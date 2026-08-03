@@ -37,6 +37,8 @@ local_settings.json
 /RPEExternalShaderPackage/
 /RPEExternalShaderPackage2/
 /RPEExternalShaderPackage3/
+/RPEExternalShader.yymps
+/tools/
 
 # Native build intermediates
 **/CMakeFiles/
@@ -70,6 +72,7 @@ local_settings.json
 *.log
 
 # Local diagnostics and comparison output
+/chart.json
 /rpe_position_comparison.csv
 /rpe_trajectory*.csv
 /rpe_trajectory*_summary.md
