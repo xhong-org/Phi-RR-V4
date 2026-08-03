@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"GifHx",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"GifHx",
+  "parent":{
+    "name":"Gif_Ext",
+    "path":"folders/Other/Gif_Ext.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

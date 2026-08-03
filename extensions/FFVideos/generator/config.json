@@ -1,0 +1,45 @@
+{
+  "$schema": "./extgen.schema.json",
+  "input": "./FFVideos.gmidl",
+  "root": "./",
+  "profile": "Full",
+  "gamemaker": {
+    "wrappers": {
+      "enabled": true,
+      "outputFile": "../../../scripts/FFVideosAPI/FFVideosAPI.gml"
+    },
+    "runtime": {
+      "enabled": false
+    },
+    "extension": {
+      "enabled": true,
+      "outputFile": "../FFVideos.yy",
+      "mode": "patch",
+      "extensionName": "FFVideos",
+      "extensionFileName": "FFVideos.dll",
+      "patchFrameworks": false
+    },
+    "injectors": {
+      "enabled": false
+    }
+  },
+  "targets": {
+    "sourceFolder": "native",
+    "sourceFile": "{0}_native",
+    "windows": {
+      "enabled": true,
+      "outputFolder": "../"
+    }
+  },
+  "extras": {},
+  "build": {
+    "emitCmake": true,
+    "cmake": {
+      "cppStandard": 20,
+      "cppExtensions": false,
+      "strictWarnings": false,
+      "useThirdParty": false,
+      "emitPresets": true
+    }
+  }
+}

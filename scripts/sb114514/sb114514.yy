@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"sb114514",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"sb114514",
+  "parent":{
+    "name":"PhigrosLoader-sample",
+    "path":"PhigrosLoader-sample.yyp",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

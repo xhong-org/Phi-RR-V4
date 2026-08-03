@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"I_NativeBindings",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"I_NativeBindings",
+  "parent":{
+    "name":"I_Shaders",
+    "path":"folders/Extensions/I_Shaders.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

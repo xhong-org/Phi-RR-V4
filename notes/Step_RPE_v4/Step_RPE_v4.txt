@@ -1,0 +1,866 @@
+///@desc 创建
+/// @description 在此处插入描述 
+// 你可以在此编辑器中写入代码 
+//初始化房间大小
+global.respack={}
+global.respack.setting = 
+{
+	name: "A.I.R.",
+	author: "星鹿ELEC",
+	description:"发布二创或auto皮肤预览时请获得作者本人同意；录制谱面预览时不需要作者本人同意；在简介内@作者即可（不@也没关系）手元随意；圭二改了蓝键",
+	hitFx: [8, 8],
+	holdAtlas: [125, 125],
+	holdAtlasMH: [200, 200],
+	hideParticles: true,
+	hitFxRotate: true,
+	hitFxScale: 0.9
+}
+
+global.respack.tap = {}
+global.respack.tapmh = {}
+global.respack.drag = {}
+global.respack.dragmh = {}
+global.respack.hold = {}
+global.respack.holdmh = {}
+global.respack.flick = {}
+global.respack.flickmh = {}
+global.respack.hit = {}
+
+
+//global.respack.tap.spriteID = click
+//global.respack.tapmh.spriteID = click_mh
+
+//global.respack.drag.spriteID = drag
+//global.respack.dragmh.spriteID = drag_mh
+
+//global.respack.flick.spriteID = flick
+//global.respack.flickmh.spriteID = flick_mh
+
+//global.respack.hold.spriteID = hold
+//global.respack.holdmh.spriteID = hold_mh
+
+//global.respack.hit.spriteID = hit_fx
+
+
+
+//global.respack.tap.spriteID = sprite_add("Respack/"+global.respack.folder+"/click.png",1,0,0,0,0)
+//global.respack.tapmh.spriteID = sprite_add("Respack/"+global.respack.folder+"/click_mh.png",1,0,0,0,0)
+
+//global.respack.drag.spriteID = sprite_add("Respack/"+global.respack.folder+"/drag.png",1,0,0,0,0)
+//global.respack.dragmh.spriteID = sprite_add("Respack/"+global.respack.folder+"/drag_mh.png",1,0,0,0,0)
+
+//global.respack.flick.spriteID = sprite_add("Respack/"+global.respack.folder+"/filck.png",1,0,0,0,0)
+//global.respack.flickmh.spriteID = sprite_add("Respack/"+global.respack.folder+"/filck_mh.png",1,0,0,0,0)
+
+//global.respack.hold.spriteID = sprite_add("Respack/"+global.respack.folder+"/hold.png",1,0,0,0,0)
+//global.respack.holdmh.spriteID = sprite_add("Respack/"+global.respack.folder+"/hold_mh.png",1,0,0,0,0)
+
+//global.respack.hit.spriteID = sprite_add("Respack/"+global.respack.folder+"/hit_fx.png",1,0,0,0,0)
+
+
+//global.respack.folder = "A.I.R"
+//global.respack.tap.spriteID = sprite_add("Respack/"+global.respack.folder+"/click.png",1,0,0,0,0)
+//global.respack.tapmh.spriteID = sprite_add("Respack/"+global.respack.folder+"/click_mh.png",1,0,0,0,0)
+
+//global.respack.drag.spriteID = sprite_add("Respack/"+global.respack.folder+"/drag.png",1,0,0,0,0)
+//global.respack.dragmh.spriteID = sprite_add("Respack/"+global.respack.folder+"/drag_mh.png",1,0,0,0,0)
+
+//global.respack.flick.spriteID = sprite_add("Respack/"+global.respack.folder+"/filck.png",1,0,0,0,0)
+//global.respack.flickmh.spriteID = sprite_add("Respack/"+global.respack.folder+"/filck_mh.png",1,0,0,0,0)
+
+//global.respack.hold.spriteID = sprite_add("Respack/"+global.respack.folder+"/hold.png",1,0,0,0,0)
+//global.respack.holdmh.spriteID = sprite_add("Respack/"+global.respack.folder+"/hold_mh.png",1,0,0,0,0)
+
+//global.respack.hit.spriteID = sprite_add("Respack/"+global.respack.folder+"/hit_fx.png",1,0,0,0,0)
+
+//global.respack.tap.width = sprite_get_width(global.respack.tap.spriteID)
+//global.respack.tap.height = sprite_get_height(global.respack.tap.spriteID)
+//global.respack.tapmh.width = sprite_get_width(global.respack.tapmh.spriteID)
+//global.respack.tapmh.height = sprite_get_height(global.respack.tapmh.spriteID)
+//global.respack.drag.width = sprite_get_width(global.respack.drag.spriteID)
+//global.respack.drag.height = sprite_get_height(global.respack.drag.spriteID)
+//global.respack.dragmh.width = sprite_get_width(global.respack.dragmh.spriteID)
+//global.respack.dragmh.height = sprite_get_height(global.respack.dragmh.spriteID)
+//global.respack.flick.width = sprite_get_width(global.respack.flick.spriteID)
+//global.respack.flick.height = sprite_get_height(global.respack.flick.spriteID)
+//global.respack.flickmh.width = sprite_get_width(global.respack.flickmh.spriteID)
+//global.respack.flickmh.height = sprite_get_height(global.respack.flickmh.spriteID)
+//global.respack.hold.width = sprite_get_width(global.respack.hold.spriteID)
+//global.respack.hold.height = sprite_get_height(global.respack.hold.spriteID)
+//global.respack.holdmh.width = sprite_get_width(global.respack.holdmh.spriteID)
+//global.respack.holdmh.height = sprite_get_height(global.respack.holdmh.spriteID)
+
+//global.respack.hit.width = sprite_get_width(global.respack.hit.spriteID)
+//global.respack.hit.height = sprite_get_height(global.respack.hit.spriteID
+
+
+//sprite_set_offset(global.respack.tap,sprite_get_width(global.respack.tap),prite_get_height(global.respack.tap))
+//sprite_set_offset(global.respack.tapmh,sprite_get_width(global.respack.tapmh),prite_get_height(global.respack.tapmh))
+//sprite_set_offset(global.respack.drag,sprite_get_width(global.respack.drag),prite_get_height(global.respack.drag))
+//sprite_set_offset(global.respack.dragmh,sprite_get_width(global.respack.dragmh),prite_get_height(global.respack.dragmh))
+//sprite_set_offset(global.respack.flick,sprite_get_width(global.respack.flick),prite_get_height(global.respack.flick))
+//sprite_set_offset(global.respack.flickmh,sprite_get_width(global.respack.flickmh),prite_get_height(global.respack.flickmh))
+//sprite_set_offset(global.respack.hold,sprite_get_width(global.respack.hold),prite_get_height(global.respack.hold))
+//sprite_set_offset(global.respack.holdmh,sprite_get_width(global.respack.holdmh),prite_get_height(global.respack.holdmh))
+
+sprite_index = (_local_source[$ "judgeline"]);
+image_yscale = (0.55);
+
+
+draw_set_halign(fa_center);
+draw_set_valign(fa_middle);
+
+null = undefined;
+	window_size = { width : window_get_width() , height : window_get_height() }
+	
+	room_width = window_size.width
+	room_height = window_size.height
+	if window_size.width < window_size.height
+	{
+		wh_zoom = window_size.height/900
+	}else{
+		wh_zoom = window_size.width/1350
+	}
+	xy_zoom = {x : room_width/1350 , y : room_height/900}
+	half_room_width = room_width/2
+	half_room_height = room_height/2
+	surface_resize(application_surface ,room_width, room_height);
+global.default_Line_color = [254,255,169]
+global.text_zoom = 0.5
+	
+//global.play = 1
+global.Timer = 0
+//global.Paused = 1
+
+//有爹时，计算方法修改
+//为了适配phira的特性
+//当true 时，将会先将判定线原坐标以比缩放，然后再以父线为原点转换坐标系
+//为false时，反之，先以父线为原点转换坐标系计算，再将得出的坐标以比缩放
+//phira父线嵌套有问题（父线的父线） 这一点还请多多注意！
+global.ignoreProportion = 1
+
+half_room_width = room_width/2
+half_room_height = room_height/2
+
+playing = 0
+
+TimeNow = 0
+_chart = chart_struct
+eventTypes = [ "alphaEvents" , "moveXEvents" , "moveYEvents" , "rotateEvents" , "speedEvents"]
+storyTypes = [ "scaleXEvents" ,"scaleYEvents" , "colorEvents" , "paintEvents" , "textEvents" , "inclineEvents" ]
+argumentTypes = [ "A" , "X" , "Y" , "R" , "S" , "Integral" , "x" , "y" , "c" , "p" , "t" , "i", "font" ]
+NoteNow = []
+EventNow = []
+lines_arguments = []
+new_lines_arguments = []
+
+offset = _chart.META.offset
+
+_line_amount = array_length( _chart.judgeLineList )
+
+_line_father = _chart.judgeLineFatherList
+//show_debug_message(_line_father)
+_note_amount = 0
+_layer_amount = []
+_event_amount = []
+	//_i 线号
+	for(var _i = 0 ; _i < _line_amount ; _i++)
+		{
+			_note_amount += _chart.judgeLineList[_i].numOfNotes
+			lines_arguments[_i] = {"A":0 , "X":0 , "Y":0 , "R":0 , "S":0 , "Integral" : 0 , "x" : 1 , "y" : 1  , "c" : undefined , "p": undefined , "t": undefined , "i" :0 , "font" : _local_source[$ "font"] }
+			new_lines_arguments[_i] = {"A":0 , "X":0 , "Y":0 , "R":0 , "x" : 1 , "y" : 1 ,"c" : #FFFFFF }
+			var _eventLayers = _chart.judgeLineList[_i].eventLayers
+			_layer_amount[_i] = array_length(_eventLayers)
+			var _layerl = array_length( _eventLayers)
+			NoteNow[_i] = 0
+			//循环-事件层 _j 层
+			var story = 0
+			for ( var _j = 0 ; _j < _layerl+1 ; _j++)
+			{
+				var _layer = {}
+				if _j == _layerl
+				{
+					if !struct_exists( _chart.judgeLineList[_i], "extended")
+						continue
+					EventNow[_i][_j]= {"scaleXEvents":0 ,"scaleYEvents":0 , "colorEvents":0 , "paintEvents":0 , "textEvents":0 , "inclineEvents":0 }
+					story= 1
+					_layer =  _chart.judgeLineList[_i].extended
+				}
+				else
+				{
+					EventNow[_i][_j]= {alphaEvents:0,moveXEvents:0,moveYEvents:0 , rotateEvents:0 , speedEvents:0}
+					_layer = _eventLayers[_j]
+				}
+				
+				if !is_struct(_layer) continue
+				//循环-事件数量预计算
+				//事件格式都基本一样所以就直接这样写咯
+				for(var _e=0 ; _e < 5+1; _e++)
+				{
+					var _event_type = ""
+					if story
+						_event_type = array_get( storyTypes  ,_e)
+					else
+						if _e < 5
+							_event_type = array_get( eventTypes ,_e)
+						else break
+					var _events = struct_get( _layer , _event_type )
+					_event_amount[_i][_j] = {}
+					struct_set( _event_amount[_i][_j],_event_type,array_length( _events ))
+					
+				}
+			}
+		}
+
+
+for (var _i = 0 ; _i < _line_amount ; _i++)
+	for (var _j = 0 ; _j < _layer_amount[_i] ; _j++)
+		
+line_Order = _chart.judgeLineOrder
+//show_debug_message(line_Order)
+
+
+
+///@desc 步结束
+if (is_undefined(obj_media_player.channel) || obj_media_player._paused) then exit;
+
+if (playing == 0)
+{
+	global.Timer = (get_timer() - chartNowTimes - chartPausedTimes);
+	playing = 1;
+};
+
+TimeNow = (obj_media_player._getPosition() - offset);
+for (var _i = 0 ; (_i < _line_amount); _i++)
+{
+	lines_arguments[@_i] =
+	{
+		"A" :0 ,
+		"X" :0 ,
+		"Y" :0 ,
+		"R" :0 ,
+		"S" :0 ,
+		"Integral" : 0 ,
+		"x" : 1 ,
+		"y" : 1  ,
+		"c" : undefined ,
+		"p" : undefined ,
+		"t" : undefined ,
+		"i" : 0 ,
+		"font" : "cmdysj" ,
+		"noteAlpha" : 1
+	};
+};
+
+new_lines_arguments[@_i] =
+{
+	"A" : 0 ,
+	"X" : 0 ,
+	"Y" : 0 ,
+	"R" : 0 ,
+	"x" : 1 ,
+	"y" : 1 ,
+	"c" : #FFFFFF
+};
+
+for (var _i = 0 ; (_i < _line_amount); _i++)
+{
+	var _eventLayers = ((_chart.judgeLineList[@_i]).eventLayers);
+	var _layer_amount = array_length(_eventLayers);
+	var story = 0;
+	for (var _j = 0 ; (_j < (_layer_amount + 1)); _j++)
+	{
+		var _layer = {  };
+		if (_j == _layer_amount)
+		{
+			if (!struct_exists(_chart.judgeLineList[@_i], "extended")) then begin continue end;
+			story = 1;
+			_layer = ((_chart.judgeLineList[@_i]).extended);
+		}
+		else 
+		{
+			_layer = (_eventLayers[@_j]);
+		};
+		if (!is_struct(_layer)) then begin continue end;
+		for (var _e = 0 ; (_e < 6); _e++)
+		{
+			var _event_type = "";
+			if (story)
+			{
+				_event_type = (storyTypes[@_e]);
+			}
+			else
+			{
+				if (_e < 5)
+				{
+					_event_type = (eventTypes[@_e]);
+				}
+				else break;
+			}
+			if (struct_exists(_layer, _event_type) == false) then begin continue end;
+			var _event_now  =
+			(
+				struct_exists( EventNow[@_i][@_j], _event_type) ?
+				struct_get(EventNow[@_i][@_j], _event_type) : 0
+			);
+			var _event = (struct_get(_layer, _event_type));
+			var _event_amount = (array_length(_event));
+			var _find_event = _event_now;
+			var _mode = 0;
+			var _get_end = 0;
+			if (TimeNow >= ((_event[@(_event_amount - 1)]).endTime))
+			{
+				_find_event = (_event_amount - 1);
+				_get_end = 1;
+			};
+			else
+			{
+				if ((TimeNow < ((_event[@_find_event]).startTime)) and (_find_event >= 0))
+				{
+					while (!(( _find_event < 0) or (TimeNow >= ((_event[@_find_event]).endTime))))
+					{ 
+						_find_event--;
+					};
+					_find_event++;
+				};
+				if  (TimeNow >= ((_event[@_find_event]).endTime))
+				{
+					while (!((TimeNow < ((_event[@_find_event]).endTime)) or (_find_event >= (_event_amount - 1))))
+					{ 
+						_find_event++;
+					};
+						
+				};
+				else
+				{
+					if ((_find_event + 1) < _event_amount)
+					{
+						if (TimeNow >= ((_event[@(_find_event + 1)]).startTime))
+						{
+							_find_event = (_find_event + 1);
+						};
+					};
+				};
+				if (TimeNow < ((_event[@_find_event]).startTime))
+				{
+					if (_find_event <= 0)
+					{
+						_find_event = 0;
+					};
+					else
+					{
+						_find_event--;
+						_get_end = 1;
+					};
+				};
+			};
+			var new_argu = 0;
+			if (_get_end or (struct_get(_event[@_find_event], "end") == struct_get(_event[@_find_event], "start")))
+			{
+				new_argu = 1;
+			}
+			else
+			{
+				new_argu = 
+				(
+					easing_cut_time
+					(
+						((_event[@_find_event]).easingType),
+						((_event[@_find_event]).easingLeft),
+						((_event[@_find_event]).easingRight),
+						((TimeNow - ((_event[@_find_event]).startTime)) /
+						(((_event[@_find_event]).endTime) - ((_event[@_find_event]).startTime))),
+						_mode
+					)
+				);
+			}
+			var i123 = 0;
+			if (story)
+			{
+				if (_event_type == "colorEvents")
+				{
+					try{
+						(lines_arguments[_i]).c =
+						[
+							lerp
+							(
+								((_event[@_find_event]).start[@0]),
+								struct_get(_event[@_find_event], "end")[@0],
+								new_argu
+							),
+							lerp
+							(
+								((_event[@_find_event]).start[@1]),
+								struct_get(_event[@_find_event], "end")[@1],
+								new_argu
+							),
+							lerp(
+								((_event[@_find_event]).start[@2]),
+								struct_get(_event[@_find_event], "end")[@2],
+								new_argu
+							)
+						];
+					}catch(_e){
+						delete(_e);
+						//(lines_arguments[_i]).c = [0,0,0];
+						//struct_set(
+						//	lines_arguments[@_i],
+						//	"c",
+						//	[
+						//		lerp
+						//		(
+						//			((_event[@_find_event]).start[@0]),
+						//			struct_get(_event[@_find_event], "end")[@0],
+						//			new_argu
+						//		),
+						//		lerp
+						//		(
+						//			((_event[@_find_event]).start[@1]),
+						//			struct_get(_event[@_find_event], "end")[@1],
+						//			new_argu
+						//		),
+						//		lerp(
+						//			((_event[@_find_event]).start[@2]),
+						//			struct_get(_event[@_find_event], "end")[@2],
+						//			new_argu
+						//		)
+						//	]
+						//);
+						
+					};
+				}
+				else if (_event_type == "textEvents")
+				{
+					(lines_arguments[@_i]).font = (_local_source[$ "font"]);
+					if (((_event[@_find_event]).start) == "")
+					{
+						var _ii = (floor(lerp(0, string_length(struct_get(_event[@_find_event], "end")), new_argu)));
+						if (_ii == 0) then begin (lines_arguments[@_i]).t = "" end;
+						else (lines_arguments[@_i]).t = (string_copy(struct_get(_event[@_find_event], "end"), 0, _ii));
+					}
+					else if (struct_get(_event[@_find_event],"end") == "")
+					{
+						var _strl = (string_length(struct_get(_event[@_find_event], "start")));
+						var _ii = (floor(_strl - lerp(0, _strl,new_argu)));
+						if (_ii == 1) then begin (lines_arguments[@_i]).t = "" end;
+						else
+						{
+							(lines_arguments[@_i]).t = (string_copy(struct_get(_event[@_find_event],"start"), 0, _ii));
+						};
+					};
+					else if (new_argu < 1)
+					{
+						(lines_arguments[@_i]).t = ((_event[@_find_event]).start)
+					}
+					else
+					{
+						(lines_arguments[@_i]).t = (struct_get(_event[@_find_event], "end"));
+					};
+				};
+				else
+				{
+					struct_set
+					(
+						lines_arguments[@_i],
+						argumentTypes[@(_e + 6)],
+						lerp
+						(
+							(_event[@_find_event]).start,
+							struct_get(_event[@_find_event], "end"),
+							new_argu
+						)
+					);
+				}
+				
+			}
+			else
+			{
+				i123 =
+				(
+					struct_get
+					(
+						lines_arguments[@_i],
+						argumentTypes[@_e]
+					)
+					+
+					lerp
+					(
+						((_event[@_find_event]).start),
+						struct_get(_event[@_find_event], "end"),
+						new_argu
+					)
+				);
+				struct_set
+				(
+					lines_arguments[@_i],
+					argumentTypes[@_e],
+					i123
+				);
+			};
+			if ((!story) && (_e == 4))
+			{
+				if (real(!TimeNow) < ((_event[@_find_event]).startTime))
+				{
+					if (TimeNow < ((_event[@_find_event]).endTime))
+					{
+						(lines_arguments[@_i]).Integral =
+						(
+							(
+								(
+									(
+										((lines_arguments[@_i]).Integral)
+										+
+										((_event[@_find_event]).aggreIntegral)
+									)
+									+ 
+									(
+										(
+											abs(TimeNow - ((_event[@_find_event]).startTime))
+											*
+											abs(i123 - ((_event[@_find_event]).start))
+										)
+										/
+										2
+									)
+									+
+									min
+									(
+										((_event[@_find_event]).start),
+										struct_get(_event[@_find_event], "end")
+									)
+								)
+								*
+								(TimeNow - ((_event[@_find_event]).startTime))
+							)
+						);
+					}
+					else
+					{
+						(lines_arguments[@_i]).Integral =
+						(
+							(
+								(
+									((lines_arguments[@_i]).Integral)
+									+
+									((_event[@_find_event]).aggreIntegral)
+								)
+								+
+								((_event[@_find_event]).integral)
+							)
+							+
+							(
+								(
+									struct_get(_event[@_find_event], "end")
+									*
+									(
+										((_event[@_find_event]).endTime)
+										-
+										TimeNow
+									)
+								)
+								/
+								2
+							)
+						);
+					};
+				};
+			};
+			struct_set(EventNow[@_i][@_j], _event_type, _find_event);
+		};
+	};
+};
+
+///@desc 绘制
+/// @description 在此处插入描述 
+// 你可以在此编辑器中写入代码 
+//draw_set_font(struct_get(global.Game_fonts,global.Game_fonts.Defined))
+//当窗口大小与记录的不同（也就是说被调整），则调整房间大小
+if ((window_size.width != window_get_width() || window_size.height != window_get_height()) && window_get_width() > 0 and window_get_height() > 0)
+{
+	if !surface_exists(application_surface)
+		exit
+	window_size = { width : window_get_width() , height : window_get_height() }
+	
+	room_width = window_size.width;
+	room_height = window_size.height;
+	//room_width = 1350
+	//room_height = 900
+	if (window_size.width < window_size.height)
+	{
+		wh_zoom = (window_size.height/900);
+	}else{
+		wh_zoom = (window_size.width/1350);
+	};
+	xy_zoom = {x : room_width/1350 , y : room_height/900}
+	half_room_width = (room_width/2);
+	half_room_height = (room_height/2);
+	surface_resize(application_surface ,room_width, room_height);
+}
+
+//if (is_undefined(obj_media_player.channel) || obj_media_player._paused)
+//	exit;
+	
+//draw_text_transformed(114, 32, fps,global.text_zoom,global.text_zoom,0)	
+//draw_text_transformed(114, 48, TimeNow,global.text_zoom,global.text_zoom,0)
+
+
+for(var _i = 0 ; _i < _line_amount ; _i++)
+{
+	//draw_text(32, 20*_i+64,string(_i) + " = " + string( lines_arguments[_i] ))
+	//_i是顺序中的第几个 _ii是线号
+	var _ii = line_Order[_i];
+	var my_father = _line_father[_ii];
+	//show_debug_message( lines_arguments[_ii])
+	new_lines_arguments[_ii].x = (lines_arguments[_ii].x);
+	new_lines_arguments[_ii].y = (lines_arguments[_ii].y);
+	if is_array( lines_arguments[_ii].c)
+		new_lines_arguments[_ii].c = (make_color_rgb( lines_arguments[_ii].c[0] , lines_arguments[_ii].c[1] ,lines_arguments[_ii].c[2]));
+	else
+		new_lines_arguments[_ii].c = (make_color_rgb( global.default_Line_color[0] , global.default_Line_color[1] ,global.default_Line_color[2]));
+	if (my_father >= 0 and my_father != _ii)
+	{
+		var newXY = {X:0,Y:0};
+		//适配phira
+		if (global.ignoreProportion)
+		{
+			new_lines_arguments[_ii].R = (0-(lines_arguments[_ii].R));
+			//转换坐标系，以父判定线为原点，计算出相对于中心点的位置
+			newXY = CoordinateSystemConversion(
+				//将rpe坐标以比例缩小
+				lines_arguments[_ii].X*xy_zoom.x ,
+				lines_arguments[_ii].Y*xy_zoom.y ,
+				lines_arguments[my_father].X*xy_zoom.x ,
+				lines_arguments[my_father].Y*xy_zoom.y ,
+				lines_arguments[my_father].R,
+				0,0,0
+			);
+			//将中心视为原点的坐标转换为gm的坐标
+			new_lines_arguments[_ii].X = (half_room_width+newXY.X);
+			new_lines_arguments[_ii].Y = (half_room_height-newXY.Y);
+			//储存并绘制判定线
+			lines_arguments[_ii].X = (newXY.X/xy_zoom.x);
+			lines_arguments[_ii].Y = (newXY.Y/xy_zoom.y);
+		}
+		else
+		{
+		newXY = CoordinateSystemConversion(lines_arguments[_ii].X,lines_arguments[_ii].Y,
+			lines_arguments[my_father].X,lines_arguments[my_father].Y,lines_arguments[my_father].R,0,0,0);
+		lines_arguments[_ii].X = newXY.X;
+		lines_arguments[_ii].Y = newXY.Y;
+		new_lines_arguments[_ii].X = (lines_arguments[_ii].X*xy_zoom.x +half_room_width);
+		new_lines_arguments[_ii].Y = (-lines_arguments[_ii].Y*xy_zoom.y +half_room_height);
+		new_lines_arguments[_ii].R = (-(lines_arguments[_ii].R));
+		}
+	}
+	else
+	{
+	new_lines_arguments[_ii].X = (lines_arguments[_ii].X*xy_zoom.x +half_room_width);
+	new_lines_arguments[_ii].Y = (-lines_arguments[_ii].Y*xy_zoom.y +half_room_height);
+	new_lines_arguments[_ii].R = (-(lines_arguments[_ii].R));
+	}
+	//show_debug_message(new_lines_arguments)
+	//draw_sprite_ext(sLine , 0 ,
+	//(lines_arguments[_ii].X+675)*room_width / 1350 ,
+	//(0-(lines_arguments[_ii].Y+450))*room_height / 900 + room_height,
+	//1,1,
+	//0-(lines_arguments[_ii].R), c_white, lines_arguments[_ii].A/255)
+	if (lines_arguments[_ii].A < 0)
+		new_lines_arguments[_ii].A = 0;
+	else if (lines_arguments[_ii].A > 255)
+		new_lines_arguments[_ii].A = 1;
+	else
+		new_lines_arguments[_ii].A = lines_arguments[_ii].A/255
+	if !(new_lines_arguments[_ii].A <= 0)
+		if (is_string(lines_arguments[_ii].t))
+		{
+			//show_debug_message( lines_arguments[_ii])
+			
+			if struct_exists( lines_arguments[_ii] , lines_arguments[_ii].font )
+				draw_set_font(
+				_local_source[$ "font"]
+				//struct_get(global.Game_fonts,global.Game_fonts.Defined)
+				);
+			else
+				draw_set_font(
+				_local_source[$ "font"]
+				);
+			draw_text_ext_transformed_color(new_lines_arguments[_ii].X ,new_lines_arguments[_ii].Y ,
+			lines_arguments[_ii].t,-1,-1,
+			lines_arguments[_ii].x * wh_zoom * global.text_zoom,lines_arguments[_ii].y * wh_zoom * global.text_zoom,
+			new_lines_arguments[_ii].R, 
+			new_lines_arguments[_ii].c,new_lines_arguments[_ii].c,new_lines_arguments[_ii].c,new_lines_arguments[_ii].c,
+			new_lines_arguments[_ii].A);
+		}
+		else
+			draw_sprite_ext(_local_source[$ "judgeline"] , 0 ,
+			new_lines_arguments[_ii].X ,
+			new_lines_arguments[_ii].Y ,
+			lines_arguments[_ii].x * wh_zoom ,lines_arguments[_ii].y * wh_zoom,
+			new_lines_arguments[_ii].R,
+			new_lines_arguments[_ii].c,
+			new_lines_arguments[_ii].A);
+	
+	//算出 相对于本判定线的 每移动一个x单位或y单位时 的 实际x,y坐标增量
+	
+	//这个只取决于角度
+	//所以这里直接用计算结果了
+	var step_long = {x:[1,0] , y:[0,1]}
+	var rad = (pi*lines_arguments[_ii].R / 180);
+	
+	//if global.rotate_precomputation_switch
+	//{
+	//	var epl  = array_length(global.easing_precomputation)
+	//	var _ij  = time* epl
+	//	var _iij = floor( _ij )
+	//	var _iii = global.easing_precomputation[_iij]
+	//	if _ii >= epl
+	//		step_long = _iii
+	//	else
+	//	{
+	//		step_long.x[0] = lerp(_iii.x[0], global.easing_precomputation[_iij+1].x[0], frac(_ij))
+	//		step_long.x[1] = lerp(_iii.x[1], global.easing_precomputation[_iij+1].x[1], frac(_ij))
+	//		step_long.y[0] = lerp(_iii.y[0], global.easing_precomputation[_iij+1].y[0], frac(_ij))
+	//		step_long.y[1] = lerp(_iii.y[1], global.easing_precomputation[_iij+1].y[1], frac(_ij))
+		
+	//	}
+	//}
+	//else
+		step_long = {x:[cos(rad),sin(rad)] , y:[-sin(rad),cos(rad)]}
+	//////////////////////////////////////////////////////////////////////////////////////////
+	//绘制note们
+	
+	//NoteNow： 
+	//作为索引：和NoteNow类似，是当前未判定的、距离当前时间最近的note
+	//			也就是下一个note的索引
+	//作为数据：它是已判定的note的数量
+	
+	//如果时轴在上一帧向前滚动了
+		//循环检查向前
+		
+			//如果这个note已被判定 NoteNow=这个note+1
+	
+	//如果时间在上一帧向后滚动了
+		//向后找到应有的note_now
+	var _note_now = NoteNow[_ii];
+	if (!struct_exists( _chart.judgeLineList[_ii] , "notes"))
+		continue;
+	var _notes = (_chart.judgeLineList[_ii].notes) 
+	var _nn =  (array_length( _notes ));
+	if (_note_now >= _nn)
+		_note_now = _nn
+		//如果note_now大于等于note数量，则不找咯
+	else
+	{
+		//循环检查，从NoteNow开始
+		//for(;_note_now<_nn;_note_now++)
+		//{
+		//	//判断此时是否小于等于当前检查的note判定时间
+		//	//即这个note有没有被判定
+			
+		//	//计算相对判定线的坐标角度0的坐标
+		//	var myx = _notes[_note_now].positionX
+		//	var myy = _notes[_note_now].floorPosition[array_length(_notes[_note_now].floorPosition)-1] * 120
+		//	var newx = myx*step_long.x[0] + myy*step_long.y[0]
+		//	var newy = myx*step_long.x[1] + myy*step_long.y[1]
+		//	//实际透明度
+		//	try
+		//		var alpha = _notes[_note_now].alpha*lines_arguments[_ii].noteAlpha/255;
+		//	catch(_e){delete(_e);};
+		//	if alpha <= 0
+		//	{
+		//		alpha = 0
+		//	}
+		//	else if alpha >1
+		//		alpha = 1
+		//	//将中心视为原点的坐标转换为gm的坐标
+		//	var new_X = half_room_width*xy_zoom.x+newx
+		//	var new_Y = half_room_height*xy_zoom.y-newy
+		//	//如果没播放过，则播放打击特效
+		//	if TimeNow <= _notes[_note_now].endTime
+		//	{
+		//		//这个值 最后 将会是相对于当前时间 第一个没有被判定的note的索引
+		//		NoteNow[_ii] = _note_now+1
+		//	}
+		//	else{
+		//		//没有被判定，判断是否显示
+		//		if  
+		//		//透明度大于0
+		//			alpha > 0
+		//		//判定线不是uncover
+		//		//且它的相对y坐标不为负数(防止精度丢失导致错误不显示所以是大于等于-0.001
+		//		//不成立
+		//		and !(_chart.judgeLineList[_ii].isCover == 1 and newy < 0-0.001)//newy < 0
+		//		//达到显示时间
+		//		and TimeNow + _notes[_note_now].visibleTime >= _notes[_note_now].startTime
+		//		//则绘制
+		//		{
+		//			//选择你的精灵图
+		//			//tap1 hold2 drag3 flick4
+		//			var use_sprite = {}
+		//			switch( _notes[_note_now].type )
+		//			{
+		//			case 1:use_sprite = global.respack.tap break
+		//			case 2:use_sprite = global.respack.hold break
+		//			case 3:use_sprite = global.respack.drag break
+		//			case 4:use_sprite = global.respack.flick break
+		//			}
+		//			if _notes[_note_now].type == 2
+		//			{
+		//				//hold的绘制不同，需要分段绘制
+		//				//hold分为头身体尾巴
+		//				//详细解释见phira文档 mivik.moe/phira-docs/respack/index.html
+						
+		//				//变速长条需要开始和结束两个floorP什么，目前长条速度将会固定为10
+		//				//身体长度
+		//				var body_long = (_notes[_note_now].floorPositionEnd[array_length(_notes[_note_now].floorPositionEnd)-1] - _notes[_note_now].floorPosition)*120
+		//				if TimeNow > _notes[_note_now].startTime
+		//				//头
+		//				draw_sprite_general(use_sprite.spriteID,0,0,
+		//				use_sprite.height-global.respack.setting.holdAtlas[1],
+		//				use_sprite.width-0,global.respack.setting.holdAtlas[1],
+		//				new_X-use_sprite.width*_notes[_note_now].size/2,
+		//				new_Y,
+		//				wh_zoom*note_zoom*_notes[_note_now].size,
+		//				wh_zoom,new_lines_arguments[_ii].R,c_white,c_white,c_white,c_white,alpha)
+		//				//身体
+		//				draw_sprite_general(use_sprite.spriteID,0,0,
+		//				global.respack.setting.holdAtlas[0],
+		//				use_sprite.width-0,
+		//				use_sprite.height - global.respack.setting.holdAtlas[0] - global.respack.setting.holdAtlas[1],
+		//				new_X-use_sprite.width*_notes[_note_now].size*wh_zoom*note_zoom*_notes[_note_now].size/2,
+		//				(new_Y-use_sprite.height+body_long),
+		//				////////////////////////////////////////////////////////////////
+		//				wh_zoom*note_zoom*_notes[_note_now].size,
+		//				wh_zoom,new_lines_arguments[_ii].R,c_white,c_white,c_white,c_white,alpha)
+		//				//尾巴
+		//				draw_sprite_general(use_sprite.spriteID,0,0,
+		//				use_sprite.height-global.respack.setting.holdAtlas[1],
+		//				use_sprite.width-0,global.respack.setting.holdAtlas[1],
+		//				new_X-use_sprite.width*_notes[_note_now].size/2,
+		//				new_Y+body_long,
+		//				//////////////////////////////////////////////////////////
+		//				wh_zoom*note_zoom*_notes[_note_now].size,
+		//				wh_zoom,new_lines_arguments[_ii].R,c_white,c_white,c_white,c_white,alpha)
+						
+		//			}
+		//			else
+		//			//其它三种note的绘制，直接画
+		//			{
+		//				draw_sprite_ext(use_sprite.spriteID,0,new_X,new_Y,
+		//				wh_zoom*note_zoom*_notes[_note_now].size,
+		//				wh_zoom,new_lines_arguments[_ii].R,c_white,alpha)
+		//			}
+						
+		//		}
+		//	}
+		//}
+	}
+	
+}
+image_yscale = (0.55);
+//draw_text_ext(32, 64, lines_arguments,12,room_width-64)
+//show_debug_message(string(EventNow))
+
+
+
+

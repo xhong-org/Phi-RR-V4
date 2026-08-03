@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"display_custom",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"display_custom",
+  "parent":{
+    "name":"Tools",
+    "path":"folders/Other/Tools.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

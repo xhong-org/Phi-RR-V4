@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"get_window_pos_scale",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"get_window_pos_scale",
+  "parent":{
+    "name":"Math",
+    "path":"folders/Other/Math.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

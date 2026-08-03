@@ -1,0 +1,47 @@
+[gml_api]
+module FFVideos;
+
+[global]
+enum FFVideosStatus {
+    Error = -1,
+    Closed = 0,
+    Preparing = 1,
+    Playing = 2,
+    Paused = 3,
+    Ended = 4
+}
+
+[global, bind = typed_gml]
+function ffvideos_initialize(device : pointer, context : pointer) : int32;
+[global]
+function ffvideos_open(path : string) : int32;
+[global]
+function ffvideos_close(handle : int32) : bool;
+[global]
+function ffvideos_play(handle : int32) : bool;
+[global]
+function ffvideos_pause(handle : int32) : bool;
+[global]
+function ffvideos_seek(handle : int32, position_ms : float) : bool;
+[global]
+function ffvideos_prepare_frame(handle : int32, position_ms : float, timeout_ms : float) : bool;
+[global]
+function ffvideos_set_volume(handle : int32, volume : float) : bool;
+[global]
+function ffvideos_set_loop(handle : int32, enabled : bool) : bool;
+[global]
+function ffvideos_get_status(handle : int32) : int32;
+[global]
+function ffvideos_get_duration(handle : int32) : float;
+[global]
+function ffvideos_get_position(handle : int32) : float;
+[global]
+function ffvideos_get_width(handle : int32) : int32;
+[global]
+function ffvideos_get_height(handle : int32) : int32;
+[global]
+function ffvideos_draw(handle : int32, left : float, top : float, right : float, bottom : float, alpha : float, dim : float) : int32;
+[global]
+function ffvideos_get_error(handle : int32) : string;
+[global, finish_fn]
+function ffvideos_shutdown() : unit;

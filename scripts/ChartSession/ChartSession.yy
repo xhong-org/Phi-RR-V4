@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"ChartSession",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"ChartSession",
+  "parent":{
+    "name":"Other",
+    "path":"folders/Other.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

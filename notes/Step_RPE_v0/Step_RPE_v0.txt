@@ -1,0 +1,101 @@
+/*
+for(var i = 0 ; i < array_length(self.events) ; i ++){
+    var names = (struct_get_names(self.events[i]));
+    if(is_undefined(names) || !is_array(names)) then continue;
+        
+    for(var e = 0 ; e < array_length(names) ; e ++){
+        if(names[e] == "speedEvents") then continue;
+            
+        var index = (events_count[i][$ names[e]]),
+            events = (self.events[i][$ names[e]]),
+            length = (array_length(events));
+        
+        // 事件结束值
+        //var _e_x = (events_values[i].moveXEvents),
+            //_e_y = (events_values[i].moveYEvents),
+            //_e_a = (events_values[i].alphaEvents),
+            //_e_r = (events_values[i].rotateEvents);
+        var _e_v = (events_values[i][$ names[e]]);
+        
+        // index ++ & --
+        if(length - 1 > index){
+        
+            while(line_time < events[index].startTime && index){
+                if(line_time > events[index - 1].endTime) then break;
+                    
+                index --;
+                //struct_set(events_count[i] , names[e] , events[index - 1][$ "end"]);
+            };
+            
+            while(line_time > events[index].endTime && length - 1 > index){
+                if(line_time < events[index + 1].startTime) then break;
+                    
+                index ++;
+                //struct_set(events_count[i] , names[e] , events[index - 1][$ "end"]);
+            };
+            
+            if(index >= length - 1) then index = (length - 1);
+            if(index != 0) then struct_set(events_values[i] , names[e] , events[index][$ "end"]);
+                
+            struct_set(events_count[i] , names[e] , index);
+        };
+        
+        //try{
+        var _index = (events_count[i][$ names[e]]);
+        //print($"Index & Length -> {index} & {length}");
+        //// == | != | idk
+        var event = (events[_index]);
+        var stime = (event.startTime),
+            etime = (event.endTime),
+            _e_left = (event[$ "easingLeft"] ?? 0),
+            _e_right = (event[$ "easingRight"] ?? 1),
+            sval = (event.start),
+            eval = (event[$ "end"]),
+            _e_type = (event[$ "easingType"] ?? 0);
+        switch (names[e]) {
+        	case "moveXEvents":
+                if(line_time < stime) then _r_x = (_e_x);
+                elif(line_time >= stime && line_time <= etime){
+                    _r_x = (tween_execute(line_time , stime , etime , sval , eval , _e_type , _e_left , _e_right));
+                    if(is_finite(_r_x)) then struct_set(events_error_revalues[i] , names[e] , _r_x);
+                    else _r_x = (events_error_revalues[i][$ names[e]]);    
+                }; 
+            break; 
+        
+            case "moveYEvents":
+                if(line_time < stime) then _r_y = (_e_y);
+                elif(line_time >= stime && line_time <= etime){
+                    _r_y = (tween_execute(line_time , stime , etime , sval , eval , _e_type , _e_left , _e_right));
+                    if(is_finite(_r_y)) then struct_set(events_error_revalues[i] , names[e] , _r_y);
+                    else _r_y = (events_error_revalues[i][$ names[e]]);    
+                }; 
+            break;
+        
+            case "alphaEvents":
+                if(line_time < stime) then _r_a = (_e_a);
+                elif(line_time >= stime && line_time <= etime){
+                    _r_a = (tween_execute(line_time , stime , etime , sval , eval , _e_type , _e_left , _e_right));
+                    if(is_finite(_r_a)) then struct_set(events_error_revalues[i] , names[e] , _r_a);
+                    else _r_a = (events_error_revalues[i][$ names[e]]);    
+                }; 
+            break;
+        
+            case "rotateEvents":
+                if(line_time < stime) then _r_r = (_e_r);
+                elif(line_time >= stime && line_time <= etime){
+                    _r_r = (tween_execute(line_time , stime , etime , sval , eval , _e_type , _e_left , _e_right));
+                    if(is_finite(_r_r)) then struct_set(events_error_revalues[i] , names[e] , _r_r);
+                    else _r_r = (events_error_revalues[i][$ names[e]]);    
+                };
+            break;    
+        }
+        //}catch (e) { delete(e) };
+        // 累加变量值
+        //_t_x += _r_x;
+        //_t_y += _r_y;
+        //_t_a += _r_a;
+        //_t_r += _r_r;
+    };
+};
+
+*/

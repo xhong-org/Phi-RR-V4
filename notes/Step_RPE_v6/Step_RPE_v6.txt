@@ -1,0 +1,746 @@
+///@event Create
+/// @description 初始化进程
+_step_user_count = 2;
+_draw_user_count = 6;
+sprite = undefined;
+//_pre_user_count = 5;
+depth = DEPTH.LINE;
+sprite_index = line;
+image_blend = (game.settings.enableLineJudge ? #ffeca0 : c_white);
+image_alpha = 0;
+event_user(0);
+
+
+///@event Step Begin
+///@desc 获取实时时间(请输入文本)
+line_time = (game_1.Math.secToBeat(game.__time[1] - (oRender_1.sec), rpe_bpm / self.bpmfactor));
+
+///@event Step
+/// @description 主进程
+event_user(_step_user_count);
+
+///@event Draw
+/// @description 绘制
+if(self.isFather != -1){
+	exit;
+};
+event_user(_draw_user_count);
+draw_set_font(game.font);
+draw_set_halign(fa_middle);
+draw_set_colour(c_lime);
+draw_text_transformed(x , y , self.line_id , 0.5 , 0.5 , 0);
+
+
+///@event User 0
+///@desc 线初始化
+scaleX = 1;
+scaleY = 1;
+_scales = 1;
+
+if(self.isFather != -1){
+	sprite_index = spr_gunmu;
+	_step_user_count = 1;
+	exit;
+};
+//var init_struct = {
+    //"moveXEvents": 0,
+    //"moveYEvents": 0,
+    //"alphaEvents": 0,
+    //"rotateEvents": 0,
+    //"speedEvents": 0,
+    //"colorEvents": c_white,
+    //"scaleXEvents": 1,
+    //"scaleYEvents": 1,
+    //"textEvents": "",
+    //"paintEvents": 0,
+    //"inclineEvents": 0,
+    //"gifEvents": 0
+//};
+//events_count = array_create(array_length(self.events), init_struct);
+//events_values = array_create(array_length(self.events), init_struct);
+//events_error_revalues = array_create(array_length(self.events), init_struct);
+//events_count = (array_create(array_length(self.events) , {
+    //"moveXEvents" : 0,
+    //"moveYEvents" : 0,
+    //"alphaEvents" : 0,
+    //"rotateEvents" : 0,
+    //"speedEvents" : 0,
+    //"colorEvents" : 0,
+    //"scaleXEvents" : 0,
+    //"scaleYEvents" : 0,
+    //"textEvents" : 0,
+    //"paintEvents" : 0,
+    //"inclineEvents" : 0,
+    //"gifEvents" : 0
+//}));
+//
+//events_values = (array_create(array_length(self.events) , {
+    //"moveXEvents" : 0,
+    //"moveYEvents" : 0,
+    //"alphaEvents" : 0,
+    //"rotateEvents" : 0,
+    //"speedEvents" : 0,
+    //"colorEvents" : c_white,
+    //"scaleXEvents" : 1,
+    //"scaleYEvents" : 1,
+    //"textEvents" : "",
+    //"paintEvents" : 0,
+    //"inclineEvents" : 0,
+    //"gifEvents" : 0
+//}));
+//
+//events_error_revalues = (array_create(array_length(self.events) , {
+    //"moveXEvents" : 0,
+    //"moveYEvents" : 0,
+    //"alphaEvents" : 0,
+    //"rotateEvents" : 0,
+    //"speedEvents" : 0,
+    //"colorEvents" : c_white,
+    //"scaleXEvents" : 1,
+    //"scaleYEvents" : 1,
+    //"textEvents" : "",
+    //"paintEvents" : 0,
+    //"inclineEvents" : 0,
+    //"gifEvents" : 0
+//})); 
+//
+//ext_events_values = {
+    //"colorEvents" : c_white,
+    //"scaleXEvents" : 1,
+    //"scaleYEvents" : 1
+//};
+
+// HYWA
+//array_set(events_values , 0 , {
+    //"moveXEvents" : 0,
+    //"moveYEvents" : 0,
+    //"alphaEvents" : 0,
+    //"rotateEvents" : 0,
+    //"speedEvents" : 0,
+    //"colorEvents" : c_white,
+    //"scaleXEvents" : 1,
+    //"scaleYEvents" : 1,
+    //"textEvents" : "",
+    //"paintEvents" : 0,
+    //"inclineEvents" : 0,
+    //"gifEvents" : 0
+//});
+//
+//array_set(events_count , 0 , {
+    //"moveXEvents" : 0,
+    //"moveYEvents" : 0,
+    //"alphaEvents" : 0,
+    //"rotateEvents" : 0,
+    //"speedEvents" : 0,
+    //"colorEvents" : 0,
+    //"scaleXEvents" : 0,
+    //"scaleYEvents" : 0,
+    //"textEvents" : 0,
+    //"paintEvents" : 0,
+    //"inclineEvents" : 0,
+    //"gifEvents" : 0
+//})
+
+events_count = (array_create(array_length(self.events) , {
+    "moveXEvents" : 0,
+    "moveYEvents" : 0,
+    "alphaEvents" : 0,
+    "rotateEvents" : 0,
+    "speedEvents" : 0
+}));
+
+events_values = (array_create(array_length(self.events) , {
+    "moveXEvents" : 0,
+    "moveYEvents" : 0,
+    "alphaEvents" : 0,
+    "rotateEvents" : 0,
+    "speedEvents" : 0
+}));
+
+events_recall_values = (array_create(array_length(self.events) , {
+    "moveXEvents" : 0,
+    "moveYEvents" : 0,
+    "alphaEvents" : 0,
+    "rotateEvents" : 0,
+    "speedEvents" : 0
+}));
+
+events_end_values = ({
+    "moveXEvents" : 0,
+    "moveYEvents" : 0,
+    "alphaEvents" : 0,
+    "rotateEvents" : 0,
+    "speedEvents" : 0
+});
+
+ext_events_count = {
+    "colorEvents" : 0,
+    "scaleXEvents" : 0,
+    "scaleYEvents" : 0,
+    "textEvents" : 0,
+    "paintEvents" : 0,
+    "inclineEvents" : 0,
+    "gifEvents" : 0
+};
+
+ext_events_values = {
+    "colorEvents" : [255 , 255 , 255],
+    "scaleXEvents" : 1,
+    "scaleYEvents" : 1,
+    "textEvents" : "",
+    "paintEvents" : 0,
+    "inclineEvents" : 0,
+    "gifEvents" : 0
+};
+
+var _sort = (func(x1 , x2){
+    if(x1.startTime < x2.startTime) then return(-1); 
+        
+    elif(x1.startTime > x2.startTime) then return(1); 
+        
+	else
+    return(0);        
+	//return(x1.startTime - x2.startTime);
+});
+
+// 码了个B , 谁发明的数组beat
+for(var i = 0 ; i < array_length(self.events) ; i ++){
+    if(is_undefined(self.events[@ i])) { 
+        //print($"events: {self.events}\nindex: {i}\nLength: {array_length(self.events)}"); 
+        continue; 
+    };
+        
+    var names = (struct_get_names(self.events[@ i]));
+    for(var ii = 0 ; ii < array_length(names) ; ii ++){
+        var _events = (self.events[i][$ names[ii]]);
+        array_foreach(_events , func(val , index){
+            if(struct_exists(val , "startTime") && is_array(val[$ "startTime"])) then val.startTime = (game_1.Math.arrToBeat(val.startTime));
+                
+            if(struct_exists(val , "endTime") && is_array(val[$ "endTime"])) then val.endTime = (game_1.Math.arrToBeat(val.endTime));
+        });
+        array_sort(self.events[i][$ names[ii]] , _sort);
+    };
+};
+
+struct_foreach(self.extEvents , func(name , val){
+    array_foreach(val , func(val , index){
+        if(struct_exists(val , "startTime") && is_array(val[$ "startTime"])) then val.startTime = (game_1.Math.arrToBeat(val.startTime));
+                
+        if(struct_exists(val , "endTime") && is_array(val[$ "endTime"])) then val.endTime = (game_1.Math.arrToBeat(val.endTime));
+    });
+    array_sort(val , (func(x1 , x2){
+        if(x1.startTime < x2.startTime) then return(-1); 
+             
+        if(x1.startTime > x2.startTime) then return(1); 
+                     
+        return(0);        
+    }));
+});
+
+
+//struct_set(self.events[0] , "extEvents" , (self.extEvents ?? {}) );
+
+//var ext = (self.extEvents);
+if(struct_exists(self.extEvents , "textEvents")){
+    _draw_user_count = 7;
+    text = "";
+    sprite_index = spr_gunmu;
+	//depth = DEPTH.LINE - 30;
+	//print(self.line_id);
+	print($"Line[{self.line_id}] TextEvents");
+    
+}elif(self.image != "line.png"){
+    if(file_exists($"{InChartPath}{self.image}")){
+		
+        sprite = (sprite_add($"{InChartPath}{self.image}" , 1 , false , false , 0 , 0 ));
+		
+        if(sprite_exists(sprite)){
+			
+			var wh = [ 
+				sprite_get_width(sprite),
+				sprite_get_height(sprite)
+			],
+			_m_s = (max(window_get_width() / 1350 , window_get_height() / 900));
+			_scales = _m_s;
+			
+			sprite_set_offset(sprite , wh[0] / 2 , wh[1] / 2);
+			
+            sprite_index = sprite;
+            print($"Line[{self.line_id}] Texture: Successed to Load \"{self.image}\" Image. " , game.settings.enableDebug);
+			
+        }else{
+            sprite_index = spr_gunmu;
+            print($"Line[{self.line_id}] Texture: Failed to Load \"{self.image}\" Image. " , game.settings.enableDebug);
+        }
+    }else{
+        sprite_index = spr_gunmu;
+        print($"Line[{self.line_id}] Texture: Non-Image called \"{self.image}\" " , game.settings.enableDebug);
+    };
+	
+	//depth = DEPTH.LINE + 50;
+}elif(is_real(self.bindUI) && self.bindUI != 0) {
+	sprite_index = spr_gunmu;
+	_draw_user_count = 5;
+};
+
+//delete(self.extEvents);
+
+//print($"Line[{self.line_id}]: {self.events[0].extEvents}");
+
+line_debug = false;
+if(self.line_id == 34){
+	print(self.extEvents);	
+};
+
+depth = depth + self.isCover;
+/*
+var ext_names = (struct_get_names(self.extEvents));
+for(var l = 0 ; l < array_length(ext_names) ; l ++){
+    
+}
+
+//print(events_count);
+if(self.line_id == 0 || self.line_id == 1 || self.line_id == 2 || self.line_id == 3 || self.line_id == 4) then print(self.events);
+
+///@event User 1
+/// @description 父线初始化
+
+
+///@event User 2
+///@desc 主线事件运行&index递进
+
+//exit;
+
+if((is_undefined(self.events) && is_undefined(self.extEvents)) || game.paused) then exit;
+
+// 每个事件值
+var _r_x = 0,
+    _r_y = 0,
+    _r_r = 0,
+    _r_a = 0;
+
+// 总和 
+var _t_x = 0,
+    _t_y = 0,
+    _t_a = 0,
+    _t_r = 0,
+    _t_c = c_white,
+    _t_sx = 1,
+    _t_sy = 1;
+
+/*
+var _t_x = 0,
+    _t_y = 0,
+    _t_a = 0,
+    _t_r = 0,
+    _t_c = c_white,
+    _t_sx = 1,
+    _t_sy = 1;
+*/
+
+var eventLayers = (self.events),
+	spEvents = (self.extEvents);
+
+if(!is_undefined(eventLayers)){
+	for(var i = 0 ; i < array_length(eventLayers) ; i ++){
+		if(is_undefined(eventLayers[i])) then continue;
+		
+		// 获取值
+		//_r_x = (events_values[@ i].moveXEvents);
+		//_r_y = (events_values[@ i].moveYEvents);
+		//_r_r = (events_values[@ i].rotateEvents);
+		//_r_a = (events_values[@ i].alphaEvents);
+		
+		// 检测事件是否存在
+		var _ex = false,
+			_ey = false,
+			_er = false,
+			_ea = false;
+		
+		var names = (variable_struct_get_names(eventLayers[i]));
+		for(var l = 0 ; l < array_length(names) ; l ++){
+			
+			// 获取事件信息
+			var event_name = (names[@ l]);
+			if(event_name == "speedEvents"){ continue; };
+			
+			var _index = (events_count[@ i][$ event_name]),
+				events = (eventLayers[@ i][$ event_name]),
+				aaa = false,
+				bbb = 0;
+				
+			var events_len = (array_length(events));
+			_index = (clamp( _index , 0 , events_len - 1 ));
+			/// 事件index
+			if((events_len - 1) > (_index + 1)){
+				if((events[_index][$ "endTime"] > events[_index + 1][$ "startTime"]) && (events[_index + 1][$ "startTime"] <= line_time)){
+					aaa = true;
+					_index ++;
+				};
+			};
+			
+			
+			while((_index > 0) && (line_time < events[_index][$ "startTime"])){
+				if((events[_index - 1][$ "endTime"] < line_time) && (!aaa)) { bbb = 1; break; };
+				
+				_index --;
+				
+			};
+			
+			while(((events_len - 1) > _index) && (line_time > events[_index][$ "endTime"])){
+				//if(self.line_id == 0){ print($"{event_name}: Ins..."); aaa = true; bbb = _index};
+				if(bbb) { break; };
+				_index ++;	
+				
+			};
+			
+			_index = (clamp( _index , 0 , events_len - 1 ));
+			
+			events_count[@ i][$ event_name] = _index;
+			if(_index - 1 >= 0){
+				//if(_index == (events_len - 1)){
+				//	events_values[@ i][$ event_name] = (events[@ (events_len - 2)][$ "end"]);	
+				//}else{
+				if(aaa) then events_values[@ i][$ event_name] = (events[@ (_index)][$ "end"]);
+				else events_values[@ i][$ event_name] = (events[@ (_index - 1)][$ "end"]);	
+				//};
+			};
+			
+			var index = (events_count[@ i][$ event_name]);
+			if(aaa){
+				print($"{event_name}: Old[{bbb}] - Now[{index}] - Len[{events_len}]");	
+			};
+			
+			//print(1111);
+			
+			/// 事件运行部分
+			
+			
+			if(!is_array(events)){
+				print($"Line[{self.line_id}] -> EventLayer[{i}]: {event_name} is no array");
+				continue;
+			};
+			
+			
+			
+			if((events_len - 1) < index){
+				print($"Line[{self.line_id}] -> EventLayer[{i}]: {event_name} -> Index[{index}] out of length[{events_len}]");
+				continue;
+			}elif(index < 0){
+				print($"Line[{self.line_id}] -> EventLayer[{i}]: {event_name} -> Index[{index}] out of -1]");
+				continue;
+			};
+			var event = (events[@ index]);
+			
+			var stime = (event[$ "startTime"]),
+				etime = (event[$ "endTime"]),
+				_eval = (events_values[@ i][$ event_name]);
+			
+			
+			
+			if(line_time < stime || bbb) {
+				switch(event_name){
+					case "moveXEvents":
+						_r_x = (_eval);
+						_ex = true;
+					break;
+					
+					case "moveYEvents":
+						_r_y = (_eval);
+						_ey = true;
+					break;
+					
+					case "alphaEvents":
+						_r_a = (_eval);
+						_ea = true;
+					break;
+					
+					case "rotateEvents":
+						_r_r = (_eval);
+						_er = true;
+					break;
+				};
+				
+				continue;
+			};
+			
+			
+			var sval = (event[$ "start"]),				
+				type = (event[$ "easingType"]),
+				eval = (event[$ "end"]),
+				eLeft = (event[$ "easingLeft"]),
+				eRight = (event[$ "easingRight"]),
+				tval = (tween_execute(line_time , stime , etime , sval , eval , type , eLeft , eRight)),
+				_re_value = (events_recall_values[@ i][$ event_name]);
+				
+			//if((line_time >= stime && line_time <= etime)){
+			switch(event_name){
+				case "moveXEvents":
+					_r_x = tval;
+					if(!is_finite(_r_x)){
+						_r_x = (_re_value);
+					}else events_recall_values[@ i][$ event_name] = (tval);//_r_x = 0//_eval;
+					_ex = true;
+				break;
+				
+				case "moveYEvents":
+					_r_y = tval;
+					if(!is_finite(_r_y)){
+						_r_y = (_re_value);
+					}else events_recall_values[@ i][$ event_name] = (tval);//then _r_y = 0//_eval;
+					_ey = true;
+				break;
+					
+				case "alphaEvents":
+					_r_a = tval;
+					if(!is_finite(_r_a)){
+						_r_a = (_re_value);
+					}else events_recall_values[@ i][$ event_name] = (tval);//then _r_a = 0//_eval;
+					_ea = true;
+				break;
+					
+				case "rotateEvents":
+					_r_r = tval;
+					if(!is_finite(_r_r)){
+						_r_r = (_re_value);
+					}else events_recall_values[@ i][$ event_name] = (tval);//then _r_r = 0//_eval;
+					_er = true;
+				break;
+			//};
+			};
+		};
+		
+		// IDK NU
+		if(!_ex) then _r_x = (events_values[@ i][$ "moveXEvents"]);
+		if(!_ey) then _r_y = (events_values[@ i][$ "moveYEvents"]);
+		if(!_ea) then _r_a = (events_values[@ i][$ "alphaEvents"]);
+		if(!_er) then _r_r = (events_values[@ i][$ "rotateEvents"]);
+		
+		// 累加
+		_t_x += _r_x;
+		_t_y += _r_y;
+		_t_a += _r_a;
+		_t_r += _r_r;
+	
+	
+		// 归零
+		_r_x = 0;
+		_r_y = 0;
+		_r_a = 0;
+		_r_r = 0;
+	
+		// 特殊层
+		if(i == 0 && (!is_undefined(spEvents))){
+			var _names = (variable_struct_get_names(spEvents));
+			//if(array_length(_names) == 0) then 
+			if(is_undefined(_names)) then continue;
+			var len = (array_length(_names));
+			if(len){
+				for(var e = 0 ; e < len ; e ++){
+					var _event_name = (_names[e]),
+						_ext_events = (spEvents[$ _event_name]),
+						_ext_len = (array_length(_ext_events)),
+						bol = false;
+					
+					//print(ext_events_count[$ event_name]);
+					
+					var	_ext_count = (clamp(ext_events_count[$ _event_name] , 0 , _ext_len - 1)),
+						_ext_index = _ext_count;
+					if(_ext_len <= 0 ) then continue;
+					
+					
+					
+					//while(_ext_index > 0 && line_time < _ext_events[_ext_index][$ "startTime"] && !bol){
+					//	if(line_time > _ext_events[_ext_index - 1][$ "endTime"]) then break;
+						
+					//	_ext_index --;
+					//	//bol = true;
+					//};
+					
+					while((_ext_index < (_ext_len - 1)) && line_time > _ext_events[_ext_index][$ "endTime"] && !bol){
+						_ext_index ++;	
+						//bol = true;
+					};
+					
+					
+					_ext_index = (clamp(_ext_index , 0 , _ext_len - 1));
+					ext_events_count[$ _event_name] = _ext_index;
+					if(_ext_index > 0){
+						ext_events_values[$ _event_name] = (_ext_events[_ext_index - 1][$ "end"]);	
+					};
+					
+					var _event = (_ext_events[_ext_index]);
+					
+					var sval = (_event[$ "start"]),				
+						type = (_event[$ "easingType"]),
+						eval = (_event[$ "end"]),
+						eLeft = (_event[$ "easingLeft"]),
+						eRight = (_event[$ "easingRight"]),
+						stime = (_event[$ "startTime"]),
+						etime = (_event[$ "endTime"]),
+						_b_val = (ext_events_values[$ _event_name]),
+						isTime = (line_time < stime);
+						//tval = (tween_execute(line_time , stime , etime , sval , eval , type , eLeft , eRight)),
+					switch(_event_name){
+						case "colorEvents":
+							var col1 , col2 , col3;
+							//print($"Color Value: {sval} | {eval}");
+							if(isTime) {
+								col1 = (_b_val[0]);
+								col2 = (_b_val[1]);
+								col3 = (_b_val[2]);
+							}else{
+								col1 = (tween_execute(line_time , stime , etime , sval[0] , eval[0] , type , eLeft , eRight));
+								col2 = (tween_execute(line_time , stime , etime , sval[1] , eval[1] , type , eLeft , eRight));
+								col3 = (tween_execute(line_time , stime , etime , sval[2] , eval[2] , type , eLeft , eRight));
+							}
+							_t_c = (make_colour_rgb(col1 , col2 , col3));
+						break;
+						
+						case "textEvents":
+							if(isTime){
+								text = _b_val;	
+							}else{
+								text = sval;
+							};
+						break;
+						
+						case "scaleXEvents":
+							if(isTime) then _t_sx = (_b_val);
+							else 
+							_t_sx = (tween_execute(line_time , stime , etime , sval , eval , type , eLeft , eRight));
+						break;
+						
+						case "scaleYEvents":
+							if(isTime) then _t_sy = (_b_val);
+							else 
+							_t_sy = (tween_execute(line_time , stime , etime , sval , eval , type , eLeft , eRight));
+						break;
+					};
+				};
+			};
+		};
+	};
+};
+
+//if(_t_x == 0) then _t_x = (events_end_values.moveXEvents);
+//if(_t_y == 0) then _t_y = (events_end_values.moveYEvents);
+//if(_t_a == 0) then _t_a = (events_end_values.alphaEvents);
+//if(_t_r == 0) then _t_r = (events_end_values.rotateEvents);
+
+//events_end_values.moveXEvents = (_t_x);
+//events_end_values.moveYEvents = (_t_y);
+//events_end_values.alphaEvents = (_t_a);
+//events_end_values.rotateEvents = (_t_r);
+
+
+
+// Positions
+var pos = (get_window_pos_scale(_t_x , _t_y));
+x = pos[0];
+y = pos[1];
+
+// Rotate
+image_angle = (-_t_r);
+
+// Alpha
+image_alpha = (_t_a / 255);
+
+// Scales
+scaleX = _t_sx;
+scaleY = _t_sy;
+
+// Color
+image_blend = _t_c;
+
+
+///@event User 3
+/// @description 子线继承主线执行
+
+
+///@event User 4
+
+
+///@event User 5
+/// @description 空事件
+
+
+///@event User 6
+/// @description 非文字事件绘制
+var __scales = [
+    scaleX * _scales * 0.8,
+    scaleY * _scales * 0.8
+]
+if(sprite_index == line){
+    __scales[0] = (__scales[0] * 1.18);
+    __scales[1] = (__scales[1] * 0.65);
+}
+draw_sprite_ext(sprite_index , 0 , x , y , __scales[0], __scales[1], image_angle , image_blend , image_alpha);
+
+
+///@event User 7
+/// @description 文字事件绘制
+//draw_set_colour(c_white);
+//depth = DEPTH.LINE - 3;
+draw_set_halign(fa_center);
+draw_set_valign(fa_middle);
+draw_set_font(game.font);
+draw_text_transformed_colour(x , y , text , scaleX * 0.6, scaleY * 0.6  , image_angle , image_blend , image_blend , image_blend , image_blend , image_alpha);
+//print($"text: {text} | xy: {[x , y]} | rot: {image_angle} | alpha: {image_alpha} | color: {color_get_red(image_blend)} {color_get_green(image_blend)} {colour_get_blue(image_blend)}");
+
+
+///@event User 8
+/// @description UI绑定
+var str = [
+    "pause",
+    "combonumber",
+    "combo",
+    "score",
+    "bar",
+    "name",
+    "level"
+]
+if(is_real(self.bindUI)) then self.bindUI = (str[self.bindUI]);
+
+var xx = x,
+    yy = y,
+    angle = image_angle,
+    alpha = image_alpha,
+    color = image_blend,
+    scaleX = image_xscale,
+    scaleY = image_yscale,
+    name = self.bindUI;
+with(oRender_2){
+    bindUI[$ name] = [ xx , yy , color , angle , alpha , scaleX , scaleY];
+};
+//struct_set(oRender_1.bindUI)
+
+//switch (self.bindUI) {
+	//case "pause" : case 1:
+        //
+    //break;
+//
+    //case "combonumber" : case 2:
+        //
+    //break;
+//
+    //case "combo" : case 3:
+        //
+    //break;
+//
+    //case "score" : case 4:
+        //
+    //break;   
+//
+    //case "bar" : case 5:
+        //
+    //break;
+//
+    //case "name" : case 6:
+        //
+    //break;
+//
+    //case "level" : case 7:
+        //
+    //break;        
+//}

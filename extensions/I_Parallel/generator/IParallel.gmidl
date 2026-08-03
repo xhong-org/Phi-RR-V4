@@ -1,0 +1,9 @@
+[gml_api]
+module IParallel;
+
+[global]
+function rpe_worker_upload_lines(input : pointer, line_count : int32) : bool;
+[global]
+function rpe_worker_resolve_lines(input : pointer, line_count : int32, output : pointer) : int32;
+[global, finish_fn]
+function rpe_worker_shutdown() : unit;

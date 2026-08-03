@@ -1,0 +1,29 @@
+[gml_api]
+module IShaders;
+
+[global]
+function rpe_hlsl_initialize(device : pointer, context : pointer) : int32;
+[global]
+function rpe_hlsl_state() : int32;
+[global]
+function rpe_hlsl_compile(source : string, source_name : string) : int32;
+[global]
+function rpe_glsl_translate(source : string, source_name : string) : string;
+[global]
+function rpe_hlsl_set_uniform_component(handle : int32, uniform_name : string, component : int32, value : float) : bool;
+[global]
+function rpe_hlsl_begin(handle : int32) : bool;
+[global]
+function rpe_hlsl_draw(handle : int32, uv_left : float, uv_top : float, uv_right : float, uv_bottom : float) : int32;
+[global]
+function rpe_hlsl_target_width() : int32;
+[global]
+function rpe_hlsl_target_height() : int32;
+[global]
+function rpe_hlsl_end() : bool;
+[global]
+function rpe_hlsl_release(handle : int32) : bool;
+[global, finish_fn]
+function rpe_hlsl_shutdown() : unit;
+[global]
+function rpe_hlsl_get_error() : string;

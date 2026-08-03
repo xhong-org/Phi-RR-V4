@@ -1,0 +1,26 @@
+{
+  "$GMSound":"v2",
+  "%Name":"snd_note_drag",
+  "audioGroupId":{
+    "name":"audiogroup_hitsounds",
+    "path":"audiogroups/audiogroup_hitsounds",
+  },
+  "bitDepth":1,
+  "channelFormat":0,
+  "compression":0,
+  "compressionQuality":4,
+  "conversionMode":0,
+  "duration":0.46535146,
+  "exportDir":"",
+  "name":"snd_note_drag",
+  "parent":{
+    "name":"SFX",
+    "path":"folders/SFX.yy",
+  },
+  "preload":false,
+  "resourceType":"GMSound",
+  "resourceVersion":"2.0",
+  "sampleRate":44100,
+  "soundFile":"snd_note_drag.wav",
+  "volume":1.0,
+}

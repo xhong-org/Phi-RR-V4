@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"kawase_blur_sprite",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"kawase_blur_sprite",
+  "parent":{
+    "name":"Blur",
+    "path":"folders/Shaders/Blur.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

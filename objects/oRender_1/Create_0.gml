@@ -1,0 +1,162 @@
+/// @description
+window_set_caption($"{GAME_NAME}");
+depth = DEPTH.DEBUG;
+gml_release_mode(false);
+globalvar game , game_1 , _eff_c , combo , maxcombo , rpe_bpm , fpsReal , PhiTime;
+bpm_count = 0;
+rpe_bpm = 140;
+combo = 0;
+maxcombo = 0;
+PhiTime = false;
+game = (new Phigros());
+chart_session_ensure();
+chart_session_bind_paths();
+if (chart_session_has_track()) {
+	chart_session_apply_folder(game);
+} else {
+	chart_session_load_sample();
+	chart_session_bind_paths();
+	chart_session_apply_folder(game);
+};
+game.Resource();
+// Configs() may overwrite folder_chart from ini; re-apply selected chart session.
+if (chart_session_has_track()) {
+	chart_session_apply_folder(game);
+	chart_session_bind_paths();
+};
+fpsReal = 0;
+show_debug_message("[oRender_1] Creating RPE state");
+game_1 = (new RPE());
+show_debug_message("[oRender_1] RPE state created");
+if (!is_struct(game_1.chart_info)) then game_1.chart_info = { name:"", level:"", offset:0, meta_offset:0, info_offset:0, song:"", background:"" };
+
+var _chart_rel = "";
+if (is_struct(game) && struct_exists(game, "folder_chart")) {
+	var _folder_chart = game.folder_chart;
+	if (is_struct(_folder_chart) && struct_exists(_folder_chart, "chart")) {
+		var _chart_value = _folder_chart[$ "chart"];
+		if (is_string(_chart_value)) then _chart_rel = _chart_value;
+	};
+};
+var _chart_path = string_length(_chart_rel) ? (InChartPath + _chart_rel) : "";
+show_debug_message($"[oRender_1] RPE chart path: {_chart_path}");
+var _rpe_loaded = game_1.Reader(_chart_path);
+if (!_rpe_loaded) {
+	show_debug_message("[oRender_1] RPE chart loading failed");
+	instance_destroy();
+	exit;
+};
+var _bg = "";
+if (is_struct(game) && struct_exists(game, "folder_chart")) {
+	var _folder_chart_bg = game.folder_chart;
+	if (is_struct(_folder_chart_bg) && struct_exists(_folder_chart_bg, "bg")) {
+		var _bg_value = _folder_chart_bg[$ "bg"];
+		if (is_string(_bg_value)) then _bg = _bg_value;
+	};
+};
+if ((!is_string(_bg) || !string_length(_bg))
+	&& variable_global_exists("chart_session") && is_struct(global.chart_session)
+	&& is_string(global.chart_session.image_file) && string_length(global.chart_session.image_file)) {
+	_bg = global.chart_session.image_file;
+	game.folder_chart.bg = _bg;
+};
+if (is_string(_bg) && string_length(_bg)) then game.Background(InChartPath + _bg);
+
+instance_create_depth(0,0,0,oBG);
+instance_create_depth(0,0,0,oMedia , { "name" : (string_length(game.folder_chart.music) ? (InChartPath + game.folder_chart.music) : "") });
+instance_create_depth(0,0,DEPTH.BG - 1,oExtraPlay);
+// Seed BPM from the same normalized timeline used by parser and runtime.
+var _initial_bpm_timeline = game_1.Math.ensureBpmTimeline();
+if (is_array(_initial_bpm_timeline) && array_length(_initial_bpm_timeline) > 0) {
+	rpe_bpm = real(_initial_bpm_timeline[0].bpm);
+};
+if (!struct_exists(game_1, "line_list")) then game_1.line_list = [];
+game_1._note_activation_records = {};
+game_1._note_spatial_group_map = {};
+game_1._note_spatial_groups = [];
+game_1._note_spatial_holds = [];
+game_1.CreateLines();
+for (var _spatial_i = 0; _spatial_i < array_length(game_1._note_spatial_groups); _spatial_i++) {
+	array_sort(game_1._note_spatial_groups[_spatial_i].notes, function(a, b) {
+		if (a.spatialFloor < b.spatialFloor) then return -1;
+		if (a.spatialFloor > b.spatialFloor) then return 1;
+		return 0;
+	});
+};
+// Expose created RPE lines for note binding later.
+if (!struct_exists(game_1, "line_list") || !is_array(game_1.line_list)) {
+	game_1.line_list = [];
+	with (oLine_1) array_add(game_1.line_list, id);
+};
+
+
+// Hit effect manager (same as oRender; required by judgeCalc -> _eff_c)
+_eff_c = (function(){ return; });
+if (game.settings.useOldFX) {
+	instance_create_depth(0, 0, 0, oEffect);
+	_eff_c = method(self, function(_x, _y, color = #ffeca0) {
+		if (!game.settings.enableHitEffect) then return;
+		with (oEffect) {
+			_x = floor(_x);
+			_y = floor(_y);
+			part_particles_create_color(p1, _x, _y, _hitFX, color, 1);
+			part_particles_create_color(p1, _x, _y, part, color, 4);
+		};
+	});
+} else {
+	instance_create_depth(0, 0, 0, oEffectNew);
+	_eff_c = eff_create;
+};
+cameraZoom = false;
+
+// attachUI target slots: [x, y, color, alpha, rot, scaleX, scaleY]
+// bindUI_attached marks which HUD keys are currently driven by a judge line
+bindUI = {
+	"pause" : (array_create(7, 0)),
+	"combonumber" : (array_create(7, 0)),
+	"combo" : (array_create(7, 0)),
+	"score" : (array_create(7, 0)),
+	"bar" : (array_create(7, 0)),
+	"name" : (array_create(7, 0)),
+	"level" : (array_create(7, 0))
+};
+bindUI_attached = {
+	"pause" : false,
+	"combonumber" : false,
+	"combo" : false,
+	"score" : false,
+	"bar" : false,
+	"name" : false,
+	"level" : false
+};
+
+// UI draw prep (mirrors oRender)
+draw_set_font(game.font);
+var _ui_name_w = game.folder_chart.name;
+if ((!is_string(_ui_name_w) || !string_length(_ui_name_w))
+	&& is_struct(game_1.chart_info) && is_string(game_1.chart_info.name)) {
+	_ui_name_w = game_1.chart_info.name;
+};
+font_scales = clamp(0.6 * ((room_width / 2) / (string_width(string(_ui_name_w)) * 0.6 + 40)), 0.2, 0.55);
+bak_str_combo = (game.settings.comboString);
+image_blend = c_white;
+
+// default event enable flags (Other_12 will overwrite from settings)
+_draw_user_count = 0;
+_draw_fps_user_count = 0;
+_step_fps_user_count = 0;
+_re_fps = 1;
+fps_more = 0;
+refresh_count = 0;
+chart_exit_started = false;
+chart_exit_timer = 0;
+chart_exit_alpha = 1;
+chart_exit_queued = false;
+if (!instance_exists(oPausedUI)) then instance_create_depth(0, 0, -1000000, oPausedUI, { owner: id });
+event_user(2);
+
+if (variable_global_exists("render_mode") && global.render_mode) {
+	instance_create_depth(0, 0, -2000000000, oVideoRenderer);
+} else {
+	alarm[0] = 200;
+};

@@ -1,0 +1,265 @@
+//print($"{events_count}");
+// 何意味遍历
+//var events_len = array_length(self.events);
+//var count_len  = array_length(events_count);
+//
+//// 保证两个数组长度一致，避免 i 越界
+//var loop_len = min(events_len, count_len);
+//
+//for (var i = 0; i < events_len; i++) {
+    //var _eventLayer = self.events[@ i];
+    //
+    //if(is_undefined(_eventLayer)) then continue;
+    //
+    //var    _names = struct_get_names(_eventLayer);
+//
+    //for (var ii = 0; ii < array_length(_names); ii ++) {
+        //var events_name = _names[@ ii],
+            //_events = _eventLayer[$ events_name];
+        //
+        //if(events_name != "extEvents"){ // 如果不是特殊事件
+            //var event_length = array_length(_events);
+    //
+            //// 默认索引，保证合法范围
+            //var index  = (events_count[@ i][$ events_name] ?? 0);
+            //var _index = clamp(index, 0, max(0, event_length - 1));
+            //
+            //
+            //
+            //if (event_length > 0) {
+                //// 向前查找
+                //while (_index > 0 && line_time < _events[@ _index].startTime) {
+                    //if (line_time > _events[@ (_index - 1)].endTime) break;
+                      //
+                    //_index--;
+                //};
+    //
+                //// 向后查找
+                //while (_index < event_length - 1 && line_time > _events[@ _index].endTime) {
+                    //_index++;
+                //};
+                //
+                //
+                //
+                //// 更新计数
+                //events_count[@ i][$ events_name] = _index;
+                //
+            //} else {
+                //// 空数组情况
+                //print("No events for " + string(events_name) + " at i=" + string(i));
+            //};
+            //if(_index > 0){
+               //events_values[@ i][$ events_name] = _events[@ (_index - 1)][$ "end"];
+            //};
+        //}elif(events_name == "extEvents" && i == 0){ // 如果是特殊事件的话
+            //var ext_events = (_eventLayer[$ "extEvents"]);
+            ////if(!line_debug){
+                ////print($"[{self.line_id}] {ext_events}");
+                ////line_debug = true;
+            ////}
+            //if(!is_undefined(ext_events)){
+                //var _ee_names = (struct_get_names(ext_events));
+                //
+                //for(var ee = 0 ; ee < array_length(_ee_names) ; ee ++){
+                    //var    _ext_name = (_ee_names[ee]);
+                    //var event_length = array_length(ext_events[$ _ext_name]);
+            //
+                    //// 默认索引，保证合法范围
+                    //var index  = (events_count[@ i][$ _ext_name] ?? 0);
+                    //var _index = clamp(index, 0, max(0, event_length - 1));
+                    //
+                    ////print(ext_events[$ _ext_name]);
+                    //
+                    //if (event_length > 0) {
+                        //// 向前查找
+                        //while (_index > 0 && line_time < ext_events[$ _ext_name][@ _index].startTime) {
+                            //if (line_time > ext_events[$ _ext_name][@ (_index - 1)].endTime) break;
+                              //
+                            //_index--;
+                        //};
+            //
+                        //// 向后查找
+                        //while (_index < event_length - 1 && line_time > ext_events[$ _ext_name][@ _index].endTime) {
+                            ////print($"{_ext_name}>>index>>{_index}");
+                            //_index++;
+                        //};
+                        //
+                        //
+                        //
+                    //} else {
+                        //// 空数组情况
+                        //print("[ExtEvents]No events for " + string(_ext_name) + " at i=" + string(i));
+                    //};
+                    //
+                    //// 更新计数
+                    //events_count[@ i][$ _ext_name] = clamp(_index, 0, event_length - 1);
+                    //
+                    //if(_index > 0){
+                        ////if()
+                        //if(_ext_name != "colorEvents") then events_values[@ i][$ _ext_name] = ext_events[$ _ext_name][@ (_index - 1)][$ "end"];
+                        //elif(_ext_name == "colorEvents"){
+                            //var _eval = (ext_events[$ _ext_name][@ (_index - 1)][$ "end"]),
+                                //__color = (make_colour_rgb(_eval[0] , _eval[1] , _eval[2]));
+                            //events_values[@ i][$ _ext_name] = __color;
+                        //};
+                    //};
+                //};
+            //}else{
+                ////print($"Line[{self.line_id}]: extEvents->undefined");
+            //};
+        //};
+        //
+        //
+        //
+        ////_e_x = (events_values[@ i].moveXEvents);
+        ////_e_y = (events_values[@ i].moveYEvents);
+        ////_e_a = (events_values[@ i].alphaEvents);
+        ////_e_r = (events_values[@ i].rotateEvents);
+        //var _e_x = (events_values[@ i][$ "moveXEvents"]),
+            //_e_y = (events_values[@ i][$ "moveYEvents"]),
+            //_e_a = (events_values[@ i][$ "alphaEvents"]),
+            //_e_r = (events_values[@ i][$ "rotateEvents"]),
+            //_e_t = (events_values[@ i][$ "textEvents"] ?? ""),
+            //_e_c = (events_values[@ i][$ "colorEvents"] ?? c_white),
+            //_e_sx = (events_values[@ i][$ "scaleXEvents"] ?? 1),
+            //_e_sy = (events_values[@ i][$ "scaleYEvents"] ?? 1);
+        //
+        //
+        //
+        //
+        //if(events_name != "extEvents"){
+            //var _index = (events_count[@ i][$ events_name]);
+            //
+            //var event = _events[@ _index];
+            //
+            //var stime = (event.startTime),
+                //etime = (event.endTime),
+                //_e_left = (event[$ "easingLeft"] ?? 0),
+                //_e_right = (event[$ "easingRight"] ?? 1),
+                //sval = (event.start),
+                //eval = (event[$ "end"]),
+                //_e_type = (event[$ "easingType"] ?? 0);
+            //var _r_val = (tween_execute(line_time , stime , etime , sval , eval , _e_type , _e_left , _e_right));
+            //if(_index && events_name == "moveXEvents" && _e_x != _events[@ (_index - 1)][$ "end"]) then print($"Fuck YYG , Why endValue -> {_e_x} & save_Value[{(index - 1)}] -> {_events[@ (_index - 1)][$ "end"]} no eq ?")
+            //
+            //switch (events_name) {
+            	//case "moveXEvents":
+                    //if(line_time < stime) then _r_x = (_e_x);
+                    //elif(line_time >= stime && line_time <= etime){
+                        //_r_x = _r_val;
+                        //if(is_finite(_r_x)) then struct_set(events_error_revalues[@ i] , events_name , _r_x);
+                        //else _r_x = (events_error_revalues[@ i][$ events_name]);    
+                    //};
+                    //
+                //break; 
+            //
+                //case "moveYEvents":
+                    //if(line_time < stime) then _r_y = (_e_y);
+                    //elif(line_time >= stime && line_time <= etime){
+                        //_r_y = _r_val;
+                        //if(is_finite(_r_y)) then struct_set(events_error_revalues[@ i] , events_name , _r_y);
+                        //else _r_y = (events_error_revalues[@ i][$ events_name]);    
+                    //}; 
+                    //
+                //break;
+            //
+                //case "alphaEvents":
+                    //if(line_time < stime) then _r_a = (_e_a);
+                    //elif(line_time >= stime && line_time <= etime){
+                        //_r_a = _r_val;
+                        //if(is_finite(_r_a)) then struct_set(events_error_revalues[@ i] , events_name , _r_a);
+                        //else _r_a = (events_error_revalues[@ i][$ events_name]);    
+                    //}; 
+                    //
+                //break;
+            //
+                //case "rotateEvents":
+                    //if(line_time < stime) then _r_r = (_e_r);
+                    //elif(line_time >= stime && line_time <= etime){
+                        //_r_r = _r_val;
+                        //if(is_finite(_r_r)) then struct_set(events_error_revalues[@ i] , events_name , _r_r);
+                        //else _r_r = (events_error_revalues[@ i][$ events_name]);    
+                    //};
+                    //
+                //break;    
+            //};
+        //};
+        //if(i == 0 && events_name == "extEvents"){
+            //if(is_undefined(_events)) then continue;
+            //var e_names = (struct_get_names(_events));
+            //for(var e = 0 ; e < array_length(e_names) ; e ++){
+                //var ___ext_name = (e_names[@ e]);
+                ////if(is_undefined())
+                //var event = (_events[$ ___ext_name]);
+                //if(is_undefined(event) || !is_array(event)) then continue;
+                //
+                //var _index = (events_count[@ i][$ ___ext_name]);//clamp(events_count[@ i][$ ___ext_name], 0, array_length(event) - 1);//(clamp());
+                //
+                ////var event = ()
+                ////print($"[{___ext_name}] Index: {_index}");
+                //var stime = (event[@ _index].startTime);
+                //var etime = (event[@ _index].endTime);
+                //var _e_left = (event[@ _index][$ "easingLeft"] ?? 0);
+                //var _e_right = (event[@ _index][$ "easingRight"] ?? 1);
+                //var sval = (event[@ _index].start);
+                //var eval = (event[@ _index][$ "end"]);
+                //var _e_type = (event[@ _index][$ "easingType"] ?? 0);
+                //
+                //switch (___ext_name) {
+                	//case "colorEvents":
+                        //if(line_time < stime) then _t_c = (_e_c);
+                        //elif(line_time >= stime && line_time <= etime){    
+                            //var _col = [
+                                  //tween_execute(line_time , stime , etime , sval[0] , eval[0] , _e_left , _e_right),
+                                  //tween_execute(line_time , stime , etime , sval[1] , eval[1] , _e_left , _e_right),
+                                  //tween_execute(line_time , stime , etime , sval[2] , eval[2] , _e_left , _e_right)
+                            //];
+                            //_t_c = (make_colour_rgb(_col[0] , _col[1] , _col[2]));
+                        //};
+                    //break;
+                //
+                    //case "textEvents":
+                        //if(line_time < stime) then text = (_e_t);
+                        //elif(line_time >= stime && line_time <= etime){
+                            //var char_length = (floor(tween_execute(line_time , stime , etime , string_length(sval) , string_length(eval) , _e_left , _e_right)));
+                            //text = (string_copy(eval , 0 , char_length));
+                        //};
+                    //break;
+                    //
+                    //case "scaleXEvents":
+                        //if(line_time < stime) then _t_sx = (_e_sx);
+                        //elif(line_time >= stime && line_time <= etime){
+                            //_t_sx = (tween_execute(line_time , stime , etime , sval , eval , _e_left , _e_right));
+                        //};    
+                    //break;
+                //
+                    //case "scaleYEvents":
+                        //if(line_time < stime) then _t_sy = (_e_sy);
+                        //elif(line_time >= stime && line_time <= etime){
+                            //_t_sy = (tween_execute(line_time , stime , etime , sval , eval , _e_left , _e_right));
+                        //};   
+                    //break;        
+                //};
+            //};
+        //};
+    //};
+    //// 累加变量值
+    //_t_x += _r_x;
+    //_t_y += _r_y;
+    //_t_a += _r_a;
+    //_t_r += _r_r; 
+    //
+    //// 归零就是了
+    //_r_x = 0;
+    //_r_y = 0;
+    //_r_r = 0;
+    //_r_a = 0;
+    //
+//};
+
+
+
+//print(events_count);
+
+
+//print(events_count);

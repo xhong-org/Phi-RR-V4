@@ -1,0 +1,698 @@
+/// @desc 将全部积压在Draw事件的大部分计算代码全部移至Step事件, 据说可以提升微量性能
+// gml_release_mode(true);
+// gml_pragma("forceinline");
+// gml_pragma("UnityBuild", "true");
+// Feather ignore GM1041
+// Feather ignore GM2016
+// Feather ignore GM2017
+// Feather ignore GM2018
+
+// 0
+var _ctime = selftime, _cseconds = selfseconds, _cmilliseconds = selfmilliseconds;
+var _swidth = scene_width, _sheight = scene_height, _shcenter = scene_width_half, _svcenter = scene_height_half;
+var _nwidth = scene_notes_width, _nheight = scene_notes_height, _nzoom = scene_notes_scaling;
+var _judline_col = (obj_chart_player.getJudgeLineColor()); // _lfcap_inde
+// instance_activate_layer(_layer_activated_instances);
+
+// 1
+var _eealpha = _enable_experimental_alpha; // 获取 Alpha 实验性特性 Flag
+var _g_e_ap = (getAutoPlayEnable());
+// var _ref_uNJ = updateNoteJudgment;
+var _ref_dsqnH = _ds_q_n_hold,
+	_ref_dsqnT = _ds_q_n_tap,
+	_ref_dsqnD = _ds_q_n_drag,
+	_ref_dsqnF = _ds_q_n_flick,
+;
+var _ref_nSGS = updateNoteSpeedGroups, _ref_uN = updateNote;
+
+/*
+// 傻逼
+// wtf bro
+with(103120) {
+	show_debug_message(self);
+};
+*/
+
+#region 判定线
+var _ili = 0, _ref_dsql = _ds_q_lines; repeat(array_length(_dlines)) { with(array_get(_dlines, (_ili ++))) {
+	enabled = true;
+	selftime = (_ctime / timeFactor);
+	selfseconds = (_cseconds / timeFactor);
+	selfmilliseconds = (_cmilliseconds / timeFactor);
+	
+	//
+	sW = _swidth; sH = _sheight;
+	
+	//
+	lposx = posx;
+	lposy = posy;
+	_blpre = image_blend;
+	_anpre = image_angle;
+	_alpre = image_alpha;
+	
+	#region 更新事件层
+	if (_length_layer_events) {
+	
+	// 重置数据
+	posx = 0;
+	posy = 0;
+	image_angle = 0;
+	alpha = 0;
+	
+	// 遍历
+	array_foreach(_layer_events, (function(_e, _i) {
+		
+		// 获取备份
+		var __posx = (_e.posx),
+			__posy = (_e.posy),
+			_rotation = (_e.rotation),
+			_alpha = (_e.alpha)
+		;
+		
+		// 更新坐标移动事件
+		if (_e[$ "length_events_position"]) { // 优先级最高: 总坐标移动事件
+		
+		for(
+			var _index_events_position = (_e.index_events_position),
+				_events_position = (_e.positionEvents)
+			;
+			_index_events_position < (_e.length_events_position);
+			_index_events_position ++
+		) {
+			
+			// 获取事件
+			var _event_position = (array_get(_events_position, _index_events_position));
+			
+			// 判断时间范围
+			var _time_tail = (_event_position.endTime),
+				_tail_x = (_event_position.stop),
+				_tail_y = (_event_position.end2)
+			;
+			if (_time_tail <= selftime) {
+				__posx = _tail_x;
+				__posy = _tail_y;
+				(_e.index_events_position) = (_index_events_position + 1);
+				continue;
+			};
+			
+			// 计算值
+			var _time_head = (_event_position.startTime);
+			if (_time_head <= selftime) {
+				var _easing = (_event_position[$ "easeType"]),
+					_head_easing = (_event_position[$ "easeHead"]),
+					_tail_easing = (_event_position[$ "easeTail"])
+				;
+				var _head_x = (_event_position.start);
+				if (_tail_x == _head_x) then __posx = _tail_x;
+				else __posx = (tween_execute(selftime, _time_head, _time_tail, _head_x, _tail_x, _easing, _head_easing, _tail_easing));
+				var _head_y = (_event_position.start2);
+				if (_tail_y == _head_y) then __posy = _tail_y;
+				else __posy = (tween_execute(selftime, _time_head, _time_tail, _head_y, _tail_y, _easing, _head_easing, _tail_easing));
+			};
+			
+			// ?
+			break;
+			
+		};
+		
+		} else { // 其他
+		
+		// 横坐标移动事件
+		if (_e[$ "length_events_x"]) {
+		for(
+			var _index_events = (_e.index_events_x),
+				_events = (_e.xEvents)
+			;
+			_index_events < (_e.length_events_x);
+			_index_events ++
+		) {
+			
+			// 获取事件
+			var _event = (array_get(_events, _index_events));
+			
+			// 判断时间范围
+			var _time_tail = (_event.endTime),
+				_value_tail = (_event.stop)
+			;
+			if (_time_tail <= selftime) {
+				__posx = _value_tail;
+				(_e.index_events_x) = (_index_events + 1);
+				continue;
+			};
+			
+			// 计算值
+			var _time_head = (_event.startTime);
+			if (_time_head <= selftime) {
+				var _value_head = (_event.start);
+				if (_value_tail == _value_head) then __posx = _value_tail;
+				else __posx = (tween_execute(selftime, _time_head, _time_tail, _value_head, _value_tail, (_event[$ "easeType"]), (_event[$ "easeHead"]), (_event[$ "easeTail"])));
+			};
+			
+			// ?
+			break;
+			
+		};
+		};
+		
+		// 纵坐标移动事件
+		if (_e[$ "length_events_y"]) {
+		for(
+			var _index_events = (_e.index_events_y),
+				_events = (_e.yEvents)
+			;
+			_index_events < (_e.length_events_y);
+			_index_events ++
+		) {
+			
+			// 获取事件
+			var _event = (array_get(_events, _index_events));
+			
+			// 判断时间范围
+			var _time_tail = (_event.endTime),
+				_value_tail = (_event.stop)
+			;
+			if (_time_tail <= selftime) {
+				__posy = _value_tail;
+				(_e.index_events_y) = (_index_events + 1);
+				continue;
+			};
+			
+			// 计算值
+			var _time_head = (_event.startTime);
+			if (_time_head <= selftime) {
+				var _value_head = (_event.start);
+				if (_value_tail == _value_head) then __posy = _value_tail;
+				else __posy = (tween_execute(selftime, _time_head, _time_tail, _value_head, _value_tail, (_event[$ "easeType"]), (_event[$ "easeHead"]), (_event[$ "easeTail"])));
+			};
+			
+			// ?
+			break;
+			
+		};
+		};
+		
+		};
+		
+		// 更新角度旋转事件
+		if (_e[$ "length_events_angle"]) {
+		for(
+			var _index_events = (_e.index_events_angle),
+				_events = (_e.angleEvents)
+			;
+			_index_events < (_e.length_events_angle);
+			_index_events ++
+		) {
+			
+			// 获取事件
+			var _event = (array_get(_events, _index_events));
+			
+			// 判断时间范围
+			var _time_tail = (_event.endTime),
+				_value_tail = (_event.stop)
+			;
+			if (_time_tail <= selftime) {
+				_rotation = _value_tail;
+				(_e.index_events_angle) = (_index_events + 1);
+				continue;
+			};
+			
+			// 计算值
+			var _time_head = (_event.startTime);
+			if (_time_head <= selftime) {
+				var _value_head = (_event.start);
+				if (_value_tail == _value_head) then _rotation = _value_tail;
+				else _rotation = (tween_execute(selftime, _time_head, _time_tail, _value_head, _value_tail, (_event[$ "easeType"]), (_event[$ "easeHead"]), (_event[$ "easeTail"])));
+			};
+			
+			// ?
+			break;
+			
+		};
+		};
+		
+		// 更新透明度变化事件
+		if (_e[$ "length_events_alpha"]) {
+		for(
+			var _index_events = (_e.index_events_alpha),
+				_events = (_e.alphaEvents)
+			;
+			_index_events < (_e.length_events_alpha);
+			_index_events ++
+		) {
+			
+			// 获取事件
+			var _event = (array_get(_events, _index_events));
+			
+			// 判断时间范围
+			var _time_tail = (_event.endTime),
+				_value_tail = (_event.stop)
+			;
+			if (_time_tail <= selftime) {
+				_alpha = _value_tail;
+				(_e.index_events_alpha) = (_index_events + 1);
+				continue;
+			};
+			
+			// 计算值
+			var _time_head = (_event.startTime);
+			if (_time_head <= selftime) {
+				var _value_head = (_event.start);
+				if (_value_tail == _value_head) then _alpha = _value_tail;
+				else _alpha = (tween_execute(selftime, _time_head, _time_tail, _value_head, _value_tail, (_event[$ "easeType"]), (_event[$ "easeHead"]), (_event[$ "easeTail"])));
+			};
+			
+			// ?
+			break;
+			
+		};
+		};
+		
+		// 应用备份
+		posx += __posx;
+		posy += __posy;
+		image_angle += _rotation;
+		alpha += _alpha;
+		
+		// 更新备份
+		(_e.posx) = __posx;
+		(_e.posy) = __posy;
+		(_e.rotation) = _rotation;
+		(_e.alpha) = _alpha;
+		
+	}));
+	
+	// 憋笑
+	if (alpha > 1) then image_alpha = ((255 & (255 * alpha)) / 255);
+	else image_alpha = alpha;
+	if (image_alpha <= 0) then enabled = true;
+	
+	};
+	#endregion 更新事件层
+	
+	// 更新音符速度变化事件
+	if (_length_events_speed) {
+	for(var __index_events_speed = _index_events_speed; __index_events_speed < _length_events_speed; __index_events_speed ++)	{
+		var _event_speed = (array_get(_events_speed, __index_events_speed));
+		
+		// 判断时间范围
+		var _time_tail = (_event_speed.endTime);
+		if (_time_tail < selftime) then continue;
+		
+		// 计算值
+		_floor_position = (((selftime - (_event_speed.startTime)) * (_event_speed.value)) + (_event_speed.floorPosition));
+		_index_events_speed = __index_events_speed;
+		
+		// ?
+		break;
+	};
+	};
+
+	// 额
+	(self._sinx) = (dsin(image_angle));
+	(self._cosine) = (dcos(image_angle));
+	// _delta_trigonometric = (_sinx - _cosine);
+	// _delta_trigonometric = (_sinx - _cosine);
+
+	// 其他
+	_nrpex = (posx - 0.5);
+	_nrpey = (posy - 0.5);
+	
+	// 计算坐标
+	var _dx = (posx * _swidth),
+		_dy = (posy * _sheight)
+	;
+	
+	// 父线?
+	if (parent != noone) {
+		var _fyx = (_dx - _shcenter),
+			_fyy = (_dy - _svcenter),
+			_fs = (parent._sinx),
+			_fc = (parent._cosine)
+		;
+		x = ((parent.x) + ((_fyx * _fc) + (_fyy * _fs)));
+		y = ((parent.y) + ((_fyy * _fc) - (_fyx * _fs)));
+	} else {
+		x = _dx;
+		y = _dy;
+	}; // if (id == 102006) { x = _shcenter; y =_svcenter;show_debug_message(_layer_events); }; // 哈。
+	
+	#region 更新故事板事件
+
+	// 横轴缩放事件
+	if (_length_events_scalex) {
+	for(var _index_events = _index_events_scalex; _index_events < _length_events_scalex; _index_events ++) {
+		var _event = (array_get(_events_scalex, _index_events));
+			
+		// 判断时间范围
+		var _time_tail = (_event.endTime),
+			_value_tail = (_event.stop)
+		;
+		if (_time_tail <= selftime) {
+			scalex = _value_tail;
+			_index_events_scalex = (_index_events + 1);
+			continue;
+		};
+		
+		// 计算值
+		var _time_head = (_event.startTime);
+		if (_time_head <= selftime) {
+			var _value_head = (_event.start);
+			if (_value_tail == _value_head) then scalex = _value_tail;
+			else scalex = (tween_execute(selftime, _time_head, _time_tail, _value_head, _value_tail, (_event[$ "easeType"]), (_event[$ "easeHead"]), (_event[$ "easeTail"])));
+		};
+	
+		// ?
+		break;
+	}; if (scalex == 0) then enabled = false;
+	};
+	// 纵轴缩放事件
+	if (_length_events_scaley) {
+	for(var _index_events = _index_events_scaley; _index_events < _length_events_scaley; _index_events ++) {
+		var _event = (array_get(_events_scaley, _index_events));
+			
+		// 判断时间范围
+		var _time_tail = (_event.endTime),
+			_value_tail = (_event.stop)
+		;
+		if (_time_tail < selftime) {
+			scaley = _value_tail;
+			_index_events_scaley = (_index_events + 1);
+			continue;
+		};
+		
+		// 计算值
+		var _time_head = (_event.startTime);
+		if (_time_head <= selftime) {
+			var _value_head = (_event.start);
+			if (_value_tail == _value_head) then scaley = _value_tail;
+			else scaley = (tween_execute(selftime, _time_head, _time_tail, _value_head, _value_tail, (_event[$ "easeType"]), (_event[$ "easeHead"]), (_event[$ "easeTail"])));
+		};
+	
+		// ?
+		break;
+	}; if (scaley == 0) then enabled = false;
+	};
+	
+	// 颜色变化事件
+	if (_length_events_color) {
+	for(var _index_events = _index_events_color; _index_events < _length_events_color; _index_events ++) {
+		var _event = (array_get(_events_color, _index_events));
+			
+		// 判断时间范围
+		var _time_tail = (_event.endTime),
+			_value_tail = (_event.stop)
+		;
+		if (_time_tail < selftime) {
+			color = _value_tail;
+			_index_events_color = (_index_events + 1);
+			continue;
+		};
+		
+		// 计算值
+		var _time_head = (_event.startTime);
+		if (_time_head <= selftime) {
+			var _value_head = (_event.start);
+			if (_value_tail == _value_head) {
+				color = _value_tail;
+			} else {
+				color = (merge_color(
+					_value_head,
+					_value_tail,
+					(tween_execute(selftime, _time_head, _time_tail, 0, 1, (_event[$ "easeType"]), (_event[$ "easeHead"]), (_event[$ "easeTail"])))
+				));
+			};
+		};
+		
+		// ?
+		break;
+	};
+	};
+	
+	// 文本事件
+	if (_length_events_text) {
+	for(var _index_events = _index_events_text; _index_events < _length_events_text; _index_events ++) {
+		var _event = (array_get(_events_text, _index_events));
+			
+		// 判断时间范围
+		var _time_tail = (_event.endTime),
+			_value_tail = (_event.stop)
+		;
+		if (_time_tail < selftime) {
+			text = _value_tail;
+			_index_events_text = (_index_events + 1);
+			continue;
+		};
+		
+		// 计算值
+		var _time_head = (_event.startTime);
+		if (_time_head <= selftime) {
+			var _value_head = (_event.start);
+			if (_value_tail == _value_head) {
+				text = _value_tail;
+			} else {
+				var _test_if_y = (tween_execute(selftime, _time_head, _time_tail, 0, 1, (_event[$ "easeType"]), (_event[$ "easeHead"]), (_event[$ "easeTail"])));
+				if (struct_exists(_event, "%P%")) { // 第 3 种情况: 起始和结束都是纯数字 且 在任意处插入 %P% -> 从起始按照缓动递增或递减到终点值
+					var _v0 = (number(_value_head)), _v1 = (number(_value_tail));
+					var _delta = (lerp(_v0, _v1, _test_if_y));
+					// 如果为整数, 那么变化过程中的数也是整数, 否则就为3位小数
+					if ((sign(frac(_v0))) || (sign(frac(_v1)))) then text = (string_format(_delta, -1, 3)); // 经验: 当 起始值 和 终止值 任一为小数时, 启用 3 位小数字符串格式化
+					else text = (string_format(_delta, -1, 0));
+				} else {
+					var _str_l_h = (string_length(_value_head)), _str_l_t = (string_length(_value_tail));
+					if ((string_starts_with(_value_head, _value_tail)) || (string_starts_with(_value_tail, _value_head))) { // 第 2 种情况: 起始是结束的前缀 或 结束是起始的前缀 -> 一字节一字节地按照缓动变化的速度在末尾添加或删除字符
+						var _lp_now = (lerp(_str_l_h, _str_l_t, _test_if_y));
+						if (_str_l_h < _str_l_t) { // 头值 短于 尾值 -> 递增
+							text = (string_copy(_value_tail, 1, _lp_now));
+						} else { // 头值 长于 尾值 -> 递减
+							text = (string_copy(_value_head, 1, _lp_now));
+						};
+					} else { // 第 1 种情况: 起始值与终止值为其他关系
+						text = _value_head;
+					};
+				};
+			};
+		};
+		
+		// ?
+		break;
+	};
+	};
+	
+	// 画画事件
+	if (_length_events_paint) {
+	// 遍历画笔事件
+	for(var _index_events = _index_events_paint; _index_events < _length_events_paint; _index_events ++) {
+		var _event = (array_get(_events_paint, _index_events));
+			
+		// 判断时间范围
+		var _time_tail = (_event.endTime),
+			_value_tail = (_event.stop)
+		;
+		if (_time_tail < selftime) {
+			_paint_radius = _value_tail;
+			_index_events_paint = (_index_events + 1);
+			continue;
+		};
+		
+		// 计算值
+		var _time_head = (_event.startTime);
+		if (_time_head <= selftime) {
+			var _value_head = (_event.start);
+			if (_value_tail == _value_head) then _paint_radius = _value_tail;
+			else _paint_radius = (tween_execute(selftime, _time_head, _time_tail, _value_head, _value_tail, (_event[$ "easeType"]), (_event[$ "easeHead"]), (_event[$ "easeTail"])));
+		};
+	
+		// ?
+		break;
+	};
+	
+	// 更新画板轨迹
+	if (_paint_radius < 0) { // 当画笔大小小于 0 时清空画板
+		if (vertex_get_number(_events_paint_buffer_vertex)) {
+			vertex_begin(_events_paint_buffer_vertex, _events_paint_format_vertex);
+			vertex_end(_events_paint_buffer_vertex);
+		};
+	} else {
+		if (_paint_radius > 0) { // 更新画笔
+			if ((posx != lposx) || (posy != lposy) || (image_blend != _blpre) || (image_alpha != _alpre)) { // 当检测到画笔状态不同时再画点
+				vertex_begin(_events_paint_buffer_vlimit, _events_paint_format_vertex);
+				vertex_position_3d(_events_paint_buffer_vlimit, (posx * 1350), (posy * 900), 0);
+				vertex_color(_events_paint_buffer_vlimit, image_blend, image_alpha);
+				vertex_texcoord(_events_paint_buffer_vlimit, (2 * _paint_radius), 0);
+				vertex_end(_events_paint_buffer_vlimit);
+				vertex_update_buffer_from_vertex(_events_paint_buffer_vertex, (vertex_get_number(_events_paint_buffer_vertex)), _events_paint_buffer_vlimit);
+			};
+		};
+	};
+	};
+	
+	#endregion 更新故事板事件
+	
+	// 其他刷新
+	if ((_judline_col == c_black) || (color == c_black)) {
+		image_blend = c_black;
+	} else {
+		var _color;
+		if (variable_instance_get(self, "UseLineColor")) {
+			if (_judline_col == c_white) then _color = color;
+			elif (color == c_white) then _color = _judline_col;
+			else _color = (merge_color(color, _judline_col, 0.5));
+		} else {
+			_color = color;
+		};
+		image_blend = (merge_color(_color, c_black, _dim)) // 应用暗色
+	};
+	
+	// Attach UI
+	/* attachUI (1.2.1-Public)
+		1 - pause
+		2 - combonumber
+		3 - combo
+		4 - score
+		5 - bar
+		6 - name
+		7 - level
+	*/
+	if (_attach_ui != ATTACH_UI.UNBUNDLED) {
+		var _hud_gui = (obj_chart_hud);
+		if (instance_exists(_hud_gui)) {
+			var _i_h_g = (_hud_gui._attach[$ _attach_ui]);
+			if (!is_undefined(_i_h_g)) {
+				(_i_h_g.posx) = (x - _shcenter);
+				(_i_h_g.posy) = (y - _svcenter);
+				(_i_h_g.scalex) = scalex;
+				(_i_h_g.scaley) = scaley;
+				(_i_h_g.image_angle) = image_angle;
+				(_i_h_g.image_blend) = image_blend;
+				(_i_h_g.alpha) = image_alpha;
+			};
+		};
+		enabled = false;
+	};
+	
+	// 其他
+	var _adecimal = (alpha * 255);
+	(self._alpha_decimal) = _adecimal;
+	if (link._enable_experimental_alpha) {
+		_is_scanlines = ((_adecimal > (-2000)) && (_adecimal <= (-1000)));
+		if (_is_scanlines) {
+			_scanline_interval = (((abs(_adecimal)) - 1000) / 18.75);
+		} else {
+			if (variable_instance_exists(self, "_scanline_interval")) then struct_remove(self, "_scanline_interval");
+		};
+	};
+	
+	// 刷新Notes // Hold拿出来单独刷新
+	_ref_nSGS(__noteSpeedGroupsLU, __noteSpeedGsIMapLU); _ref_nSGS(__noteSpeedGroupsRU, __noteSpeedGsIMapRU);
+	_ref_nSGS(__nHoldSpeedGroupsLU, __nHoldSpeedGsIMapLU); _ref_nSGS(__nHoldSpeedGroupsRU, __nHoldSpeedGsIMapRU);
+	_ref_nSGS(__noteSpeedGroupsLD, __noteSpeedGsIMapLD); _ref_nSGS(__noteSpeedGroupsRD, __noteSpeedGsIMapRD);
+	_ref_nSGS(__nHoldSpeedGroupsLD, __nHoldSpeedGsIMapLD); _ref_nSGS(__nHoldSpeedGroupsRD, __nHoldSpeedGsIMapRD);
+	
+	// 其他
+	if (enabled) then ds_queue_enqueue(_ref_dsql, id);
+	// if (parent) then with(parent) { show_debug_message($"{id}:{parent}"); };
+}; }; _ref_dsql = undefined; _ili = undefined;
+#endregion 判定线更新
+
+// with(obj_note_0) _ref_uN(self);
+
+#region 打击特效
+
+// if (((link.getMediaPlaying()) && (!link.getMediaPaused()))) then 
+_he_manager.nowTime = selfmilliseconds;
+_he_manager.nowScale = (scene_notes_scaling * 6);
+_he_manager.updateQueue();
+// hitfx_update();
+// effectManager.update(current_time);  // 先更新状态
+
+#endregion 打击特效
+
+#region 音符
+var _nindex;
+
+// 缓存基本信息
+var _nlist = _note_list,
+	_nl_count = (array_length(_nlist))
+;
+
+// 第二次遍历 (长条用)
+var _nhl_lim = _nhl_lv;
+for(var _i = 0; _i < (array_length(_nhl_lim)); _i ++) {
+	var _inhold = (_nhl_lim[@ _i]);
+	_ref_uN(_inhold); // 强制更新Hold
+	with(_inhold) {
+		if ((!_inhold._is_real) || (_g_e_ap)) {
+			_type_judge = JUDGMENT.PREFECT;
+		} else {
+			_type_judge = JUDGMENT.PREFECT;
+		};
+		_time_delta = (_time_down - (line.selftime));
+		CHART_PLAYER_JUDGELINE_NOTE_UPDATE_JUDGMENT;
+	};
+	if (_inhold.__last__) then array_delete(_nhl_lim, (_i --), 1);
+};
+
+// 第一次遍历 (基础判定用)
+for(var _i = _nlindex; _i < _nl_count; _i ++) {
+	var _inote = (_nlist[@ _i]), _iline = (_inote.line);
+	var _is_nhold = ((_inote.object_index) == obj_note_hold);
+	
+	//
+	var _tnow = (_iline.selftime),
+		_tnow_s = (_iline.selfseconds),
+	;
+	var _tdelta = ((_inote._time_down) - _tnow),
+		_tdelta_s = ((_inote._seconds_down) - _tnow_s)
+	; (_inote._time_delta) = _tdelta;
+	
+	// Frame
+	var _frame = (_inote.frame);
+	if (_tdelta <= 0) {
+		(_frame ++);
+		(_inote.frame) = _frame;
+	};
+	
+	// 回收相关
+	if (_tdelta_s <= 0.2) {
+		var _sn_ic = (_inote[$ "_is_click"]);
+		
+		// 自动判定
+		if ((!_inote._is_real) || (_g_e_ap)) {
+			if (_sn_ic) then return(false); // 过滤点击判定
+			if (!sign(_tdelta)) {
+				(_inote._type_judge) = JUDGMENT.PREFECT; // 设置判定类型
+				with(_inote) { CHART_PLAYER_JUDGELINE_NOTE_UPDATE_JUDGMENT }; // 触发判定事件
+				if (_is_nhold) then array_add(_nhl_lv, _inote);
+				_nlindex = (_i + 1);
+				continue;
+			};
+		} else {
+			// 检测判定
+			if (_sn_ic) {
+				(_inote._type_judge) = JUDGMENT.PREFECT; // 设置判定类型
+				(_inote._time_collect) = (_iline.selfmilliseconds); // 更新回收时间
+				with(_inote) { CHART_PLAYER_JUDGELINE_NOTE_UPDATE_JUDGMENT }; // 触发判定事件
+				if (_is_nhold) then array_add(_nhl_lv, _inote);
+				_nlindex = (_i + 1);
+				continue;
+			};
+			
+			// Miss
+			if (_tdelta_s < -0.16) {
+				if (_frame > 4) { // 帧检测
+					(_inote._type_judge) = JUDGMENT.MISS; // 设置判定类型
+					with(_inote) { CHART_PLAYER_JUDGELINE_NOTE_UPDATE_JUDGMENT }; // 触发判定事件
+					if (_is_nhold) then array_add(_nhl_lv, _inote);
+					_nlindex = (_i + 1);
+					continue;
+				};
+			};
+		};
+	};
+	
+	//
+	break;
+};
+
+_nindex = undefined;
+#endregion 音符

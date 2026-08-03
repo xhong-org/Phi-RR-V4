@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"I_NativeRuntime",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"I_NativeRuntime",
+  "parent":{
+    "name":"I_Shaders",
+    "path":"folders/Extensions/I_Shaders.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"RPEExtraEffect",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"RPEExtraEffect",
+  "parent":{
+    "name":"PhigrosLoader-sample",
+    "path":"PhigrosLoader-sample.yyp",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

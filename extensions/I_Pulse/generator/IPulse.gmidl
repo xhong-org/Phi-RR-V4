@@ -1,0 +1,7 @@
+[gml_api]
+module IPulse;
+
+[global]
+function rpe_window_drag_enable(window : pointer) : bool;
+[global, finish_fn]
+function rpe_window_drag_disable() : unit;

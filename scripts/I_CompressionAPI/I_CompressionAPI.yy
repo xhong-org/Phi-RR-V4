@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"I_CompressionAPI",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"I_CompressionAPI",
+  "parent":{
+    "name":"Tools",
+    "path":"folders/Other/Tools.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

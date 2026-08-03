@@ -1,0 +1,11 @@
+{
+  "$GMNotes":"v1",
+  "%Name":"Step_RPE_v1",
+  "name":"Step_RPE_v1",
+  "parent":{
+    "name":"判定线(RPE)",
+    "path":"folders/Notes/判定线(RPE).yy",
+  },
+  "resourceType":"GMNotes",
+  "resourceVersion":"2.0",
+}

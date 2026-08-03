@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"array_add",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"array_add",
+  "parent":{
+    "name":"Tools",
+    "path":"folders/Other/Tools.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"__PCRTWEEN__",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"__PCRTWEEN__",
+  "parent":{
+    "name":"PhigrosLoader-sample",
+    "path":"PhigrosLoader-sample.yyp",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

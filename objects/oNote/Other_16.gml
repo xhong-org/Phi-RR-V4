@@ -1,0 +1,39 @@
+/// @description Judge a hold note using cached beat/time values.
+var now_time = _now_beat,
+	now_hit_time = judgeTime;
+
+if(now_time >= now_hit_time && !isMiss && notJudge && hit_status == TYPE.NONE){
+	event_user(2);
+	hit_status = (judgeCalc(self.time, now_hit_time, self.bpm, _hx0, _hy0, self.type, true, false));
+	if(hit_status == TYPE.MISS && !isMiss){
+		isMiss = true;
+		judgeCalc(self.time, now_hit_time, self.bpm, _hx0, _hy0, self.type, true, true);
+	}else{
+		_eff_c(_hx0, _hy0, hit_status == TYPE.PREFECT ? #ffeca0 : make_colour_rgb(162, 238, 255));
+		_bak_time = _now_seconds;
+		render_play_hitsound(sound);
+	};
+	notJudge = false;
+};
+
+if(now_time > self.time + lateHitTime && !isMiss && notJudge && !game.settings.enableAccJudgment){
+	hit_status = (judgeCalc(self.time, now_time, self.bpm, _hx0, _hy0, self.type, false, false));
+	notJudge = false;
+};
+
+if(now_time >= self.time){
+	if(!isHold){
+		isHold = true;
+		event_user(2);
+	}else if(!notJudge && !isMiss && (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT)){
+		if(_now_seconds - _bak_time >= (60 / self.bpm) / 2){
+			_eff_c(_hx0, _hy0, hit_status == TYPE.PREFECT ? #ffeca0 : make_colour_rgb(162, 238, 255));
+			_bak_time = _now_seconds;
+		};
+	};
+
+	if(now_time >= self.time + self.holdTime){
+		hit_status = (judgeCalc(self.time, now_hit_time, self.bpm, _hx0, _hy0, self.type, false, !isMiss));
+		instance_deactivate_object(self);
+	};
+};

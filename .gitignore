@@ -1,0 +1,86 @@
+# Operating system files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.stackdump
+*.lnk
+
+# Editors and IDEs
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.VC.db
+*.VC.VC.opendb
+
+# GameMaker and gm-cli generated files
+.gmcache/
+Build/
+output/
+*.resource_order
+*.old
+local_settings.json
+
+# Local automation and temporary workspaces
+.agents/
+.codex-*/
+/RPEExternalShaderPackage/
+/RPEExternalShaderPackage2/
+/RPEExternalShaderPackage3/
+
+# Native build intermediates
+**/CMakeFiles/
+**/CMakeCache.txt
+**/cmake_install.cmake
+**/Makefile
+**/out/build/
+*.obj
+*.o
+*.d
+*.exp
+*.lib
+*.ilk
+*.iobj
+*.ipdb
+*.pdb
+
+# Generated packages, rendered media, and temporary audio tracks
+/*.zip
+/*.pez
+/*.mp4
+/*.mov
+/*.mkv
+/*.avi
+*.hitsounds.stem.f32le
+*.hitsounds.tmp.mp4
+*.hitsound.*.f32le
+*.f32le
+*.tmp
+*.temp
+*.log
+
+# Local diagnostics and comparison output
+/rpe_position_comparison.csv
+/rpe_trajectory*.csv
+/rpe_trajectory*_summary.md
+
+# Environment files and credentials
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Keep runtime extension binaries and bundled third-party archives tracked.
+!extensions/**/*.dll
+!extensions/**/*.zip

@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"RPEGifDecoder",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"RPEGifDecoder",
+  "parent":{
+    "name":"Gif_Ext",
+    "path":"folders/Other/Gif_Ext.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

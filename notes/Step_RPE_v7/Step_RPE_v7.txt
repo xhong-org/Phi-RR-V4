@@ -1,0 +1,518 @@
+///@events RPE (Create)
+/// @desc
+
+
+line_image = undefined;
+times = 0;
+sprite_index = line;
+DrawIndex = 2;
+scales = 1;
+event_user(0);
+
+///@events RPE (Step-begin)
+/// @desc
+times = (game_1.Math.secToBeat(game.__time[1] - (oRender_1.sec), rpe_bpm / self.bpmfactor));
+line_info = {
+	"x" : x,
+	"y" : y,
+	"alpha" : image_alpha,
+	"rot" : image_angle,
+	"xscale" : image_xscale,
+	"yscale" : image_yscale
+};
+
+///@events RPE (Step)
+/// @desc
+event_user(1);
+
+///@events RPE (Draw)
+/// @desc
+
+var size = [
+	((sprite_width * scaleX * scales) / room_width),
+	((sprite_height * scaleY * scales) / room_height)
+];
+depth = clamp((DEPTH.LINE + image_depth + (size[0] + size[1])) , -infinity , DEPTH.BG - 1);
+
+event_user(DrawIndex);
+
+if(game.settings.enableDisplayLineID){
+	draw_set_font(game.font);
+	draw_set_halign(fa_middle);
+	draw_set_colour(c_lime);
+	draw_text_transformed(x , y , self.line_id , 0.5 , 0.5 , 0);
+};
+
+///@events (User 0)
+/// @desc 初始化
+
+scaleX = 1;
+scaleY = 1;
+image_depth = 0;
+
+var _sort = (function(x1 , x2){
+	if(x1.startTime < x2.startTime) then return(-1);
+	if(x1.startTime > x2.startTime) then return(1);
+	return(0);
+});
+
+if(!is_undefined(self.events)){
+	for(var i = 0 ; i < array_length(self.events) ; i ++){
+		//array_foreach()
+		if(is_undefined(self.events[i])) then continue;
+		var names = (struct_get_names(self.events[i]));
+		for(var n = 0 ; n < array_length(names) ; n ++){
+			array_foreach(self.events[i][$ names[n]] , function(val , index){
+				val.startTime = (game_1.Math.arrToBeat(val.startTime));
+				val.endTime = (game_1.Math.arrToBeat(val.endTime));
+			});	
+			
+			array_sort(self.events[i][$ names[n]] , _sort);
+		};
+	};
+};
+
+if(!is_undefined(self.extEvents)){
+	var _names = (struct_get_names(self.extEvents));
+	for(var l = 0 ; l < array_length(_names) ; l ++){
+		if(array_length(self.extEvents[$ _names[l]]) <= 0) then continue;
+		array_foreach(self.extEvents[$ _names[l]] , function(val , index){
+			var _index = [ 0, 1, 3, 2, 6, 5, 4, 7, 9, 8, 12, 11, 10, 13, 15, 14, pointer_null, 17, 16, pointer_null, 19, 18, 22, 21, 20, 23, 25, 24, pointer_null, 27, 26, 28 ];
+			print(Easings.List[_index[24]]);
+			val[$ "easingType"] = (_index[clamp(val[$ "easingType"] , 0 , array_length(_index) - 1) ]);
+			val.startTime = (game_1.Math.arrToBeat(val.startTime));
+			val.endTime = (game_1.Math.arrToBeat(val.endTime));
+			
+			// 何意味
+			var sval = (val.start),
+				eval = (val[$ "end"]);
+			if(is_string(sval) && is_string(eval)){
+				// 假如为true , 那么 sval("Hell") eval("Hello")
+				var caonima = (string_copy(eval, 1, string_length(sval)) == sval ? true : (string_copy(sval, 1, string_length(eval)) == eval ? false : pointer_null));
+				val[$ "isEasing"] = caonima;
+			};
+		});
+		
+		array_sort(self.extEvents[$ _names[l]] , _sort);
+	};
+};
+
+var dep = 0;
+
+if(struct_exists(self.extEvents , "scaleXEvents") || struct_exists(self.extEvents , "scaleYEvents")){
+	dep = 10;	
+};
+
+
+if(self.image != "line.png"){
+	var path = ($"{InChartPath}{self.image}");
+	if(file_exists(path)){
+		var _dep = 0;
+		if(!struct_exists(game_1.Texture , self.image)) then game_1.Texture[$ self.image] = (sprite_add(path , 0 , false , false , 0 , 0));
+		if(sprite_exists(game_1.Texture[$ self.image]) || struct_exists(game_1.Texture , self.image)){
+			line_image = (game_1.Texture[$ self.image]);
+			var w = (sprite_get_width(line_image)),
+				h = (sprite_get_height(line_image));
+			if(h + w > 4000) then _dep = 5
+			elif(h + w > 2000) then _dep = 3;
+			var _scl = (min(window_get_width() / 1350 , window_get_height() / 900));
+			scales = _scl;
+			sprite_set_offset(line_image , w / 2 , h / 2);
+			sprite_index = line_image;
+			dep = 20 + _dep;
+			print($"Line[{self.line_id}] - Loaded \"{self.image}\". ");
+		}else{
+			print($"Line[{self.line_id}] - Failed to Load Sprite to \"{self.image}\". ");
+			sprite_index = spr_gunmu;
+		};
+	}else{
+		print($"Line[{self.line_id}] - Non-found called \"{self.image}\". ");
+		sprite_index = spr_gunmu;
+	};
+};
+
+if(struct_exists(self.extEvents , "textEvents")){
+	dep = -20;
+	sprite_index = spr_gunmu;
+	DrawIndex = 3;
+};
+
+if(string_length(self.bindUI) > 1){
+	sprite_index = spr_gunmu;	
+};
+
+image_depth = dep;
+
+events_index = (array_create(array_length(self.events) , {
+	"moveXEvents" : 0,
+	"moveYEvents" : 0,
+	"alphaEvents" : 0,
+	"rotateEvents" : 0,
+	"speedEvents" : 0
+}));
+
+events_values = (array_create(array_length(self.events) , {
+	"moveXEvents" : 0,
+	"moveYEvents" : 0,
+	"alphaEvents" : { "time" : -1 , "value" : 0 , "isEnable" : false , "stime" : -1},
+	"rotateEvents" : 0,
+	"speedEvents" : 0
+}));
+
+events_err = (array_create(array_length(self.events) , {
+	"moveXEvents" : 0,
+	"moveYEvents" : 0,
+	"alphaEvents" : 0,
+	"rotateEvents" : 0,
+	"speedEvents" : 0
+}));
+
+line_info = {
+	"x" : x,
+	"y" : y,
+	"alpha" : image_alpha,
+	"rot" : image_angle,
+	"xscale" : image_xscale,
+	"yscale" : image_yscale
+};
+
+ext_index = {
+	"paintEvents" : 0,
+	"textEvents" : 0,
+	"scaleXEvents" : 0,
+	"scaleYEvents" : 0,
+	"colorEvents" : 0,
+	"inclineEvents" : 0
+};
+
+ext_values = {
+	"paintEvents" : 0,
+	"textEvents" : 0,
+	"scaleXEvents" : 0,
+	"scaleYEvents" : 0,
+	"colorEvents" : [0 , 0 , 0],
+	"inclineEvents" : 0
+};
+
+text = "";
+depth = DEPTH.LINE + dep;
+
+if(self.line_id == 0){
+	print($"{self.events[0][$ "moveXEvents"]}");	
+};
+
+///@events RPE(User 1)
+/// @desc 事件运行
+
+var _ = (self.events),
+	__ = (self.extEvents);
+
+if(((is_undefined(_) && __ == {})) || (game.paused)) then exit;
+
+// 事件值
+var r_x = 0,
+	r_y = 0,
+	r_r = 0,
+	r_a = 255;
+	
+// 总和
+var t_x = 0,
+	t_y = 0,
+	t_r = 0,
+	t_a = [{ "time" : -1 , "value" : 255 , "isEnable" : false , "stime" : -1}],
+	t_t = "",
+	t_c = c_white,
+	t_sx = 1,
+	t_sy = 1,
+	tt_a = 0;
+	
+
+var ____ = (array_length(_));
+
+for(var _1 = 0 ; _1 < ____ ; _1 ++){
+	if(is_undefined(_[_1])) then continue;
+	var ___ = (struct_get_names(_[_1]));
+	var _____ = (_[_1])	// eventLayers[i]
+	for(var __1 = 0 ; __1 < array_length(___) ; __1 ++){
+		var ______ = (___[__1]); // name
+		
+		if(______ == "speedEvents") then continue;
+		var	_______ = (_____[$ ______]), // eventLayers[i][$ name]
+			________ = (events_index[_1][$ ______]), // index
+			_________ = (array_length(_______)), // length
+			__________ = false; // Run ?
+		________ = (clamp(________ , 0 , _________ - 1));
+		
+		while((________ < _________ - 1) && (times > _______[________].endTime)){
+			________ ++;	
+		};
+		
+		while((________ > 0) && times < _______[________].startTime){
+			if(times >  _______[________ - 1].endTime)	then break;
+			
+			________ --;
+			__________ = true;
+		};
+		
+		
+		
+		________ = (clamp(________ , 0 , _________ - 1));
+		if(________ > 0){
+			if(______ == "alphaEvents") then events_values[_1][$ ______] = { 
+				"time" : (_______[________ - 1][$ "endTime"]) ,
+				"value" : (_______[________ - 1][$ "end"]) ,
+				"isEnable" : false,
+				"stime" : (_______[________ - 1][$ "startTime"])
+			};
+			else
+			events_values[_1][$ ______] = (_______[________ - 1][$ "end"]);
+		};
+		
+		var ___________ = (_______[________]), // one event
+			____________ = (___________[$ "startTime"]),
+			_____________ = (___________[$ "endTime"]),
+			______________ = (___________[$ "start"]),
+			_______________ = (___________[$ "end"]),
+			________________ = (___________[$ "easingType"]),
+			_________________ = (___________[$ "easingLeft"]),
+			__________________ = (___________[$ "easingRight"]),
+			___________________ = (tween_execute(times,
+				____________,
+				_____________,
+				______________,
+				_______________,
+				________________,
+				_________________,
+				__________________
+			)),
+			____________________ = (times < ____________),
+			_____________________ = (events_values[_1][$ ______]);
+		
+		//print(____________);
+		switch(______){
+			case "moveXEvents":
+				if(____________________) then r_x = (_____________________)
+				else{
+					if(is_finite(___________________)) then events_err[_1][$ ______] = (___________________)
+					else{
+						___________________ = (events_err[_1][$ ______]);
+					};
+					
+					r_x = (___________________);
+				};
+			break;
+			
+			case "moveYEvents":
+				if(____________________) then r_y = (_____________________)
+				else{
+					if(is_finite(___________________)) then events_err[_1][$ ______] = (___________________)
+					else{
+						___________________ = (events_err[_1][$ ______]);
+					};
+					
+					r_y = (___________________);
+				};
+			break;
+			
+			case "alphaEvents":
+				var mm = [ (min(______________ , _______________)) , (max(______________ , _______________)) ];
+				var l = ({"time" : _____________ , "value" : clamp(___________________ , mm[0] , mm[1]) , "isEnable" : true , "stime" : ____________ , "eval" : _______________});
+				if(____________________) then l = (_____________________)
+				else{
+					if(is_finite(___________________)) then events_err[_1][$ ______] = l
+					else{
+						l = (events_err[_1][$ ______]);
+					};
+					
+					//t_a = (___________________);
+					
+				};
+				//print(l);
+				if(times < l.stime || times > l.time) then l.isEnable = false
+				elif(times >= l.stime && times <= l.time) then l.isEnable = true;
+				r_a = l.value;
+				array_add(t_a , l);
+			break;
+			
+			case "rotateEvents":
+				if(____________________) then r_r = (_____________________)
+				else{
+					if(is_finite(___________________)) then events_err[_1][$ ______] = (___________________)
+					else{
+						___________________ = (events_err[_1][$ ______]);
+					};
+					r_r = (___________________);
+				};
+			break;
+			
+			default:
+				
+			break;
+		};
+	};
+	
+	//r_x += t_x;
+	//r_y += t_y;
+	//r_r += t_r;
+	t_x += r_x;
+	t_y += r_y;
+	t_r += r_r;
+	tt_a += r_a;
+	//t_a += r_a;
+	
+	r_x = 0;
+	r_y = 0;
+	r_r = 0;
+	r_a = 0;
+	//r_a = 0;
+};
+
+if(self.extEvents != {}){
+	var _names = (struct_get_names(self.extEvents));
+	for(var e = 0 ; e < array_length(_names) ; e ++){
+		var event_name = (_names[e]),
+			_events = (self.extEvents[$ event_name]),
+			_index = (ext_index[$ event_name] ?? 0),
+			len = (array_length(_events));
+		if(len <= 0) then continue;
+		//print($"{_index} | {event_name}");
+		_index = (clamp(_index , 0 , len - 1));
+		
+		while((_index > 0) && (times < _events[_index].startTime)){
+			if(times > _events[_index - 1].endTime) then break;
+			
+			_index --;
+		};
+		
+		while((_index < len - 1) && (times > _events[_index].endTime)){
+			_index ++;	
+		};
+		
+		_index = (clamp(_index , 0 , len - 1));
+		if(_index > 0){
+			var _last_event = (_events[_index - 1])
+			if(event_name == "textEvents"){
+				if(_last_event.isEasing != pointer_null) then ext_values[$ event_name] = _last_event[$ "end"];
+				else ext_values[$ event_name] = _last_event[$ "start"];	
+			}else
+			ext_values[$ event_name] = _last_event[$ "start"];
+		};
+		
+		
+		var event = (_events[_index]),
+			stime = (event[$ "startTime"]),
+			etime = (event[$ "endTime"]),
+			sval = (event[$ "start"]),
+			eval = (event[$ "end"]),
+			eType = (event[$ "easingType"] > 31 ? 0 : event[$ "easingType"]),
+			eLeft = (event[$ "easingLeft"]),
+			eRight = (event[$ "easingRight"]),
+			_val;
+			//print($"{stime} | {etime}");
+			if(event_name != "colorEvents" && event_name != "textEvents"){
+				_val = (tween_execute(
+					times,
+					stime,
+					etime,
+					sval,
+					eval,
+					eType,
+					eLeft,
+					eRight
+				));
+			};
+			var isTime = (times < stime),
+				endval = (ext_values[$ event_name]);
+		
+		switch(event_name){
+			case "textEvents":
+				var isEasing = (event.isEasing),
+					sLen = (string_length(sval)),
+					eLen = (string_length(eval));
+				if(isEasing == pointer_null){
+					if(isTime) then t_t = (endval)
+					else t_t = sval;
+				}else{
+					if(isEasing) then t_t = (string_copy(eval , 1 , 1 + sLen + (floor((eLen - sLen) * tween_execute(times , stime , etime , 0 , 1 , eType , eLeft , eRight)))));
+					else t_t = (string_copy(sval , 1 , -1 + sLen - (floor((sLen - eLen) * tween_execute(times , stime , etime , 0 , 1 , eType , eLeft , eRight)))));
+				};
+			break;
+			
+			case "colorEvents":
+				if(isTime) then t_c = (make_colour_rgb(endval[0] , endval[1] , endval[2]))
+				else{
+					var r = (tween_execute(times , stime , etime , sval[0] , eval[0] , eType , eLeft , eRight)),
+						g = (tween_execute(times , stime , etime , sval[1] , eval[1] , eType , eLeft , eRight)),
+						b = (tween_execute(times , stime , etime , sval[2] , eval[2] , eType , eLeft , eRight));
+					t_c = (make_colour_rgb(r , g , b));
+				};
+			break;
+			
+			case "scaleXEvents":
+				if(isTime) then t_sx = endval
+				else t_sx = _val;
+			break;
+			
+			case "scaleYEvents":
+				if(isTime) then t_sy = endval
+				else t_sy = _val;
+			break;
+		};
+	};
+};
+
+//array_sort(t_a , function(x1 , x2){
+//	var times = (self.times);
+	
+//	if(times >= x1.stime && times <= x1.time) then x1.isEnable = true
+//	else x1.isEnable = false;
+	
+//	if(times >= x2.stime && times <= x2.time) then x2.isEnable = true
+//	else x2.isEnable = false;
+	
+//    if(x1.isEnable != x2.isEnable){
+//        return(x1.isEnable ? 1 : -1);
+//    }
+//	if(x1.time < x2.time) then return(-1)
+//	if(x1.time > x2.time) then return(1)
+//    return(0);
+//});
+
+
+var ______________________ = (get_window_pos_scale(t_x , t_y));
+x = ______________________[0];
+y = ______________________[1];
+
+image_angle = (-t_r);
+image_alpha = (tt_a / 255); // array_last(t_a).value
+image_blend = t_c;
+
+scaleX = t_sx;
+scaleY = t_sy;
+text = t_t;
+
+if(self.line_id == 0){
+	//print(line_info);
+	//print(line_info);
+	//print(t_a);
+};
+
+///@events RPE(User 2)
+/// @desc 非文字事件渲染
+var __scales = [
+    scaleX * 0.78 * scales,
+    scaleY * 0.8 * scales
+]
+if(sprite_index == line){
+    __scales[0] = (__scales[0] * 1.18);
+    __scales[1] = (__scales[1] * 0.65);
+}
+draw_sprite_ext(sprite_index , 0 , x , y , __scales[0], __scales[1], image_angle , image_blend , image_alpha);
+
+
+///@events RPE(User 3)
+/// @desc 文字事件渲染
+draw_set_halign(fa_center);
+draw_set_valign(fa_middle);
+draw_set_font(game.font);
+draw_text_transformed_colour(x , y , text , scaleX * 0.6, scaleY * 0.6  , image_angle , image_blend , image_blend , image_blend , image_blend , image_alpha);

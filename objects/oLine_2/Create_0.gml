@@ -1,0 +1,20 @@
+/// @description PEC judge line runtime state.
+depth = DEPTH.LINE;
+sprite_index = line;
+image_blend = (game.settings.enableLineJudge ? #ffeca0 : c_white);
+var initial_scale = (variable_global_exists("global_scales") ? global_scales : 1);
+image_xscale = 0.9204 * initial_scale;
+image_yscale = 0.52 * initial_scale;
+if (!variable_instance_exists(id, "events") || !is_struct(events)) then events = pec_line_data();
+_move_index = 0;
+_alpha_index = 0;
+_rotate_index = 0;
+_speed_index = 0;
+_move_value = [0, 0];
+_alpha_value = 0;
+_rotate_value = 0;
+floor_position = 0;
+line_sec = 0;
+_last_line_sec = -infinity;
+__cos = 1;
+__sin = 0;

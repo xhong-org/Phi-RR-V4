@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"GetRotate",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"GetRotate",
+  "parent":{
+    "name":"Math",
+    "path":"folders/Other/Math.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

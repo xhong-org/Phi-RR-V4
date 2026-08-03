@@ -1,0 +1,50 @@
+{
+  "$GMAnimCurve":"",
+  "%Name":"ac_easings",
+  "channels":[
+    {"$GMAnimCurveChannel":"","%Name":"Sine.In","colour":4290799884,"name":"Sine.In","points":[
+        {"th0":-0.1,"th1":0.12,"tv0":0.0,"tv1":0.0,"x":0.0,"y":0.0,},
+        {"th0":-0.61,"th1":0.1,"tv0":-1.0,"tv1":0.0,"x":1.0,"y":1.0,},
+      ],"resourceType":"GMAnimCurveChannel","resourceVersion":"2.0","visible":false,},
+    {"$GMAnimCurveChannel":"","%Name":"Sine.In-Out","colour":4290799884,"name":"Sine.In-Out","points":[
+        {"th0":-0.1,"th1":0.37,"tv0":0.0,"tv1":0.0,"x":0.0,"y":0.0,},
+        {"th0":-0.37,"th1":0.1,"tv0":0.0,"tv1":0.0,"x":1.0,"y":1.0,},
+      ],"resourceType":"GMAnimCurveChannel","resourceVersion":"2.0","visible":false,},
+    {"$GMAnimCurveChannel":"","%Name":"Sine.Out","colour":4290799884,"name":"Sine.Out","points":[
+        {"th0":-0.1,"th1":0.61,"tv0":0.0,"tv1":1.0,"x":0.0,"y":0.0,},
+        {"th0":-0.12,"th1":0.1,"tv0":0.0,"tv1":0.0,"x":1.0,"y":1.0,},
+      ],"resourceType":"GMAnimCurveChannel","resourceVersion":"2.0","visible":false,},
+    {"$GMAnimCurveChannel":"","%Name":"Quad.In","colour":4281083598,"name":"Quad.In","points":[
+        {"th0":-0.1,"th1":0.11,"tv0":0.0,"tv1":0.0,"x":0.0,"y":0.0,},
+        {"th0":-0.5,"th1":0.1,"tv0":-1.0,"tv1":0.0,"x":1.0,"y":1.0,},
+      ],"resourceType":"GMAnimCurveChannel","resourceVersion":"2.0","visible":false,},
+    {"$GMAnimCurveChannel":"","%Name":"Quad.In-Out","colour":4281083598,"name":"Quad.In-Out","points":[
+        {"th0":-0.1,"th1":0.45,"tv0":0.0,"tv1":0.0,"x":0.0,"y":0.0,},
+        {"th0":-0.45,"th1":0.1,"tv0":0.0,"tv1":0.0,"x":1.0,"y":1.0,},
+      ],"resourceType":"GMAnimCurveChannel","resourceVersion":"2.0","visible":false,},
+    {"$GMAnimCurveChannel":"","%Name":"Quad.Out","colour":4281083598,"name":"Quad.Out","points":[
+        {"th0":-0.1,"th1":0.5,"tv0":0.0,"tv1":1.0,"x":0.0,"y":0.0,},
+        {"th0":-0.11,"th1":0.1,"tv0":0.0,"tv1":0.0,"x":1.0,"y":1.0,},
+      ],"resourceType":"GMAnimCurveChannel","resourceVersion":"2.0","visible":false,},
+    {"$GMAnimCurveChannel":"","%Name":"Quint.In","colour":4279025727,"name":"Quint.In","points":[
+        {"th0":-0.1,"th1":0.64,"tv0":0.0,"tv1":0.0,"x":0.0,"y":0.0,},
+        {"th0":-0.22,"th1":0.1,"tv0":-1.0,"tv1":0.0,"x":1.0,"y":1.0,},
+      ],"resourceType":"GMAnimCurveChannel","resourceVersion":"2.0","visible":false,},
+    {"$GMAnimCurveChannel":"","%Name":"Quint.In-Out","colour":4279025727,"name":"Quint.In-Out","points":[
+        {"th0":-0.1,"th1":0.83,"tv0":0.0,"tv1":0.0,"x":0.0,"y":0.0,},
+        {"th0":-0.83,"th1":0.1,"tv0":0.0,"tv1":0.0,"x":1.0,"y":1.0,},
+      ],"resourceType":"GMAnimCurveChannel","resourceVersion":"2.0","visible":false,},
+    {"$GMAnimCurveChannel":"","%Name":"Quint.Out","colour":4279025727,"name":"Quint.Out","points":[
+        {"th0":-0.1,"th1":0.22,"tv0":0.0,"tv1":1.0,"x":0.0,"y":0.0,},
+        {"th0":-0.64,"th1":0.1,"tv0":0.0,"tv1":0.0,"x":1.0,"y":1.0,},
+      ],"resourceType":"GMAnimCurveChannel","resourceVersion":"2.0","visible":false,},
+  ],
+  "function":2,
+  "name":"ac_easings",
+  "parent":{
+    "name":"Animation Curves",
+    "path":"folders/Animation Curves.yy",
+  },
+  "resourceType":"GMAnimCurve",
+  "resourceVersion":"2.0",
+}

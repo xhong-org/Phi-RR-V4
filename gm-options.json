@@ -1,0 +1,9 @@
+{
+  "toolchain": "GMS2@2026.0.0.23",
+  "gms2": {
+    "windows": {
+      "packageType": "zip",
+      "visualStudioSdk": "F:\\Visual Studio Community 2022\\IDE\\Common7\\Tools\\VsDevCmd.bat"
+    }
+  }
+}

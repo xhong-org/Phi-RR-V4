@@ -1,0 +1,12 @@
+{
+  "$GMShader":"",
+  "%Name":"shd_kawase_blur",
+  "name":"shd_kawase_blur",
+  "parent":{
+    "name":"Blur",
+    "path":"folders/Shaders/Blur.yy",
+  },
+  "resourceType":"GMShader",
+  "resourceVersion":"2.0",
+  "type":1,
+}

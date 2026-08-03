@@ -1,0 +1,25 @@
+[gml_api]
+module ICompression;
+
+[global, start_fn]
+function unicode_zip_initialize() : unit;
+[global]
+function unicode_zip_available() : bool;
+[global]
+function unicode_zip_extract_async(archive_path : string, output_directory : string, overwrite : bool, clean_output : bool) : int32;
+[global]
+function unicode_zip_compress_async(source_path : string, archive_path : string, include_root : bool, overwrite : bool) : int32;
+[global]
+function unicode_zip_task_status(task_id : int32) : int32;
+[global]
+function unicode_zip_task_exit_code(task_id : int32) : int32;
+[global]
+function unicode_zip_task_error(task_id : int32) : string;
+[global]
+function unicode_zip_task_cancel(task_id : int32) : bool;
+[global]
+function unicode_zip_task_release(task_id : int32) : bool;
+[global]
+function unicode_zip_last_error() : string;
+[global, finish_fn]
+function unicode_zip_shutdown() : unit;

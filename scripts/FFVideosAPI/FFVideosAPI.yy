@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"FFVideosAPI",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"FFVideosAPI",
+  "parent":{
+    "name":"FFVideos",
+    "path":"folders/Extensions/FFVideos.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

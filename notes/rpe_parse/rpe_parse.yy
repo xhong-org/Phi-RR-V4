@@ -1,0 +1,11 @@
+{
+  "$GMNotes":"v1",
+  "%Name":"rpe_parse",
+  "name":"rpe_parse",
+  "parent":{
+    "name":"Notes",
+    "path":"folders/Notes.yy",
+  },
+  "resourceType":"GMNotes",
+  "resourceVersion":"2.0",
+}

@@ -1,0 +1,139 @@
+///@desc 步开始
+for(var i = 0 ; i < array_length(self.events) ; i ++){
+    var _eventLayer = (self.events[i]);
+    if(is_undefined(_eventLayer)) then continue;
+    var names = (struct_get_names(_eventLayer));
+    for(var l = 0 ; l < array_length(names) ; l ++){
+        var _event_name = (names[@ l]),
+            _event = (_eventLayer[$ _event_name]),
+            _event_length = (array_length(_event)),
+            index = (clamp(events_count[i][$ _event_name] , 0 , _event_length - 1));
+		if(index < _event_length - 1){
+	        while(index > 0 && line_time < _event[index].startTime){
+	            if(line_time > _event[@ (index - 1)].endTime) then break;
+                
+	            index --;
+	        };
+        
+	        while(index < _event_length - 1 && line_time > _event[@ index].endTime){
+	            index ++;
+	        };
+        
+	        if(index > 0){ 
+	            events_values[@ i][$ _event_name] = (_event[@ (index - 1)][$ "end"]);
+	        };
+		};
+        events_count[@ i][$ _event_name] = (clamp(index , 0 , _event_length - 1));
+		print($"{index} - {_event_length}");
+		if(index >= _event_length) {
+			print("What the Fuck?");
+		};
+		
+    };
+    
+    if(i == 0){
+        var ext = (self.extEvents);
+        if(is_undefined(ext)) then continue;
+            
+        var _names = (struct_get_names(ext));
+        for(var e = 0 ; e < array_length(_names) ; e ++){
+            var _event_name = (_names[@ e]),
+                _event = (ext[$ _event_name]),
+                _event_length = (array_length(_event)),
+                index = (ext_events_count[$ _event_name]);
+            
+            while(index < _event_length - 1 && line_time > _event[@ index].endTime){
+                index ++;
+            };
+            
+            while(index > 0 && line_time < _event[@ index].startTime){
+                if(line_time > _event[@ (index - 1)].endTime) then break;
+                    
+                index --;
+            };
+            
+            if(index > 0){ 
+                var __event = (_event[@ (index - 1)]);
+                if(_event_name == "colorEvents"){ 
+                    var _col = [
+                        __event[$ "end"][@ 0],
+                        __event[$ "end"][@ 1],
+                        __event[$ "end"][@ 2]
+                    ];
+                    ext_events_values[$ _event_name] = (make_colour_rgb(_col[0] , _col[1] , _col[2]));
+                }else{
+                    ext_events_values[$ _event_name] = (__event[$ "end"]);
+                };
+            };
+            ext_events_count[$ _event_name] = (clamp(index , 0 , _event_length - 1));
+        };
+    };
+};
+
+
+///@desc 步
+for(var i = 0 ; i < array_length(self.events) ; i ++){
+    var _eventLayer = (self.events[i]);
+    if(is_undefined(_eventLayer)) then continue;
+        
+    var names = (struct_get_names(_eventLayer));
+    for(var n = 0 ; n < array_length(names) ; n ++){
+        var event_name = (names[@ n]);
+		if(event_name == "speedEvents") then continue;
+		if(events_count[@ i][$ event_name] == array_length(_eventLayer[$ event_name])) then print($"[{event_name}] -> Index: {events_count[@ i][$ event_name]} | Length: {array_length(_eventLayer[$ event_name])}");
+		
+        var _event = (_eventLayer[$ event_name][@ (events_count[@ i][$ event_name]) ]);
+        var stime = (_event[$ "startTime"]),
+            etime = (_event[$ "endTime"]),
+            sval = (_event[$ "start"]),
+            eval = (_event[$ "end"]),
+            easingLeft = (_event[$ "easingLeft"]),
+            easingRight = (_event[$ "easingRight"]),
+            easingType = (_event[$ "easingType"]),
+            value = (tween_execute(line_time , stime , etime , sval , eval , easingType , easingLeft , easingRight));
+        
+        switch (event_name) {
+        	case "moveXEvents":
+                if(line_time < stime) then _r_x = (events_count[@ i][$ event_name]);
+                elif(line_time >= stime && line_time <= etime){
+                    _r_x = value;
+                };    
+            break;
+        
+            case "moveYEvents":
+                if(line_time < stime) then _r_y = (events_count[@ i][$ event_name]);
+                elif(line_time >= stime && line_time <= etime){
+                    _r_y = value;
+                };
+            break;
+        
+            case "alphaEvents":
+                if(line_time < stime) then _r_a = (events_count[@ i][$ event_name]);
+                elif(line_time >= stime && line_time <= etime){
+                    _r_a = value;
+                };   
+            break;
+            
+            case "rotateEvents":
+                if(line_time < stime) then _r_r = (events_count[@ i][$ event_name]);
+                elif(line_time >= stime && line_time <= etime){
+                    _r_r = value;
+                };
+            break;    
+        };
+    };
+    
+    // Total values
+    _t_x += _r_x;
+    _t_y += _r_y;
+    _t_a += _r_a;
+    _t_r += _r_r;
+    
+    
+    // Zero
+    //_r_x = 0;
+    //_r_y = 0;
+    //_r_a = 0;
+    //_r_r = 0;
+    
+};

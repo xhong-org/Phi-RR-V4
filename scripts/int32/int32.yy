@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"int32",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"int32",
+  "parent":{
+    "name":"PhigrosLoader-sample",
+    "path":"PhigrosLoader-sample.yyp",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

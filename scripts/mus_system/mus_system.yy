@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"mus_system",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"mus_system",
+  "parent":{
+    "name":"MUS_SYSTEM",
+    "path":"folders/MUS_SYSTEM.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}
