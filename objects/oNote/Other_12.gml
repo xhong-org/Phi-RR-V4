@@ -3,7 +3,7 @@ if(!_is_hold || !inition) then exit;
 
 var line_floor = _line_ref.__value[0];
 var floor_delta = (isAbove ? line_floor - yOffset : yOffset - line_floor);
-var passed_line = ((!isAbove ? floor_delta < -0.001 : floor_delta > 0.001) && !isHold);
+var passed_line = (!isHold && line_floor > maximum_visual_length);
 var line_x = _line_ref.x;
 var line_y = _line_ref.y;
 var local_x = xOffset * room_width * 0.05625;

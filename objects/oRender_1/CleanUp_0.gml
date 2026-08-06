@@ -52,6 +52,14 @@ if(variable_global_exists("game_1") && !is_undefined(game_1)){
 		};
 		game_1.HitSounds = {};
 	};
+	if (struct_exists(game_1, "Fonts") && is_struct(game_1.Fonts)) {
+		var _font_names = struct_get_names(game_1.Fonts);
+		for (var _fi = 0; _fi < array_length(_font_names); _fi++) {
+			var _font = game_1.Fonts[$ _font_names[_fi]];
+			if (_font != -1 && font_exists(_font)) then font_delete(_font);
+		};
+		game_1.Fonts = {};
+	};
 	game_1.chart = undefined;
 	game_1.line_list = [];
 	game_1._notes = [];

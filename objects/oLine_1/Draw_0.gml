@@ -88,18 +88,17 @@ if (is_default_line) {
 	sy = 0.80 * s * 0.65 * __scale_y;
 } else {
 	var line_base_scale = line_canvas_scale * 1.2;
-	sx = line_base_scale * __scale_x;
-	sy = line_base_scale * __scale_y;
+	sx = line_base_scale * line_csv_scale * __scale_x;
+	sy = line_base_scale * line_csv_scale * __scale_y;
 };
 
 // Apply color from extended colorEvents (or default white)
 image_blend = __color;
 
-if (has_text_events) {
-        if (string_length(line_text) > 0) {
-                if (variable_global_exists("game") && is_struct(game) && !is_undefined(game.font) && font_exists(game.font)) {
-                        draw_set_font(game.font);
-                };
+	if (has_text_events) {
+	        if (string_length(line_text) > 0) {
+	                if (line_text_font != -1 && font_exists(line_text_font)) then draw_set_font(line_text_font);
+	                else if (variable_global_exists("game") && is_struct(game) && !is_undefined(game.font) && font_exists(game.font)) then draw_set_font(game.font);
                 draw_set_halign(fa_center);
                 draw_set_valign(fa_middle);
                 draw_set_colour(image_blend);

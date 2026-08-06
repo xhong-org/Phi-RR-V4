@@ -45,6 +45,7 @@ depth = DEPTH.DEBUG;
 if(game.settings.showBG) then instance_create_depth(0,0,0,oBG);
 
 instance_create_depth(0,0,0,oMedia , { "name" : (string_length(game.folder_chart.music) ? (InChartPath + game.folder_chart.music) : "") });
+instance_create_depth(0,0,DEPTH.BG - 1,oExtraPlay);
 
 game.Sort();
 game.CreateLines();

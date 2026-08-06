@@ -2,8 +2,8 @@
 if (game.paused) then exit;
 line_sec = game.__time[1] - game_2.chart.offsetSeconds;
 var current_scale = (variable_global_exists("global_scales") ? global_scales : 1);
-image_xscale = 0.9204 * current_scale;
-image_yscale = 0.52 * current_scale;
+image_xscale = (image_id == line ? 0.9204 : line_csv_scale * room_height / 1080 * 1.35) * current_scale;
+image_yscale = (image_id == line ? 0.52 : line_csv_scale * room_height / 1080 * 1.35) * current_scale;
 image_blend = c_white;
 if (game.settings.enableLineJudge) {
 	image_blend = #ffeca0;

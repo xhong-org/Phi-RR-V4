@@ -15,15 +15,21 @@ fmod_system_select(track);
 fmod_system_init(128 , FMOD_MODE.DEFAULT);
 
 if(use_stream){
-	soundIndex = (fmod_system_create_stream(self.name,FMOD_MODE.DEFAULT));	
+	soundIndex = (fmod_system_create_stream(self.name,FMOD_MODE.ACCURATETIME));	
 }else{
-	soundIndex = (fmod_system_create_sound(self.name,FMOD_MODE.DEFAULT));
+	soundIndex = (fmod_system_create_sound(self.name,FMOD_MODE.ACCURATETIME));
 };
 
 if(soundIndex){
 	use_stream = true;
 	position = 0;
-	length = (fmod_sound_get_length(soundIndex,FMOD_TIMEUNIT.MS) * 1000);
+	var length_sound = soundIndex;
+	if (fmod_sound_get_num_sub_sounds(soundIndex) > 0) {
+		var sub_sound = fmod_sound_get_sub_sound(soundIndex, 0);
+		if (sub_sound) then length_sound = sub_sound;
+	};
+	playbackIndex = length_sound;
+	length = (fmod_sound_get_length(length_sound,FMOD_TIMEUNIT.MS) * 1000);
 	self[$ "success"] = true;
 	print("[L-Sound] Done.");
 	exit;

@@ -4,7 +4,7 @@ if (_is_hold || !inition) then exit;
 var now_time = _now_seconds;
 var now_hit = judgeTime;
 
-if (now_time > start_sec + lateHitTime && !isBad && !isJudge) {
+if (now_time > start_sec + lateHitTime && !isBad && !isJudge && !game.settings.enableAccJudgment) {
 	if (is_real_note) {
 		judgeCalc(start_sec, now_time, 0, _note_x, _note_y, type, false, true, true);
 	};

@@ -39,11 +39,11 @@ if (type == 2) {
 	};
 	yscale = body_scale;
 	canDraw = (hold_length > 0 || before);
-	var hold_judge_sec = startSec + hit_offset;
-	if (!hold_started && chart_sec >= hold_judge_sec) {
+	if (!hold_started && chart_sec >= judge_sec) {
 		hold_started = true;
 		if (!isFake) {
-			hit_status = judgeCalc(startSec, hold_judge_sec, 0, base_x, base_y, judge_type, true, false, true);
+			var hold_sample_sec = (!use_acc_judgment && chart_sec > late_deadline_sec) ? chart_sec : judge_sec;
+			hit_status = judgeCalc(startSec, hold_sample_sec, 0, base_x, base_y, judge_type, true, false, true);
 			if (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) {
 				hold_effect_sec = chart_sec;
 				render_play_hitsound(sound);
@@ -60,7 +60,7 @@ if (type == 2) {
 	if (chart_sec >= endSec) {
 		if (!isFake) {
 			if (hold_started && (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT)) {
-				judgeCalc(startSec, hold_judge_sec, 0, base_x, base_y, judge_type, false, true, true);
+				judgeCalc(startSec, judge_sec, 0, base_x, base_y, judge_type, false, true, true);
 			} else {
 				judgeCalc(startSec, endSec + 1, 0, base_x, base_y, judge_type, false, true, true);
 			};
@@ -74,12 +74,11 @@ if (type == 2) {
 x = note_x;
 y = note_y;
 canDraw = (chart_sec < startSec);
-var note_judge_sec = startSec + hit_offset;
-var trigger_sec = ((judge_type == 2 || judge_type == 4) ? startSec : note_judge_sec);
 if (chart_sec >= trigger_sec && !judged) {
 	judged = true;
 	if (!isFake) {
-		hit_status = judgeCalc(startSec, note_judge_sec, 0, base_x, base_y, judge_type, true, true, true);
+		var note_sample_sec = (!use_acc_judgment && chart_sec > late_deadline_sec) ? chart_sec : judge_sec;
+		hit_status = judgeCalc(startSec, note_sample_sec, 0, base_x, base_y, judge_type, true, true, true);
 		if (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) then render_play_hitsound(sound);
 	};
 	canDraw = false;

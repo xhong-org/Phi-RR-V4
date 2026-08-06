@@ -123,7 +123,7 @@ function rpe_effect_external_mapping(shader_path) {
 	var relative_path = string_delete(shader_path, 1, 1);
 	relative_path = string_replace_all(relative_path, "\\", "/");
 	if (!string_length(relative_path) || string_pos("..", relative_path) > 0 || string_pos(":", relative_path) > 0) then return "";
-	var full_path = InChartPath + relative_path;
+	var full_path = chart_extra_asset_path(relative_path);
 	if (!file_exists(full_path)) {
 		print($"[RPE Effect] Missing external shader: {relative_path}");
 		return "";
@@ -162,7 +162,7 @@ function rpe_effect_external_defaults(shader_name) {
 	var separator = string_pos(":", shader_name);
 	if (separator <= 0) then return result;
 	var relative_path = string_delete(shader_name, 1, separator);
-	var full_path = InChartPath + relative_path;
+	var full_path = chart_extra_asset_path(relative_path);
 	if (!file_exists(full_path)) then return result;
 	var handle = file_text_open_read(full_path);
 	if (is_undefined(handle) || handle < 0) then return result;

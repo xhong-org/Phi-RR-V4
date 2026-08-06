@@ -17,6 +17,10 @@ function chart_session_default() {
                 "chart_file" : "",
                 "music_file" : "",
                 "image_file" : "",
+                "line_file" : "",
+                "line_overrides" : [],
+                "extra_file" : "",
+                "info_offset_ms" : 0,
                 "name" : "",
                 "level" : "",
                 "play_room" : -1,
@@ -140,6 +144,109 @@ function chart_path_file_name(path) {
         var slash = max(string_last_pos("/", p), string_last_pos("\\", p));
         if (slash <= 0) then return p;
         return string_copy(p, slash + 1, string_length(p) - slash);
+}
+
+function chart_path_dir(path) {
+        var p = chart_path_norm(path);
+        var slash = string_last_pos("/", p);
+        if (slash <= 0) then return "";
+        return string_copy(p, 1, slash);
+}
+
+function chart_find_sidecar(files, file_name, chart_path) {
+        if (!is_array(files)) then return "";
+        var wanted = string_lower(file_name);
+        var chart_dir = string_lower(chart_path_dir(chart_path));
+        var fallback = "";
+        for (var i = 0; i < array_length(files); i++) {
+                var path = files[i];
+                if (string_lower(chart_path_file_name(path)) != wanted) then continue;
+                if (string_lower(chart_path_dir(path)) == chart_dir) then return path;
+                if (!string_length(fallback)) then fallback = path;
+        };
+        return fallback;
+}
+
+function chart_load_line_overrides(line_path, chart_path, root_dir) {
+        var result = [];
+        if (!file_exists(line_path)) then return result;
+        var grid = load_csv(line_path);
+        if (!ds_exists(grid, ds_type_grid)) then return result;
+        var rows = ds_grid_to_struct_array(grid);
+        ds_grid_destroy(grid);
+        if (!is_array(rows)) then return result;
+
+        var chart_name = string_lower(chart_path_file_name(chart_path));
+        var line_dir = chart_path_dir(line_path);
+        for (var i = 0; i < array_length(rows); i++) {
+                var row = rows[i];
+                if (!is_struct(row) || is_undefined(row[$ "LineId"]) || is_undefined(row[$ "Image"])) then continue;
+                var row_chart = string_lower(chart_path_file_name(string(row[$ "Chart"] ?? "")));
+                if (string_length(row_chart) && row_chart != chart_name) then continue;
+                var image_name = chart_path_norm(string(row.Image));
+                var image_full = chart_path_join(line_dir, image_name);
+                if (!file_exists(image_full)) then image_full = chart_path_join(root_dir, image_name);
+                array_add(result, {
+                        LineId: floor(real(row.LineId)),
+                        Image: chart_path_rel(root_dir, image_full),
+                        Scale: real(row[$ "Scale"] ?? 1)
+                });
+        };
+        return result;
+}
+
+function chart_line_override(line_id) {
+        var session = chart_session_ensure();
+        if (!is_array(session.line_overrides)) then return undefined;
+        for (var i = array_length(session.line_overrides) - 1; i >= 0; i--) {
+                if (session.line_overrides[i].LineId == line_id) then return session.line_overrides[i];
+        };
+        return undefined;
+}
+
+function chart_line_override_sprite(line_id) {
+        var row = chart_line_override(line_id);
+        if (!is_struct(row)) then return -1;
+        var key = "line_csv_" + string(line_id);
+        if (struct_exists(game.TextureGroup, key) && sprite_exists(game.TextureGroup[$ key])) {
+                return game.TextureGroup[$ key];
+        };
+        var sprite = sprite_add(chart_path_join(InChartPath, row.Image), 0, false, false, 0, 0);
+        if (!sprite_exists(sprite)) then return -1;
+        sprite_set_offset(sprite, sprite_get_width(sprite) / 2, sprite_get_height(sprite) / 2);
+        game.TextureGroup[$ key] = sprite;
+        return sprite;
+}
+
+function chart_extra_offset_seconds() {
+        var session = chart_session_ensure();
+        switch (session.format) {
+                case CHART_FORMAT.RPE:
+                        if (variable_global_exists("game_1") && is_struct(game_1) && is_struct(game_1.chart_info)) {
+                                return real(game_1.chart_info.offset ?? 0) / 1000;
+                        };
+                break;
+                case CHART_FORMAT.PEC:
+                        if (variable_global_exists("game_2") && is_struct(game_2) && is_struct(game_2.chart)) {
+                                return real(game_2.chart.offsetSeconds ?? 0);
+                        };
+                break;
+                case CHART_FORMAT.OFFICIAL:
+                        if (variable_global_exists("game") && is_struct(game) && is_struct(game.chart)) {
+                                return real(game.chart.offset ?? 0);
+                        };
+                break;
+        };
+        return 0;
+}
+
+function chart_extra_asset_path(relative_path) {
+        var session = chart_session_ensure();
+        var root = InChartPath;
+        if (is_string(session.extra_file) && string_length(session.extra_file)) {
+                root = chart_path_dir(chart_path_join(InChartPath, session.extra_file));
+        };
+        return chart_path_join(root, relative_path);
 }
 
 function chart_path_rel(base_dir, full_path) {
@@ -320,7 +427,8 @@ function chart_parse_info_file(info_path) {
                 "level" : "",
                 "image" : "",
                 "music" : "",
-                "chart" : ""
+                "chart" : "",
+                "offset_ms" : 0
         };
         if (!file_exists(info_path)) then return info;
 
@@ -377,6 +485,9 @@ function chart_parse_info_file(info_path) {
                         case "chartfile":
                                 info.chart = val;
                         break;
+                        case "offset":
+                                info.offset_ms = number(val, 0);
+                        break;
                 };
         };
         file_text_close(handle);
@@ -390,7 +501,8 @@ function chart_load_root_info(root_dir) {
                 "level" : "",
                 "image" : "",
                 "music" : "",
-                "chart" : ""
+                "chart" : "",
+                "offset_ms" : 0
         };
         var root = chart_path_norm(root_dir);
         if (string_length(root) && string_char_at(root, string_length(root)) != "/") then root += "/";
@@ -516,6 +628,23 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
         session.chart_file = chart_path_rel(root, chart_full);
         session.music_file = chart_path_rel(root, music_full);
         session.image_file = string_length(image_full) ? chart_path_rel(root, image_full) : "";
+        var sidecar_files = [];
+        if (is_array(discovered.text)) {
+                for (var sidecar_text_i = 0; sidecar_text_i < array_length(discovered.text); sidecar_text_i++) {
+                        array_add(sidecar_files, discovered.text[sidecar_text_i]);
+                };
+        };
+        if (is_array(discovered.other)) {
+                for (var sidecar_other_i = 0; sidecar_other_i < array_length(discovered.other); sidecar_other_i++) {
+                        array_add(sidecar_files, discovered.other[sidecar_other_i]);
+                };
+        };
+        var line_full = chart_find_sidecar(sidecar_files, "line.csv", chart_full);
+        var extra_full = chart_find_sidecar(sidecar_files, "extra.json", chart_full);
+        session.line_file = string_length(line_full) ? chart_path_rel(root, line_full) : "";
+        session.line_overrides = chart_load_line_overrides(line_full, chart_full, root);
+        session.extra_file = string_length(extra_full) ? chart_path_rel(root, extra_full) : "";
+        session.info_offset_ms = real(info.offset_ms ?? 0);
 
         // name/level only from root info; otherwise keep empty strings.
         session.name = (has_info && string_length(info.name)) ? info.name : "";

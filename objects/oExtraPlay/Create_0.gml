@@ -10,7 +10,14 @@ video_backend_ready = false;
 video_error_logged = false;
 effect_controller = -1;
 
-if (os_type == os_windows && extension_exists("FFVideos")) {
+var extra_path = InChartPath + "extra.json";
+if (variable_global_exists("chart_session") && is_struct(global.chart_session)
+	&& is_string(global.chart_session.extra_file) && string_length(global.chart_session.extra_file)) {
+	extra_path = chart_path_join(InChartPath, global.chart_session.extra_file);
+};
+var extra_root = chart_path_dir(extra_path);
+
+if (file_exists(extra_path) && os_type == os_windows && extension_exists("FFVideos")) {
 	var video_d3d_info = os_get_info();
 	if (ds_exists(video_d3d_info, ds_type_map)
 		&& ds_map_exists(video_d3d_info, "video_d3d11_device")
@@ -47,7 +54,7 @@ extra_beat_value = function(value, fallback = 0) {
 	return fallback;
 };
 
-var extra_text = read_extra_text(InChartPath + "extra.json");
+var extra_text = read_extra_text(extra_path);
 var extra = undefined;
 if (string_length(extra_text)) {
 	try { extra = json_parse(extra_text); } catch (error) { delete(error); };
@@ -122,7 +129,7 @@ if (is_struct(extra)) {
 		var relative_path = string_replace_all(source.path, "\\", "/");
 		if (string_pos("..", relative_path) > 0 || string_char_at(relative_path, 1) == "/") then continue;
 		array_add(videos, {
-			path: InChartPath + relative_path,
+			path: chart_path_join(extra_root, relative_path),
 			startTime: extra_beat_to_second(extra_beat_value(source[$ "time"], 0)),
 			scale: string(source[$ "scale"] ?? "cropCenter"),
 			alpha: extra_parse_anim(source[$ "alpha"], 1),

@@ -3,7 +3,7 @@ if(_is_hold || !inition) then exit;
 
 var line_floor = (_line_ref.__value[0]),
 	floor_delta = (self.isAbove ? line_floor - self.yOffset : self.yOffset - line_floor),
-	_c_y = (!self.isAbove ? floor_delta < -0.001 : floor_delta > 0.001);
+	_c_y = (line_floor >= max_visible_position);
 
 var line_x = (_line_ref.x),
 	line_y = (_line_ref.y),

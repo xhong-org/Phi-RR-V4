@@ -50,7 +50,7 @@ for (var external_list_i = 0; external_list_i < array_length(external_lists); ex
 			external_pass.externalHandle = external_hlsl_handles[$ external_relative];
 			continue;
 		};
-		var external_full_path = InChartPath + external_relative;
+		var external_full_path = chart_extra_asset_path(external_relative);
 		if (!file_exists(external_full_path)) {
 			print($"[RPE Effect] External shader file missing: {external_full_path}");
 			continue;

@@ -1,7 +1,4 @@
 /// @description 
-if(game.settings.enableFPS && !(variable_global_exists("render_mode") && global.render_mode)) {
-	window_set_caption($"{GAME_NAME} - FPS: {fps} / {fps_real}");
-};
     
 if(!game.paused){
 	game.Math.ctime();

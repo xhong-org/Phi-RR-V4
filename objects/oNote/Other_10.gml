@@ -4,7 +4,10 @@ if(inition) then exit;
 realHitTime = (self.time * _seconds_per_beat);
 hold_time_length = (self.holdTime * _seconds_per_beat);
 _hold_body_height = (sprite_get_height(note_hold_body));
-max_visible_position = (game.Math.maxVisiblePos(self.yOffset));
+max_visible_position = (game.Math.maxVisiblePos(self.yOffset) + 0.01);
+maximum_visual_length = (self._is_hold && holdFloorLength > 0
+	? game.Math.maxVisiblePos(self.yOffset + holdFloorLength) + 0.01
+	: max_visible_position);
 
 switch(self.type){
 	case 1:

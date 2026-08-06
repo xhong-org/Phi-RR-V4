@@ -57,6 +57,7 @@ if (!pec_reader_load(game_2, pec_path)) {
 	exit;
 };
 pec_create_runtime(game_2);
+instance_create_depth(0,0,DEPTH.BG - 1,oExtraPlay);
 //game_2.CreateLines();
 
 _eff_c = (function(){ return(false); });

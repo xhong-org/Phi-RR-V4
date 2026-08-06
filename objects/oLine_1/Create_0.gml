@@ -16,6 +16,7 @@ if (!variable_instance_exists(id, "extEvents")) then extEvents = {};
 if (!variable_instance_exists(id, "isFather")) then isFather = -1;
 if (!variable_instance_exists(id, "rotFatherLine")) then rotFatherLine = false;
 if (!variable_instance_exists(id, "image")) then image = "line.png";
+if (!variable_instance_exists(id, "line_csv_scale")) then line_csv_scale = 1;
 if (!variable_instance_exists(id, "anchor")) then anchor = [0.5, 0.5];
 if (!variable_instance_exists(id, "bpmfactor")) then bpmfactor = 1;
 if (!variable_instance_exists(id, "isCover") || is_undefined(isCover)) then isCover = true;
@@ -526,21 +527,36 @@ rpe_eval_color_events = function(default_value) {
 };
 
 rpe_eval_text_events = function(default_value) {
-        if (!is_struct(extEvents)) then return default_value;
-        var arr = extEvents[$ "textEvents"];
-        if (!is_array(arr) || array_length(arr) <= 0) then return default_value;
+		line_text_font = (!is_undefined(game.font) && font_exists(game.font)) ? game.font : -1;
+		if (!is_struct(extEvents)) then return default_value;
+		var arr = extEvents[$ "textEvents"];
+		if (!is_array(arr) || array_length(arr) <= 0) then return default_value;
+
+		var select_font = function(text_event) {
+			if (!is_struct(text_event)) then return;
+			var font_name = string(text_event[$ "font"] ?? "cmdysj");
+			if (!string_length(font_name) || string_lower(font_name) == "cmdysj") then return;
+			if (struct_exists(game_1, "Fonts") && is_struct(game_1.Fonts)
+				&& struct_exists(game_1.Fonts, font_name)) {
+				var selected_font = game_1.Fonts[$ font_name];
+				if (selected_font != -1 && font_exists(selected_font)) then line_text_font = selected_font;
+			};
+		};
 
         var event_name = "textEvents";
         if (!struct_exists(ext_count, event_name)) then ext_count[$ event_name] = 0;
         if (!struct_exists(ext_hold, event_name)) then ext_hold[$ event_name] = default_value;
         if (!struct_exists(ext_recall, event_name)) then ext_recall[$ event_name] = default_value;
 
-        var n = array_length(arr);
-        var idx = clamp(ext_count[$ event_name], 0, n);
-        if (idx >= n) {
-                if (line_time >= arr[n - 1].endTime) then return string(arr[n - 1][$ "end"]);
-                idx = n - 1;
-        };
+		var n = array_length(arr);
+		var idx = clamp(ext_count[$ event_name], 0, n);
+		if (idx >= n) {
+				if (line_time >= arr[n - 1].endTime) {
+						select_font(arr[n - 1]);
+						return string(arr[n - 1][$ "end"]);
+				};
+				idx = n - 1;
+		};
 
         while ((idx > 0) && (line_time < arr[idx].startTime)) {
                 idx--;
@@ -549,19 +565,26 @@ rpe_eval_text_events = function(default_value) {
                 ext_hold[$ event_name] = string(arr[idx][$ "end"]);
                 idx++;
         };
-        ext_count[$ event_name] = idx;
-        if (idx >= n) then return ext_hold[$ event_name];
+		ext_count[$ event_name] = idx;
+		if (idx >= n) {
+				select_font(arr[n - 1]);
+				return ext_hold[$ event_name];
+		};
 
         var ev = arr[idx];
         var st = ev.startTime;
         var et = ev.endTime;
-        var v0 = string(ev.start);
-        var v1 = string(ev[$ "end"]);
-        if (line_time < st) {
-                if (idx > 0) then return string(arr[idx - 1][$ "end"]);
-                return string(default_value);
-        };
-        if (st == et || v0 == v1) then return v1;
+		var v0 = string(ev.start);
+		var v1 = string(ev[$ "end"]);
+		if (line_time < st) {
+				if (idx > 0) {
+						select_font(arr[idx - 1]);
+						return string(arr[idx - 1][$ "end"]);
+				};
+				return string(default_value);
+		};
+		select_font(ev);
+		if (st == et || v0 == v1) then return v1;
 
         var p = rpe_event_progress(ev, st, et);
         var out_text = v0;
@@ -914,6 +937,7 @@ __paint_radius = -1;
 __gif_progress = 0;
 __color = c_white;
 line_text = "";
+line_text_font = (!is_undefined(game.font) && font_exists(game.font)) ? game.font : -1;
 __x = room_width * 0.5;
 __y = room_height * 0.5;
 __a = 255;

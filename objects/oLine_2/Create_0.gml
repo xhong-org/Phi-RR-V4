@@ -1,10 +1,12 @@
 /// @description PEC judge line runtime state.
 depth = DEPTH.LINE;
-sprite_index = line;
+if (!variable_instance_exists(id, "image_id") || !sprite_exists(image_id)) then image_id = line;
+if (!variable_instance_exists(id, "line_csv_scale")) then line_csv_scale = 1;
+sprite_index = image_id;
 image_blend = (game.settings.enableLineJudge ? #ffeca0 : c_white);
 var initial_scale = (variable_global_exists("global_scales") ? global_scales : 1);
-image_xscale = 0.9204 * initial_scale;
-image_yscale = 0.52 * initial_scale;
+image_xscale = (image_id == line ? 0.9204 : line_csv_scale * room_height / 1080 * 1.35) * initial_scale;
+image_yscale = (image_id == line ? 0.52 : line_csv_scale * room_height / 1080 * 1.35) * initial_scale;
 if (!variable_instance_exists(id, "events") || !is_struct(events)) then events = pec_line_data();
 _move_index = 0;
 _alpha_index = 0;

@@ -1043,45 +1043,11 @@ function Phigros() constructor { // 仅仅结构
 		};
 		self.TextureGroup = { "default" : line_2 };
 		self.line_list = [];
-		var csv = (load_line_csv());
-		if(csv.status){
-			array_sort(
-				csv.result,
-				function(x1 , x2){
-					return(x1.LineId - x2.LineId);	
-				}
-			);
-			array_foreach(csv.result, function(val , index){
-				var struct_img = (sprite_add($"{InChartPath}{val.Image}" , 0 , 0 , 0 , 0 , 0));
-				//struct_set(struct_img , string(val.LineId) , );
-				if(sprite_exists(struct_img)){
-					sprite_set_offset(struct_img , sprite_get_width(struct_img) / 2 , sprite_get_height(struct_img) / 2);
-					struct_set(game.TextureGroup , string(val.LineId) , struct_img);
-					print($"Line[{string(val.LineId)}] -> Successfully to Load \"{val.Image}\"");
-				}else{
-					print($"Line[{string(val.LineId)}] -> Failed to Load \"{val.Image}\"");
-				};
-				
-				//array_add(game.TextureGroup , {
-				//		string(val.LineId) : sprite_add($"{InChartPath}{val.Image}" , 0 , 0 , 0 , 0 , 0)
-				//	}
-				//);
-				
-				//var len = (array_length(game.TextureGroup));
-				//if(sprite_exists(game.TextureGroup[len - 1])
-			});
-		};
-		for(var i = 0 , ll = 0 , img , scales = 1; i < array_length(self.chart.judgeLineList) ; i ++){
-			if(csv.status && string(i) == csv.result[ll].LineId){
-				img = (game.TextureGroup[$ string(i)]);
-				scales = (csv.result[ll][$ "Scale"] ?? 1);
-				print($"[C-Lines::line.csv][Line {i}] -> Successfully to get line.csv values(\"{csv.result[ll].Image}\")")
-				ll = (clamp(ll + 1 , 0 , array_length(csv.result) - 1));
-			}
-			else {
-				img = line_2;
-				scales = 1;
-			};
+		for(var i = 0 , img , scales = 1; i < array_length(self.chart.judgeLineList) ; i ++){
+			var line_override = chart_line_override(i);
+			img = chart_line_override_sprite(i);
+			if (!sprite_exists(img)) then img = line_2;
+			scales = is_struct(line_override) ? real(line_override.Scale ?? 1) : 1;
 			var l = (instance_create_depth(room_width / 2 , room_height / 2 , 0 , oLine , {
 				events : self.chart.judgeLineList[i] ,
 				line_id : i ,
@@ -1277,6 +1243,7 @@ function RPE() constructor{
 	static Texture = {};
 	static Gif = {};
 	static HitSounds = {};
+	static Fonts = {};
 	//static BPMList = undefined;
 	
 	static chart_info = {
@@ -1392,6 +1359,50 @@ function RPE() constructor{
 		var judge_lines = game_1.chart[$ "judgeLineList"] ?? [];
 		if (!is_array(judge_lines)) then judge_lines = [];
 		var line_group_size = array_length(judge_lines);
+		self.Fonts = {};
+		font_add_enable_aa(true);
+		for (var font_line_i = 0; font_line_i < line_group_size; font_line_i++) {
+			var font_line = judge_lines[font_line_i];
+			if (!is_struct(font_line)) then continue;
+			var font_extended = font_line[$ "extended"];
+			if (!is_struct(font_extended)) then continue;
+			var font_events = font_extended[$ "textEvents"];
+			if (!is_array(font_events)) then continue;
+			for (var font_event_i = 0; font_event_i < array_length(font_events); font_event_i++) {
+				var font_event = font_events[font_event_i];
+				if (!is_struct(font_event)) then continue;
+				var font_name = string(font_event[$ "font"] ?? "cmdysj");
+				if (!string_length(font_name) || string_lower(font_name) == "cmdysj"
+					|| struct_exists(self.Fonts, font_name)) then continue;
+
+				var font_source = font_name;
+				var font_relative = string_replace_all(font_name, "\\", "/");
+				if (string_pos("..", font_relative) <= 0 && string_char_at(font_relative, 1) != "/"
+					&& string_pos(":", font_relative) <= 0) {
+					var font_candidates = [font_relative];
+					var font_lower = string_lower(font_relative);
+					if (string_pos(".ttf", font_lower) <= 0 && string_pos(".otf", font_lower) <= 0
+						&& string_pos(".ttc", font_lower) <= 0) {
+						array_add(font_candidates, font_relative + ".ttf");
+						array_add(font_candidates, font_relative + ".otf");
+						array_add(font_candidates, font_relative + ".ttc");
+					};
+					for (var font_candidate_i = 0; font_candidate_i < array_length(font_candidates); font_candidate_i++) {
+						var font_path = InChartPath + font_candidates[font_candidate_i];
+						if (file_exists(font_path)) {
+							font_source = font_path;
+							break;
+						};
+					};
+				};
+
+				var loaded_font = font_add(font_source, 47, false, false, -infinity, infinity);
+				self.Fonts[$ font_name] = loaded_font;
+				if (loaded_font == -1) {
+					show_debug_message($"[RPEFont] Failed to load font \"{font_name}\" from \"{font_source}\"");
+				};
+			};
+		};
 		print($"Lines Count: {line_group_size}");
 		var eff_line_count = 0;
 		if(file_exists($"{InChartPath}extra.json")){
@@ -1510,10 +1521,13 @@ function RPE() constructor{
 			if (!is_real(_isFather)) then _isFather = -1; 
 			print($"Line[{i}]FatherID->{_isFather >= 0 ? _isFather : "undefined"}" , game.settings.enableDebug);
 				//enableFatherLine = ()
+			var line_override = chart_line_override(i);
+			var line_image = is_struct(line_override) ? line_override.Image : l_s[$ "Texture"];
 			var l = (instance_create_depth(room_width / 2 , room_height / 2 , 0 , oLine_1 , {
 				"line_id" : i, // 线ID
 				"bindUI" : (is_undefined(l_s[$ "attachUI"]) ? 0 : l_s[$ "attachUI"]), // UI判定
-				"image" : (l_s[$ "Texture"]), // 线纹理
+				"image" : line_image, // 线纹理（line.csv 优先）
+				"line_csv_scale" : (is_struct(line_override) ? real(line_override.Scale ?? 1) : 1),
 				"anchor" : (l_s[$ "anchor"] ?? [0.5, 0.5]), // 线锚点
 				"isFather" : (_isFather), // 是否为父线
 				"isGif" : (l_s[$ "isGif"] ?? false), // 是否为Gif
@@ -2394,7 +2408,12 @@ function pec_reader_load(ctx, chart_path) {
 	var handle = file_text_open_read(chart_path);
 	if (is_undefined(handle) || handle < 0) then return false;
 	if (file_text_eof(handle)) { file_text_close(handle); return false; };
-	ctx.chart.offsetSeconds = number(file_text_readln(handle), 0) / 1000 - 0.175;
+	var pec_header_offset_ms = number(file_text_readln(handle), 0);
+	var pec_info_offset_ms = 0;
+	if (variable_global_exists("chart_session") && is_struct(global.chart_session)) {
+		pec_info_offset_ms = real(global.chart_session.info_offset_ms ?? 0);
+	};
+	ctx.chart.offsetSeconds = (pec_header_offset_ms + pec_info_offset_ms) / 1000 - 0.175;
 	var lines = [];
 	while (!file_text_eof(handle)) array_add(lines, file_text_readln(handle));
 	file_text_close(handle);
@@ -2489,15 +2508,20 @@ function pec_reader_load(ctx, chart_path) {
 		note.endSec = pec_beat_to_sec(ctx.chart.bpmList, note.endBeat);
 		note.floorPosition = pec_floor_at_sec(speed_events, note.startSec);
 		note.endFloorPosition = pec_floor_at_sec(speed_events, note.endSec);
+		note.highlightKey = round(note.startSec * 1000);
 	};
-	array_sort(ctx.chart.notes, function(a,b) { return a.startSec-b.startSec; });
+	array_sort(ctx.chart.notes, function(a,b) {
+		if (a.highlightKey < b.highlightKey) then return -1;
+		if (a.highlightKey > b.highlightKey) then return 1;
+		return 0;
+	});
 	for (var highlight_i = 0; highlight_i < array_length(ctx.chart.notes); highlight_i++) ctx.chart.notes[highlight_i].hl = 0;
 	if (bool(game.settings.enableNoteHightLight ?? true)) {
 		var group_start = 0;
 		while (group_start < array_length(ctx.chart.notes)) {
 			var group_end = group_start + 1;
-			var group_sec = ctx.chart.notes[group_start].startSec;
-			while (group_end < array_length(ctx.chart.notes) && ctx.chart.notes[group_end].startSec == group_sec) group_end++;
+			var group_key = ctx.chart.notes[group_start].highlightKey;
+			while (group_end < array_length(ctx.chart.notes) && ctx.chart.notes[group_end].highlightKey == group_key) group_end++;
 			if (group_end - group_start > 1) {
 				for (var group_i = group_start; group_i < group_end; group_i++) ctx.chart.notes[group_i].hl = 1;
 			};
@@ -2510,7 +2534,14 @@ function pec_reader_load(ctx, chart_path) {
 function pec_create_runtime(ctx) {
 	ctx.line_group = [];
 	for (var line_i = 0; line_i < array_length(ctx.chart.judgeLineList); line_i++) {
-		array_add(ctx.line_group, instance_create_depth(room_width/2, room_height/2, DEPTH.LINE, oLine_2, { line_id:line_i, events:ctx.chart.judgeLineList[line_i] }));
+		var line_override = chart_line_override(line_i);
+		var line_sprite = chart_line_override_sprite(line_i);
+		array_add(ctx.line_group, instance_create_depth(room_width/2, room_height/2, DEPTH.LINE, oLine_2, {
+			line_id:line_i,
+			events:ctx.chart.judgeLineList[line_i],
+			image_id:(sprite_exists(line_sprite) ? line_sprite : line),
+			line_csv_scale:(is_struct(line_override) ? real(line_override.Scale ?? 1) : 1)
+		}));
 	};
 	for (var note_i = 0; note_i < array_length(ctx.chart.notes); note_i++) {
 		var note = ctx.chart.notes[note_i];
