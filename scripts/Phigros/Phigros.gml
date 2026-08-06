@@ -1,10 +1,10 @@
-// 闂備礁鎼ˇ顖炴偋閸℃稑绠犻幖娣灪閸欏繑銇勮箛鎾搭棏闁稿鎹囬幃鐑藉箥椤旂虎鍞堕梻浣虹帛閻楁洟鎮ユ總绋胯摕?
+// 石库水
 #macro print LogOutputFile
 #macro elif else if
 #macro func function
 #macro isExists file_exists
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal 40494
+#macro VerReal 40495
 #macro VerStr "v.4.0.8"
 #macro GAME_NAME "Re: Phi-RR - " + VerStr
 #macro HYW_MODE true
@@ -31,14 +31,14 @@ function asset_font_valid(_id) {
 
 
 
-// 濠电姷鏁搁崑鐐差焽濞嗘搩鏁勯柛顐犲劜閸庡﹥銇勯弽銊с€掓い鈺冨厴閺屻劌鈹戦崱妯虹獩闂?闂備浇顕ф绋匡耿闁秴纾婚柕鍫濐槹閸嬫ɑ绻涢崱妯诲碍缂?
+// 实验性内容
 //scheduler_resolution_set(800000000000);
 //gpu_set_texfilter(true);
 gml_release_mode(true);
 //gml_pragma("forceinline");
 
 //string_format()
-// 闂傚倷鐒﹂幃鍫曞磿閺屻儱纾块柟鎯板Г閸庢垵霉閸忓吋缍戦柛鎴犲У閹便劌顫滈崱妞剧盎濡?
+// 憋憋枚举
 enum DEPTH {
 	DEBUG = -15000,
 	LINE = -3000,
@@ -63,7 +63,7 @@ enum TYPE {
 
 
 
-// 婵犵妲呴崑鍡樻櫠濡ゅ啯宕查柛宀€鍊涢崶銊х瘈婵﹩鍓涢悡鎴︽⒑缁嬫寧婀扮紒瀣笒閳?
+// cmd命令调用参数
 var cmd_count = (parameter_count());
 
 if(cmd_count){	
@@ -111,7 +111,7 @@ if(cmd_count){
 //		"enableHitEffect" : true
 //	};
 	
-//	///@desc 闂備浇顕х€涒晝绮欓幒妞尖偓鍐醇閵夘喗鏅炴繛杈剧到濠€閬嶅煝閺冨牊鐓犻柤瑙勬緲閻撴劗绱掓笟鍥ф珝闁哄备鍓濋幏鍛村传閵夛附鍠栭梻?//
+//	///@desc 字符串转数字
 //	static strToReal = (func(str , default_value = undefined){
 //		if(string_lower(str) == "false") then return(0);
 //		if(string_lower(str) == "true") then return(1);
@@ -130,12 +130,12 @@ if(cmd_count){
 //room_speed = 120;
 
 randomise();
-// 缂傚倸鍊风拋鏌ュ磻閹捐绾ч柣鎰綑椤ュ霉?
+// 测试
 var sval = "fweasfare",
 	eval = "Hel";
 show_debug_message(string_copy(sval, 1, string_length(eval))); 
 
-///@desc 闂傚倷娴囧銊╂嚄閸撲焦宕叉繝闈涚墢缁€濠囨倵閿濆骸鏋涚紒鈧崱娑欑厱闁斥晛鍙愰幋婵冩灁闁割偅娲橀悡娑㈡煕椤愶絿绠栭柟顖氱墦閺?
+///@desc 计算ACC
 function accCalc(){
 	var aoc = (phi_state_list),
 		counts = (aoc.prefect + aoc.good + aoc.miss + aoc.bad),
@@ -147,7 +147,7 @@ function accCalc(){
 };
 
 
-///@desc 闂傚倷绀侀幉锛勬暜閸ヮ剙纾归柡鍥ュ灪閸?
+///@desc 计算打击offset
 function judgeCalc(oHTime , nHTime , bpm , xx , yy , _type , isFHitEf = true, insCombo = true, timeInSeconds = false, effectColor = undefined){
 	var timer = (timeInSeconds ? real(oHTime) : game.Math.realTimer(bpm , oHTime)),
 		ntimer = (timeInSeconds ? real(nHTime) : game.Math.realTimer(bpm , nHTime)),
@@ -204,13 +204,13 @@ function judgeCalc(oHTime , nHTime , bpm , xx , yy , _type , isFHitEf = true, in
 		
 	};
 	
-	//print($"offset: 闂備礁鎲￠〃蹇撐ｉ埡鐜set}");
-	
 	if(isFHitEf && (status == TYPE.GOOD || status == TYPE.PREFECT)) then _eff_c(xx , yy , is_undefined(effectColor) ? color : effectColor);
 	
 	return(status);
 };
 
+///@desc 分数系统
+///@param _mode {Real} 
 function ScoreSystem(_mode = undefined){
 	if(maxcombo <= 0) then return(-NaN);
 	var mode;
@@ -240,7 +240,7 @@ function ScoreSystem(_mode = undefined){
 };
 
 
-///@desc 闂傚倷绀侀幖顐﹀磹缁嬫５娲晲閸涱亝鐎婚梺闈涚箚閹冲洭宕戦幘瀛樺闁告劖鍎冲▓顓炩攽閻愰潧甯堕柛鐔告綑閻?
+///@desc 文件寻找系统(仅Windows)
 function File_Discoverer(disc_path){
         var return_path = {
                 "chart" : [],
@@ -367,7 +367,7 @@ function TrackZ(path) {
 
 
 
-///@desc line.csv 闂傚倷绀侀幉锛勬暜閸ヮ剙纾归柡鍥ュ灪閸嬧晠鏌涢幘妤€鎳忛敍蹇涙⒑閸忕厧澧柛銊ゅ嵆瀹曞綊鏌嗗鍡欏幈闂侀潧锛忛崘褍顥氭繝鐢靛仜閻°劑鎯勯鐐靛祦?
+///@desc 读取line.csy
 function load_line_csv(){
 	var path = ($"{InChartPath}line.csv");
 	if(file_exists(path)){
@@ -392,7 +392,7 @@ function load_line_csv(){
 	});
 };
 
-///@desc Phigros Official闂備浇宕垫慨鎾敄婢跺顩查悹杞拌閻掍粙鏌ｅΔ鈧悧蹇涘煝閺冨牊鐓犲┑顔藉姇閳ь剚顨呴埢鏃堝閵堝棛鍘?
+///@desc Phigros Official的floorPosition计算
 function official_floor_at_beat(speed_events, beat, seconds_per_beat) {
 	var floor_value = 0;
 	for (var speed_i = 0; speed_i < array_length(speed_events); speed_i++) {
@@ -405,12 +405,12 @@ function official_floor_at_beat(speed_events, beat, seconds_per_beat) {
 	return floor_value;
 }
 
-function Phigros() constructor {
-	// 濠电姷鏁告慨宥夊礋椤愩埄娼欐繝娈垮枟鑿ч柛鏃€鍨佃灋?
+function Phigros() constructor { // 仅仅结构
+	// 谱面&信息
 	static chart = undefined;
 	static version = 0;
 	static line_list = [];
-	// [闂備浇宕垫慨鎾敄婢跺顩查悹杞拌閻掍粙鏌℃径瀣靛劌闁搞倖娲熼弻宥堫檨闁告挻宀搁獮鍫ュΩ瑜夐崑鎾绘晲鎼粹€茬凹闁诲繐楠忕换婵嬪蓟閿熺姴鐒垫い鎺戝閸婇攱銇勯幒宥囪窗婵″樊鍨跺?闂傚倷绀侀幉锟犮€冮崱妞曟椽骞嬮悩鐢殿槸? 闂佽娴烽弫濠氬磻婵犲洤绐楁慨妯款啇缂? , 闂備浇顕ф绋匡耿闁秴纾婚柣鎰▕濞撳鏌涘畝鈧崑娑氱尵瀹ュ鐓曟い鎰剁稻缁€鍐煥?闂傚倷绀侀幉锟犮€冮崱妞曟椽骞嬮悩鐢殿槸? 缂? , 闂佽瀛╅鏍窗閹烘纾婚柟鐐灱閺€鑺ャ亜閺冨倵鎷￠柛搴㈠姈缁绘盯宕煎┑鍫㈩啋閻庤娲橀崹鐢糕€﹂妸鈺佺妞ゆ帒顦拌ⅶ闂?闂傚倷绀侀幉锟犮€冮崱妞曟椽骞嬮悩鐢殿槸? 闂佽娴烽弫濠氬磻婵犲洤绐楁慨妯款啇缂? , 闂備浇顕ф绋匡耿闁秴纾婚柕鍫濇媼閻庤埖銇勯弽顐粶婵鐓￠弻娑氫沪閸撗呭彎缂備緡鍠栭…鐑藉蓟閿熺姴绀冮柕濞у啰鍘芥繝?闂傚倷绀侀幉锟犮€冮崱妞曟椽骞嬮悩鐢殿槸? 闂佽娴烽弫濠氬磻婵犲洤绐楁慨妯款啇缂? , 缂傚倸鍊搁崐鐑芥倿閿曞倸绠伴悹鍥ф▕閻掕姤銇勯幇鍓佺暠婵鐓￠弻娑氫沪閸撗呭彎缂備緡鍠栭…鐑藉蓟閿熺姴绀冮柕濞у啰鍘芥繝?闂傚倷绀侀幉锟犮€冮崱妞曟椽骞嬮悩鐢殿槸? 闂佽娴烽弫濠氬磻婵犲洤绐楁慨妯款啇缂?] 
+	// 
 	__time = array_create(6, 0);
 	paused = true;
 	_notes = [];
@@ -420,7 +420,7 @@ function Phigros() constructor {
 		"default" : line_2
 	};
 	
-	// 闂傚倸鍊烽悞锕€顭垮Ο鑲╃煋闁割偅娲橀崑顏堟煕閳╁啰鈯曢柛搴℃捣缁辨帞鈧綆浜炴禒銏㈡喐?
+	// 音符&字体
 	static notes = ({});
 	font_add_enable_aa(true);
 	static font = (font_add($"{working_directory}resource/saira.ttf" , 45 , true , false , 32 , 255));
@@ -437,28 +437,28 @@ function Phigros() constructor {
 	};
 	static bg = -1;
 	
-	// 闂備浇宕垫慨宕囩矆娴ｈ娅犲ù鐘差儐閸?
+	// 设置
 	static settings = {
-		"enableBlur" : false,					// 闂傚倷绀侀幖顐も偓姘卞厴瀹曡瀵奸弶鎴犵暰婵炴挻鍩冮崑鎾垛偓瑙勬磸閸庣敻銆佸☉姗嗙叆闁告洦鍓氶褰掓⒒娴ｈ鍋犻柛搴ら哺閺呭爼鎳為妷锔界彿闂佸搫绋侀悘娑㈡偄閸忓吋娅栭梺鍛婃处閸?婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍缂備緡鍋嗛惃顩沞)
-		"enableFPS" : true,						// 闂傚倷绀侀幖顐も偓姘卞厴瀹曡瀵奸弶鎴犵暰婵炴挻鍩冮崑鎾垛偓娈垮枙閸楀啿鐣峰鍡╂Ч婵炲濮甸幎鐩(婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍缂備緡鍋嗙€电se)
-		"enableQuikyStart" : true,				// 闂傚倸顭崑鍕归崒鐐茬；濠电姴娲ら悞鍨亜閹烘垵鈧悂寮告惔銊︾厵妞ゆ牗宀搁崣鍕偓?婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍缂備緡鍋嗛惃顩沞)[闂傚倷绀侀幉锟犮€冮崨鏉戠柈闁冲搫鍟伴崡姘舵煟閹伴潧澧伴柍缁樻⒒閳ь剙绠嶉崕閬嶆偋濠婂厾娲晲閸涱亝顫嶉梺褰掔畺椤ゅ倿宕甸　顪瞫e]
-		"enableCanvasZoom" : false,				// 闂傚倷鑳堕、濠偽涢崟顓涘亾濮樼厧澧寸€规洘娲栭～婵嬵敇閻愮數鐛梺璇查叄濞佳囧箺濠婂懏顫曟慨妯垮煐閻撴盯鏌?.5(婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍缂備緡鍋嗙€电se)
-		"enableSurface" : false,				// 闂傚倷绀侀幖顐も偓姘卞厴瀹曡瀵奸弶鎴犵暰婵炴挻鍩冮崑鎾垛偓瑙勬磸閸庣敻銆佸☉姗嗙叆闁告洦鍓氶褰掓⒒娴ｅ憡鍟為柛鏃€娲熼獮濠偽熺拠宸殼?婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍缂備緡鍋嗙€电se)
-		"enableNoteHightLight" : true,			// 闂傚倷绀侀幖顐も偓姘卞厴瀹曡瀵奸弶鎴犵暰婵炴挻鍩冮崑鎾垛偓瑙勬磸閸庣敻銆佸☉姗嗙叆闁告洦鍓氶褰掓⒒娴ｅ憡鍟為柣鐔村劦瀵敻顢楁担铏诡啎闂佺鐬奸崑娑氱不閻㈠憡鐓欓梺顓ㄧ畱閺嬫柨霉?婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍缂備緡鍋嗛惃顩沞)
-		"enableChartGUI" : true,				// 闂傚倷绀侀幖顐も偓姘卞厴瀹曡瀵奸弶鎴犵暰婵炴挻鍩冮崑鎾垛偓娈垮枙閸楀啿鐣峰鍡╂Ч婵炲濮垫ご宄孖(婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍缂備緡鍋嗛惃顩沞)
-		"enableLineJudge" : true,				// FC/AP 闂傚倷绀佸﹢閬嶁€﹂崼婢濇椽濡搁埡浣勶附鎱ㄥΟ鎸庣【闂?婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍缂備緡鍋嗛惃顩沞)
-		"showBG" : true,						// 闂傚倷绀侀幖顐も偓姘煎墯閺呰埖绂掔€ｎ€附鎱ㄥΟ鍨厫闁搞倕瀚伴幃姗€鎮欓棃娑楀闂?婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍缂備緡鍋嗛惃顩沞)
-		"enableHitEffect" : true,				// 闂傚倷绀侀幖顐も偓姘卞厴瀹曡瀵奸弶鎴犵暰婵炴挻鍩冮崑鎾垛偓瑙勬磸閸庣敻銆佸☉姗嗙叆闁告洦鍓氶褰掓⒒娴ｇ儤鍤€闁诲繑宀搁獮鎰板箹娴ｇ鎯炲銈嗘磵閸嬫捇鏌熼銊ユ噺閸犲棝鏌涢弴銊ュ闁?婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍缂備緡鍋嗛惃顩沞)
-		"refreshFPSCount" : 60,					// 闂傚倷绀侀幉锛勬暜閿熺姴缁╅梺顒€绉撮拑鐔封攽閸屾碍鎲燬婵犵妲呴崑鍡樻櫠濡ゅ懎鍨傞柣鐔煎亰閸?婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍?0)
-		"enableDebug" : true,					// 闂傚倷绀侀幖顐も偓姘卞厴瀹曡瀵奸弶鎴犵暰婵炴挻鍩冮崑鎾垛偓瑙勬磸閸庣敻銆佸☉姗嗙叆闁告洦鍓氶褰掓⒑閼姐倕孝妞ゆ垵鎳樺畷顖炲箮閼恒儱鍓ㄥ銈嗙墬椤曢亶鎮㈤悡搴ｄ紜閻庤娲栧ú銊┿€?婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍缂備緡鍋嗙€电se)
-		"enableDisplayLineID" : false,			// 闂傚倷绀侀幖顐も偓姘卞厴瀹曡瀵奸弶鎴犵暰婵炴挻鍩冮崑鎾垛偓娈垮枙閸楀啿鐣峰鍡╂Ч婵炲濮电粙鎾舵閹烘绠氱憸蹇旂閵忋垺鍠?婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍缂備緡鍋嗙€电se)
-		"comboString" : "COMBO",				// combo text
-		"enableVsync" : true,					// 闂傚倷绀侀幖顐も偓姘卞厴瀹曡瀵奸弶鎴犵暰婵炴挻鍩冮崑鎾垛偓瑙勬磸閸庣敻銆佸☉姗嗙叆闁告洦鍓氶褰掓⒒娴ｈ鍋犻柛鏂跨焸瀹曟劗鎷犵憗浣规そ瀹曠螖閳ь剛鎲撮敃鍌涘€堕柣鎰祷濡炬悂鏌?婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍缂備緡鍋嗛惃顩沞)
-		"aa_level" : 0,							// aa闂傚倷鑳堕、濠囧春閺嶎厹鈧啯绻濋崶褎鐎銈嗘⒒閻℃棃鎮楅弻銉﹀仯闁诡厽甯掓俊鍧楁煙閼规澘浜圭紒?婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍?)
-		"useOldFX" : false,						// 闂傚倷绀侀幖顐も偓姘卞厴瀹曡瀵奸弶鎴犵暰婵炶揪缍€椤鍒婇幘顔藉仯闁诡厽甯掓俊浠嬫煛閸℃绠婚柡宀嬬節瀹曟﹢宕熼銏╀患闂佹剚浜為弫濠氬蓟濞戙垹绠ｉ柨婵嗘噹閹偞绻濋姀锝庢綈閻㈩垪鈧剚鍤?婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍缂備緡鍋嗙€电se)
-		"enableComboScore" : true,				// 闂傚倷绀侀幖顐も偓姘卞厴瀹曡瀵奸弶鎴犵暰婵炴挻鍩冮崑鎾垛偓瑙勬磸閸庣敻銆佸☉姗嗙叆闁告洦鍓氶褰掓⒑閸濆嫷妲撮柡鍛箞瀹曟垵鈽夐姀鐘叉優濡炪倖娲嶉崑鎾垛偓?婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍缂備緡鍋嗙€电se)
-		"judgeOffset" : 0,						// AUTO闂傚倷绀侀幉锛勬暜閸ヮ剙纾归柡鍥ュ灪閸嬧晠鏌熼鍡楄嫰濞堟﹢姊虹拠鈥崇仭濠㈢懓妫涚划?婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍?)
-		"enableAccJudgment" : true,				// 闂傚倷绀侀幖顐も偓姘卞厴瀹曡瀵奸弶鎴犵暰婵炴挻鍩冮崑鎾垛偓瑙勬磸閸庣敻銆佸☉姗嗙叆闁告洦鍓氶鐟扳攽閻愭潙鐏﹂柟绋跨埣瀹曟洟骞橀鑲╋紮闂佺鎻粻鎴犵矆閸℃稒鐓忛柛顐ｇ箖閸ｄ粙鏌?婵犳鍠楃敮妤冪矙閹烘せ鈧箓宕奸妷顔芥櫍缂備緡鍋嗛惃顩沞)
+		"enableBlur" : true,					// 是否启用背景模糊(default:true)
+		"enableFPS" : true,						// 是否显示FPS(default:true)
+		"enableQuikyStart" : true,				// 是否启用快速启动(已弃用)(default:true)
+		"enableCanvasZoom" : false,				// 是否启用摄像头缩放(已弃用)(default:false)
+		"enableSurface" : false,				// 是否启用遮罩(已弃用)(default:false)
+		"enableNoteHightLight" : true,			// 是否启用音符多押高亮(default:true)
+		"enableChartGUI" : true,				// 是否启用UI(default:true)
+		"enableLineJudge" : true,				// 是否启用FC/AP指示器(default:true)
+		"showBG" : true,						// 是否显示背景(default:true)
+		"enableHitEffect" : true,				// 是否显示打击特效(default:true)
+		"refreshFPSCount" : 60,					// 刷新FPS计量次数(default:60)
+		"enableDebug" : true,					// 是否启用Debug(default:true)
+		"enableDisplayLineID" : false,			// 是否显示线ID(已弃用)(default:false)
+		"comboString" : "COMBO",				// combo text(default:"COMBO")
+		"enableVsync" : true,					// 是否启用垂直同步(default:true)
+		"aa_level" : 0,							// aa_level等级(default:0)
+		"useOldFX" : false,						// 是否使用旧版打击特效(default:false)
+		"enableComboScore" : true,				// 是否启用打击分(default:true)
+		"judgeOffset" : 0,						// 自动打击偏移延迟(default:0)
+		"enableAccJudgment" : true,				// 是否启用Auto严肃判定(可能对其他格式的谱面无效)(default:true)
 		"preventWindowMoveFreeze" : true,		// use non-blocking Windows moving and resizing
 		"enableRPEMulticore" : true,			// enable native RPE frame workers
 		"rpeWorkerMinLines" : 32,				// minimum line count for native parallel resolve
@@ -469,8 +469,8 @@ function Phigros() constructor {
 	};
 	
 	
-	/// 闂傚倸鍊搁崐鎼佹偋婵犲洦鍋￠柨鏇炲€搁悞鍨亜閹达絾纭舵い锔肩畵閺屾盯濡舵径澶嬪枤閻?	
-	///@desc 闂備浇顕х€涒晝绮欓幒妞尖偓鍐醇閵夘喗鏅炴繛杈剧到濠€閬嶅煝閺冨牊鐓犻柤瑙勬緲閻撴劗绱掓笟鍥ф灍缂佺粯鐩獮鏍敇閻愬浜鹃梻浣侯焾椤戞垹绱炴担鍓插殨?
+	/// 必要的函数
+	///@desc String->Real
 	static strToReal = (func(str , default_value = undefined){
 		if(string_lower(str) == "false") then return(0);
 		if(string_lower(str) == "true") then return(1);
@@ -479,14 +479,14 @@ function Phigros() constructor {
 		catch(e){ delete(e); return(default_value) };
 	});
 	
-	///@desc 濠电姷鏁搁崑鐐哄箚瀹€鍕獥婵娉涚壕濠氭煥濠靛棭妲搁柡瀣╃窔閺岀喎鐣￠悧鍫熸嫳缂備椒绶￠崳锝夊箖濡も偓閳藉鈻庡Ο鑽ゆ毉婵＄偑鍊栭崹鎶芥倿閿斿墽鐭欏鑸靛姇缁犵敻鏌熼悜妯荤闁绘挸鍊块幃妤€鈻撻崹顔界亪缂備胶绮崝妤冨垝閳哄偆妲归幖瀛樼箘閸撱劑姊洪崫鍕偓鍝ヨ姳闁秴纾?
+	///@desc Real->String
 	static realToStrBool = (func(_real){
 		if(!is_real(_real)) then return("undefined");
 		if(bool(_real) == true) then return("true");
 		else return("false");
 	});
 	
-	///@desc 闂備浇宕垫慨鏉懨洪埡鍜佹晪鐟滄垿濡甸幇鏉跨倞妞ゆ巻鍋撶紒鈧崟顖涚厾闁诡厽甯掗崝婊勭箾?	///@arg Chart {String} 闂備浇宕垫慨鎾敄婢跺顩查悹杞拌閻掕棄霉閸忓吋缍戞俊顐ｏ耿閺屾盯濡烽鐐搭€嶅銈嗗姃缁瑩寮诲☉銏℃櫆闁兼亽鍎抽崙鈥斥攽?
+	///@desc 读取器
 	static Reader = (func(_chart = "" , lmode = 0 , chart_source = undefined){
 		// Reader may be called repeatedly when switching charts. Do not retain
 		// note references from the previous chart.
@@ -566,7 +566,7 @@ function Phigros() constructor {
 		return(true);
 	});
 	
-	///@desc 闂傚倷娴囧銊х矆娓氣偓椤㈡岸顢橀姀鐘电暫婵犵數濮村ú銈囩矆閸曨垱鐓犻柟顓熷笒閸旀粍绻?
+	///@desc 事件分类
 	static Sort = (func(){
 		//print(array_length(game.__time));
 		for(var i = 0 ; i < array_length(self.chart.judgeLineList) ; i ++){
@@ -603,7 +603,7 @@ function Phigros() constructor {
 		print("[S-Sort] Done." , game.settings.enableDebug);
 	});
 	
-	///@desc 闂傚倷绀侀幉鈥愁潖缂佹ɑ鍙忛柟顖ｇ亹瑜版帒鐐婃い鎺嶇濞堟垿鏌ｈ箛鏇炰户闁稿鎹囬幃鐢割敍閻愬鍘?	///@desc Path {String} 闂傚倷鑳堕崢褔宕崸妤€瀚夋い鎺嗗亾闁宠绉撮埢搴ㄥ箻瀹曞洤鈧偤姊虹拠鈥崇€婚柛鏇ㄥ亜閻熷酣姊绘担渚綊闁逞屽墴瀹?
+	///@desc 背景应用
 	static Background = (func(custom = ""){
 		var p = ((is_string(custom) && string_length(custom)) ? custom : "");
 		if(asset_sprite_valid(self.bg)) then sprite_delete(self.bg);
@@ -806,7 +806,7 @@ function Phigros() constructor {
 	//	delete(self.res_path);
 	//});
 	
-	///@desc 闂傚倷绀侀幉锟犲礉閺囥垹绠犻柟鎵閸嬵亪鏌涢埄鍐噭閻忓繐閰ｉ弻娑㈠即閵娿儱顫梺缁樼墵娴滃爼寮婚悢铏圭當婵炴垶蓱閿涘秹鏌￠埀顒佺鐎ｎ偆鍘?
+	///@desc 资源管理器
 	static Resource = (func(){
 		if(!asset_font_valid(self.font)){
 			font_add_enable_aa(true);
@@ -833,7 +833,7 @@ function Phigros() constructor {
 		print("[L-Resource] Done." , game.settings.enableDebug);
 	});
 	
-	///@desc 濠电姷鏁搁崑鐐哄箰閹间礁绠犻柟鐗堟緲缁犳牕鈹戦悩鎻掝仾閻忓繐閰ｉ弻娑㈠即閵娿儱顫梺?	///@arg full {Bool} 闂傚倷绀侀幖顐も偓姘卞厴瀹曡瀵奸弶鎴犵暰婵炶揪缍€閵嗏偓闁稿鎹囬幃鐑藉箯鐏炵瓔浼冮梻浣告啞閻熴儳鎹㈤幇鏉课ラ柟鐑橆殔瀹告繃銇勯弽銊р槈闁?
+	///@desc 清理
 	static Clean = (func(full = false){
 		if(asset_sprite_valid(self.bg)){
 			sprite_delete(self.bg);	
@@ -885,7 +885,7 @@ function Phigros() constructor {
 		print($"[D-Clean] {full ? "Full Clean Done." : "Done."}" , game.settings.enableDebug);
 	});
 	
-	///@desc 闂備浇宕垫慨鎾敄婢跺顩查悹杞拌閻掕棄霉閸忓吋缍戦柡瀣╃窔閺屸剝寰勭€ｉ潧鍔岄梺鍛婃煥閹虫﹢寮诲☉銏犵闁挎繂鎲涢幘缁樼厸?
+	///@desc 数学函数
 	static Math = ({
 		
 		///@desc beat timer
@@ -982,9 +982,9 @@ function Phigros() constructor {
 		//pause1 : (function)
 	});
 	
-	///@desc 闂備浇顕х换鎰崲閹邦喗宕查柟閭﹀幖椤曢亶鏌熼悧鍫熺凡缂佲偓?
+	///@desc Phi小工具(仅对官谱格式写)
 	static PhiTool = {
-		///@desc 婵犵數鍋為崹鍫曞箰鐠囧弬锝夊箳濡炲皷鍋撻崨瀛樻櫇闁稿本鑹惧宄邦渻閵堝棛澧紒瀣笧閻ヮ亪顢涢悙瀵稿幐闂侀€炲苯澧伴柟鍙夋尦瀹曠喖顢曢妶鍡忔瀻闂傚倸鍊烽悞锕傤敄濞嗘挸绐楁慨妯块哺閸嬫牗銇勯幇鍓佺暠闁?		// How to Use? before_type_arr[index] => after_type_arr[index]
+		///@desc 转变音符类型
 		TrasformType : (function(before_type_arr , after_type_arr){
 			if(is_array(after_type_arr) && is_array(before_type_arr)) {}
 			else return(false);
@@ -1014,7 +1014,7 @@ function Phigros() constructor {
 			return(true);
 		}),
 		
-		///@desc  婵犵數鍎戠徊钘壝洪敂鐐床闁稿瞼鍋為崑銈夋煏婵炑冨椤忊晠姊绘笟鍥у缂佸娼ч々?		// 闂?, 闂傚倷绀侀幉锟犳偡椤栨稓顩叉繝闈涙焾閿濆绠瑰ù锝囶焾閸嬪秹姊虹紒妯活棃妞ゃ儲鎸搁埢鎾诲础閻愨晜顫嶉梺瑙勫劤绾绢厼鐡┑鐘愁問閸犳帡寮查悩璇茬畾闁告劦鍠栫粈瀣亜韫囨挻顥犳い鏃€妫冮弻?
+		///@desc  保存谱面
 		SaveTrack : (function(path){
 			var js_str = (json_stringify(game.chart , true)),
 				buff = (buffer_create(string_byte_length(js_str) , buffer_grow , 1));
@@ -1025,14 +1025,14 @@ function Phigros() constructor {
 			return(true);
 		}),
 		
-		///@desc  闂傚倷绀佺紞濠囁夐幘璇茬獥閹兼番鍔岀粻鏍箹濞ｎ剙濡肩紒鈧崟顖涚厾闁诡厽甯掗崝婊勭箾?
+		///@desc  文本
 		FitEventsTrack : (function(){
 				
 		})
 	};
 	
 	
-	///@desc 闂傚倷绀侀幉锛勬暜閸ヮ剙纾归柡鍥ュ灪閸嬧晠鏌涢幘妤€鎳忛敍?闂傚倸鍊搁崐鎼佹晝閵堝洤顥氭い鎾卞焺閺?
+	///@desc 创建判定线
 	static CreateLines = (func(){
 		// Release textures and instance references left by a previous chart load.
 		var old_texture_names = (struct_get_names(self.TextureGroup));
@@ -1291,11 +1291,11 @@ function RPE() constructor{
 	
 	static version = 0;
 	
-	static line_list = []; // 缂傚倸鍊烽悞锕傚磿閹惰姤鍊舵繝闈涱儐閸嬵亪鏌涢弴銊ュ闁荤喎缍婇幃妤呮晲鎼粹€愁潾闂?
-	static attachUI_Group = ["default" , "pause" , "combonumber" , "combo" , "score" , "bar" , "name" , "level"]; // UI缂傚倸鍊搁崐鐑芥倿閿曞倸鍨傞柣銏犳啞閸嬧晠鏌涢幘妤€鎳愰敍?
-	static fatherLineList = [];  // 闂傚倷鑳剁划顖炴偋閺囩喐娅犻幖娣妼閸氬綊骞栨潏鍓ф偧濞戞挸绉归弻銊モ槈濡警浠鹃梺绋匡功閸嬬喓妲?
-	static Texture = {}; // 缂傚倸鍊烽悞锕傚磿閸愯鑰块梺顒€绉寸粻鏍р攽閻樻彃顏☉鎾崇Ч閺屻劌鈽夊Ο渚痪闂佺锕﹂崑鐔烘?
-	static _notes = []; // 闂傚倷绀佸﹢閬嶃€傛禒瀣；闁瑰墽绮悡娑㈡煕椤愶絿绠ユ俊顖楀亾闂備胶绮幐鍛婃櫠鎼达絽鍨濇い鎾卞灪閺呮粓鏌涢幘妤€鎳愰崢?
+	static line_list = []; // 线列表
+	static attachUI_Group = ["default" , "pause" , "combonumber" , "combo" , "score" , "bar" , "name" , "level"]; // UI绑定组
+	static fatherLineList = [];  // 父线列表
+	static Texture = {}; // 纹理存储
+	static _notes = []; // 音符存储
 	static chart_time = [0 , 0]; // chart real time / multi-BPM compensation
 	static Reader = (func(_chart){
 		var f = (string_length(_chart) ? _chart : ($"{working_directory}chart/Chart_IN.json"));
@@ -1386,9 +1386,9 @@ function RPE() constructor{
 		return true;
 	});
 	
-	///@desc RPE闂傚倷绀侀幉锛勬暜閸ヮ剙纾归柡鍥ュ灪閸嬧晠鏌涢幘妤€鎳忛敍蹇涙⒑閸撹尙鍘涢柛鐘崇墵閹﹢鏁嶉崟銊ヤ壕?
+	///@desc RPE创建判定线
 	static CreateLines = (func(){
-		// 闂傚倷绀侀幖顐⑽涘▎蹇ｇ劷婵炲棙鍔栭崣蹇涚叓閸ャ劎鈯曢柣鎺曞亹閳ь剙绠嶉崕閬嶅箠鎼淬劌閿ゅ┑鐘叉处閻撴洟鏌熼崫鍕靛剰闁逞屽墯濞茬喖骞冩ィ鍐ㄧ鐟滃繐螞椤栫偞鐓欑紒瀣健椤庢銇勯敐鍡欏弨闁哄矉绻濆畷鐓庘攽閹邦厜锕傛⒑闁偛鑻晶浼存煕濡姴娲ょ粻顖炴煟濡も偓閻楀繘銆呴弻銉﹀€甸柨婵嗗€瑰▍鍡樸亜?
+		// 文本
 		var judge_lines = game_1.chart[$ "judgeLineList"] ?? [];
 		if (!is_array(judge_lines)) then judge_lines = [];
 		var line_group_size = array_length(judge_lines);
@@ -1414,7 +1414,7 @@ function RPE() constructor{
 			var //,
 				events = [];// = l_s[$ "eventLayers"];
 			
-			// (line)缂傚倸鍊烽悞锕傚磿閸愬樊鐒介柨鐔哄Т绾惧潡鏌熺紒銏犳灈缂佲偓?
+			// (line)
 			var l_s = judge_lines[i];//,
 			if (!is_struct(l_s)) then continue;
 			global._id = i;
@@ -1430,10 +1430,10 @@ function RPE() constructor{
 					
 					global.__id = o;
 					
-					struct_foreach(events_index , (func(name , val){//濠德板€楁慨鐑藉磻閻樺樊鍤曢柟鎹愭硾閸ㄦ繈鏌涢銈呮灁闁?
+					struct_foreach(events_index , (func(name , val){//
 						if(name == "speedEvents") then return;
 						if(!is_array(val)) then return;
-						// 闂傚倷绀侀幉锛勬暜閹烘嚦娑樷槈濮橆厼浠?						//
+						//
 						//var _sort = (function(x1 , x2){
 						//		//if(is_array(x1.startTime)) {
 						//	//	x1.startTime = (game_1.Math.arrToBeat(x1.startTime))	
@@ -1467,7 +1467,7 @@ function RPE() constructor{
 					}));
 					if(struct_exists(l_s , "extended") && o == 0){
 						//struct_foreach(l_s[$ "extended"] , function(_name , _val){
-						//	// 闂傚倷绀侀幉锛勬暜閹烘嚦娑樷槈濮橆厼浠?						//
+						//	// 					//
 						//var _sort = (function(x1 , x2){
 						//		//if(is_array(x1.startTime)) {
 						//		//	x1.startTime = (game_1.Math.arrToBeat(x1.startTime))	
@@ -1511,22 +1511,22 @@ function RPE() constructor{
 			print($"Line[{i}]FatherID->{_isFather >= 0 ? _isFather : "undefined"}" , game.settings.enableDebug);
 				//enableFatherLine = ()
 			var l = (instance_create_depth(room_width / 2 , room_height / 2 , 0 , oLine_1 , {
-				"line_id" : i, // 缂傚倸鍊烽悞锕€鐣峰Ο琛℃灃闁哄洨鍋愰弸鏃堟煙鏉堚晝顩?
-				"bindUI" : (is_undefined(l_s[$ "attachUI"]) ? 0 : l_s[$ "attachUI"]), // UI缂傚倸鍊搁崐鐑芥倿閿曞倸鍨傞柣銏犳啞閸?闂傚倷绀侀幖顐⑽涘Δ鍛９濡炲娴风粻鏂款熆閼搁潧濮堥柛銈傚亾闂備礁鎲￠崝锕傚储娴犲鏁佹慨妯垮煐閻撴盯鏌嶈閸撶喖銆佸☉妯锋婵☆垰鍚嬪暩)
-				"image" : (l_s[$ "Texture"]), // 缂傚倸鍊烽悞锕€鐣峰Ο琛℃灃闁哄洨鍋愰弸鏃堟煙鐎电啸婵☆偒鍨堕弻娑㈡晜鐠囨彃绠洪梺?
-				"anchor" : (l_s[$ "anchor"] ?? [0.5, 0.5]),
-				"isFather" : (_isFather), // 闂傚倷绀侀幖顐も偓姘卞厴瀹曡瀵奸弶鎴犵暰婵炴挻鍩冮崑鎾垛偓瑙勬磸閸庣敻銆佸☉姗嗙叆闁告洦鍓氶褰掓⒒娴ｈ櫣甯涢柣妤佹礃閺呰埖鎯旈妸銉ユ優?-1婵犵數鍋為崹鍫曞箰妤ｅ啫纾块柕鍫濇啒濞戙垹围濠㈣泛顑呮禍顖炴⒑閸涘﹥灏紒鈧担绯曟灁?
-				"isGif" : (l_s[$ "isGif"] ?? false), // 闂傚倷绀侀幖顐も偓姘卞厴瀹曡瀵奸弶鎴犵暰婵炶揪绲藉﹢閬嶅煝閺冨倻纾奸柍銉ョ－閸楁
-				"isCover" : ((l_s[$ "isCover"] ?? true)), // 闂傚倷绀侀幖顐も偓姘卞厴瀹曡瀵奸弶鎴犵暰婵炴挻鍩冮崑鎾垛偓瑙勬磸閸庣敻銆佸☉姗嗙叆闁告洦鍓氶褰掓⒒閸屾瑧璐伴柛鎿勭畵瀹曟澘顫濈捄铏癸紳?婵犵數鍋為崹鍫曞箰閸濄儳鐭撻柣鎴ｆ閻掑灚銇勯幒鍡椾壕闂佸摜鍠庨崯鍧椻€栨繝鍐瘈婵﹩鍓涢崫妤€顪冮妶鍡欏缂佸鍨块幆?
-				"sizeControl" : (l_s[$ "sizeControl"]), // notes闂傚倷鐒﹂惇褰掑礉瀹€鈧埀顒佸嚬閸撶喐淇婇悽绋跨倞闁宠　鍋撻柣鎺戯躬閻擃偊宕惰閹癸綁鏌ｉ妸锕€鐏ラ棁?婵犵數鍋為崹鍫曞箰閸濄儳鐭撻柣鎴ｆ閻掑灚銇勯幒鍡椾壕闂佸摜鍠庨崯鍧椻€栨繝鍐瘈婵﹩鍓涢崫妤€顪冮妶鍡欏缂佸鍨块幆?
-				"alphaControl" : (l_s[$ "alphaControl"]), // notes闂傚倷鐒﹂惇褰掑礉瀹€鈧埀顒佸嚬娴滅偟鍒掗鐔风窞闁归偊鍘鹃崝鐢告椤愩垺澶勬慨濠傜秺閿濈偤寮介鐐殿啇闁哄鐗嗘晶鐣屾閹殿喚纾奸柕濠忕到婵＄晫绱?婵犵數鍋為崹鍫曞箰閸濄儳鐭撻柣鎴ｆ閻掑灚銇勯幒鍡椾壕闂佸摜鍠庨崯鍧椻€栨繝鍐瘈婵﹩鍓涢崫妤€顪冮妶鍡欏缂佸鍨块幆?
-				"posControl" : (l_s[$ "posControl"]),
-				"yControl" : (l_s[$ "yControl"]),
-				"rotFatherLine" : (l_s[$ "rotateWithFather"]), // 闂傚倷绀侀幖顐も偓姘卞厴瀹曡瀵奸弶鎴犵暰婵炶揪缍€濞咃絿澹曢懖鈺傚枑閹兼番鍨婚悵鑸电箾閸℃ɑ灏伴柛瀣樀閺屾盯骞橀懠顒夋М濠电偛鐗忔繛鈧柡宀嬬節瀹曟﹢鈥﹂幋婵嗗婵犵數鍋炲娆徫涘▎鎴犵焿鐎广儱娲犻崑鎾绘晲閸屾稒鐝曞?
-				"events" : (events), // 闂傚倷鑳剁涵鍫曞疾濠靛纾块柕鍫濇嫅閼板潡鏌ｅΔ鈧悧蹇涖€呴弻銉﹀€甸柨婵嗗€瑰▍鍡樸亜?
-				"extEvents" : (l_s[$ "extended"] ?? {}), // 闂傚倷绀佸﹢閬嶃€傛禒瀣柧婵炴垯鍨洪崕鎾垛偓骞垮劚濡盯銆呴弻銉﹀€甸柨婵嗗€瑰▍鍡樸亜?(闂傚倷绀侀幖顐⑽涘Δ鍛９濡炲娴风粻鏂款熆閼搁潧濮堥柛銈傚亾闂備礁鎲￠崝锕傚储娴犲鏁佹慨妯垮煐閻撴盯鏌嶈閸撶喖銆佸☉妯锋婵☆垰鍚嬪暩)
-				"zOrder" : (l_s[$ "zOrder"] ?? 0), // line layer order
-				"bpmfactor" : (l_s[$ "bpmfactor"] ?? 1)
+				"line_id" : i, // 线ID
+				"bindUI" : (is_undefined(l_s[$ "attachUI"]) ? 0 : l_s[$ "attachUI"]), // UI判定
+				"image" : (l_s[$ "Texture"]), // 线纹理
+				"anchor" : (l_s[$ "anchor"] ?? [0.5, 0.5]), // 线锚点
+				"isFather" : (_isFather), // 是否为父线
+				"isGif" : (l_s[$ "isGif"] ?? false), // 是否为Gif
+				"isCover" : ((l_s[$ "isCover"] ?? true)), // 是否启用遮罩
+				"sizeControl" : (l_s[$ "sizeControl"]), // notes
+				"alphaControl" : (l_s[$ "alphaControl"]), // notes
+				"posControl" : (l_s[$ "posControl"]), // notes
+				"yControl" : (l_s[$ "yControl"]), // notes
+				"rotFatherLine" : (l_s[$ "rotateWithFather"]), // 反正跟旋转有关
+				"events" : (events), // 事件层
+				"extEvents" : (l_s[$ "extended"] ?? {}), // 特殊事件(only 1)
+				"zOrder" : (l_s[$ "zOrder"] ?? 0), // line layer order(depth)
+				"bpmfactor" : (l_s[$ "bpmfactor"] ?? 1) // 文本
 			}));
 			self.line_list[i] = l;
 			
@@ -1799,7 +1799,7 @@ function RPE() constructor{
 		delete(game_1.chart.judgeLineList);
 	});
 	
-	///@desc RPE闂傚倷娴囧銊╂倿閿曗偓椤灝顫滈埀顒勩€佸Δ鍛亜闁绘挸娴烽ˇ褍顪冮妶鍡楀潑闁稿鎸剧槐?(aligned with PCR ArrayToTime / BPM helpers)
+	///@desc RPE数学函数(aligned with PCR ArrayToTime / BPM helpers)
 	static Math = ({
 		///@desc Array -> Beat  [bar, num, den] => bar + num/den
 		arrToBeat : rpe_array_to_beat,
@@ -1957,7 +1957,7 @@ function RPE() constructor{
 
 function PEC() constructor{
 	
-	// 闂備礁鎼ˇ閬嶅磿閹版澘绀堟慨姗嗗墰閺嗭箓鏌＄仦璇插姎閻熸瑱绠撻獮鏍ㄦ綇閸撗吷戦梺浼欑秮娴滃爼骞冮崷顓涘亾閿濆骸鏋欓柟鑼亾缁?
+	// 谱面信息
 	static chart = {
 		"version" : 4,
 		"offset" : 0,
@@ -1969,7 +1969,7 @@ function PEC() constructor{
     static line_group = [];
 	
 	
-	///@desc 闂備浇宕垫慨鏉懨洪埡鍜佹晪鐟滄垿濡甸幇鏉跨倞闁冲搫鍊搁鈺呮⒒娓氬洤澧紒澶愭涧椤?
+	///@desc 读取器
 	static Reader = (func(_chart){
 		var f = (string_length(_chart) ? _chart : ($"{working_directory}chart/Chart_IN.json")),
 			handle = (file_text_open_read(f));
@@ -1977,8 +1977,7 @@ function PEC() constructor{
 		
         // idk
 		var _pe_chart_func = {
-			// Notes 闂傚倸鍊搁崐鎼佹晝閵堝洤顥氭い鎾卞焺閺?            
-            // 闂傚倷鐒﹀鎸庣濠婂牜鏁勯柛娑樼摠閸嬧晜銇勯幒宥堝厡闁崇粯姊婚埀顒€绠嶉崕鍗灻洪妸鈺佺疇闁告稑鐡ㄩ悡鐔兼煏婵炲灝鍔氭い蹇ｄ簼娣囧﹪骞撻幒鎾虫殘缂備礁顑呴ˇ鐢搞€侀弮鍫濈闁冲搫鍟花鐐烘⒒?            
+			// Notes         
             ///@desc Tap
 			"n1" : (func(arr_args0 , arr_arg1 , arr_arg2) { 
                 return(
@@ -2045,7 +2044,7 @@ function PEC() constructor{
                     } 
                 ); 
             }),
-			//  闂傚倷鐒﹀鍧楀礈閿曞倸绀堟慨姗嗗墻濞撳鏌涚仦鍓с€掓い鈺傜叀閹鏁愰崒娑欑彆濡?
+			//  判定线事件
 			"cv" : (func(arr_args0) { 
                 return([ 
                     { 
@@ -2114,7 +2113,7 @@ function PEC() constructor{
                     "rotateEvents" 
                 ]); 
             }),
-			//  缂傚倸鍊搁崐鎼佸磹瑜版帒绠伴柛娑橈攻閸欏繘鏌嶉崫鍕偓濠氥€呴弻銉﹀€甸柨婵嗗€瑰▍鍡樸亜?
+			//  
 			"cr" : (func(arr_args0) { 
                 return([ 
                     { 
@@ -2177,31 +2176,31 @@ function PEC() constructor{
 			
 			var text = (file_text_readln(handle));
 			
-			//  闂傚倷绀侀崥瀣磿閹惰棄搴婇柤鑹扮堪娴滃綊鏌涢妷鎴濊嫰濞堟﹢姊虹拠鈥崇仭濠㈢懓妫涚划?
+			//  
 			if(!cl){
 				self.chart.offset = (number(text , 0));
 				cl = true;
 				continue;
 			};
 			
-			// 闂備浇宕垫慨鏉懨洪埡鍜佹晪鐟滄垿濡甸幇鏉跨倞闁冲搫鍟弳妤呮煟閻樺弶绌块悘蹇旂懇閸┾偓?闂傚倷绀侀幉锟犳偡閵夆晛纾圭憸鐗堝笒濮?
+			// 
 			var __t = (string_replace_all(string_copy(text , 1 , 2) , " " , "")),
 				args = (string_split_ext(string_copy(text , 3 , string_length(text)) , [" " , "\n" , "\r"] , true));
 			
-			//  闂傚倷绀侀幉锟犳晪濡炪値鍘奸崲鏌ュ煝瀹ュ棙鍎熼柨婵嗘川閻撴梹淇婇妶蹇涙妞ゆ垶鐟╁?
+			// 
 			if(!array_length(args)) then continue;
 			
-			//  缂傚倸鍊风粈浣规櫠閻ｅ瞼鍗氱紒?
+			// 
 			var lineID = 0;
 			
-			// 婵犵數濮烽。浠嬪焵椤掆偓閸熷潡鍩€椤掆偓缂嶅﹪骞冨Ο璇茬窞閻庯綆鍏橀弸鏍倵楠炲灝鍔氶悗姘煎灣缁牊绻濋惉顤篹s闂傚倷绀侀幉锟犳偡閵夆晛纾圭憸鐗堝笒濮?闂傚倷绀侀崥瀣磿閹惰棄搴婇柤鑹扮堪娴滃綊鏌涢妷銏℃珖婵☆偒鍨崇槐鎺楀传閸曨偅鐤?
+			// 
 			if(string_length(__t) == 2) then lineID = (number(args[0] , -1));
 			//var lineID = (number(args))
 			
-			//  婵犵數濮烽。浠嬪焵椤掆偓閸熷潡鍩€椤掆偓缂嶅﹪骞冨Ο璇茬窞鐎光偓閳ь剙螞椤栨粎纾奸柛婵嗗濞堢喎鈹戦悙鏉戠仸闁规瓕顕ч—鍐寠婢舵鍔峰銈呯箰鐎氀囧几閺嶎厽鐓涢柛銉㈡櫅娴滃綊鏌涚€ｎ偅宕岄柟顔瑰墲閹棃鏁嶉崟顏呭煕闂備浇宕垫慨鎾箹椤愶附鍋柛銉㈡櫆瀹?
+			//
 			if(lineID == -1) then continue;
 			
-			//  婵犵數濮烽。浠嬪焵椤掆偓閸熷潡鍩€椤掆偓缂嶅﹪骞冨Ο璇茬窞闁归偊鍓涢ˇ顐︽⒑闂堟稓澧曢柟铏姍瀵娊骞嶉鍓э紲闂佺顫夐崝鏍兜閸撲胶纾兼い鏃囧亹鏍￠悗鍨緲鐎氼垶藝閺屻儲鐓熸い顓熷灥婢ф挳鏌℃担鍝バ㈡い顓滃姂瀹曘劑顢橀悢鐑樼€甀D , 闂傚倷绀侀幉锛勬暜濡ゅ懏鍋￠柨鏇炲€搁柨銈呪攽閻樺弶鎼愮紒鈧径鎰厽婵☆垰銇橀崥顐ｃ亜韫囨稐鎲鹃柡灞稿墲瀵板嫬鈽夊鎲嬬吹闂?
+			// 
 			if(array_length(self.chart.judgeLineList) - 1 < lineID) then array_add(self.chart.judgeLineList , {			
 				"moveEvents" : [],
 				"alphaEvents" : [],
@@ -2239,7 +2238,7 @@ function PEC() constructor{
 		print(array_length(self.chart.notes));
 	});
 	
-	///@desc PEC闂傚倷娴囧銊╂倿閿曗偓椤灝顫滈埀顒勩€佸Δ鍛亜闁绘挸娴烽ˇ褍顪冮妶鍡楀潑闁稿鎸剧槐?
+	///@desc PEC数学函数
 	static Math = ({
 		///@desc Second 闂?Beat
 		secToBeat : (func(_sec , _bpm){
@@ -2251,19 +2250,17 @@ function PEC() constructor{
 			return(_beat * (60 / _bpm));	
 		}),
         
-        /// @desc 闂備礁鎼ˇ閬嶅磿閹版澘绀堟慨姗嗗墰閺嗭箓鏌＄仦璇插姎闂佽￥鍊濋弻鐔兼焽閿曗偓楠炴﹢鏌?        /// @param {Real} wx 婵犵數鍋為崹鍫曞箰婵犳碍鍋嬫繝濠傜墕閻ょ偓銇勯幇鍓佺暠闂佽￥鍊濋弻鐔兼焽閿曗偓楠炴﹢鏌涢妸褍浼?
-        /// @param {Real} wy 婵犵數鍋為崹鍫曞箰婵犳碍鍋嬫繝濠傜墕閻ょ偓銇勯幇鍓佺暠闂佽￥鍊濋弻鐔兼焽閿曗偓楠炴﹢鏌涢妸褑鍋?
-        /// @returns {Array} [闂備浇顕х换鎺楀磻濞戞碍宕查柟閭﹀枤娑撳秶绱? 闂備浇顕х换鎺楀磻濞戞碍宕查柟閭﹀枤娑撳秶绱掔仦绋夸壕]
+        /// @desc
+		/// @param {Real} wx 
+        /// @param {Real} wy 
+        /// @returns {Array} 
         pos_to_size : (func(xx , yy){
-            // 缂傚倸鍊烽悞锕傚礉閺嶎厹鈧啴宕ㄩ懜顑挎睏濠电偞鍨堕惌顕€鎮炴繝鍥ㄧ厱婵犻潧妫楅鎾煕?
             var sw = 1366;
             var sh = 768;
         
-            // 婵犵數鍋為崹鍫曞箰婵犳碍鍋嬫繝濠傜墕閻ょ偓銇勯幇鍫曟闁搞倖鍨块弻娑㈠箛閳轰礁顬夌紓浣鸿檸閸ㄥ爼寮婚妸銉㈡婵☆垳鍘ч。鍝勵渻閵堝棙鈷愭慨濠傜秺楠炲棝寮崼鐔告珖闂侀€炲苯澧存鐐茬箻閹囧醇椤愶絿鏆繝纰樻閸ㄤ即骞栭锔绘晩濠电姴娲﹂悡?
             var world_w = 2048;  // 1024 - (-1024)
             var world_h = 1400;  // 700 - (-700)
         
-            // 闂備浇宕垫慨宕囨閵堝洦顫曢柡鍥ュ灪閸嬧晠鏌ゆ慨鎰偓鎾斥柦椤忓牏鍙撻柛銉ｅ妽鐏忓灚銇勯弬鍧楀弰闁哄本绋栭ˇ鎶芥煕閺冣偓閻楃娀骞?
             var sx = (xx + 1024) * (sw / world_w);
             var sy = sh - (yy + 700) * (sh / world_h);
         
@@ -2271,7 +2268,7 @@ function PEC() constructor{
         })
 	});
 	
-    ///@desc 闂傚倷绀侀幉锛勬暜濡ゅ啰鐭欓柟瀵稿Х绾句粙鏌熼幑鎰靛殭缂佲偓閸℃稒鐓忛柛顐ｇ箖閸ｄ粙鏌￠崱妯侯棆缂?
+    ///@desc PEC创建判定线
     static CreateLines = (func(){
         var _func = (func(x1 , x2){
                 if(x1.time[0] < x2.time[1]) then return(-1); 
@@ -2303,7 +2300,7 @@ function PEC() constructor{
         }));
     });
     
-	///@desc 闂備浇顕уù鐑藉极閹间礁鍌ㄧ憸鏂跨暦閻㈠壊鏁囬柣妯哄暱椤忊晠姊绘笟鍥у缂佸娼ч々?
+	///@desc 保存谱面
 	static chartBuffSave = (function(){
 		var buff = (buffer_create(1 , buffer_grow , 1));
 		
