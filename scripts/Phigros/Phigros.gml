@@ -398,8 +398,18 @@ function official_floor_at_beat(speed_events, beat, seconds_per_beat) {
 	for (var speed_i = 0; speed_i < array_length(speed_events); speed_i++) {
 		var speed_event = speed_events[speed_i];
 		if (beat <= speed_event.startTime) then break;
-		var covered_end = min(beat, speed_event.endTime);
-		floor_value += max(0, covered_end - speed_event.startTime) * seconds_per_beat * speed_event.value;
+		var event_start = speed_event.startTime;
+		if (speed_i == 0 && event_start < 0) then event_start = 0;
+		var event_floor = floor_value;
+		if (struct_exists(speed_event, "floorPosition") && is_real(speed_event.floorPosition)) {
+			event_floor = speed_event.floorPosition;
+		};
+		// Runtime keeps the final speed after its declared endTime. Use the
+		// same continuation rule when precomputing Hold floor length.
+		var event_end = speed_event.endTime;
+		if (speed_i == array_length(speed_events) - 1 && beat > event_end) then event_end = beat;
+		var covered_end = min(beat, event_end);
+		floor_value = event_floor + max(0, covered_end - event_start) * seconds_per_beat * speed_event.value;
 		if (beat <= speed_event.endTime) then break;
 	};
 	return floor_value;
@@ -500,11 +510,24 @@ function Phigros() constructor { // 仅仅结构
 		self.line_list = [];
 		if(lmode == 0){
 			var f = (string_length(_chart) ? _chart : ($"{working_directory}chart/Chart_IN.json"));
+			if (!file_exists(f)) {
+				show_debug_message($"[R-Chart] File not found: {f}");
+				return(false);
+			};
 			var buff = buffer_load(f);
+			if (buff < 0) then return(false);
 			var r = buffer_read(buff, buffer_string);
-			//return(f);
-			self.chart = (json_parse(r));
-			game.version = (self.chart.formatVersion);
+			var parsed_chart = undefined;
+			try {
+				parsed_chart = json_parse(r);
+			} catch (parse_error) {
+				delete(parse_error);
+				buffer_delete(buff);
+				delete(r);
+				show_debug_message($"[R-Chart] Invalid JSON: {f}");
+				return(false);
+			};
+			self.chart = parsed_chart;
 			delete(r);
 			buffer_delete(buff);
 			delete(chart_source);
@@ -512,51 +535,108 @@ function Phigros() constructor { // 仅仅结构
 			delete(_chart);
 			self.chart = chart_source;
 		}
+		if (!is_struct(self.chart) || !struct_exists(self.chart, "formatVersion")
+			|| !is_real(self.chart.formatVersion)) {
+			show_debug_message("[R-Chart] Missing or invalid formatVersion.");
+			return(false);
+		};
+		game.version = real(self.chart.formatVersion);
+		if (game.version != floor(game.version) || game.version < 1 || game.version > 3) {
+			show_debug_message($"[R-Chart] Unsupported Official formatVersion: {game.version}");
+			return(false);
+		};
+		if (!struct_exists(self.chart, "offset") || !is_real(self.chart.offset)) then self.chart.offset = 0;
+		if (!struct_exists(self.chart, "judgeLineList") || !is_array(self.chart.judgeLineList)) {
+			show_debug_message("[R-Chart] judgeLineList is missing or invalid.");
+			return(false);
+		};
 		
 		for(var i = 0 ; i < array_length(self.chart.judgeLineList) ;  i ++){
-			//array_push(self._notes , []);
+			var line_data = self.chart.judgeLineList[i];
+			if (!is_struct(line_data)) {
+				show_debug_message($"[R-Chart] Invalid judge line at index {i}.");
+				return(false);
+			};
+			if (!struct_exists(line_data, "judgeLineMoveEvents") || !is_array(line_data.judgeLineMoveEvents)) then line_data.judgeLineMoveEvents = [];
+			if (!struct_exists(line_data, "judgeLineRotateEvents") || !is_array(line_data.judgeLineRotateEvents)) then line_data.judgeLineRotateEvents = [];
+			if (!struct_exists(line_data, "judgeLineDisappearEvents") || !is_array(line_data.judgeLineDisappearEvents)) then line_data.judgeLineDisappearEvents = [];
+			if (!struct_exists(line_data, "speedEvents") || !is_array(line_data.speedEvents)) then line_data.speedEvents = [];
+			if (!struct_exists(line_data, "notesAbove") || !is_array(line_data.notesAbove)) then line_data.notesAbove = [];
+			if (!struct_exists(line_data, "notesBelow") || !is_array(line_data.notesBelow)) then line_data.notesBelow = [];
+			if (!is_real(line_data.bpm) || line_data.bpm <= 0) then line_data.bpm = 60;
+
+			// v1 and v2 store movement coordinates in legacy packed/centered form.
+			// v3 already uses normalized values; its Y inversion happens in oLine.
 			if(game.version == 1 || game.version == 2){
-				for(var m = 0 ; m < array_length(self.chart.judgeLineList[i].judgeLineMoveEvents) ; m ++){
-					var l_m = (self.chart.judgeLineList[i].judgeLineMoveEvents[m]);
+				for(var m = 0 ; m < array_length(line_data.judgeLineMoveEvents) ; m ++){
+					var l_m = line_data.judgeLineMoveEvents[m];
+					if (!is_struct(l_m) || !struct_exists(l_m, "start") || !struct_exists(l_m, "end")) then continue;
 					var move_source = {
 						"start" : l_m.start,
 						"end" : l_m[$ "end"],
-						"start2" : l_m[$ "start2"] ?? 0,
-						"end2" : l_m[$ "end2"] ?? 0
+						"start2" : l_m[$ "start2"],
+						"end2" : l_m[$ "end2"]
 					};
+					if (game.version == 2 && (!is_real(move_source.start2) || !is_real(move_source.end2))) then continue;
 					var r_m = (game.version == 1 ? game.Math.posCovert(move_source) : game.Math.posCovert2(move_source));
 					if (!is_struct(r_m)) then continue;
-					self.chart.judgeLineList[i].judgeLineMoveEvents[m][$ "start"] = r_m.start;
-					self.chart.judgeLineList[i].judgeLineMoveEvents[m][$ "end"] = r_m[$ "end"];
-					self.chart.judgeLineList[i].judgeLineMoveEvents[m][$ "start2"] = r_m.start2;
-					self.chart.judgeLineList[i].judgeLineMoveEvents[m][$ "end2"] = r_m.end2;
+					line_data.judgeLineMoveEvents[m][$ "start"] = r_m.start;
+					line_data.judgeLineMoveEvents[m][$ "end"] = r_m[$ "end"];
+					line_data.judgeLineMoveEvents[m][$ "start2"] = r_m.start2;
+					line_data.judgeLineMoveEvents[m][$ "end2"] = r_m.end2;
 				};
 			};
 			
-			var bpm = (self.chart.judgeLineList[i].bpm);
-			var line_speed_events = self.chart.judgeLineList[i].speedEvents;
+			var bpm = line_data.bpm;
+			var line_speed_events = line_data.speedEvents;
 			array_sort(line_speed_events, function(a, b) { return a.startTime - b.startTime; });
+			// Official v1 uses a large negative start time as a pre-roll
+			// sentinel. PCR starts the first speed segment at chart time 0;
+			// keeping the sentinel would move the line hundreds of floor units
+			// before the first note.
+			if (game.version == 1 && array_length(line_speed_events) > 0) {
+				var first_speed = line_speed_events[0];
+				if (is_struct(first_speed) && is_real(first_speed.startTime)
+					&& first_speed.startTime < 0) {
+					first_speed.startTime = 0;
+				};
+			};
 			var line_seconds_per_beat = 1.875 / bpm;
-			for(var a = 0 ; a < array_length(self.chart.judgeLineList[i].notesAbove) ; a ++){
-				var n = (self.chart.judgeLineList[i].notesAbove[a]);
+			if (game.version == 1) {
+				// v1 stores no floor base. Materialize the same cumulative
+				// timeline used by the reference loader before notes are read.
+				var v1_floor = 0;
+				for (var v1_speed_i = 0; v1_speed_i < array_length(line_speed_events); v1_speed_i++) {
+					var v1_speed_event = line_speed_events[v1_speed_i];
+					if (!is_struct(v1_speed_event)) then continue;
+					v1_speed_event.floorPosition = v1_floor;
+					var v1_start = real(v1_speed_event.startTime ?? 0);
+					var v1_end = real(v1_speed_event.endTime ?? v1_start);
+					v1_floor += max(0, v1_end - v1_start) * line_seconds_per_beat * real(v1_speed_event.value ?? 0);
+				};
+			};
+			for(var a = 0 ; a < array_length(line_data.notesAbove) ; a ++){
+				var n = line_data.notesAbove[a];
+				if (!is_struct(n)) then continue;
 				var hold_floor_length = 0;
 				if (n.type == 3) {
 					var hold_beats = max(0, floor(n.holdTime));
 					hold_floor_length = official_floor_at_beat(line_speed_events, n.time + hold_beats, line_seconds_per_beat) - n.floorPosition;
-					if (hold_floor_length == 0) then hold_floor_length = hold_beats * line_seconds_per_beat * n[$ "speed"];
+					if (hold_floor_length == 0) then hold_floor_length = hold_beats * line_seconds_per_beat * real(n[$ "speed"] ?? 1);
 				};
-				array_add(self._notes , { "type" : n.type , "time" : n.time , "holdTime" : (n.type == 3 ? max(0, floor(n.holdTime)) : 0) , "holdFloorLength" : hold_floor_length, "speed" : (n.type == 3 ? 1 : n[$ "speed"]) , "xOffset" : n.positionX , "yOffset" : n.floorPosition , "hl" : false , "isAbove" : true , "id" : i , "bpm" : bpm});
+				array_add(self._notes , { "type" : n.type , "time" : n.time , "holdTime" : (n.type == 3 ? max(0, floor(n.holdTime)) : 0) , "holdFloorLength" : hold_floor_length, "speed" : real(n[$ "speed"] ?? 1), "xOffset" : n.positionX , "yOffset" : n.floorPosition , "hl" : false , "isAbove" : true , "id" : i , "bpm" : bpm});
 			};
 			
-			for(var b = 0 ; b < array_length(self.chart.judgeLineList[i].notesBelow) ; b ++){
-				var n = (self.chart.judgeLineList[i].notesBelow[b]);
+			for(var b = 0 ; b < array_length(line_data.notesBelow) ; b ++){
+				var n = line_data.notesBelow[b];
+				if (!is_struct(n)) then continue;
 				var hold_floor_length = 0;
 				if (n.type == 3) {
 					var hold_beats = max(0, floor(n.holdTime));
 					hold_floor_length = official_floor_at_beat(line_speed_events, n.time + hold_beats, line_seconds_per_beat) - n.floorPosition;
-					if (hold_floor_length == 0) then hold_floor_length = hold_beats * line_seconds_per_beat * n[$ "speed"];
+					if (hold_floor_length == 0) then hold_floor_length = hold_beats * line_seconds_per_beat * real(n[$ "speed"] ?? 1);
 				};
-				array_add(self._notes , { "type" : n.type , "time" : n.time , "holdTime" : (n.type == 3 ? max(0, floor(n.holdTime)) : 0) , "holdFloorLength" : hold_floor_length, "speed" : (n.type == 3 ? 1 : n[$ "speed"]) , "xOffset" : n.positionX , "yOffset" : n.floorPosition , "hl" : false , "isAbove" : false , "id" : i , "bpm" : bpm});
+				array_add(self._notes , { "type" : n.type , "time" : n.time , "holdTime" : (n.type == 3 ? max(0, floor(n.holdTime)) : 0) , "holdFloorLength" : hold_floor_length, "speed" : real(n[$ "speed"] ?? 1), "xOffset" : n.positionX , "yOffset" : n.floorPosition , "hl" : false , "isAbove" : false , "id" : i , "bpm" : bpm});
 			};
 			//delete(self.chart.judgeLineList[i].notesAbove);
 			//delete(self.chart.judgeLineList[i].notesBelow);
@@ -971,7 +1051,8 @@ function Phigros() constructor { // 仅仅结构
 		
 		///@desc formatVersion = 2 -> 3
 		posCovert2 : (func(pos_struct){
-			if(array_length(struct_get_names(pos_struct)) != 4) then return(undefined);
+			if((!struct_exists(pos_struct , "start")) || (!struct_exists(pos_struct , "end"))
+				|| (!struct_exists(pos_struct , "start2")) || (!struct_exists(pos_struct , "end2"))) then return(undefined);
 			return({
 				"start" : (0.5 + (pos_struct.start / 10)),
 				"end" : (0.5 + (pos_struct[$ "end"] / 10)),
@@ -2341,33 +2422,46 @@ function pec_line_data() {
 
 function pec_beat_to_sec(timeline, beat) {
 	if (!is_array(timeline) || array_length(timeline) <= 0) then return 0;
-	var point = timeline[0];
-	if (beat < point.beat) then return 0;
-	for (var i = 1; i < array_length(timeline); i++) {
-		if (timeline[i].beat > beat) then break;
-		point = timeline[i];
+	if (beat < timeline[0].beat) then return 0;
+	var low = 0;
+	var high = array_length(timeline) - 1;
+	while (low < high) {
+		var middle = (low + high + 1) div 2;
+		if (timeline[middle].beat <= beat) low = middle;
+		else high = middle - 1;
 	};
+	var point = timeline[low];
 	return point.second + (beat - point.beat) * 60 / point.bpm;
+}
+
+function pec_bpm_index_at_sec(timeline, sec) {
+	if (!is_array(timeline) || array_length(timeline) <= 0) then return 0;
+	var low = 0;
+	var high = array_length(timeline) - 1;
+	while (low < high) {
+		var middle = (low + high + 1) div 2;
+		if (timeline[middle].second <= sec) low = middle;
+		else high = middle - 1;
+	};
+	return low;
 }
 
 function pec_bpm_at_sec(timeline, sec) {
 	if (!is_array(timeline) || array_length(timeline) <= 0) then return 60;
-	var point = timeline[0];
-	for (var i = 1; i < array_length(timeline); i++) {
-		if (timeline[i].second > sec) then break;
-		point = timeline[i];
-	};
-	return point.bpm;
+	return timeline[pec_bpm_index_at_sec(timeline, sec)].bpm;
 }
 
 function pec_floor_at_sec(speed_events, sec) {
 	if (!is_array(speed_events) || array_length(speed_events) <= 0) then return 0;
-	var event = speed_events[0];
-	if (sec < event.startSec) then return 0;
-	for (var i = 1; i < array_length(speed_events); i++) {
-		if (speed_events[i].startSec > sec) then break;
-		event = speed_events[i];
+	if (sec < speed_events[0].startSec) then return 0;
+	var low = 0;
+	var high = array_length(speed_events) - 1;
+	while (low < high) {
+		var middle = (low + high + 1) div 2;
+		if (speed_events[middle].startSec <= sec) low = middle;
+		else high = middle - 1;
 	};
+	var event = speed_events[low];
 	return event.floor + (sec - event.startSec) * event.value;
 }
 
@@ -2389,13 +2483,23 @@ function pec_finalize_property(raw_events, timeline, kind) {
 	var previous = (kind == "move" ? [0, 0] : 0);
 	for (var i = 0; i < array_length(raw_events); i++) {
 		var source = raw_events[i];
-		array_add(result, {
-			startSec: pec_beat_to_sec(timeline, source.startBeat),
-			endSec: pec_beat_to_sec(timeline, source.endBeat),
+		var start_sec = pec_beat_to_sec(timeline, source.startBeat);
+		var end_sec = pec_beat_to_sec(timeline, source.endBeat);
+		var event = {
+			startSec: start_sec,
+			endSec: end_sec,
 			start: previous,
 			"end": source.target,
-			easing: pec_easing(source.easing)
-		});
+			easing: pec_easing(source.easing),
+			instant: (start_sec == end_sec)
+		};
+		if (kind == "move") {
+			event.startX = previous[0];
+			event.startY = previous[1];
+			event.endX = source.target[0];
+			event.endY = source.target[1];
+		};
+		array_add(result, event);
 		previous = source.target;
 	};
 	return result;
@@ -2484,6 +2588,9 @@ function pec_reader_load(ctx, chart_path) {
 		var previous = ctx.chart.bpmList[bpm_i-1];
 		ctx.chart.bpmList[bpm_i].second = previous.second + (ctx.chart.bpmList[bpm_i].beat-previous.beat)*60/previous.bpm;
 	};
+	for (var bpm_tick_i = 0; bpm_tick_i < array_length(ctx.chart.bpmList); bpm_tick_i++) {
+		ctx.chart.bpmList[bpm_tick_i].holdTickInterval = 30 / max(1, ctx.chart.bpmList[bpm_tick_i].bpm);
+	};
 	for (var line_i = 0; line_i < array_length(ctx.chart.judgeLineList); line_i++) {
 		var item = ctx.chart.judgeLineList[line_i];
 		item.moveEvents = pec_finalize_property(item.moveEvents, ctx.chart.bpmList, "move");
@@ -2509,6 +2616,12 @@ function pec_reader_load(ctx, chart_path) {
 		note.floorPosition = pec_floor_at_sec(speed_events, note.startSec);
 		note.endFloorPosition = pec_floor_at_sec(speed_events, note.endSec);
 		note.highlightKey = round(note.startSec * 1000);
+		note.localXFactor = note.xOffset * 0.05625;
+		note.sideDirection = note.isAbove ? -1 : 1;
+		note.angleOffset = note.isAbove ? 0 : 180;
+		note.speedFloorStart = note.speed * note.floorPosition;
+		note.speedFloorEnd = note.speed * note.endFloorPosition;
+		note.speedHoldFloorLength = note.speed * (note.endFloorPosition - note.floorPosition);
 	};
 	array_sort(ctx.chart.notes, function(a,b) {
 		if (a.highlightKey < b.highlightKey) then return -1;
@@ -2549,7 +2662,10 @@ function pec_create_runtime(ctx) {
 			type:note.type, line_id:note.line_id, startSec:note.startSec, endSec:note.endSec,
 			floorPosition:note.floorPosition, endFloorPosition:note.endFloorPosition,
 			xOffset:note.xOffset, isAbove:note.isAbove, isFake:note.isFake,
-			speed:note.speed, widthScale:note.xscale, _hl:note.hl
+			speed:note.speed, widthScale:note.xscale, _hl:note.hl,
+			localXFactor:note.localXFactor, sideDirection:note.sideDirection,
+			angleOffset:note.angleOffset, speedFloorStart:note.speedFloorStart,
+			speedFloorEnd:note.speedFloorEnd, speedHoldFloorLength:note.speedHoldFloorLength
 		});
 		if (variable_global_exists("render_mode") && global.render_mode && !note.isFake
 			&& instance_exists(note_instance)) {

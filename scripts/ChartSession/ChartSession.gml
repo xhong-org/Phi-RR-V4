@@ -313,7 +313,7 @@ function chart_read_text_file(path, max_chars = 200000) {
         };
         buffer_delete(buff);
         if (!is_string(text)) then return "";
-        if (string_length(text) > max_chars) then text = string_copy(text, 1, max_chars);
+        if (max_chars > 0 && string_length(text) > max_chars) then text = string_copy(text, 1, max_chars);
         return text;
 }
 
@@ -323,16 +323,29 @@ function chart_detect_format(chart_path) {
         if (ext == ".pec") then return CHART_FORMAT.PEC;
 
         if (ext == ".json" || ext == ".txt") {
-                var text = chart_read_text_file(chart_path, 120000);
+                // Official charts can be much larger than 120 KB; structural
+                // format validation needs the complete JSON document.
+                var text = chart_read_text_file(chart_path, -1);
                 if (!string_length(text)) then return CHART_FORMAT.UNKNOWN;
 
                 if (string_pos("\"RPEVersion\"", text) > 0) {
                         return CHART_FORMAT.RPE;
                 };
 
-                if (string_pos("\"formatVersion\"", text) > 0 && string_pos("\"judgeLineList\"", text) > 0) {
-                        return CHART_FORMAT.OFFICIAL;
-                };
+				if (string_pos("\"formatVersion\"", text) > 0 && string_pos("\"judgeLineList\"", text) > 0) {
+					try {
+						var official_probe = json_parse(text);
+						if (is_struct(official_probe) && is_real(official_probe[$ "formatVersion"])
+							&& real(official_probe.formatVersion) == floor(real(official_probe.formatVersion))
+							&& real(official_probe.formatVersion) >= 1
+							&& real(official_probe.formatVersion) <= 3
+							&& is_array(official_probe[$ "judgeLineList"])) {
+							return CHART_FORMAT.OFFICIAL;
+						};
+					} catch (official_probe_error) {
+						delete(official_probe_error);
+					};
+				};
 
                 if (string_pos("\"META\"", text) > 0 && string_pos("eventLayers", text) > 0) {
                         return CHART_FORMAT.RPE;
@@ -349,7 +362,10 @@ function chart_detect_format(chart_path) {
                                 if (struct_exists(parsed, "META") && is_struct(parsed.META) && struct_exists(parsed.META, "RPEVersion")) {
                                         return CHART_FORMAT.RPE;
                                 };
-                                if (struct_exists(parsed, "formatVersion") && struct_exists(parsed, "judgeLineList")) {
+						if (struct_exists(parsed, "formatVersion") && is_real(parsed.formatVersion)
+							&& real(parsed.formatVersion) == floor(real(parsed.formatVersion))
+							&& real(parsed.formatVersion) >= 1 && real(parsed.formatVersion) <= 3
+							&& is_array(parsed[$ "judgeLineList"])) {
                                         return CHART_FORMAT.OFFICIAL;
                                 };
                         };

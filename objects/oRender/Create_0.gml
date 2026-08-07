@@ -35,7 +35,11 @@ if (chart_session_has_track()) {
 };
 print(game.folder_chart , game.settings.enableDebug);
 var chart_path = (string_length(game.folder_chart.chart) ? (InChartPath + game.folder_chart.chart) : "");
-game.Reader(chart_path);
+if (!game.Reader(chart_path)) {
+	show_debug_message($"[Official] Failed to load chart: {chart_path}");
+	room_goto(room_menu);
+	exit;
+};
 
 //var success = (game.PhiTool.TrasformType([2 , 4] , [1 , 1]));
 //if(success) then game.PhiTool.SaveTrack($"{game_save_id}123.json");

@@ -143,11 +143,13 @@ function paused_ui_reset_pec() {
         with (oLine_2) {
                 _move_index = 0; _alpha_index = 0; _rotate_index = 0; _speed_index = 0;
                 _move_value = [0, 0];
+                _move_x = 0; _move_y = 0;
                 _alpha_value = 0; _rotate_value = 0;
                 floor_position = 0;
                 line_sec = 0;
                 _last_line_sec = -infinity;
                 __cos = 1; __sin = 0;
+                _last_angle = 0;
                 if (variable_instance_exists(id, "_counts")) then _counts = [0, 0, 0, 0];
                 if (variable_instance_exists(id, "line_time")) then line_time = 0;
         };
@@ -157,11 +159,14 @@ function paused_ui_reset_pec() {
                 hold_started = false;
                 hit_status = TYPE.NONE;
                 hold_effect_sec = -infinity;
+                hold_bpm_index = 0;
+                hold_bpm_last_sec = -infinity;
                 hx0 = 0; hy0 = 0; hx1 = 0; hy1 = 0; hx2 = 0; hy2 = 0;
                 yscale = 0;
                 image_alpha = 1;
         };
         owner.bpm_count = 0;
+        owner.pec_bpm_last_sec = -infinity;
 }
 
 function paused_ui_reset_rpe() {
