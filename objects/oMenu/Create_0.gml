@@ -2,6 +2,11 @@
 // Depends on Camera_View defining global_scales first.
 window_set_caption(GAME_NAME + " - Menu");
 chart_session_ensure();
+if (variable_global_exists("render_gui_returning") && global.render_gui_returning) {
+        global.render_gui_returning = false;
+        chart_session_cleanup(true);
+        game_set_speed(60, gamespeed_fps);
+};
 
 pending_path = "";
 status_text = "Select a custom chart package or load the bundled sample.";
@@ -10,6 +15,7 @@ last_error = "";
 
 hover_open = false;
 hover_sample = false;
+hover_render = false;
 
 // Layout cache. Rebuild when room size or global_scales changes.
 layout_w = -1;
@@ -22,6 +28,10 @@ btn_open = {
 };
 btn_sample = {
         "label" : "Load Sample Chart",
+        "x" : 0, "y" : 0, "w" : 1, "h" : 1
+};
+btn_render = {
+        "label" : "X X XXX",
         "x" : 0, "y" : 0, "w" : 1, "h" : 1
 };
 

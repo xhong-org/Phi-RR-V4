@@ -3,7 +3,7 @@
   "%Name":"PhigrosLoader-sample",
   "AudioGroups":[
     {"$GMAudioGroup":"v1","%Name":"audiogroup_default","exportDir":"","name":"audiogroup_default","resourceType":"GMAudioGroup","resourceVersion":"2.0","targets":-1,},
-    {"$GMAudioGroup":"v1","%Name":"audiogroup_hitsounds","exportDir":"","name":"audiogroup_hitsounds","resourceType":"GMAudioGroup","resourceVersion":"2.0","targets":-1,},
+    {"$GMAudioGroup":"v1","%Name":"audiogroup_hitsounds","exportDir":"resource","name":"audiogroup_hitsounds","resourceType":"GMAudioGroup","resourceVersion":"2.0","targets":-1,},
   ],
   "configs":{
     "children":[],
@@ -100,6 +100,7 @@
     {"id":{"name":"oRender_1","path":"objects/oRender_1/oRender_1.yy",},},
     {"id":{"name":"oRender_2","path":"objects/oRender_2/oRender_2.yy",},},
     {"id":{"name":"oRender","path":"objects/oRender/oRender.yy",},},
+    {"id":{"name":"oRenderSetup","path":"objects/oRenderSetup/oRenderSetup.yy",},},
     {"id":{"name":"oRPEEffect","path":"objects/oRPEEffect/oRPEEffect.yy",},},
     {"id":{"name":"oRPELineTextureAudit","path":"objects/oRPELineTextureAudit/oRPELineTextureAudit.yy",},},
     {"id":{"name":"oVideoRenderer","path":"objects/oVideoRenderer/oVideoRenderer.yy",},},
@@ -110,6 +111,7 @@
     {"id":{"name":"room_play_official","path":"rooms/room_play_official/room_play_official.yy",},},
     {"id":{"name":"room_play_pec","path":"rooms/room_play_pec/room_play_pec.yy",},},
     {"id":{"name":"room_play_rpe","path":"rooms/room_play_rpe/room_play_rpe.yy",},},
+    {"id":{"name":"room_render_setup","path":"rooms/room_render_setup/room_render_setup.yy",},},
     {"id":{"name":"Room1","path":"rooms/Room1/Room1.yy",},},
     {"id":{"name":"__PCRTWEEN__","path":"scripts/__PCRTWEEN__/__PCRTWEEN__.yy",},},
     {"id":{"name":"array_add","path":"scripts/array_add/array_add.yy",},},
@@ -182,6 +184,7 @@
   "RoomOrderNodes":[
     {"roomId":{"name":"room_bootstrap","path":"rooms/room_bootstrap/room_bootstrap.yy",},},
     {"roomId":{"name":"room_menu","path":"rooms/room_menu/room_menu.yy",},},
+    {"roomId":{"name":"room_render_setup","path":"rooms/room_render_setup/room_render_setup.yy",},},
     {"roomId":{"name":"room_loading","path":"rooms/room_loading/room_loading.yy",},},
     {"roomId":{"name":"room_play_official","path":"rooms/room_play_official/room_play_official.yy",},},
     {"roomId":{"name":"room_play_rpe","path":"rooms/room_play_rpe/room_play_rpe.yy",},},
@@ -192,6 +195,6 @@
   "templateType":"game",
   "TextureGroups":[
     {"$GMTextureGroup":"","%Name":"Default","autocrop":true,"border":2,"compressFormat":"bz2","customOptions":"","directory":"","groupParent":null,"isScaled":true,"loadType":"default","mipsToGenerate":0,"name":"Default","resourceType":"GMTextureGroup","resourceVersion":"2.0","targets":-1,},
-    {"$GMTextureGroup":"","%Name":"DefaultNotes","autocrop":true,"border":2,"compressFormat":"bz2","customOptions":"","directory":"datafiles","groupParent":null,"isScaled":true,"loadType":"dynamicpages","mipsToGenerate":0,"name":"DefaultNotes","resourceType":"GMTextureGroup","resourceVersion":"2.0","targets":-1,},
+    {"$GMTextureGroup":"","%Name":"DefaultNotes","autocrop":true,"border":2,"compressFormat":"bz2","customOptions":"","directory":"resource","groupParent":null,"isScaled":true,"loadType":"dynamicpages","mipsToGenerate":0,"name":"DefaultNotes","resourceType":"GMTextureGroup","resourceVersion":"2.0","targets":-1,},
   ],
 }

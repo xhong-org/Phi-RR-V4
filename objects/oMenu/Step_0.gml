@@ -10,6 +10,7 @@ var my = mouse_y;
 
 hover_open = (mx >= btn_open.x && mx <= btn_open.x + btn_open.w && my >= btn_open.y && my <= btn_open.y + btn_open.h);
 hover_sample = (mx >= btn_sample.x && mx <= btn_sample.x + btn_sample.w && my >= btn_sample.y && my <= btn_sample.y + btn_sample.h);
+hover_render = (mx >= btn_render.x && mx <= btn_render.x + btn_render.w && my >= btn_render.y && my <= btn_render.y + btn_render.h);
 
 if (mouse_check_button_pressed(mb_left)) {
         if (hover_open) {
@@ -36,6 +37,8 @@ if (mouse_check_button_pressed(mb_left)) {
                 session_sample.status = "Queued";
                 session_sample.detail = "sample";
                 room_goto(room_loading);
+        } else if (hover_render) {
+                //room_goto(room_render_setup);
         };
 };
 
@@ -60,3 +63,4 @@ if (keyboard_check_pressed(ord("S"))) {
         session_s.detail = "sample";
         room_goto(room_loading);
 };
+//if (keyboard_check_pressed(ord("R"))) room_goto(room_render_setup);

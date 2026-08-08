@@ -1,0 +1,1 @@
+// Render settings room.

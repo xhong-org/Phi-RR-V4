@@ -10,6 +10,9 @@ global.render_resolution = "native";
 global.render_width = 1366;
 global.render_height = 768;
 global.render_crf = 18;
+global.render_aa_level = 8;
+global.render_cli = false;
+global.render_gui_returning = false;
 global.render_preset = "medium";
 global.render_encoder = "auto";
 global.render_seed = 0;
@@ -88,6 +91,7 @@ for (var i = 1; i < param_count; i++) {
 };
 
 if (global.render_mode) {
+	global.render_cli = true;
         if (!string_length(global.render_output)) {
                 global.render_output = working_directory + "render.mp4";
         };

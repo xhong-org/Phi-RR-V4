@@ -9,7 +9,7 @@ var height = surface_get_height(application_surface);
 if (!gpu_capture_ready) {
     print($"[Renderer] D3D11 capture initialization failed: {video_renderer_get_error()}");
     encoder_finished = true;
-    game_end();
+		if (global.render_cli) game_end(); else { global.render_mode = false; room_goto(room_menu); };
     exit;
 };
 
@@ -41,13 +41,13 @@ if (!encoder_started) {
     if (!video_renderer_set_preset(global.render_preset)) {
         print($"[Renderer] Invalid preset: {global.render_preset}");
         encoder_finished = true;
-        game_end();
+		if (global.render_cli) game_end(); else { global.render_mode = false; room_goto(room_menu); };
         exit;
     };
     if (!video_renderer_set_encoder(global.render_encoder)) {
         print($"[Renderer] Invalid encoder: {global.render_encoder}");
         encoder_finished = true;
-        game_end();
+		if (global.render_cli) game_end(); else { global.render_mode = false; room_goto(room_menu); };
         exit;
     };
     encoder_started = bool(video_renderer_start(global.render_output, audio_path));
@@ -55,7 +55,7 @@ if (!encoder_started) {
         render_status = "Unable to start encoder";
         print($"[Renderer] Start failed: {video_renderer_get_error()}");
         encoder_finished = true;
-        game_end();
+		if (global.render_cli) game_end(); else { global.render_mode = false; room_goto(room_menu); };
         exit;
     };
     var scheduled_hitsounds = (variable_global_exists("render_hitsounds")
@@ -77,7 +77,7 @@ if (!video_renderer_capture()) {
     print($"[Renderer] GPU capture failed: {video_renderer_get_error()}");
     encoder_finished = true;
     video_renderer_finish();
-    game_end();
+		if (global.render_cli) game_end(); else { global.render_mode = false; room_goto(room_menu); };
     exit;
 };
 
@@ -160,5 +160,10 @@ if (global.render_frame >= total_frames) {
     var success = bool(video_renderer_finish());
     if (success) print($"[Renderer] Complete: {global.render_output}");
     else print($"[Renderer] FFmpeg failed: {video_renderer_get_error()}");
-    game_end();
+	if (global.render_cli) game_end(); else {
+		global.render_mode = false;
+		global.render_source = "";
+		global.render_gui_returning = true;
+		room_goto(room_menu);
+	};
 };

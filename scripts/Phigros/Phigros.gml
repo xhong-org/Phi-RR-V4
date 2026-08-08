@@ -895,8 +895,8 @@ function Phigros() constructor { // 仅仅结构
 		};
 		self.Configs();
 		if (variable_global_exists("render_mode") && global.render_mode) {
-			self.settings.aa_level = 8;
-			print("[Renderer] Anti-aliasing: 8x MSAA");
+			self.settings.aa_level = variable_global_exists("render_aa_level") ? global.render_aa_level : 8;
+			print($"[Renderer] Anti-aliasing: {self.settings.aa_level}x MSAA");
 		};
 		//self.Img();
 		// Prefer active chart session image; do not invent missing defaults.

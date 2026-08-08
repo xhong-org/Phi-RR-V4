@@ -25,6 +25,11 @@ btn_sample.h = btn_h;
 btn_sample.x = (rw - btn_w) * 0.5;
 btn_sample.y = btn_open.y + btn_h + gap;
 
+btn_render.w = btn_w;
+btn_render.h = btn_h;
+btn_render.x = (rw - btn_w) * 0.5;
+btn_render.y = btn_sample.y + btn_h + gap;
+
 layout_w = rw;
 layout_h = rh;
 layout_scale = s;

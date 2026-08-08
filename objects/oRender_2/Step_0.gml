@@ -1,5 +1,4 @@
 /// @description 
-    
 if(!game.paused){
 	game.Math.ctime();
 	event_user(0);

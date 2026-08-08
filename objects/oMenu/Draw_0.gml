@@ -24,8 +24,8 @@ draw_text_transformed(cx, room_height * 0.18, GAME_NAME, title_scale, title_scal
 draw_set_colour(c_ltgray);
 draw_text_transformed(cx, room_height * 0.26, "Custom Chart Loader", subtitle_scale, subtitle_scale, 0);
 
-var buttons = [btn_open, btn_sample];
-var hovers = [hover_open, hover_sample];
+var buttons = [btn_open, btn_sample, btn_render];
+var hovers = [hover_open, hover_sample, hover_render];
 for (var i = 0; i < array_length(buttons); i++) {
         var b = buttons[i];
         var hot = hovers[i];
@@ -37,13 +37,13 @@ for (var i = 0; i < array_length(buttons); i++) {
 };
 
 draw_set_colour(c_silver);
-draw_text_transformed(cx, room_height * 0.72, status_text, body_scale, body_scale, 0);
+draw_text_transformed(cx, room_height * 0.78, status_text, body_scale, body_scale, 0);
 draw_set_colour(c_gray);
-draw_text_transformed(cx, room_height * 0.78, detail_text, body_scale * 0.85, body_scale * 0.85, 0);
+ draw_text_transformed(cx, room_height * 0.84, detail_text, body_scale * 0.85, body_scale * 0.85, 0);
 if (string_length(last_error)) {
         draw_set_colour(c_red);
-        draw_text_transformed(cx, room_height * 0.86, last_error, body_scale * 0.9, body_scale * 0.9, 0);
+        draw_text_transformed(cx, room_height * 0.9, last_error, body_scale * 0.9, body_scale * 0.9, 0);
 };
 
 draw_set_colour(c_dkgray);
-draw_text_transformed(cx, room_height - max(18, 30 * s), "O: Open package    S: Sample chart", small_scale, small_scale, 0);
+draw_text_transformed(cx, room_height - max(18, 30 * s), "O: Open package    S: Sample chart    X: X X XXX", small_scale, small_scale, 0);
