@@ -1,0 +1,61 @@
+/// @function draw_hold(x, y, scalex, scaley, hold_body_scale, angle, subimg, colour, alpha, draw_head, attach_head, tail_trim)
+/// @description Draws a Hold from its head reference point with bbox-aligned joins.
+/// @param {Real} x
+/// @param {Real} y
+/// @param {Real} scalex
+/// @param {Real} scaley
+/// @param {Real} hold_body_scale
+/// @param {Real} angle
+/// @param {Real} subimg
+/// @param {Colour} colour
+/// @param {Real} alpha
+/// @param {Bool} draw_head
+/// @param {Bool} attach_head Whether the body starts at the head's visible edge.
+/// @param {Real} tail_trim Distance in screen pixels that the tail overlaps the body.
+function draw_hold(x, y, scalex, scaley, hold_body_scale, angle = 0, subimg = 0,
+		colour = c_white, alpha = 1, draw_head = true, attach_head = draw_head, tail_trim = 0) {
+	static _head_attach = max(0, sprite_get_yoffset(note_hold_head)
+		- sprite_get_bbox_top(note_hold_head));
+	static _body_near = max(0, sprite_get_yoffset(note_hold_body)
+		- sprite_get_bbox_bottom(note_hold_body));
+	static _body_far = max(0, sprite_get_yoffset(note_hold_body)
+		- sprite_get_bbox_top(note_hold_body));
+	static _body_height = max(1, sprite_get_height(note_hold_body));
+	static _body_visible_span = max(1, _body_far - _body_near);
+	static _tail_near = max(0, sprite_get_yoffset(note_hold_end)
+		- sprite_get_bbox_bottom(note_hold_end));
+
+	var _xscale = real(scalex);
+	var _yscale = abs(real(scaley));
+	var _body_scale = max(0, real(hold_body_scale));
+	var _body_length = _body_height * _body_scale;
+	var _draw_body_scale = _body_length / _body_visible_span;
+	var _alpha = clamp(real(alpha), 0, 1);
+	if (_alpha <= 0 || _xscale == 0) then return;
+
+	var _axis_x = -dsin(angle);
+	var _axis_y = -dcos(angle);
+	var _head_distance = 0;
+	if (attach_head) {
+		_head_distance = _head_attach * _yscale;
+	};
+
+	// Align the first and last visible body pixels, not the transparent sprite bounds.
+	var _body_origin_distance = _head_distance - _body_near * _draw_body_scale;
+	var _tail_origin_distance = _head_distance + _body_length - _tail_near * _yscale
+		- max(0, real(tail_trim));
+
+	var _body_x = x + _axis_x * _body_origin_distance;
+	var _body_y = y + _axis_y * _body_origin_distance;
+	var _tail_x = x + _axis_x * _tail_origin_distance;
+	var _tail_y = y + _axis_y * _tail_origin_distance;
+
+	draw_sprite_ext(note_hold_body, subimg, _body_x, _body_y,
+		_xscale, _draw_body_scale, angle, colour, _alpha);
+	draw_sprite_ext(note_hold_end, subimg, _tail_x, _tail_y,
+		_xscale, _yscale, angle, colour, _alpha);
+	if (draw_head) {
+		draw_sprite_ext(note_hold_head, subimg, x, y,
+			_xscale, _yscale, angle, colour, _alpha);
+	};
+}

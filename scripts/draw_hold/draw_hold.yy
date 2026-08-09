@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"draw_hold",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"draw_hold",
+  "parent":{
+    "name":"Tools",
+    "path":"folders/Other/Tools.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

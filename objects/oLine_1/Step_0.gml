@@ -4,7 +4,9 @@
 // Extended special events (scale/color/text) live under extEvents once.
 
 if (variable_global_exists("game") && is_struct(game) && game.paused) then exit;
-if ((!is_array(events) || array_length(events) <= 0) && (!is_struct(extEvents))) then exit;
+var _events = events;
+var _event_layer_count = (is_array(_events) ? array_length(_events) : 0);
+if (_event_layer_count <= 0 && !is_struct(extEvents)) then exit;
 
 // ---- current chart beat time ----
 var now_sec = 0;
@@ -31,9 +33,9 @@ var sum_y = 0;
 var sum_a = 0;
 var sum_r = 0;
 
-if (is_array(events)) {
-        for (var i = 0; i < array_length(events); i++) {
-                if (!is_struct(events[i])) then continue;
+if (_event_layer_count > 0) {
+        for (var i = 0; i < _event_layer_count; i++) {
+                if (!is_struct(_events[i])) then continue;
                 sum_x += rpe_eval_events(i, "moveXEvents", 0);
                 sum_y += rpe_eval_events(i, "moveYEvents", 0);
                 sum_a += rpe_eval_events(i, "alphaEvents", 0);
@@ -73,11 +75,12 @@ if (has_gif_events && is_struct(gif_data) && real(gif_data.total) > 0) {
 	var _gif_duration = real(gif_data.total);
 	__gif_progress = frac(max(0, line_time) / _gif_duration);
 	var _gif_events = extEvents[$ "gifEvents"];
-	if (is_array(_gif_events) && array_length(_gif_events) > 0) {
+	var _gif_event_count = (is_array(_gif_events) ? array_length(_gif_events) : 0);
+	if (_gif_event_count > 0) {
 		var _gif_last_end_time = 0;
 		var _gif_last_end_value = 0;
 		var _gif_has_previous = false;
-		for (var _gi = 0; _gi < array_length(_gif_events); _gi++) {
+		for (var _gi = 0; _gi < _gif_event_count; _gi++) {
 			var _gev = _gif_events[_gi];
 			if (!is_struct(_gev)) then continue;
 			if (line_time < _gev.startTime) then break;

@@ -1,8 +1,9 @@
 /// @description Update hold RPE note (PCR-aligned head/body/tail)
 if (!_is_hold || !inition) then exit;
-if (!instance_exists(_line_ref)) { canDraw = false; exit; };
+var _line = _line_ref;
+if (!instance_exists(_line)) { canDraw = false; exit; };
 
-var line_floor = real(_line_ref.__value[0]);
+var line_floor = real(_line.__value[0]);
 var time_before = (_now_seconds < start_sec);
 _position_floor_delta = floorPosition - line_floor;
 _control_position_speed = speed * _position_floor_delta;
@@ -18,10 +19,9 @@ if (time_before) {
 // Hold head visibility and body pinning depend on chart time, not judgment state.
 _is_out = time_before;
 if (time_before) {
-	var uncover = variable_instance_exists(_line_ref, "_uncover") ? bool(_line_ref._uncover) : false;
-	var tail_floor_distance = speed * (endFloorPosition - line_floor);
-	// Keep a crossing Hold visible while either endpoint remains on the visible side.
-	_is_out_line = uncover || max(_note_position_speed, tail_floor_distance) >= -0.000001;
+	var uncover = bool(_line._uncover);
+	// PCR masks pre-hit Holds by their precomputed tail visibility boundary.
+	_is_out_line = uncover || line_floor <= maximum_visual_length;
 } else {
 	_is_out_line = true;
 };
@@ -32,19 +32,20 @@ var notes_w = scene_w * 0.05625;
 var notes_h = scene_h * 0.6;
 var posx = (xOffset / 75.375) * notes_w;
 var posy = (yorigin * scene_h) + (_note_position_speed * notes_h);
-posx *= rpe_sample_control("pos", _control_position_speed, 1);
-var control_y = rpe_sample_control("y", _control_position_speed, 1);
+posx *= rpe_sample_control(1, _control_position_speed, 1);
+var control_y = rpe_sample_control(3, _control_position_speed, 1);
 posy *= control_y;
-var control_size = rpe_sample_control("size", _control_position_speed, 1);
+var control_size = rpe_sample_control(2, _control_position_speed, 1);
 image_xscale = (global_scales / 6) * size * control_size;
-var uniform_factor = bool(game.settings.noteUniformScale ?? false) ? size * control_size : 1;
+var _settings = game.settings;
+var uniform_factor = bool(_settings.noteUniformScale ?? false) ? size * control_size : 1;
 image_yscale = (global_scales / 6) * uniform_factor;
 
 var reversed = (isAbove ? -1 : 1);
-var line_x = _line_ref.x;
-var line_y = _line_ref.y;
-var c = _line_ref.__cos;
-var s = _line_ref.__sin;
+var line_x = _line.x;
+var line_y = _line.y;
+var c = _line.__cos;
+var s = _line.__sin;
 _ox_v = s * reversed;
 _oy_v = c * reversed;
 
@@ -68,11 +69,7 @@ var base_length = notes_h * speed * control_y * uniform_factor;
 
 var head_offset = 0;
 if (_is_out && (!compactHold)) {
-	var head_yoff = sprite_get_yoffset(sprite_index);
-	var head_bbox_top = sprite_get_bbox_top(sprite_index);
-	var head_attach = max(1, head_yoff - head_bbox_top);
-	head_attach = min(head_attach, max(1, head_yoff * 0.25));
-	head_offset = max(0, head_attach * image_yscale - 1);
+	head_offset = _hold_head_attach * image_yscale;
 };
 
 var hold_units = (time_before ? length_floor : endFloorPosition - line_floor);
@@ -94,14 +91,15 @@ _hx1 = x + body_ox * head_offset;
 _hy1 = y + body_oy * head_offset;
 _hx2 = x + body_ox * tail_offset;
 _hy2 = y + body_oy * tail_offset;
-image_angle = _line_ref.image_angle + (isAbove ? 0 : 180);
+image_angle = _line.image_angle + (isAbove ? 0 : 180);
 
 var sWH = scene_w * 0.5;
 var sHH = scene_h * 0.5;
 var dx = x - sWH;
 var dy = y - sHH;
-var dyn_r = sWH * 1.2365 + sHH + abs(_note_position_speed) * notes_h;
-outside = ((dx * dx + dy * dy) >= (dyn_r * dyn_r));
+var dyn_r = sWH * 1.2365 + sHH + speed * max(0, _note_position_speed) * notes_h;
+var dyn_r_sq = dyn_r * dyn_r;
+outside = ((dx * dx + dy * dy) >= dyn_r_sq);
 if (outside) {
 	var dot = dx * (_x_h - sWH) + dy * (_y_h - sHH);
 	if (dot <= 0) {

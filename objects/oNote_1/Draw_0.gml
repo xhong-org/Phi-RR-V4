@@ -1,28 +1,30 @@
 /// @description Draw RPE note
 if (!canDraw) then exit;
 
+var _sprite = sprite_index;
+var _frame = hl;
+var _xscale = image_xscale;
+var _yscale = image_yscale;
+var _angle = image_angle;
+var _blend = image_blend;
+var _alpha = image_alpha;
+
 if (!_is_hold) {
 	if (isBad) {
 		var a = ((1 - (_now_seconds - judgeRealTime)) * 0.5);
-		draw_sprite_ext(sprite_index, 2, _bad_x, _bad_y, image_xscale, image_yscale, _bad_angle, c_red, a);
+		draw_sprite_ext(_sprite, 2, _bad_x, _bad_y, _xscale, _yscale, _bad_angle, c_red, a);
 		exit;
 	};
-	draw_sprite_ext(sprite_index, hl, x, y, image_xscale, image_yscale, image_angle, image_blend, image_alpha);
+	draw_sprite_ext(_sprite, _frame, x, y, _xscale, _yscale, _angle, _blend, _alpha);
 	
 	
 	//type={type} time={string_format(start_beat , 0 , 10)} lineID={line_id} line_xy=[{_line_ref.x} , {_line_ref.y}] note_xy=[{x} , {y}] above={isAbove}
 	
 } else {
-	// PCR order: body, tail, then head if still out
-	var a = (isMiss ? 0.5 : image_alpha);
-	// body at body-start (_hx1,_hy1), scaled by yscale (body stretch)
-	draw_sprite_ext(note_hold_body, hl, _hx1, _hy1, image_xscale, yscale, image_angle, image_blend, a);
-	// tail at end
-	draw_sprite_ext(note_hold_end, hl, _hx2, _hy2, image_xscale, image_yscale, image_angle, image_blend, a);
-	// head only while still approaching (PCR _is_out)
-	if (_is_out) {
-		draw_sprite_ext(sprite_index, hl, _hx0, _hy0, image_xscale, image_yscale, image_angle, image_blend, a);
-	};
+	var a = (isMiss ? 0.5 : _alpha);
+	var _tail_trim = (compactHold ? _yscale * (_hold_tail_height * 0.5) : 0);
+	draw_hold(_hx0, _hy0, _xscale, _yscale, yscale,
+		_angle, _frame, _blend, a, _is_out, _is_out && !compactHold, _tail_trim);
 };
 
 //draw_set_font(game.font);

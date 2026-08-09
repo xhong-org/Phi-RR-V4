@@ -1,13 +1,15 @@
 /// @description Draw RPE judge line (supports extended scale/color/text)
 var s = (variable_global_exists("global_scales") ? global_scales : 1.0);
 if (!is_real(s) || s <= 0) then s = 1.0;
+var _room_w = room_width;
+var _room_h = room_height;
 
 if (has_paint_events) {
 	if (!surface_exists(paint_surface)
-		|| surface_get_width(paint_surface) != room_width
-		|| surface_get_height(paint_surface) != room_height) {
+		|| surface_get_width(paint_surface) != _room_w
+		|| surface_get_height(paint_surface) != _room_h) {
 		if (surface_exists(paint_surface)) then surface_free(paint_surface);
-		paint_surface = surface_create(room_width, room_height);
+		paint_surface = surface_create(_room_w, _room_h);
 		if (surface_exists(paint_surface)) {
 			surface_set_target(paint_surface);
 			draw_clear_alpha(c_black, 0);
@@ -79,8 +81,8 @@ if (has_paint_events) {
 if (image_alpha <= 0) then exit;
 if ((__scale_x == 0) || (__scale_y == 0)) then exit;
 
-var line_canvas_scale = (room_width > room_height * 0.75
-	? room_height / 1080 : room_width / 810);
+var line_canvas_scale = (_room_w > _room_h * 0.75
+	? _room_h / 1080 : _room_w / 810);
 var sx;
 var sy;
 if (is_default_line) {
@@ -105,9 +107,6 @@ image_blend = __color;
                 draw_set_alpha(image_alpha);
 				// Match PCR's 47px line-text size on its 1080px reference canvas.
 				var text_font_size = max(1, font_get_size(draw_get_font()));
-				var line_canvas_scale = (room_width > room_height * 0.75
-					? room_height / 1080
-					: room_width / 810);
 				var tscale = line_canvas_scale * (47 / text_font_size);
 				var text_scale_x = tscale * __scale_x;
 				var text_scale_y = tscale * __scale_y;
@@ -134,13 +133,14 @@ image_blend = __color;
 		if (sprite_exists(gif_sprite)) then sprite_index = gif_sprite;
 		frame = 0;
 	};
-	var sprite_local_x = (0.5 - anchor_x) * sprite_get_width(sprite_index) * sx;
-	var sprite_local_y = (anchor_y - 0.5) * sprite_get_height(sprite_index) * sy;
+	var _line_sprite = sprite_index;
+	var sprite_local_x = (0.5 - anchor_x) * sprite_get_width(_line_sprite) * sx;
+	var sprite_local_y = (anchor_y - 0.5) * sprite_get_height(_line_sprite) * sy;
 	var sprite_cos = dcos(image_angle);
 	var sprite_sin = dsin(image_angle);
 	var sprite_draw_x = x + sprite_local_x * sprite_cos + sprite_local_y * sprite_sin;
 	var sprite_draw_y = y - sprite_local_x * sprite_sin + sprite_local_y * sprite_cos;
-        draw_sprite_ext(sprite_index, frame, sprite_draw_x, sprite_draw_y, sx, sy, image_angle, image_blend, image_alpha);
+	        draw_sprite_ext(_line_sprite, frame, sprite_draw_x, sprite_draw_y, sx, sy, image_angle, image_blend, image_alpha);
 };
 
 if (variable_global_exists("game") && is_struct(game) && game.settings.enableDisplayLineID) {

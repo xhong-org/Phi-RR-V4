@@ -9,29 +9,14 @@ var out_x = __raw_x;
 var out_y = __raw_y;
 var out_r = __raw_r;
 
-if (is_real(isFather) && isFather >= 0 && variable_global_exists("game_1") && is_struct(game_1) && is_array(game_1.line_list)) {
-        if (isFather < array_length(game_1.line_list) && isFather != line_id) {
-                // Build ancestor chain: [self.father, father.father, ...] then fold root -> leaf
-                var chain = [];
-                var cur_id = isFather;
-                var guard = 0;
-                while (is_real(cur_id) && cur_id >= 0 && cur_id < array_length(game_1.line_list) && guard < 16) {
-                        array_add(chain, cur_id);
-                        var cinst = game_1.line_list[cur_id];
-                        if (!instance_exists(cinst) || !variable_instance_exists(cinst, "isFather")) then break;
-                        var next_id = cinst.isFather;
-                        if (!is_real(next_id) || next_id < 0 || next_id == cur_id) then break;
-                        cur_id = next_id;
-                        guard++;
-                };
-
+if (is_array(_father_chain) && array_length(_father_chain) > 0) {
+                var chain = _father_chain;
                 // Resolve world position of immediate parent by folding ancestors from root
                 var wx = 0;
                 var wy = 0;
                 var have_world = false;
                 for (var ai = array_length(chain) - 1; ai >= 0; ai--) {
-                        var aid = chain[ai];
-                        var ainst = game_1.line_list[aid];
+                        var ainst = chain[ai];
                         if (!instance_exists(ainst) || !variable_instance_exists(ainst, "__raw_x")) {
                                 have_world = false;
                                 break;
@@ -46,9 +31,7 @@ if (is_real(isFather) && isFather >= 0 && variable_global_exists("game_1") && is
                         } else {
                                 // convert this ancestor local into current world using its parent world
                                 // parent for this node is the previously folded world (wx,wy) with parent local angle
-                                // parent id is chain[ai+1]
-                                var pid = chain[ai + 1];
-                                var pinst = game_1.line_list[pid];
+                                var pinst = chain[ai + 1];
                                 var pr = pinst.__raw_r;
                                 var rad = degtorad(pr);
                                 var cc = cos(rad);
@@ -61,7 +44,7 @@ if (is_real(isFather) && isFather >= 0 && variable_global_exists("game_1") && is
                 };
 
                 if (have_world) {
-                        var pinst = game_1.line_list[isFather];
+                        var pinst = chain[0];
                         if (instance_exists(pinst) && variable_instance_exists(pinst, "__raw_r")) {
                                 var pr = pinst.__raw_r;
                                 var rad = degtorad(pr);
@@ -73,7 +56,7 @@ if (is_real(isFather) && isFather >= 0 && variable_global_exists("game_1") && is
                                 if (rotFatherLine) {
                                         // accumulate ancestor local rotations root->leaf? child inherits parent world rotation
                                         for (var ri = array_length(chain) - 1; ri >= 0; ri--) {
-                                                var rinst = game_1.line_list[chain[ri]];
+                                                var rinst = chain[ri];
                                                 if (instance_exists(rinst) && variable_instance_exists(rinst, "__raw_r")) {
                                                         out_r += rinst.__raw_r;
                                                 };
@@ -81,13 +64,11 @@ if (is_real(isFather) && isFather >= 0 && variable_global_exists("game_1") && is
                                 };
                         };
                 };
-        };
 };
 
 // get_window_pos_scale: x*(W/1350)+W/2 , -y*(H/900)+H/2
-var pos = get_window_pos_scale(out_x, out_y);
-x = pos[0];
-y = pos[1];
+x = out_x * (room_width / 1350) + room_width * 0.5;
+y = -out_y * (room_height / 900) + room_height * 0.5;
 image_angle = -out_r;
 image_blend = __color;
 

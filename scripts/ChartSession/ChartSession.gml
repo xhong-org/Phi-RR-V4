@@ -29,7 +29,9 @@ function chart_session_default() {
                 "status" : "Idle",
                 "detail" : "",
                 "error" : "",
-                "files" : undefined
+                "files" : undefined,
+                "detected_chart_path" : "",
+                "detected_chart_text" : ""
         };
 }
 
@@ -317,6 +319,12 @@ function chart_read_text_file(path, max_chars = 200000) {
         return text;
 }
 
+function chart_cache_detected_text(path, text) {
+        var session = chart_session_ensure();
+        session.detected_chart_path = chart_path_norm(path);
+        session.detected_chart_text = text;
+}
+
 function chart_detect_format(chart_path) {
         if (!file_exists(chart_path)) then return CHART_FORMAT.UNKNOWN;
         var ext = chart_path_ext(chart_path);
@@ -329,6 +337,7 @@ function chart_detect_format(chart_path) {
                 if (!string_length(text)) then return CHART_FORMAT.UNKNOWN;
 
                 if (string_pos("\"RPEVersion\"", text) > 0) {
+                        chart_cache_detected_text(chart_path, text);
                         return CHART_FORMAT.RPE;
                 };
 
@@ -348,6 +357,7 @@ function chart_detect_format(chart_path) {
 				};
 
                 if (string_pos("\"META\"", text) > 0 && string_pos("eventLayers", text) > 0) {
+                        chart_cache_detected_text(chart_path, text);
                         return CHART_FORMAT.RPE;
                 };
 
@@ -360,6 +370,7 @@ function chart_detect_format(chart_path) {
                         var parsed = json_parse(text);
                         if (is_struct(parsed)) {
                                 if (struct_exists(parsed, "META") && is_struct(parsed.META) && struct_exists(parsed.META, "RPEVersion")) {
+                                        chart_cache_detected_text(chart_path, text);
                                         return CHART_FORMAT.RPE;
                                 };
 						if (struct_exists(parsed, "formatVersion") && is_real(parsed.formatVersion)

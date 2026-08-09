@@ -20,7 +20,7 @@ if (type == 2) {
 	var before = (chart_sec < startSec);
 	var head_offset = 0;
 	if (before) {
-		head_offset = max(0, hold_head_attach * image_yscale - 1);
+		head_offset = max(0, hold_head_attach * image_yscale);
 	};
 	var units = before ? speedHoldFloorLength : speedFloorEnd - speed * line_floor;
 	var hold_length = max(0, units * scene_height - head_offset);

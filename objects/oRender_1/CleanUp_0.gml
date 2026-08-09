@@ -1,11 +1,11 @@
 /// @description Release RPE and shared chart resources on room exit.
+if (os_type == os_windows && extension_exists("I_Parallel")) rpe_worker_shutdown();
 if (variable_instance_exists(id, "_rpe_worker_hierarchy") && buffer_exists(_rpe_worker_hierarchy)) buffer_delete(_rpe_worker_hierarchy);
 if (variable_instance_exists(id, "_rpe_worker_input") && buffer_exists(_rpe_worker_input)) buffer_delete(_rpe_worker_input);
 if (variable_instance_exists(id, "_rpe_worker_output") && buffer_exists(_rpe_worker_output)) buffer_delete(_rpe_worker_output);
 _rpe_worker_hierarchy = -1;
 _rpe_worker_input = -1;
 _rpe_worker_output = -1;
-if (os_type == os_windows && extension_exists("I_Parallel")) rpe_worker_shutdown();
 if(variable_global_exists("game") && !is_undefined(game)){
 	game.Clean(true);
 	game = undefined;

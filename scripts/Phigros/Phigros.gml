@@ -1353,19 +1353,28 @@ function RPE() constructor{
 			return false;
 		};
 
-		// Keep native buffer reads on the hot path. The assignments must remain
-		// separate because YYC can treat a prior local as unset in a comma var.
-		var buff = buffer_load(f);
 		var r = "";
 		var buffer_read_ok = false;
-		if (!is_undefined(buff)) {
-			try {
-				r = buffer_read(buff, buffer_text);
-				buffer_read_ok = is_string(r);
-			} catch (e) {
-				delete(e);
+		var session = chart_session_ensure();
+		if (string(session.detected_chart_path) == chart_path_norm(f)
+			&& is_string(session.detected_chart_text) && string_length(session.detected_chart_text)) {
+			r = session.detected_chart_text;
+			session.detected_chart_path = "";
+			session.detected_chart_text = "";
+			buffer_read_ok = true;
+		} else {
+			// Keep native buffer reads on the hot path. The assignments must remain
+			// separate because YYC can treat a prior local as unset in a comma var.
+			var buff = buffer_load(f);
+			if (!is_undefined(buff)) {
+				try {
+					r = buffer_read(buff, buffer_text);
+					buffer_read_ok = is_string(r);
+				} catch (e) {
+					delete(e);
+				};
+				if (buffer_exists(buff)) then buffer_delete(buff);
 			};
-			if (buffer_exists(buff)) then buffer_delete(buff);
 		};
 
 		// Fallback for runtimes that cannot read the local buffer handle.
@@ -1513,89 +1522,6 @@ function RPE() constructor{
 			if(struct_exists(l_s , "eventLayers")){
 				events = l_s[$ "eventLayers"];
 				if(!is_array(events)) then events = [];
-				
-				//global.__line_id = i;
-				for(var o = 0 ; o < array_length(events) ; o ++){
-					var events_index = (events[o]);
-					
-					if(!is_struct(events_index)) then continue;
-					
-					global.__id = o;
-					
-					struct_foreach(events_index , (func(name , val){//
-						if(name == "speedEvents") then return;
-						if(!is_array(val)) then return;
-						//
-						//var _sort = (function(x1 , x2){
-						//		//if(is_array(x1.startTime)) {
-						//	//	x1.startTime = (game_1.Math.arrToBeat(x1.startTime))	
-						//	//};
-						//	var x1_time = (game_1.Math.arrToBeat(x1.startTime)),
-						//		x2_time = (game_1.Math.arrToBeat(x2.startTime));
-						//	x1.startTime = x1_time;
-						//	x2.startTime = x2_time;
-						//	x1.endTime = (game_1.Math.arrToBeat(x1.endTime));
-						//	x2.endTime = (game_1.Math.arrToBeat(x2.endTime));
-			
-						//	if(x1_time < x2_time) then return(-1);
-						//	if(x1_time > x2_time) then return(1);
-						//	return(0);
-						//});
-						
-						// easingType remapped once in oLine_1 Create; only sanitize left/right here
-						for(var e = 0 ; e < array_length(val) ; e ++){
-							var _e_left = (val[e][$ "easingLeft"] ?? 0),
-								_e_right = (val[e][$ "easingRight"] ?? 1);
-								
-							if((_e_left == _e_right) || (_e_left < 0 || _e_left > 1 || _e_right < 0 || _e_right > 1)){
-								_e_left = 0;
-								_e_right = 1;
-							};
-							
-							struct_set(game_1.chart.judgeLineList[global._id].eventLayers[global.__id][$ name][e] , "easingLeft" , _e_left);
-							struct_set(game_1.chart.judgeLineList[global._id].eventLayers[global.__id][$ name][e] , "easingRight" , _e_right);
-						};
-						//array_sort(val , _sort);
-					}));
-					if(struct_exists(l_s , "extended") && o == 0){
-						//struct_foreach(l_s[$ "extended"] , function(_name , _val){
-						//	// 					//
-						//var _sort = (function(x1 , x2){
-						//		//if(is_array(x1.startTime)) {
-						//		//	x1.startTime = (game_1.Math.arrToBeat(x1.startTime))	
-						//		//};
-						//		var x1_time = (game_1.Math.arrToBeat(x1.startTime)),
-						//			x2_time = (game_1.Math.arrToBeat(x2.startTime));
-						//		x1.startTime = x1_time;
-						//		x2.startTime = x2_time;
-						//		x1.endTime = (game_1.Math.arrToBeat(x1.endTime));
-						//		x2.endTime = (game_1.Math.arrToBeat(x2.endTime));
-			
-						//		if(x1_time < x2_time) then return(-1);
-						//		if(x1_time > x2_time) then return(1);
-						//		return(0);
-						//	});
-							
-						//	var index = [ 0, 1, 3, 2, 6, 5, 4, 7, 9, 8, 12, 11, 10, 13, 15, 14, pointer_null, 17, 16, pointer_null, 19, 18, 22, 21, 20, 23, 25, 24, pointer_null, 27, 26, 28 ];
-						//	for(
-						//var e = 0 ; e < array_length(_val) ; e ++){
-						//		var type_index = (real( _val[e][$ "easingType"] ));
-						//		struct_set(game_1.chart.judgeLineList[global._id].extended[$ _name][e] , "easingType" , ( index[ (type_index > 31 ? 0 : type_index)] ) );
-						//		var _e_left = (_val[e][$ "easingLeft"] ?? 0),
-						//			_e_right = (_val[e][$ "easingRight"] ?? 1);
-								
-						//		if((_e_left == _e_right) || (_e_left < 0 || _e_left > 1 || _e_right < 0 || _e_right > 1)){
-						//			_e_left = 0;
-						//			_e_right = 1;
-						//		};
-							
-						//		struct_set(game_1.chart.judgeLineList[global._id].extended[$ _name][e] , "easingLeft" , _e_left);
-						//		struct_set(game_1.chart.judgeLineList[global._id].extended[$ _name][e] , "easingRight" , _e_right);
-						//	};
-						//	array_sort(_val , _sort);
-						//});
-					};
-				};
 			};
 			
 			var _isFather = (l_s[$ "father"]);
@@ -1642,6 +1568,8 @@ function RPE() constructor{
 
 				var st_beat = game_1.Math.arrToBeat(n_s[$ "startTime"]);
 				var et_beat = game_1.Math.arrToBeat(n_s[$ "endTime"]);
+				var st_abs = game_1.Math.beatToAbsSec(st_beat);
+				var et_abs = game_1.Math.beatToAbsSec(et_beat);
 				// floorPosition at note time from this line's speed integral (PCR)
 				var note_floor = 0;
 				var end_floor = 0;
@@ -1651,13 +1579,11 @@ function RPE() constructor{
 					// Both must use the SAME second clock (chart seconds / bpmfactor).
 					// Do not bake META.offset here; runtime line_sec already subtracts chart offset.
 					// Note times are in line-local chart seconds.
-					var st_abs = game_1.Math.beatToAbsSec(st_beat);
-					var et_abs = game_1.Math.beatToAbsSec(et_beat);
 					note_floor = l.rpe_floor_at_sec(st_abs);
 					if (off_type == 3) then end_floor = l.rpe_floor_at_sec(et_abs);
 				};
-				var note_start_sec = game_1.Math.beatToAbsSec(st_beat);
-				var note_end_sec = game_1.Math.beatToAbsSec(et_beat);
+				var note_start_sec = st_abs;
+				var note_end_sec = et_abs;
 
 				var n_alpha = real(n_s[$ "alpha"] ?? 255);
 				var n_size = real(n_s[$ "size"] ?? 1);
@@ -1833,6 +1759,16 @@ function RPE() constructor{
 				_parent = self.line_list[_parent].isFather;
 			};
 			if (!_valid_parent) then _fl.isFather = -1;
+			_fl._father_chain = [];
+			_parent = _fl.isFather;
+			var _chain_guard = 0;
+			while (is_real(_parent) && _parent >= 0 && _chain_guard < 16) {
+				var _parent_line = self.line_list[_parent];
+				if (!instance_exists(_parent_line)) then break;
+				array_add(_fl._father_chain, _parent_line);
+				_parent = _parent_line.isFather;
+				_chain_guard++;
+			};
 		};
 		// Resolve line depth from zOrder (PCR-aligned).
 		// PCR LEVEL_CONTROLLER sorts obj_judgeline by:

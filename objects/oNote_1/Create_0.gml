@@ -78,6 +78,7 @@ if (!instance_exists(_line_ref)) {
 
 var _line_factor = (variable_instance_exists(_line_ref, "bpmfactor") ? real(_line_ref.bpmfactor) : 1);
 if (!is_real(_line_factor) || _line_factor <= 0) then _line_factor = 1;
+_line_time_factor = _line_factor;
 _preload_seconds = (variable_global_exists("game") && is_struct(game)
 	? real(game.settings.notePreloadSeconds ?? 0) / _line_factor
 	: 0);
@@ -121,6 +122,7 @@ if (variable_global_exists("game_1") && is_struct(game_1)
 		endSec:end_sec,
 		yOrigin:yorigin,
 		visibleTime:visibleTime,
+		timeFactor:_line_time_factor,
 		speed:speed,
 		alpha:alpha,
 		above:isAbove,
@@ -141,7 +143,16 @@ if (variable_global_exists("game_1") && is_struct(game_1)
 	game_1._note_activation_records[$ string(id)] = _spatial_record;
 	if (visibleTime > 0 && speed != 0) {
 		if (_is_hold) {
-			array_add(game_1._note_spatial_holds, _spatial_record);
+			var _hold_group_key = string(line_id) + ":" + string(isAbove);
+			var _hold_group;
+			if (!struct_exists(game_1._note_spatial_hold_group_map, _hold_group_key)) {
+				_hold_group = { line:_line_ref, above:isAbove, notes:[], count:0 };
+				game_1._note_spatial_hold_group_map[$ _hold_group_key] = _hold_group;
+				array_add(game_1._note_spatial_hold_groups, _hold_group);
+			} else {
+				_hold_group = game_1._note_spatial_hold_group_map[$ _hold_group_key];
+			};
+			array_add(_hold_group.notes, _spatial_record);
 		} else {
 			_spatial_record.spatialFloor += yOffset / (540 * speed);
 			_spatial_record.endSpatialFloor += yOffset / (540 * speed);
@@ -160,25 +171,29 @@ if (variable_global_exists("game_1") && is_struct(game_1)
 	};
 };
 
-rpe_sample_control = function(control_name, note_pos_speed, default_value = 1) {
-	if (!instance_exists(_line_ref)) then return default_value;
-	var field_name = "_control_" + control_name;
-	if (!variable_instance_exists(_line_ref, field_name)) then return default_value;
-	var control = variable_instance_get(_line_ref, field_name);
+rpe_controls = [_line_ref._control_alpha, _line_ref._control_pos, _line_ref._control_size, _line_ref._control_y];
+rpe_control_cursors = [0, 0, 0, 0];
+rpe_sample_control = function(control_index, note_pos_speed, default_value = 1) {
+	var control = rpe_controls[control_index];
 	if (!is_struct(control) || real(control.length) < 2) then return default_value;
 	var n = real(control.length);
 	var positions = control.positions;
 	var values = control.values;
 	var easings = control.easings;
-	if (note_pos_speed <= real(positions[0])) then return real(values[0]);
-	if (note_pos_speed > real(positions[n - 1])) then return default_value;
-	for (var i = 0; i < n - 1; i++) {
-		var p0 = real(positions[i]);
-		var p1 = real(positions[i + 1]);
-		if (p1 < note_pos_speed) then continue;
-		return tween_execute(note_pos_speed, p0, p1, real(values[i]), real(values[i + 1]), real(easings[i]));
+	if (note_pos_speed <= real(positions[0])) {
+		rpe_control_cursors[@ control_index] = 0;
+		return real(values[0]);
 	};
-	return real(values[n - 1]);
+	if (note_pos_speed > real(positions[n - 1])) {
+		rpe_control_cursors[@ control_index] = n - 2;
+		return default_value;
+	};
+	var i = clamp(rpe_control_cursors[control_index], 0, n - 2);
+	while (i > 0 && note_pos_speed <= real(positions[i])) i--;
+	while (i < n - 2 && real(positions[i + 1]) < note_pos_speed) i++;
+	rpe_control_cursors[@ control_index] = i;
+	return tween_execute(note_pos_speed, real(positions[i]), real(positions[i + 1]),
+		real(values[i]), real(values[i + 1]), real(easings[i]));
 };
 
 rpe_note_apply_visibility = function() {
@@ -197,8 +212,11 @@ rpe_note_apply_visibility = function() {
 	};
 
 	var sec_to_hit = start_sec - _now_seconds;
+	var sec_to_hit_real = sec_to_hit * _line_time_factor;
 	var time_before = (sec_to_hit > 0);
-	if (time_before && is_finite(visibleTime) && visibleTime < 999999 && sec_to_hit > visibleTime) {
+	// RPE visibleTime is a signed real-time threshold relative to the note head.
+	// Negative values intentionally keep short Holds hidden after their start.
+	if (is_finite(visibleTime) && visibleTime < 999999 && sec_to_hit_real > visibleTime) {
 		canDraw = false;
 		image_alpha = 0;
 		return false;
@@ -222,7 +240,7 @@ rpe_note_apply_visibility = function() {
 		return false;
 	};
 
-	var final_a = note_a * rpe_sample_control("alpha", _control_position_speed, 1);
+	var final_a = note_a * rpe_sample_control(0, _control_position_speed, 1);
 	if (final_a <= 0) {
 		canDraw = false;
 		image_alpha = 0;

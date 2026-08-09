@@ -19,7 +19,8 @@ var base_y = line_y - local_x * rotation_sin;
 
 var hold_floor_length = (variable_instance_exists(id, "holdFloorLength") ? holdFloorLength : hold_time_length);
 var is_out = (!isHold && max_visible_position > line_floor);
-var head_offset = (is_out ? max(0, sprite_yoffset * image_yscale) : 0);
+var head_offset = (is_out ? max(0, sprite_get_yoffset(note_hold_head)
+	- sprite_get_bbox_top(note_hold_head)) * image_yscale : 0);
 var hold_units = hold_floor_length + (is_out ? 0 : yOffset - line_floor);
 var hold_length = max(0, hold_units * scale_y - head_offset);
 yscale = hold_length / max(1, _hold_body_height);

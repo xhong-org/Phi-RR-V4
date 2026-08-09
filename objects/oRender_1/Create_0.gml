@@ -74,14 +74,22 @@ if (!struct_exists(game_1, "line_list")) then game_1.line_list = [];
 game_1._note_activation_records = {};
 game_1._note_spatial_group_map = {};
 game_1._note_spatial_groups = [];
-game_1._note_spatial_holds = [];
+game_1._note_spatial_hold_group_map = {};
+game_1._note_spatial_hold_groups = [];
 game_1.CreateLines();
-for (var _spatial_i = 0; _spatial_i < array_length(game_1._note_spatial_groups); _spatial_i++) {
-	array_sort(game_1._note_spatial_groups[_spatial_i].notes, function(a, b) {
+var _spatial_groups = game_1._note_spatial_groups;
+var _spatial_group_count = array_length(_spatial_groups);
+for (var _spatial_i = 0; _spatial_i < _spatial_group_count; _spatial_i++) {
+	array_sort(_spatial_groups[_spatial_i].notes, function(a, b) {
 		if (a.spatialFloor < b.spatialFloor) then return -1;
 		if (a.spatialFloor > b.spatialFloor) then return 1;
 		return 0;
 	});
+};
+var _hold_groups = game_1._note_spatial_hold_groups;
+var _hold_group_count = array_length(_hold_groups);
+for (var _hold_group_i = 0; _hold_group_i < _hold_group_count; _hold_group_i++) {
+	_hold_groups[_hold_group_i].count = array_length(_hold_groups[_hold_group_i].notes);
 };
 // Expose created RPE lines for note binding later.
 if (!struct_exists(game_1, "line_list") || !is_array(game_1.line_list)) {

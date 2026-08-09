@@ -86,9 +86,11 @@ function paused_ui_back() {
         if (action_queued) then return;
         print("[PausedUI] Back to menu");
         action_queued = true;
-        m_clean(true);
-        chart_session_cleanup(true);
-        room_goto(room_menu);
+        game.paused = true;
+        m_pause();
+        owner.chart_exit_started = true;
+        owner.chart_exit_timer = get_timer() - 500000;
+        owner.chart_exit_alpha = 0;
 }
 
 function paused_ui_reset_score() {

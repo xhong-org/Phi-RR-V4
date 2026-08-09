@@ -7,7 +7,6 @@ if (!instance_exists(_line_ref)) { canDraw = false; exit; };
 _now_seconds = (variable_instance_exists(_line_ref, "line_sec") ? _line_ref.line_sec : 0);
 
 _line_time = (variable_instance_exists(_line_ref, "line_time") ? _line_ref.line_time : 0);
-_now_beat = game_1.Math.absSecToBeat(_now_seconds);
 
 // Judge windows are seconds so multi-BPM charts use the correct unit.
 var late_ms = (_is_hold || type == 2 || type == 4 ? 161 : 201);
