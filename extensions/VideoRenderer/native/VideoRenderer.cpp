@@ -1453,12 +1453,19 @@ bool mix_hitsounds() {
 
     std::wstring command = quote(utf8_to_wide(g_ffmpeg))
         + L" -hide_banner -loglevel warning -y -i " + quote(output)
-        + L" -itsoffset " + std::to_wstring(g_audio_delay_seconds)
         + L" -i " + quote(utf8_to_wide(g_audio_path))
         + L" -f f32le -ar 44100 -ac 2 -i " + quote(stem_path)
-        + L" -filter_complex \"[1:a:0]volume=0.82[music];[2:a:0]volume=1.4[hits];"
+        + L" -filter_complex \"[1:a:0]adelay="
+        + std::to_wstring(static_cast<int>(std::llround(g_audio_delay_seconds * 1000.0)))
+        + L"|"
+        + std::to_wstring(static_cast<int>(std::llround(g_audio_delay_seconds * 1000.0)))
+        + L",volume=0.82[music];[2:a:0]adelay="
+        + std::to_wstring(static_cast<int>(std::llround(g_audio_delay_seconds * 1000.0)))
+        + L"|"
+        + std::to_wstring(static_cast<int>(std::llround(g_audio_delay_seconds * 1000.0)))
+        + L",volume=1.4[hits];"
           L"[music][hits]amix=inputs=2:normalize=0:dropout_transition=0,"
-          L"alimiter=limit=0.95[mix]\""
+          L"alimiter=limit=0.95,apad[mix]\""
         + L" -map 0:v:0 -map \"[mix]\" -c:v copy -c:a aac -b:a 192k"
         + L" -shortest -movflags +faststart " + quote(mixed_path);
 
@@ -1761,7 +1768,7 @@ extern "C" __declspec(dllexport) double video_renderer_add_hitsound(const char* 
         g_error = "Invalid hitsound event.";
         return 0.0;
     }
-    g_hitsounds.push_back({path, time + g_audio_delay_seconds, std::clamp(volume, 0.0, 4.0)});
+    g_hitsounds.push_back({path, time, std::clamp(volume, 0.0, 4.0)});
     return 1.0;
 }
 

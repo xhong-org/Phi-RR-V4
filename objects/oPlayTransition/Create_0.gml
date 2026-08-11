@@ -22,6 +22,7 @@ exit_delay = 500000;
 progress = 0;
 line_progress = 0;
 render_started_frame = 0;
+render_outro_started_frame = 0;
 transition_instances = [];
 
 function play_transition_deactivate_gameplay() {
@@ -38,8 +39,8 @@ function play_transition_deactivate_gameplay() {
 	instance_deactivate_object(oNote);
 	instance_deactivate_object(oNote_1);
 	instance_deactivate_object(oNote_2);
-	if(instance_exists(oEffect)) { with(oEffect) { isDraw = false; } }
-	elif(instance_exists(oEffectNew)) { with(oEffectNew) { isDraw = false; } };
+	if (instance_exists(oEffect)) then with (oEffect) isDraw = false;
+	if (instance_exists(oEffectNew)) then with (oEffectNew) isDraw = false;
 }
 
 function play_transition_activate_gameplay() {
@@ -47,6 +48,8 @@ function play_transition_activate_gameplay() {
 		instance_activate_object(transition_instances[_i]);
 	};
 	transition_instances = [];
+	if (instance_exists(oEffect)) then with (oEffect) isDraw = true;
+	if (instance_exists(oEffectNew)) then with (oEffectNew) isDraw = true;
 }
 
 function play_transition_apply(_value, _outro = false) {

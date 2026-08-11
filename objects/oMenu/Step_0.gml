@@ -63,4 +63,4 @@ if (keyboard_check_pressed(ord("S"))) {
         session_s.detail = "sample";
         room_goto(room_loading);
 };
-//if (keyboard_check_pressed(ord("R"))) room_goto(room_render_setup);
+if (keyboard_check_pressed(ord("X"))) room_goto(room_render_setup);

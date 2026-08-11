@@ -4,7 +4,7 @@
 #macro func function
 #macro isExists file_exists
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal 40498
+#macro VerReal 40499
 #macro VerStr "v.4.0.9b"
 #macro GAME_NAME "Re: Phi-RR - " + VerStr
 #macro HYW_MODE true
@@ -1279,12 +1279,17 @@ function render_schedule_hitsound(_default_sound, _event_time, _custom_path = ""
 	if (!(variable_global_exists("render_mode") && global.render_mode)) then return false;
 	var _path = render_hitsound_path(_default_sound, _custom_path);
 	if (!string_length(_path)) then return false;
+	// Precomputed events must start on the first frame in which the note is
+	// actually judged and drawn. Runtime fallback events already use that frame.
+	var _fps = max(1, real(global.render_fps));
+	var _scheduled_time = max(0, real(_event_time));
+	_scheduled_time = ceil(_scheduled_time * _fps - 0.000001) / _fps;
 	if (!variable_global_exists("render_hitsounds") || !is_array(global.render_hitsounds)) {
 		global.render_hitsounds = [];
 	};
 	array_add(global.render_hitsounds, {
 		path: _path,
-		time: max(0, real(_event_time)),
+		time: _scheduled_time,
 		volume: 0.7
 	});
 	return true;
@@ -1296,7 +1301,7 @@ function render_play_hitsound(_default_sound, _custom_path = "") {
 			&& bool(variable_instance_get(id, "render_hitsound_scheduled"))) then return true;
 		var _path = render_hitsound_path(_default_sound, _custom_path);
 		if (string_length(_path)) {
-			var _event_time = global.render_frame / max(1, global.render_fps);
+			var _event_time = max(0, global.render_frame) / max(1, global.render_fps);
 			return bool(video_renderer_add_hitsound(_path, _event_time, 0.7));
 		};
 		return false;

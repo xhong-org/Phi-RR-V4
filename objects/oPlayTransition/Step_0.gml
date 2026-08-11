@@ -19,6 +19,35 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 		state = PLAY_TRANSITION_STATE.INTRO_DELAY;
 	};
 	var _render_elapsed = max(0, (global.render_frame - render_started_frame) / max(1, global.render_fps));
+	if (state == PLAY_TRANSITION_STATE.PLAYING
+		&& variable_global_exists("render_chart_frames")
+		&& global.render_frame >= global.render_chart_frames) {
+		game.paused = true;
+		play_transition_deactivate_gameplay();
+		owner.chart_exit_started = true;
+		owner.chart_exit_alpha = 1;
+		render_outro_started_frame = global.render_frame;
+		state = PLAY_TRANSITION_STATE.OUTRO;
+	};
+	if (state == PLAY_TRANSITION_STATE.OUTRO) {
+		var _render_outro_elapsed = max(0,
+			(global.render_frame - render_outro_started_frame) / max(1, global.render_fps));
+		progress = clamp(_render_outro_elapsed / 1.0, 0, 1);
+		var _render_outro_eased = Easings.InOutExpo(progress);
+		play_transition_apply(_render_outro_eased, true);
+		owner.chart_exit_alpha = 1 - _render_outro_eased;
+		if (_render_outro_elapsed >= 1.0) {
+			play_transition_apply(1, true);
+			owner.chart_exit_alpha = 0;
+			line_progress = 0;
+			state = PLAY_TRANSITION_STATE.EXIT_DELAY;
+		};
+		exit;
+	};
+	if (state == PLAY_TRANSITION_STATE.EXIT_DELAY) {
+		game.paused = true;
+		exit;
+	};
 	if (_render_elapsed < 0.1) {
 		game.paused = true;
 		play_transition_apply(0);

@@ -27,6 +27,10 @@ if (os_type == os_windows) {
 global.render_intro_seconds = 1.6;
 global.render_intro_frames = ceil(global.render_intro_seconds * global.render_fps);
 global.render_intro_seconds = global.render_intro_frames / max(1, global.render_fps);
+global.render_outro_seconds = 1.5;
+global.render_outro_frames = ceil(global.render_outro_seconds * global.render_fps);
+global.render_outro_seconds = global.render_outro_frames / max(1, global.render_fps);
+global.render_chart_frames = 0;
 global.render_frame = -global.render_intro_frames;
 video_renderer_clear_hitsounds();
 random_set_seed(global.render_seed);

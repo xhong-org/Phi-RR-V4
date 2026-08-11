@@ -34,6 +34,7 @@ if (!encoder_started) {
     frame_width = width;
     frame_height = height;
     total_frames = max(1, ceil((media.length / 1000000) * global.render_fps));
+    global.render_chart_frames = total_frames;
 
     var audio_path = InChartPath + game.folder_chart.music;
     video_renderer_configure(frame_width, frame_height, global.render_fps, global.render_crf);
@@ -96,7 +97,7 @@ var panel_width = min(gui_width - 64 * scale, 920 * scale);
 var panel_left = (gui_width - panel_width) * 0.5;
 var panel_top = gui_height * 0.5 - 150 * scale;
 var output_frame = global.render_frame + global.render_intro_frames;
-var output_total_frames = total_frames + global.render_intro_frames;
+var output_total_frames = total_frames + global.render_intro_frames + global.render_outro_frames;
 var progress = output_total_frames > 0 ? clamp(output_frame / output_total_frames, 0, 1) : 0;
 var elapsed = max(0, (get_timer() - render_started_at) / 1000000);
 var eta = progress > 0 ? max(0, elapsed * (1 - progress) / progress) : 0;
@@ -162,7 +163,7 @@ if ((output_frame mod max(1, round(global.render_fps * 5))) == 0) {
     print($"[Renderer] {output_frame}/{output_total_frames}");
 };
 
-if (global.render_frame >= total_frames) {
+if (global.render_frame >= total_frames + global.render_outro_frames) {
     encoder_finished = true;
     render_status = "Finalizing video file";
     var success = bool(video_renderer_finish());
