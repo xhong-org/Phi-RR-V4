@@ -96,6 +96,7 @@
     {"id":{"name":"oNote_2","path":"objects/oNote_2/oNote_2.yy",},},
     {"id":{"name":"oNote","path":"objects/oNote/oNote.yy",},},
     {"id":{"name":"oPausedUI","path":"objects/oPausedUI/oPausedUI.yy",},},
+    {"id":{"name":"oPlayTransition","path":"objects/oPlayTransition/oPlayTransition.yy",},},
     {"id":{"name":"oPLSBootstrap","path":"objects/oPLSBootstrap/oPLSBootstrap.yy",},},
     {"id":{"name":"oRender_1","path":"objects/oRender_1/oRender_1.yy",},},
     {"id":{"name":"oRender_2","path":"objects/oRender_2/oRender_2.yy",},},

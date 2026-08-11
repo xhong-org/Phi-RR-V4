@@ -5,8 +5,8 @@
   "isDnD":false,
   "name":"I_NativeBindings",
   "parent":{
-    "name":"I_Shaders",
-    "path":"folders/Extensions/I_Shaders.yy",
+    "name":"Extensions",
+    "path":"folders/Extensions.yy",
   },
   "resourceType":"GMScript",
   "resourceVersion":"2.0",

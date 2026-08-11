@@ -165,30 +165,4 @@ if (!(variable_global_exists("render_mode") && global.render_mode)
 	};
 };
 
-if (chart_exit_started) {
-	var chart_exit_elapsed = max(0, get_timer() - chart_exit_timer);
-	chart_exit_alpha = 1 - clamp(chart_exit_elapsed / 500000, 0, 1);
-	// Room navigation is time-driven; UI bindings may hide HUD elements but
-	// must never control or block the end-of-chart state machine.
-	if (chart_exit_elapsed >= 500000 && !chart_exit_queued) {
-		chart_exit_queued = true;
-		if (instance_exists(oExtraPlay)) then with (oExtraPlay) instance_destroy();
-		if (is_struct(game_1) && struct_exists(game_1, "HitSounds") && is_struct(game_1.HitSounds)) {
-			if (instance_exists(oMedia)) {
-				var exit_media_system = instance_find(oMedia, 0);
-				if (exit_media_system.track > 0) then fmod_system_select(exit_media_system.track);
-			};
-			var exit_hit_names = struct_get_names(game_1.HitSounds);
-			for (var exit_hit_i = 0; exit_hit_i < array_length(exit_hit_names); exit_hit_i++) {
-				var exit_hit_sound = game_1.HitSounds[$ exit_hit_names[exit_hit_i]];
-				if (exit_hit_sound > 0) then fmod_sound_release(exit_hit_sound);
-			};
-			game_1.HitSounds = {};
-		};
-		m_clean(true);
-		chart_session_cleanup(true);
-		room_goto(room_menu);
-	};
-};
-
 event_user(_step_fps_user_count);

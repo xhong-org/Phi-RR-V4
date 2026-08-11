@@ -17,19 +17,20 @@
   "extensionVersion":"1.0.0",
   "files":[
     {"$GMExtensionFile":"v1","%Name":"VideoRenderer.dll","constants":[],"copyToTargets":64,"filename":"VideoRenderer.dll","final":"video_renderer_shutdown","functions":[
-      {"$GMExtensionFunction":"","%Name":"__video_renderer_initialize","argCount":2,"args":[1,2],"documentation":"@param arg_buffer\r\n@param arg_buffer_length\r\n@returns {Real}","externalName":"video_renderer_initialize","help":"","hidden":true,"kind":1,"name":"__video_renderer_initialize","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2},
-      {"$GMExtensionFunction":"","%Name":"video_renderer_configure","argCount":4,"args":[2,2,2,2],"documentation":"@param width\r\n@param height\r\n@param fps\r\n@param crf\r\n@returns {Real}","externalName":"video_renderer_configure","help":"","hidden":false,"kind":1,"name":"video_renderer_configure","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2},
-      {"$GMExtensionFunction":"","%Name":"video_renderer_set_ffmpeg","argCount":1,"args":[1],"documentation":"@param ffmpeg_path\r\n@returns {Real}","externalName":"video_renderer_set_ffmpeg","help":"","hidden":false,"kind":1,"name":"video_renderer_set_ffmpeg","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2},
-      {"$GMExtensionFunction":"","%Name":"video_renderer_set_preset","argCount":1,"args":[1],"documentation":"@param preset\r\n@returns {Real}","externalName":"video_renderer_set_preset","help":"","hidden":false,"kind":1,"name":"video_renderer_set_preset","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2},
-      {"$GMExtensionFunction":"","%Name":"video_renderer_set_encoder","argCount":1,"args":[1],"documentation":"@param encoder\r\n@returns {Real}","externalName":"video_renderer_set_encoder","help":"","hidden":false,"kind":1,"name":"video_renderer_set_encoder","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2},
-      {"$GMExtensionFunction":"","%Name":"video_renderer_start","argCount":2,"args":[1,1],"documentation":"@param output_path\r\n@param audio_path\r\n@returns {Real}","externalName":"video_renderer_start","help":"","hidden":false,"kind":1,"name":"video_renderer_start","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2},
-      {"$GMExtensionFunction":"","%Name":"video_renderer_capture","argCount":0,"args":[],"documentation":"@returns {Real}","externalName":"video_renderer_capture","help":"","hidden":false,"kind":1,"name":"video_renderer_capture","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2},
-      {"$GMExtensionFunction":"","%Name":"video_renderer_clear_hitsounds","argCount":0,"args":[],"documentation":"@returns {Real}","externalName":"video_renderer_clear_hitsounds","help":"","hidden":false,"kind":1,"name":"video_renderer_clear_hitsounds","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2},
-      {"$GMExtensionFunction":"","%Name":"video_renderer_add_hitsound","argCount":3,"args":[1,2,2],"documentation":"@param path\r\n@param time\r\n@param volume\r\n@returns {Real}","externalName":"video_renderer_add_hitsound","help":"","hidden":false,"kind":1,"name":"video_renderer_add_hitsound","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2},
-      {"$GMExtensionFunction":"","%Name":"video_renderer_finish","argCount":0,"args":[],"documentation":"@returns {Real}","externalName":"video_renderer_finish","help":"","hidden":false,"kind":1,"name":"video_renderer_finish","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2},
-      {"$GMExtensionFunction":"","%Name":"video_renderer_get_error","argCount":0,"args":[],"documentation":"@returns {String}","externalName":"video_renderer_get_error","help":"","hidden":false,"kind":1,"name":"video_renderer_get_error","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":1},
-      {"$GMExtensionFunction":"","%Name":"video_renderer_shutdown","argCount":0,"args":[],"documentation":"@returns {Real}","externalName":"video_renderer_shutdown","help":"","hidden":false,"kind":1,"name":"video_renderer_shutdown","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2}
-    ],"init":"","kind":1,"name":"VideoRenderer.dll","origname":"","ProxyFiles":[],"resourceType":"GMExtensionFile","resourceVersion":"2.0","uncompress":false,"usesRunnerInterface":false}
+        {"$GMExtensionFunction":"","%Name":"__video_renderer_initialize","argCount":2,"args":[1,2,],"documentation":"@param arg_buffer\r\n@param arg_buffer_length\r\n@returns {Real}","externalName":"video_renderer_initialize","help":"","hidden":true,"kind":1,"name":"__video_renderer_initialize","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2,},
+        {"$GMExtensionFunction":"","%Name":"video_renderer_configure","argCount":4,"args":[2,2,2,2,],"documentation":"@param width\r\n@param height\r\n@param fps\r\n@param crf\r\n@returns {Real}","externalName":"video_renderer_configure","help":"","hidden":false,"kind":1,"name":"video_renderer_configure","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2,},
+        {"$GMExtensionFunction":"","%Name":"video_renderer_set_ffmpeg","argCount":1,"args":[1,],"documentation":"@param ffmpeg_path\r\n@returns {Real}","externalName":"video_renderer_set_ffmpeg","help":"","hidden":false,"kind":1,"name":"video_renderer_set_ffmpeg","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2,},
+        {"$GMExtensionFunction":"","%Name":"video_renderer_set_audio_delay","argCount":1,"args":[2,],"documentation":"@param seconds\r\n@returns {Real}","externalName":"video_renderer_set_audio_delay","help":"","hidden":false,"kind":1,"name":"video_renderer_set_audio_delay","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2,},
+        {"$GMExtensionFunction":"","%Name":"video_renderer_set_preset","argCount":1,"args":[1,],"documentation":"@param preset\r\n@returns {Real}","externalName":"video_renderer_set_preset","help":"","hidden":false,"kind":1,"name":"video_renderer_set_preset","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2,},
+        {"$GMExtensionFunction":"","%Name":"video_renderer_set_encoder","argCount":1,"args":[1,],"documentation":"@param encoder\r\n@returns {Real}","externalName":"video_renderer_set_encoder","help":"","hidden":false,"kind":1,"name":"video_renderer_set_encoder","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2,},
+        {"$GMExtensionFunction":"","%Name":"video_renderer_start","argCount":2,"args":[1,1,],"documentation":"@param output_path\r\n@param audio_path\r\n@returns {Real}","externalName":"video_renderer_start","help":"","hidden":false,"kind":1,"name":"video_renderer_start","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2,},
+        {"$GMExtensionFunction":"","%Name":"video_renderer_capture","argCount":0,"args":[],"documentation":"@returns {Real}","externalName":"video_renderer_capture","help":"","hidden":false,"kind":1,"name":"video_renderer_capture","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2,},
+        {"$GMExtensionFunction":"","%Name":"video_renderer_clear_hitsounds","argCount":0,"args":[],"documentation":"@returns {Real}","externalName":"video_renderer_clear_hitsounds","help":"","hidden":false,"kind":1,"name":"video_renderer_clear_hitsounds","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2,},
+        {"$GMExtensionFunction":"","%Name":"video_renderer_add_hitsound","argCount":3,"args":[1,2,2,],"documentation":"@param path\r\n@param time\r\n@param volume\r\n@returns {Real}","externalName":"video_renderer_add_hitsound","help":"","hidden":false,"kind":1,"name":"video_renderer_add_hitsound","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2,},
+        {"$GMExtensionFunction":"","%Name":"video_renderer_finish","argCount":0,"args":[],"documentation":"@returns {Real}","externalName":"video_renderer_finish","help":"","hidden":false,"kind":1,"name":"video_renderer_finish","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2,},
+        {"$GMExtensionFunction":"","%Name":"video_renderer_get_error","argCount":0,"args":[],"documentation":"@returns {String}","externalName":"video_renderer_get_error","help":"","hidden":false,"kind":1,"name":"video_renderer_get_error","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":1,},
+        {"$GMExtensionFunction":"","%Name":"video_renderer_shutdown","argCount":0,"args":[],"documentation":"@returns {Real}","externalName":"video_renderer_shutdown","help":"","hidden":false,"kind":1,"name":"video_renderer_shutdown","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2,},
+      ],"init":"","kind":1,"name":"VideoRenderer.dll","origname":"","ProxyFiles":[],"resourceType":"GMExtensionFile","resourceVersion":"2.0","uncompress":false,"usesRunnerInterface":false,},
   ],
   "gradleinject":"",
   "hasConvertedCodeInjection":true,
@@ -54,7 +55,10 @@
   "options":[],
   "optionsFile":"options.json",
   "packageId":"",
-  "parent":{"name":"Extensions","path":"folders/Extensions.yy"},
+  "parent":{
+    "name":"FFVideos",
+    "path":"folders/Extensions/FFVideos.yy",
+  },
   "productId":"",
   "resourceType":"GMExtension",
   "resourceVersion":"2.0",
@@ -70,5 +74,5 @@
   "tvosplistinject":"",
   "tvosProps":false,
   "tvosSystemFrameworkEntries":[],
-  "tvosThirdPartyFrameworkEntries":[]
+  "tvosThirdPartyFrameworkEntries":[],
 }

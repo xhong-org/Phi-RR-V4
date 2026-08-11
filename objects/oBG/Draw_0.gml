@@ -18,6 +18,13 @@ var dw = bw * sc;
 var dh = bh * sc;
 var dx = (room_width) * 0.5;
 var dy = (room_height) * 0.5;
+var transition_alpha = 1;
+if (instance_exists(oPlayTransition)) {
+	var transition = instance_find(oPlayTransition, 0);
+	if (instance_exists(transition.owner) && transition.owner.play_transition_active) {
+		transition_alpha = transition.owner.play_transition_bg_alpha;
+	};
+};
 
 draw_sprite_ext(game.bg, 0, dx, dy, sc, sc, 0, image_blend, 1);
 
@@ -26,9 +33,9 @@ if (sprite_exists(spr_black)) {
         var sw = max(1, sprite_get_width(spr_black));
         var sh = max(1, sprite_get_height(spr_black));
         // spr_black also uses top-left origin; stretch from (0,0).
-        draw_sprite_ext(spr_black, 0, dx, dy, room_width / sw, room_height / sh, 0, c_black, 0.6);
+        draw_sprite_ext(spr_black, 0, dx, dy, room_width / sw, room_height / sh, 0, c_black, 0.6 * transition_alpha);
 } else {
-        draw_set_alpha(0.6);
+        draw_set_alpha(0.6 * transition_alpha);
         draw_set_colour(c_black);
         draw_rectangle(0, 0, room_width, room_height, false);
         draw_set_alpha(1);

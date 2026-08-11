@@ -1,5 +1,6 @@
 ///@desc 打击特效渲染初始化
 depth = DEPTH.HEF;
+isDraw = true;
 globalvar eff_create;
 effect_events = [];
 eff_create = (function(xx , yy , color , time = undefined){

@@ -24,6 +24,10 @@ button_sprite = [spr_back, spr_retry, spr_resume];
 button_hover = [false, false, false];
 
 function paused_ui_can_control() {
+	if (instance_exists(oPlayTransition) && !retry_waiting) {
+		var _transition = instance_find(oPlayTransition, 0);
+		if (_transition.state != PLAY_TRANSITION_STATE.PLAYING) then return false;
+	};
         return !(variable_global_exists("render_mode") && global.render_mode)
                 && instance_exists(owner)
                 && variable_global_exists("game") && is_struct(game)
@@ -89,8 +93,8 @@ function paused_ui_back() {
         game.paused = true;
         m_pause();
         owner.chart_exit_started = true;
-        owner.chart_exit_timer = get_timer() - 500000;
-        owner.chart_exit_alpha = 0;
+        owner.chart_exit_timer = get_timer();
+        owner.chart_exit_alpha = 1;
 }
 
 function paused_ui_reset_score() {

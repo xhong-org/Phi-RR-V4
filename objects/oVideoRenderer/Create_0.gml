@@ -24,7 +24,10 @@ if (os_type == os_windows) {
     };
 };
 
-global.render_frame = 0;
+global.render_intro_seconds = 1.6;
+global.render_intro_frames = ceil(global.render_intro_seconds * global.render_fps);
+global.render_intro_seconds = global.render_intro_frames / max(1, global.render_fps);
+global.render_frame = -global.render_intro_frames;
 video_renderer_clear_hitsounds();
 random_set_seed(global.render_seed);
 game_set_speed(global.render_fps, gamespeed_fps);
@@ -33,8 +36,8 @@ audio_master_gain(0);
 with (oPausedUI) visible = false;
 
 if (variable_global_exists("game") && is_struct(game)) {
-    game.paused = false;
-    game.__time[0] = 1;
+    game.paused = true;
+    game.__time[0] = 0;
     game.__time[1] = 0;
     game.__time[3] = 0;
     game.__time[4] = 0;

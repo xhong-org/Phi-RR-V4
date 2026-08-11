@@ -42,3 +42,4 @@ part_type_life(part,30,30);
 part_type_life(_hitFX,30,30);
 
 _timer = (get_timer());
+isDraw = true;

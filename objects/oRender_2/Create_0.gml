@@ -80,6 +80,14 @@ chart_exit_started = false;
 chart_exit_timer = 0;
 chart_exit_alpha = 1;
 chart_exit_queued = false;
+play_transition_active = false;
+play_transition_pause_y = 0;
+play_transition_name_y = 0;
+play_transition_level_y = 0;
+play_transition_score_y = 0;
+play_transition_ui_alpha = 1;
+play_transition_bar_alpha = 1;
+play_transition_bg_alpha = 1;
 font_scales = clamp(0.6*((room_width/2)/(string_width(string(game.folder_chart.name))*0.6+40)), 0.2, 0.55);
 
 _draw_user_count = 0;
@@ -95,6 +103,7 @@ print($"Usage Times: {(get_timer() - time) / 1000}ms");
 
 if (variable_global_exists("render_mode") && global.render_mode) {
 	instance_create_depth(0, 0, -2000000000, oVideoRenderer);
-} else {
-	alarm[0] = 300;
+};
+if (!instance_exists(oPlayTransition)) {
+	instance_create_depth(0, 0, -999999, oPlayTransition, { owner:id });
 };

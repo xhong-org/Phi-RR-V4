@@ -38,6 +38,7 @@ std::string g_preset = "medium";
 std::string g_encoder = "auto";
 std::string g_active_encoder = "x264";
 std::string g_audio_path;
+double g_audio_delay_seconds = 0.0;
 ComPtr<ID3D11Device> g_device;
 ComPtr<ID3D11DeviceContext> g_context;
 ComPtr<ID3D11Texture2D> g_resolved;
@@ -455,6 +456,7 @@ bool mux_h264_bitstream(const std::wstring& raw_path) {
     std::wstring command = quote(utf8_to_wide(g_ffmpeg))
         + L" -hide_banner -loglevel warning -y -fflags +genpts -r "
         + std::to_wstring(g_fps) + L" -i " + quote(raw_path)
+        + L" -itsoffset " + std::to_wstring(g_audio_delay_seconds)
         + L" -i " + quote(utf8_to_wide(g_audio_path))
         + L" -map 0:v:0 -map 1:a:0? -c:v copy -c:a aac -b:a 192k"
           L" -movflags +faststart " + quote(output);
@@ -1451,6 +1453,7 @@ bool mix_hitsounds() {
 
     std::wstring command = quote(utf8_to_wide(g_ffmpeg))
         + L" -hide_banner -loglevel warning -y -i " + quote(output)
+        + L" -itsoffset " + std::to_wstring(g_audio_delay_seconds)
         + L" -i " + quote(utf8_to_wide(g_audio_path))
         + L" -f f32le -ar 44100 -ac 2 -i " + quote(stem_path)
         + L" -filter_complex \"[1:a:0]volume=0.82[music];[2:a:0]volume=1.4[hits];"
@@ -1516,6 +1519,15 @@ extern "C" __declspec(dllexport) double video_renderer_configure(double width_va
 
 extern "C" __declspec(dllexport) double video_renderer_set_ffmpeg(const char* ffmpeg_path) {
     g_ffmpeg = ffmpeg_path && *ffmpeg_path ? ffmpeg_path : "ffmpeg.exe";
+    return 1.0;
+}
+
+extern "C" __declspec(dllexport) double video_renderer_set_audio_delay(double seconds) {
+    if (!std::isfinite(seconds) || seconds < 0.0 || seconds > 60.0) {
+        g_error = "Invalid renderer audio delay.";
+        return 0.0;
+    }
+    g_audio_delay_seconds = seconds;
     return 1.0;
 }
 
@@ -1640,7 +1652,8 @@ extern "C" __declspec(dllexport) double video_renderer_start(const char* output_
     std::wstring command = quote(executable)
         + L" -hide_banner -loglevel warning -y -f rawvideo -pixel_format "
         + (g_pipe_bgra ? L"bgra" : L"rgba") + L" -video_size "
-        + size_text + L" -framerate " + fps_text + L" -i pipe:0 -i " + quote(audio)
+        + size_text + L" -framerate " + fps_text + L" -i pipe:0 -itsoffset "
+        + std::to_wstring(g_audio_delay_seconds) + L" -i " + quote(audio)
         + L" -map 0:v:0 -map 1:a:0?" + hardware_encoder_options()
         + (g_active_encoder == "qsv" ? L" -pix_fmt nv12" : L" -pix_fmt yuv420p")
         + L" -c:a aac -b:a 192k -movflags +faststart "
@@ -1748,7 +1761,7 @@ extern "C" __declspec(dllexport) double video_renderer_add_hitsound(const char* 
         g_error = "Invalid hitsound event.";
         return 0.0;
     }
-    g_hitsounds.push_back({path, time, std::clamp(volume, 0.0, 4.0)});
+    g_hitsounds.push_back({path, time + g_audio_delay_seconds, std::clamp(volume, 0.0, 4.0)});
     return 1.0;
 }
 
@@ -1767,6 +1780,7 @@ extern "C" __declspec(dllexport) double video_renderer_shutdown() {
     g_hitsounds.clear();
     g_output_path.clear();
     g_audio_path.clear();
+    g_audio_delay_seconds = 0.0;
     g_captured_frames = 0;
     g_pipe_bgra = false;
     g_active_encoder = "x264";

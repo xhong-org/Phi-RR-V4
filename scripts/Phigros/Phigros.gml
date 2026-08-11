@@ -4,8 +4,8 @@
 #macro func function
 #macro isExists file_exists
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal 40497
-#macro VerStr "v.4.0.8"
+#macro VerReal 40498
+#macro VerStr "v.4.0.9b"
 #macro GAME_NAME "Re: Phi-RR - " + VerStr
 #macro HYW_MODE true
 #macro BYD_COLOR_MODE true

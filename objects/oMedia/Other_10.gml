@@ -1,5 +1,7 @@
 /// @description 变量初始化
 use_stream = false;
+self[$ "isExists"] = false;
+self[$ "success"] = false;
 soundIndex = undefined;
 playbackIndex = undefined;
 position = -1;

@@ -20,16 +20,26 @@ if (retry_waiting) {
                 retry_mode = 0;
                 action_queued = false;
                 if (completed_mode == 1) {
-                        m_play();
-                        game.Math.now(0);
-                        print("[PausedUI] Retry playback started");
+			if (instance_exists(oPlayTransition)) {
+				var transition = instance_find(oPlayTransition, 0);
+				transition.state = PLAY_TRANSITION_STATE.INTRO;
+				transition.state_started_at = get_timer();
+				transition.progress = 0;
+				transition.play_transition_deactivate_gameplay();
+				transition.play_transition_apply(0);
+				print("[PausedUI] Retry prepare animation started");
+			} else {
+				m_play();
+				game.Math.now(0);
+				game.paused = false;
+			};
                 } else {
                         m_resume();
                         array_set(game.__time, 4, get_timer());
                         game.Math.ptime();
                         print("[PausedUI] Resume playback started");
                 };
-                game.paused = false;
+		if (completed_mode != 1) then game.paused = false;
         };
         exit;
 };

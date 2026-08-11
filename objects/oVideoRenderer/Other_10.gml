@@ -38,6 +38,12 @@ if (!encoder_started) {
     var audio_path = InChartPath + game.folder_chart.music;
     video_renderer_configure(frame_width, frame_height, global.render_fps, global.render_crf);
     video_renderer_set_ffmpeg(global.render_ffmpeg);
+    if (!video_renderer_set_audio_delay(global.render_intro_seconds)) {
+        print($"[Renderer] Invalid audio delay: {video_renderer_get_error()}");
+        encoder_finished = true;
+		if (global.render_cli) game_end(); else { global.render_mode = false; room_goto(room_menu); };
+        exit;
+    };
     if (!video_renderer_set_preset(global.render_preset)) {
         print($"[Renderer] Invalid preset: {global.render_preset}");
         encoder_finished = true;
@@ -63,8 +69,8 @@ if (!encoder_started) {
     var submitted_hitsounds = 0;
     for (var hitsound_i = 0; hitsound_i < array_length(scheduled_hitsounds); hitsound_i++) {
         var hitsound_event = scheduled_hitsounds[hitsound_i];
-        if (video_renderer_add_hitsound(hitsound_event.path, hitsound_event.time,
-            hitsound_event.volume)) submitted_hitsounds++;
+        if (video_renderer_add_hitsound(hitsound_event.path,
+            hitsound_event.time, hitsound_event.volume)) submitted_hitsounds++;
     };
     print($"[Renderer] Scheduled hitsounds: {submitted_hitsounds}/{array_length(scheduled_hitsounds)}");
     render_status = "Rendering video";
@@ -89,7 +95,9 @@ var scale = min(gui_width / 1366, gui_height / 768);
 var panel_width = min(gui_width - 64 * scale, 920 * scale);
 var panel_left = (gui_width - panel_width) * 0.5;
 var panel_top = gui_height * 0.5 - 150 * scale;
-var progress = total_frames > 0 ? clamp(global.render_frame / total_frames, 0, 1) : 0;
+var output_frame = global.render_frame + global.render_intro_frames;
+var output_total_frames = total_frames + global.render_intro_frames;
+var progress = output_total_frames > 0 ? clamp(output_frame / output_total_frames, 0, 1) : 0;
 var elapsed = max(0, (get_timer() - render_started_at) / 1000000);
 var eta = progress > 0 ? max(0, elapsed * (1 - progress) / progress) : 0;
 
@@ -135,7 +143,7 @@ draw_text_transformed(bar_left, bar_top + 38 * scale,
 draw_set_halign(fa_right);
 draw_set_colour(make_colour_rgb(139, 151, 178));
 draw_text_transformed(panel_left + panel_width - 42 * scale, bar_top + 40 * scale,
-    $"Frame {global.render_frame} / {total_frames}", 0.9 * scale, 0.9 * scale, 0);
+    $"Frame {output_frame} / {output_total_frames}", 0.9 * scale, 0.9 * scale, 0);
 draw_set_halign(fa_left);
 draw_text_transformed(bar_left, panel_top + 258 * scale,
     $"Elapsed  {string_format(elapsed, 0, 1)}s", 0.9 * scale, 0.9 * scale, 0);
@@ -150,8 +158,8 @@ draw_set_valign(fa_top);
 draw_set_colour(c_white);
 
 global.render_frame++;
-if ((global.render_frame mod max(1, round(global.render_fps * 5))) == 0) {
-    print($"[Renderer] {global.render_frame}/{total_frames}");
+if ((output_frame mod max(1, round(global.render_fps * 5))) == 0) {
+    print($"[Renderer] {output_frame}/{output_total_frames}");
 };
 
 if (global.render_frame >= total_frames) {

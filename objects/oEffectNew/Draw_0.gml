@@ -1,4 +1,6 @@
 /// @description Draw active hit effects without building a duplicate draw list.
+if(!isDraw) then exit;
+
 var realT = (game.__time[1]);
 
 // Keep the original draw order while removing expired entries in place.

@@ -20,6 +20,4 @@ if(game.__time[0] > 0){
 	};
 	
 	game.paused = (!(game.paused));
-}else{
-	alarm[0] = 1;	
 };

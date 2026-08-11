@@ -5,8 +5,8 @@
   "isDnD":false,
   "name":"I_CompressionAPI",
   "parent":{
-    "name":"Tools",
-    "path":"folders/Other/Tools.yy",
+    "name":"I_Compression",
+    "path":"folders/Extensions/I_Compression.yy",
   },
   "resourceType":"GMScript",
   "resourceVersion":"2.0",
