@@ -3,7 +3,11 @@
 // Parent/screen transform is applied in End Step so parents evaluate first.
 // Extended special events (scale/color/text) live under extEvents once.
 
-if (variable_global_exists("game") && is_struct(game) && game.paused) then exit;
+var _transition_updates = instance_exists(oRender_1)
+	&& variable_instance_exists(oRender_1, "play_transition_active")
+	&& bool(oRender_1.play_transition_active);
+if (variable_global_exists("game") && is_struct(game) && game.paused
+	&& !_transition_updates) then exit;
 var _events = events;
 var _event_layer_count = (is_array(_events) ? array_length(_events) : 0);
 if (_event_layer_count <= 0 && !is_struct(extEvents)) then exit;

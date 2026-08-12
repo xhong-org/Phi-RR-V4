@@ -3,7 +3,11 @@
 // End Step runs after every line finished writing __raw_* this frame.
 // Parent world position is resolved with a small stack (no nested function defs).
 
-if (variable_global_exists("game") && is_struct(game) && game.paused) then exit;
+var _transition_updates = instance_exists(oRender_1)
+	&& variable_instance_exists(oRender_1, "play_transition_active")
+	&& bool(oRender_1.play_transition_active);
+if (variable_global_exists("game") && is_struct(game) && game.paused
+	&& !_transition_updates) then exit;
 
 var out_x = __raw_x;
 var out_y = __raw_y;
@@ -11,58 +15,40 @@ var out_r = __raw_r;
 
 if (is_array(_father_chain) && array_length(_father_chain) > 0) {
                 var chain = _father_chain;
-                // Resolve world position of immediate parent by folding ancestors from root
-                var wx = 0;
-                var wy = 0;
-                var have_world = false;
+                var parent_world_x = 0;
+                var parent_world_y = 0;
+                var parent_world_r = 0;
+                var have_parent = false;
+
+                // Fold root -> immediate parent so nested lines use the same
+                // transform rules as the renderer's non-worker path.
                 for (var ai = array_length(chain) - 1; ai >= 0; ai--) {
-                        var ainst = chain[ai];
-                        if (!instance_exists(ainst) || !variable_instance_exists(ainst, "__raw_x")) {
-                                have_world = false;
+                        var ancestor = chain[ai];
+                        if (!instance_exists(ancestor) || !variable_instance_exists(ancestor, "__raw_x")) {
+                                have_parent = false;
                                 break;
                         };
-                        var lx = ainst.__raw_x;
-                        var ly = ainst.__raw_y;
-                        if (!have_world) {
-                                // root ancestor: world == local
-                                wx = lx;
-                                wy = ly;
-                                have_world = true;
+                        if (!have_parent) {
+                                parent_world_x = ancestor.__raw_x;
+                                parent_world_y = ancestor.__raw_y;
+                                parent_world_r = ancestor.__raw_r;
+                                have_parent = true;
                         } else {
-                                // convert this ancestor local into current world using its parent world
-                                // parent for this node is the previously folded world (wx,wy) with parent local angle
-                                var pinst = chain[ai + 1];
-                                var pr = pinst.__raw_r;
-                                var rad = degtorad(pr);
-                                var cc = cos(rad);
-                                var ss = sin(rad);
-                                var nx = lx * cc + ly * ss + wx;
-                                var ny = ly * cc - lx * ss + wy;
-                                wx = nx;
-                                wy = ny;
+                                var parent_cos = dcos(parent_world_r);
+                                var parent_sin = dsin(parent_world_r);
+                                parent_world_x += ancestor.__raw_x * parent_cos + ancestor.__raw_y * parent_sin;
+                                parent_world_y += ancestor.__raw_y * parent_cos - ancestor.__raw_x * parent_sin;
+                                parent_world_r = ancestor.__raw_r
+                                        + (bool(ancestor.rotFatherLine) ? parent_world_r : 0);
                         };
                 };
 
-                if (have_world) {
-                        var pinst = chain[0];
-                        if (instance_exists(pinst) && variable_instance_exists(pinst, "__raw_r")) {
-                                var pr = pinst.__raw_r;
-                                var rad = degtorad(pr);
-                                var cc = cos(rad);
-                                var ss = sin(rad);
-                                out_x = __raw_x * cc + __raw_y * ss + wx;
-                                out_y = __raw_y * cc - __raw_x * ss + wy;
-
-                                if (rotFatherLine) {
-                                        // accumulate ancestor local rotations root->leaf? child inherits parent world rotation
-                                        for (var ri = array_length(chain) - 1; ri >= 0; ri--) {
-                                                var rinst = chain[ri];
-                                                if (instance_exists(rinst) && variable_instance_exists(rinst, "__raw_r")) {
-                                                        out_r += rinst.__raw_r;
-                                                };
-                                        };
-                                };
-                        };
+                if (have_parent) {
+                        var parent_cos = dcos(parent_world_r);
+                        var parent_sin = dsin(parent_world_r);
+                        out_x = parent_world_x + __raw_x * parent_cos + __raw_y * parent_sin;
+                        out_y = parent_world_y + __raw_y * parent_cos - __raw_x * parent_sin;
+                        if (rotFatherLine) then out_r += parent_world_r;
                 };
 };
 

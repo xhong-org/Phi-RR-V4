@@ -27,35 +27,61 @@ transition_instances = [];
 
 function play_transition_deactivate_gameplay() {
 	if (array_length(transition_instances) > 0) then return;
-	with (oLine) array_add(other.transition_instances, id);
-	with (oLine_1) array_add(other.transition_instances, id);
-	with (oLine_2) array_add(other.transition_instances, id);
-	with (oNote) array_add(other.transition_instances, id);
-	with (oNote_1) array_add(other.transition_instances, id);
-	with (oNote_2) array_add(other.transition_instances, id);
-	instance_deactivate_object(oLine);
-	instance_deactivate_object(oLine_1);
-	instance_deactivate_object(oLine_2);
-	instance_deactivate_object(oNote);
-	instance_deactivate_object(oNote_1);
-	instance_deactivate_object(oNote_2);
+	// Pausing already stops gameplay updates. Keep instances active so line
+	// parent references and the note preload activation set survive the
+	// transition unchanged; only suppress their drawing temporarily.
+	with (oLine) { array_add(other.transition_instances, [id, visible]); visible = false; };
+	with (oLine_1) { array_add(other.transition_instances, [id, visible]); visible = false; };
+	with (oLine_2) { array_add(other.transition_instances, [id, visible]); visible = false; };
+	with (oNote) { array_add(other.transition_instances, [id, visible]); visible = false; };
+	with (oNote_1) { array_add(other.transition_instances, [id, visible]); visible = false; };
+	with (oNote_2) { array_add(other.transition_instances, [id, visible]); visible = false; };
 	if (instance_exists(oEffect)) then with (oEffect) isDraw = false;
 	if (instance_exists(oEffectNew)) then with (oEffectNew) isDraw = false;
 }
 
 function play_transition_activate_gameplay() {
 	for (var _i = 0; _i < array_length(transition_instances); _i++) {
-		instance_activate_object(transition_instances[_i]);
+		var _record = transition_instances[_i];
+		if (is_array(_record) && array_length(_record) >= 2 && instance_exists(_record[0])) {
+			_record[0].visible = _record[1];
+		};
 	};
 	transition_instances = [];
 	if (instance_exists(oEffect)) then with (oEffect) isDraw = true;
 	if (instance_exists(oEffectNew)) then with (oEffectNew) isDraw = true;
 }
 
+function play_transition_sync_bound_ui() {
+	if (!instance_exists(owner) || owner.object_index != oRender_1) then return;
+	if (!variable_instance_exists(owner, "play_transition_bound_ui")
+		|| !is_struct(owner.play_transition_bound_ui)) then return;
+
+	// Lines are created after the renderer in some load paths. Refresh this
+	// relationship while the transition is active instead of relying on the
+	// renderer's one-time Create scan.
+	var _render_owner = owner;
+	// The gameplay objects are inactive during the transition, so enumerate
+	// the chart's retained line list instead of relying on an active-object
+	// query. This also preserves bindings for child lines.
+	if (variable_global_exists("game_1") && is_struct(game_1)
+		&& is_array(game_1.line_list)) {
+		var _lines = game_1.line_list;
+		for (var _line_i = 0; _line_i < array_length(_lines); _line_i++) {
+			var _line = _lines[_line_i];
+			if (!instance_exists(_line) || !_line.is_attach_ui
+				|| !is_string(_line.attach_ui_key) || !string_length(_line.attach_ui_key)
+				|| !struct_exists(_render_owner.play_transition_bound_ui, _line.attach_ui_key)) then continue;
+			_render_owner.play_transition_bound_ui[$ _line.attach_ui_key] = true;
+		};
+	};
+}
+
 function play_transition_apply(_value, _outro = false) {
 	if (!instance_exists(owner)) then return;
 	var _p = clamp(_value, 0, 1);
 	var _hidden = _outro ? _p : (1 - _p);
+	play_transition_sync_bound_ui();
 	owner.play_transition_active = true;
 	owner.play_transition_pause_y = -max(1, 70 * global_scales) * _hidden;
 	owner.play_transition_name_y = max(1, 60 * global_scales) * _hidden;

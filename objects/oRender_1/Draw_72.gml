@@ -99,7 +99,12 @@ if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") &&
 				if (is_array(result_ui_slot) && array_length(result_ui_slot) >= 7) {
 					result_ui_slot[@ 0] = result_child.x - room_width * 0.5;
 					result_ui_slot[@ 1] = result_child.y - room_height * 0.5;
+					result_ui_slot[@ 2] = result_child.image_blend;
+					result_ui_slot[@ 3] = clamp(real(result_child.__raw_a) / 255, 0, 1);
 					result_ui_slot[@ 4] = result_child.image_angle;
+					result_ui_slot[@ 5] = result_child.__scale_x;
+					result_ui_slot[@ 6] = result_child.__scale_y;
+					if (is_struct(bindUI_attached)) then bindUI_attached[$ result_child.attach_ui_key] = true;
 				};
 			};
 		};
@@ -196,14 +201,19 @@ if (!worker_resolved) {
 	child.__cos = dcos(child.image_angle);
 	child.__sin = dsin(child.image_angle);
 	if (child.is_attach_ui && is_string(child.attach_ui_key) && string_length(child.attach_ui_key)
-		&& is_struct(bindUI) && struct_exists(bindUI, child.attach_ui_key)) {
-		var ui_slot = bindUI[$ child.attach_ui_key];
-		if (is_array(ui_slot) && array_length(ui_slot) >= 7) {
-			ui_slot[@ 0] = child.x - room_width * 0.5;
-			ui_slot[@ 1] = child.y - room_height * 0.5;
-			ui_slot[@ 4] = child.image_angle;
+			&& is_struct(bindUI) && struct_exists(bindUI, child.attach_ui_key)) {
+			var ui_slot = bindUI[$ child.attach_ui_key];
+			if (is_array(ui_slot) && array_length(ui_slot) >= 7) {
+				ui_slot[@ 0] = child.x - room_width * 0.5;
+				ui_slot[@ 1] = child.y - room_height * 0.5;
+				ui_slot[@ 2] = child.image_blend;
+				ui_slot[@ 3] = clamp(real(child.__raw_a) / 255, 0, 1);
+				ui_slot[@ 4] = child.image_angle;
+				ui_slot[@ 5] = child.__scale_x;
+				ui_slot[@ 6] = child.__scale_y;
+				if (is_struct(bindUI_attached)) then bindUI_attached[$ child.attach_ui_key] = true;
+			};
 		};
-	};
 	};
 	var fallback_total_us = get_timer() - line_resolve_start;
 	if (!variable_instance_exists(id, "_rpe_fallback_profile_samples")) {
