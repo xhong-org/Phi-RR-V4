@@ -20,7 +20,7 @@
   "overriddenProperties":[],
   "parent":{
     "name":"PEC",
-    "path":"folders/Objects/PEC.yy",
+    "path":"folders/Objects/Main/Loader/Format/PEC.yy",
   },
   "parentObjectId":null,
   "persistent":false,

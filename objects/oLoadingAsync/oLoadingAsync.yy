@@ -11,8 +11,8 @@
   "name":"oLoadingAsync",
   "overriddenProperties":[],
   "parent":{
-    "name":"Objects",
-    "path":"folders/Objects.yy",
+    "name":"Loader",
+    "path":"folders/Objects/Main/Loader.yy",
   },
   "parentObjectId":null,
   "persistent":false,

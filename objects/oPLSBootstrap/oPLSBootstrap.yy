@@ -7,7 +7,10 @@
   "managed":true,
   "name":"oPLSBootstrap",
   "overriddenProperties":[],
-  "parent":{"name":"Objects","path":"folders/Objects.yy",},
+  "parent":{
+    "name":"CLI",
+    "path":"folders/Objects/Main/CLI.yy",
+  },
   "parentObjectId":null,
   "persistent":false,
   "physicsAngularDamping":0.1,

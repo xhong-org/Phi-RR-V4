@@ -1,5 +1,5 @@
 /// @description Auto-judge hold RPE note
-if (!_is_hold || !inition) then exit;
+if (!_is_hold || !inition || isFake) then exit;
 
 var now_time = _now_seconds;
 var now_hit = judgeTime;

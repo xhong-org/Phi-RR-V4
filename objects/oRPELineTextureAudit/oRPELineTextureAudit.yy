@@ -8,7 +8,10 @@
   "managed":true,
   "name":"oRPELineTextureAudit",
   "overriddenProperties":[],
-  "parent":{"name":"Objects","path":"folders/Objects.yy",},
+  "parent":{
+    "name":"RPE",
+    "path":"folders/Objects/Main/Loader/Format/RPE.yy",
+  },
   "parentObjectId":null,
   "persistent":true,
   "physicsAngularDamping":0.1,

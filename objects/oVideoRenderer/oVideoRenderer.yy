@@ -11,8 +11,8 @@
   "name":"oVideoRenderer",
   "overriddenProperties":[],
   "parent":{
-    "name":"Objects",
-    "path":"folders/Objects.yy",
+    "name":"Render",
+    "path":"folders/Objects/Main/Render.yy",
   },
   "parentObjectId":null,
   "persistent":false,

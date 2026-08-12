@@ -10,8 +10,8 @@
   "name":"oPlayTransition",
   "overriddenProperties":[],
   "parent":{
-    "name":"Objects",
-    "path":"folders/Objects.yy",
+    "name":"Anim",
+    "path":"folders/Objects/Main/Anim.yy",
   },
   "parentObjectId":null,
   "persistent":false,

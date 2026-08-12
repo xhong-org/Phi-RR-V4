@@ -12,7 +12,7 @@
   "overriddenProperties":[],
   "parent":{
     "name":"RPE",
-    "path":"folders/Objects/RPE.yy",
+    "path":"folders/Objects/Main/Loader/Format/RPE.yy",
   },
   "parentObjectId":null,
   "persistent":false,

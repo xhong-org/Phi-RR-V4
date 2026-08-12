@@ -19,8 +19,8 @@
   "name":"oMedia",
   "overriddenProperties":[],
   "parent":{
-    "name":"Objects",
-    "path":"folders/Objects.yy",
+    "name":"System",
+    "path":"folders/Objects/Main/System.yy",
   },
   "parentObjectId":null,
   "persistent":false,

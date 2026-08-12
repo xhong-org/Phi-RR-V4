@@ -4,7 +4,7 @@
 #macro func function
 #macro isExists file_exists
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal 40500
+#macro VerReal 40501
 #macro VerStr "v.4.0.9b"
 #macro GAME_NAME "Re: Phi-RR - " + VerStr
 #macro HYW_MODE true
@@ -1275,8 +1275,9 @@ function render_hitsound_path(_default_sound, _custom_path = "") {
 	return file_exists(_path) ? _path : "";
 };
 
-function render_schedule_hitsound(_default_sound, _event_time, _custom_path = "") {
+function render_schedule_hitsound(_default_sound, _event_time, _custom_path = "", _is_fake = false) {
 	if (!(variable_global_exists("render_mode") && global.render_mode)) then return false;
+	if (bool(_is_fake)) then return false;
 	var _path = render_hitsound_path(_default_sound, _custom_path);
 	if (!string_length(_path)) then return false;
 	// Precomputed events must start on the first frame in which the note is
@@ -1296,6 +1297,7 @@ function render_schedule_hitsound(_default_sound, _event_time, _custom_path = ""
 };
 
 function render_play_hitsound(_default_sound, _custom_path = "") {
+	if (variable_instance_exists(id, "isFake") && bool(variable_instance_get(id, "isFake"))) then return false;
 	if (variable_global_exists("render_mode") && global.render_mode) {
 		if (variable_instance_exists(id, "render_hitsound_scheduled")
 			&& bool(variable_instance_get(id, "render_hitsound_scheduled"))) then return true;
@@ -1689,7 +1691,7 @@ function RPE() constructor{
 						note_hitsound_time += note_factor * note_instance.hitTime2 * 0.001;
 					};
 					note_instance.render_hitsound_scheduled = render_schedule_hitsound(
-						note_instance.sound, note_hitsound_time, custom_hitsound_path);
+						note_instance.sound, note_hitsound_time, custom_hitsound_path, isFake);
 				};
 				var note_lead = _note_preload;
 				if (is_finite(n_vis) && n_vis >= 0 && n_vis < 999999) then note_lead = min(note_lead, note_factor * n_vis);

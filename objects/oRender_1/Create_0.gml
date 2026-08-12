@@ -28,6 +28,9 @@ fpsReal = 0;
 show_debug_message("[oRender_1] Creating RPE state");
 game_1 = (new RPE());
 show_debug_message("[oRender_1] RPE state created");
+if (variable_global_exists("render_mode") && global.render_mode) {
+	global.render_hitsounds = [];
+};
 if (!is_struct(game_1.chart_info)) then game_1.chart_info = { name:"", level:"", offset:0, meta_offset:0, info_offset:0, song:"", background:"" };
 
 var _chart_rel = "";
