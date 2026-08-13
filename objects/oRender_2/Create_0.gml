@@ -47,6 +47,11 @@ if (chart_session_has_track()) {
 };
 game_2 = (new PEC());
 
+// Clear the previous chart before PEC runtime creation schedules its notes.
+if (variable_global_exists("render_mode") && global.render_mode) {
+	global.render_hitsounds = [];
+};
+
 instance_create_depth(0,0,0,oBG);
 instance_create_depth(0,0,0,oMedia , { "name" : (string_length(game.folder_chart.music) ? (InChartPath + game.folder_chart.music) : "") });
 

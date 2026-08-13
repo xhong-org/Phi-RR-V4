@@ -39,8 +39,7 @@ switch (type) {
 };
 hold_head_attach = 0;
 if (type == 2) {
-	hold_head_attach = max(1, sprite_get_yoffset(sprite_index) - sprite_get_bbox_top(sprite_index));
-	hold_head_attach = min(hold_head_attach, max(1, sprite_get_yoffset(sprite_index) * 0.25));
+		hold_head_attach = max(1, sprite_get_yoffset(sprite_index));
 };
 hold_bpm_index = 0;
 hold_bpm_last_sec = -infinity;

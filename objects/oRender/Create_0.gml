@@ -35,6 +35,10 @@ if (chart_session_has_track()) {
 };
 print(game.folder_chart , game.settings.enableDebug);
 var chart_path = (string_length(game.folder_chart.chart) ? (InChartPath + game.folder_chart.chart) : "");
+// Start each render with an empty schedule. CreateLines populates it for this chart.
+if (variable_global_exists("render_mode") && global.render_mode) {
+	global.render_hitsounds = [];
+};
 if (!game.Reader(chart_path)) {
 	show_debug_message($"[Official] Failed to load chart: {chart_path}");
 	room_goto(room_menu);

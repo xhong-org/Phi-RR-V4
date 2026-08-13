@@ -22,7 +22,7 @@ switch (type) {
 		_hx2 = 0; _hy2 = 0;
 		_hold_body_height = max(1, sprite_get_height(note_hold_body));
 		_hold_tail_height = max(1, sprite_get_height(note_hold_end));
-		_hold_head_attach = max(1, sprite_get_yoffset(note_hold_head) - sprite_get_bbox_top(note_hold_head));
+		_hold_head_attach = max(1, sprite_get_yoffset(note_hold_head));
 		isHold = false;
 		notJudge = true;
 		isMiss = false;

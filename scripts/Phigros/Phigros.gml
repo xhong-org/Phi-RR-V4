@@ -4,7 +4,7 @@
 #macro func function
 #macro isExists file_exists
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal 40501
+#macro VerReal 40503
 #macro VerStr "v.4.0.9b"
 #macro GAME_NAME "Re: Phi-RR - " + VerStr
 #macro HYW_MODE true
@@ -1291,7 +1291,7 @@ function render_schedule_hitsound(_default_sound, _event_time, _custom_path = ""
 	array_add(global.render_hitsounds, {
 		path: _path,
 		time: _scheduled_time,
-		volume: 0.7
+		volume: 0.5
 	});
 	return true;
 };
@@ -1304,7 +1304,7 @@ function render_play_hitsound(_default_sound, _custom_path = "") {
 		var _path = render_hitsound_path(_default_sound, _custom_path);
 		if (string_length(_path)) {
 			var _event_time = max(0, global.render_frame) / max(1, global.render_fps);
-			return bool(video_renderer_add_hitsound(_path, _event_time, 0.7));
+			return bool(video_renderer_add_hitsound(_path, _event_time, 0.5));
 		};
 		return false;
 	};

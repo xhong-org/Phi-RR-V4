@@ -235,6 +235,19 @@ function paused_ui_reset_rpe() {
                                 if (is_struct(record)) then record.activated = false;
                         };
                 };
+                // Hold spatial queries remove activated entries by swapping them
+                // out of the active prefix. Rebuild that prefix for a retry.
+                if (is_array(game_1._note_spatial_hold_groups)) {
+                        for (var hold_group_i = 0; hold_group_i < array_length(game_1._note_spatial_hold_groups); hold_group_i++) {
+                                var hold_group = game_1._note_spatial_hold_groups[hold_group_i];
+                                if (!is_struct(hold_group) || !is_array(hold_group.notes)) then continue;
+                                hold_group.count = array_length(hold_group.notes);
+                                for (var hold_note_i = 0; hold_note_i < hold_group.count; hold_note_i++) {
+                                        var hold_record = hold_group.notes[hold_note_i];
+                                        if (is_struct(hold_record)) then hold_record.activated = false;
+                                };
+                        };
+                };
                 if (bool(game_1._note_activation_enabled ?? false)) then instance_deactivate_object(oNote_1);
         };
         with (oExtraPlay) {
