@@ -1,5 +1,5 @@
 /// @description Initialize deterministic chart rendering.
-depth = -2000000000;
+depth = -20000000000000000;
 encoder_started = false;
 encoder_finished = false;
 frame_width = 0;
@@ -9,6 +9,15 @@ surface_recovery_logged = false;
 render_started_at = get_timer();
 render_status = "Preparing chart and encoder";
 gpu_capture_ready = false;
+overlay_ready = false;
+overlay_surface = -1;
+overlay_surface_width = 0;
+overlay_surface_height = 0;
+ui_font = -1;
+if (file_exists(working_directory + "resource/saira.ttf")) {
+    font_add_enable_aa(true);
+    ui_font = font_add(working_directory + "resource/saira.ttf", 28, true, false, -infinity, infinity);
+};
 
 if (os_type == os_windows) {
     var d3d_info = os_get_info();
@@ -49,4 +58,4 @@ if (variable_global_exists("game") && is_struct(game)) {
 };
 
 window_set_caption($"Rendering: {global.render_output}");
-print($"[Renderer] Output: {global.render_output}, resolution={global.render_resolution} ({global.render_width}x{global.render_height}), fps={global.render_fps}, crf={global.render_crf}, preset={global.render_preset}, encoder={global.render_encoder}");
+print($"[Renderer] Output: {global.render_output}, resolution={global.render_resolution} ({global.render_width}x{global.render_height}), aspect={global.render_aspect_ratio}, fps={global.render_fps}, crf={global.render_crf}, preset={global.render_preset}, encoder={global.render_encoder}");

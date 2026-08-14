@@ -1,10 +1,11 @@
-/// @description Loading progress UI.
+/// @description Loading progress UI using Camera_View.global_scales.
 if (font_exists(ui_font)) then draw_set_font(ui_font);
 else draw_set_font(-1);
 
 var s = (variable_global_exists("global_scales") ? global_scales : 1.0);
 if (!is_real(s) || s <= 0) then s = 1.0;
-var cx = room_width * 0.5;
+var cx = (room_width) * 0.5;
+var cy = (room_height) * 0.5;
 
 draw_set_halign(fa_center);
 draw_set_valign(fa_middle);
@@ -25,12 +26,12 @@ if (string_length(session.detail)) {
 
 if (failed) {
         draw_set_colour(c_silver);
-        draw_text_transformed(cx, room_height * 0.82, "Returning to menu...", 0.35 * s, 0.35 * s, 0);
+         draw_text_transformed(cx, room_height * 0.82, "Returning to menu...", 0.35 * s, 0.35 * s, 0);
 } else {
         var p = (phase == 10) ? 0.4 : clamp(phase / 3, 0, 1);
-        var bx1 = room_width * 0.25;
-        var bx2 = room_width * 0.75;
-        var by1 = room_height * 0.78;
+         var bx1 = room_width * 0.25;
+         var bx2 = room_width * 0.75;
+         var by1 = room_height * 0.78;
         var by2 = by1 + max(8, 12 * s);
         draw_set_colour(make_colour_rgb(40, 40, 48));
         draw_rectangle(bx1, by1, bx2, by2, false);

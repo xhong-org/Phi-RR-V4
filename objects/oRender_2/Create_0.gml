@@ -107,7 +107,7 @@ event_user(2);
 print($"Usage Times: {(get_timer() - time) / 1000}ms");
 
 if (variable_global_exists("render_mode") && global.render_mode) {
-	instance_create_depth(0, 0, -2000000000, oVideoRenderer);
+	instance_create_depth(0, 0, -9999999, oVideoRenderer);
 };
 if (!instance_exists(oPlayTransition)) {
 	instance_create_depth(0, 0, -999999, oPlayTransition, { owner:id });

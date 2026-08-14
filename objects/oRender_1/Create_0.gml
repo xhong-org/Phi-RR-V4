@@ -92,7 +92,10 @@ for (var _spatial_i = 0; _spatial_i < _spatial_group_count; _spatial_i++) {
 var _hold_groups = game_1._note_spatial_hold_groups;
 var _hold_group_count = array_length(_hold_groups);
 for (var _hold_group_i = 0; _hold_group_i < _hold_group_count; _hold_group_i++) {
-	_hold_groups[_hold_group_i].count = array_length(_hold_groups[_hold_group_i].notes);
+	var _hold_group = _hold_groups[_hold_group_i];
+	_hold_group.count = array_length(_hold_group.notes);
+	_hold_group.originalNotes = array_create(_hold_group.count);
+	array_copy(_hold_group.originalNotes, 0, _hold_group.notes, 0, _hold_group.count);
 };
 // Expose created RPE lines for note binding later.
 if (!struct_exists(game_1, "line_list") || !is_array(game_1.line_list)) {
@@ -187,7 +190,7 @@ if (!instance_exists(oPausedUI)) then instance_create_depth(0, 0, -1000000, oPau
 event_user(2);
 
 if (variable_global_exists("render_mode") && global.render_mode) {
-	instance_create_depth(0, 0, -2000000000, oVideoRenderer);
+	instance_create_depth(0, 0, -9999999, oVideoRenderer);
 };
 if (!instance_exists(oPlayTransition)) {
 	instance_create_depth(0, 0, -999999, oPlayTransition, { owner:id });

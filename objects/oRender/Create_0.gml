@@ -104,7 +104,7 @@ print($"str3: {game.settings.comboString}");
 image_blend = c_white;
 if (!instance_exists(oPausedUI)) then instance_create_depth(0, 0, -1000000, oPausedUI, { owner: id });
 if (variable_global_exists("render_mode") && global.render_mode) {
-	instance_create_depth(0, 0, -2000000000, oVideoRenderer);
+	instance_create_depth(0, 0, -9999999, oVideoRenderer);
 };
 if (!instance_exists(oPlayTransition)) {
 	instance_create_depth(0, 0, -999999, oPlayTransition, { owner:id });

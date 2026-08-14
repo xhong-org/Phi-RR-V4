@@ -9,6 +9,7 @@ global.render_fps = 60;
 global.render_resolution = "native";
 global.render_width = 1366;
 global.render_height = 768;
+global.render_aspect_ratio = "16:9";
 global.render_crf = 18;
 global.render_aa_level = 8;
 global.render_cli = false;
@@ -22,6 +23,9 @@ global.default_notes_texture_loaded = false;
 global.default_hitsounds_load_requested = false;
 
 var param_count = parameter_count();
+var render_base_height = 768;
+var render_aspect_width = 16;
+var render_aspect_height = 9;
 for (var i = 1; i < param_count; i++) {
         if (parameter_string(i) == "-archive-test" && i + 1 < param_count) {
                 i++;
@@ -42,33 +46,52 @@ for (var i = 1; i < param_count; i++) {
                 global.render_resolution = string_lower(parameter_string(i));
                 switch (global.render_resolution) {
                         case "720p":
-                                global.render_width = 1280;
-                                global.render_height = 720;
+                                render_base_height = 720;
                                 break;
                         case "1080p":
-                                global.render_width = 1920;
-                                global.render_height = 1080;
+                                render_base_height = 1080;
                                 break;
                         case "2k":
                         case "1440p":
-                                global.render_width = 2560;
-                                global.render_height = 1440;
+                                render_base_height = 1440;
                                 break;
                         case "4k":
                         case "2160p":
-                                global.render_width = 3840;
-                                global.render_height = 2160;
+                                render_base_height = 2160;
                                 break;
                         case "native":
-                                global.render_width = 1366;
-                                global.render_height = 768;
+                                render_base_height = 768;
                                 break;
                         default:
                                 print($"[Renderer] Unknown resolution '{global.render_resolution}', using native");
                                 global.render_resolution = "native";
-                                global.render_width = 1366;
-                                global.render_height = 768;
+                                render_base_height = 768;
                                 break;
+                };
+        } else if (parameter_string(i) == "-ar" && i + 1 < param_count) {
+                i++;
+                var aspect_value = string_trim(parameter_string(i));
+                var aspect_separator = string_pos(":", aspect_value);
+                if (aspect_separator <= 1 || aspect_separator >= string_length(aspect_value)) {
+                        print($"[Renderer] Invalid aspect ratio '{aspect_value}', using 16:9");
+                        render_aspect_width = 16;
+                        render_aspect_height = 9;
+                        global.render_aspect_ratio = "16:9";
+                } else {
+                        var aspect_width = real(string_trim(string_copy(aspect_value, 1, aspect_separator - 1)));
+                        var aspect_height = real(string_trim(string_copy(aspect_value, aspect_separator + 1,
+                                string_length(aspect_value) - aspect_separator)));
+                        if (is_nan(aspect_width) || !is_finite(aspect_width) || aspect_width <= 0
+                                || is_nan(aspect_height) || !is_finite(aspect_height) || aspect_height <= 0) {
+                                print($"[Renderer] Invalid aspect ratio '{aspect_value}', using 16:9");
+                                render_aspect_width = 16;
+                                render_aspect_height = 9;
+                                global.render_aspect_ratio = "16:9";
+                        } else {
+                                render_aspect_width = aspect_width;
+                                render_aspect_height = aspect_height;
+                                global.render_aspect_ratio = $"{string(aspect_width)}:{string(aspect_height)}";
+                        };
                 };
         } else if (parameter_string(i) == "-crf" && i + 1 < param_count) {
                 i++;
@@ -89,6 +112,9 @@ for (var i = 1; i < param_count; i++) {
                 global.pls_exit_test = true;
         };
 };
+
+global.render_height = render_base_height;
+global.render_width = max(2, round((render_base_height * render_aspect_width / render_aspect_height) / 2) * 2);
 
 if (global.render_mode) {
 	global.render_cli = true;

@@ -11,8 +11,8 @@
   "name":"oRenderSetup",
   "overriddenProperties":[],
   "parent":{
-    "name":"System",
-    "path":"folders/Objects/Main/System.yy",
+    "name":"Render",
+    "path":"folders/Objects/Main/Render.yy",
   },
   "parentObjectId":null,
   "persistent":false,
