@@ -226,7 +226,7 @@ function paused_ui_reset_rpe() {
                 paint_last_valid = false;
                 paint_last_time = -infinity;
         };
-        with (oNote_1) {
+        with (oNote_1) { // TODO: Retry之后部分音符变滚木,等会修)))))))
                 canDraw = false;
                 isHold = false;
                 notJudge = true;
