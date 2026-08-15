@@ -42,7 +42,7 @@ if (phase == 1) {
                 // chart_session_fail already cleans extract files/session memory.
                 // Ensure cleanup even if older fail path didn't.
                 chart_session_cleanup(true);
-                MsgBox_Warning(detail, "Chart Loader");
+                msgbox_warning_async(detail, "Chart Loader");
                 phase = 99;
                 // Return to menu after failure.
                 room_goto(room_menu);

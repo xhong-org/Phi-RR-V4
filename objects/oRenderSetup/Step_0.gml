@@ -7,6 +7,11 @@ if ((field == 2 || field == 3) && string_length(string_trim(keyboard_string)) > 
         setup_set_status("FPS and quality must be numeric.");
     };
 };
+if (field == 4 && string_length(string_trim(keyboard_string)) > 0) {
+    var aspect_probe = string_trim(keyboard_string);
+    var aspect_separator = string_pos(":", aspect_probe);
+    if (aspect_separator <= 1 || aspect_separator >= string_length(aspect_probe)) setup_set_status("Aspect ratio must use width:height.");
+};
 var control_down = keyboard_check(vk_control) || keyboard_check(vk_lcontrol) || keyboard_check(vk_rcontrol);
 if (control_down && keyboard_check_pressed(ord("C"))) {
     try {
@@ -38,13 +43,13 @@ if (keyboard_check_pressed(vk_delete)) {
 };
 if (keyboard_check_pressed(vk_enter)) {
     setup_store_text();
-    if (field < 3) { field++; setup_begin_text(); }
+    if (field < 4) { field++; setup_begin_text(); }
     else event_user(0);
     exit;
 };
 if (keyboard_check_pressed(vk_tab)) {
     setup_store_text();
-    field = (field + 1) mod 4;
+    field = (field + 1) mod 5;
     setup_begin_text();
 };
 if (keyboard_check_pressed(vk_backspace)) {
@@ -61,9 +66,10 @@ if (keyboard_check_pressed(ord("O")) && field == 1) {
     exit;
 };
 if (mouse_check_button_pressed(mb_left)) {
-    var scale = max(0.55, min(room_width / 1366, room_height / 768));
-    var left = room_width * 0.5 - 430 * scale;
-    var top = room_height * 0.5 - 250 * scale;
+    var scale = variable_global_exists("global_scales") ? max(0.01, global_scales) : 1.0;
+    var panel_width = 980 * scale;
+    var left = (room_width - panel_width) * 0.5;
+    var top = max(18 * scale, room_height * 0.5 - 350 * scale);
     var row = top + 92 * scale;
     if (point_in_rectangle(mouse_x, mouse_y, left + 610 * scale, row, left + 790 * scale, row + 48 * scale)) {
         var selected_mouse = get_open_filename_ext("Chart package|*.zip;*.pez|All files|*.*", "", "", "Select chart package");
@@ -75,14 +81,18 @@ if (mouse_check_button_pressed(mb_left)) {
         if (string_length(selected_output_mouse)) { output_text = selected_output_mouse; field = 1; setup_begin_text(); };
         exit;
     };
-    for (var i = 0; i < 4; i++) {
+    for (var i = 0; i < 5; i++) {
         if (point_in_rectangle(mouse_x, mouse_y, left + 210 * scale, row + i * 62 * scale, left + 790 * scale, row + 48 * scale + i * 62 * scale)) {
             setup_store_text(); field = i; setup_begin_text(); exit;
         };
     };
-    var option_top = row + 4 * 62 * scale + 16 * scale;
+    var option_top = row + 5 * 62 * scale + 16 * scale;
     if (point_in_rectangle(mouse_x, mouse_y, left + 210 * scale, option_top, left + 390 * scale, option_top + 48 * scale)) resolution_index = (resolution_index + 1) mod array_length(resolutions);
     else if (point_in_rectangle(mouse_x, mouse_y, left + 590 * scale, option_top, left + 790 * scale, option_top + 48 * scale)) aa_index = (aa_index + 1) mod array_length(aa_values);
-    else if (point_in_rectangle(mouse_x, mouse_y, left + 210 * scale, option_top + 62 * scale, left + 520 * scale, option_top + 110 * scale)) ratio_index = 0;
+    else if (point_in_rectangle(mouse_x, mouse_y, left + 210 * scale, option_top + 62 * scale, left + 520 * scale, option_top + 110 * scale)) {
+        ratio_index = (ratio_index + 1) mod array_length(ratios);
+        aspect_text = ratios[ratio_index];
+        setup_begin_text();
+    }
     else if (point_in_rectangle(mouse_x, mouse_y, left + 580 * scale, option_top + 52 * scale, left + 750 * scale, option_top + 104 * scale)) event_user(0);
 };

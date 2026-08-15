@@ -1,0 +1,29 @@
+[gml_api]
+module MsgBox;
+
+[global, start_fn]
+function MsgBox_Initialize() : unit;
+[global, finish_fn]
+function MsgBox_Shutdown() : unit;
+[global]
+function MsgBox_ClearButtons() : unit;
+[global]
+function MsgBox_SetButton(index : int32, text : string) : bool;
+[global]
+function MsgBox_SetButtonAlignment(alignment : int32) : bool;
+[global]
+function MsgBox_ShowSync(message : string, title : string, kind : int32) : int32;
+[global]
+function MsgBox_ShowAsync(message : string, title : string, kind : int32) : int32;
+[global]
+function MsgBox_TaskStatus(task_id : int32) : int32;
+[global]
+function MsgBox_TaskResult(task_id : int32) : int32;
+[global]
+function MsgBox_TaskRelease(task_id : int32) : bool;
+[global]
+function MsgBox_Info(message : string, title : string) : int32;
+[global]
+function MsgBox_Warning(message : string, title : string) : int32;
+[global]
+function MsgBox_Error(message : string, title : string) : int32;

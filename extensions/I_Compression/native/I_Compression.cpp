@@ -20,6 +20,8 @@ using namespace gm_enums;
 
 namespace {
 
+constexpr std::uintmax_t kMaxArchiveBytes = 1ull << 30;
+
 enum TaskStatus : int32_t {
     TaskUnknown = 0,
     TaskQueued = 1,
@@ -48,10 +50,20 @@ std::atomic<bool> g_shutting_down{false};
 
 std::wstring utf8_to_wide(std::string_view text) {
     if (text.empty()) return {};
-    const int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
+    int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
+    UINT code_page = CP_UTF8;
+    DWORD flags = MB_ERR_INVALID_CHARS;
+    // GameMaker normally passes UTF-8, but older extension call paths can pass
+    // the active Windows code page for non-ASCII strings. Keep UTF-8 as the
+    // canonical path and only fall back when the byte sequence is invalid.
+    if (count <= 0) {
+        code_page = CP_ACP;
+        flags = 0;
+        count = MultiByteToWideChar(code_page, flags, text.data(), static_cast<int>(text.size()), nullptr, 0);
+    }
     if (count <= 0) return {};
     std::wstring result(static_cast<size_t>(count), L'\0');
-    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), count);
+    MultiByteToWideChar(code_page, flags, text.data(), static_cast<int>(text.size()), result.data(), count);
     return result;
 }
 
@@ -116,6 +128,17 @@ std::filesystem::path tar_path() {
     return std::filesystem::path(system_dir) / L"tar.exe";
 }
 
+std::filesystem::path create_staging_directory() {
+    wchar_t temp_name[MAX_PATH]{};
+    wchar_t temp_path[MAX_PATH]{};
+    const DWORD temp_length = GetTempPathW(static_cast<DWORD>(std::size(temp_path)), temp_path);
+    if (temp_length == 0 || temp_length >= std::size(temp_path)) return {};
+    if (GetTempFileNameW(temp_path, L"ICZ", 0, temp_name) == 0) return {};
+    DeleteFileW(temp_name);
+    if (!CreateDirectoryW(temp_name, nullptr)) return {};
+    return std::filesystem::path(temp_name);
+}
+
 bool is_dangerous_clean_path(const std::filesystem::path& path) {
     const auto absolute = std::filesystem::absolute(path).lexically_normal();
     return absolute.empty() || absolute == absolute.root_path();
@@ -127,7 +150,7 @@ std::shared_ptr<ZipTask> find_task(int32_t task_id) {
     return it == g_tasks.end() ? nullptr : it->second;
 }
 
-bool run_process(const std::shared_ptr<ZipTask>& task, std::wstring command_line) {
+bool run_process(const std::shared_ptr<ZipTask>& task, std::wstring command_line, std::string* captured_output = nullptr) {
     SECURITY_ATTRIBUTES security{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
     HANDLE read_pipe = nullptr;
     HANDLE write_pipe = nullptr;
@@ -182,6 +205,7 @@ bool run_process(const std::shared_ptr<ZipTask>& task, std::wstring command_line
         if (task->cancel_requested.load()) TerminateProcess(process_info.hProcess, ERROR_CANCELLED);
     }
     CloseHandle(read_pipe);
+    if (captured_output) *captured_output = output;
     WaitForSingleObject(process_info.hProcess, INFINITE);
 
     DWORD exit_code = 1;
@@ -270,6 +294,15 @@ int32_t unicode_zip_extract_async(std::string_view archive_path, std::string_vie
             task->error = "ZIP archive does not exist: " + wide_to_utf8(archive.wstring());
             return false;
         }
+        const auto archive_size = std::filesystem::file_size(archive, error);
+        if (error) {
+            task->error = "Failed to inspect ZIP archive size: " + error.message();
+            return false;
+        }
+        if (archive_size > kMaxArchiveBytes) {
+            task->error = "ZIP archive size exceeds the 1 GiB limit.";
+            return false;
+        }
         if (clean_output) {
             if (is_dangerous_clean_path(output)) {
                 task->error = "Refusing to clean a filesystem root directory.";
@@ -287,11 +320,54 @@ int32_t unicode_zip_extract_async(std::string_view archive_path, std::string_vie
             return false;
         }
 
+        // Windows tar.exe can mishandle non-ASCII command-line paths even when
+        // the archive itself contains valid UTF-8 entry names. Keep tar's input
+        // and output paths ASCII, then move the extracted tree with filesystem's
+        // UTF-16 APIs so both archive paths and entry paths remain Unicode-safe.
+        const auto staging = create_staging_directory();
+        if (staging.empty()) {
+            task->error = "Failed to create a temporary ZIP staging directory.";
+            return false;
+        }
+        const auto staged_archive = staging / L"archive.zip";
+        const auto staged_output = staging / L"out";
+        auto cleanup_staging = [&]() {
+            std::error_code cleanup_error;
+            std::filesystem::remove_all(staging, cleanup_error);
+        };
+        std::filesystem::copy_file(archive, staged_archive, std::filesystem::copy_options::overwrite_existing, error);
+        if (error) {
+            task->error = "Failed to stage ZIP archive: " + error.message();
+            cleanup_staging();
+            return false;
+        }
+        std::filesystem::create_directories(staged_output, error);
+        if (error) {
+            task->error = "Failed to create temporary ZIP output: " + error.message();
+            cleanup_staging();
+            return false;
+        }
+
         // Many community ZIP charts store legacy Chinese names as CP936 without
-        // the UTF-8 flag. libarchive still honours explicitly flagged UTF-8 names.
-        std::wstring command = quote_arg(tar.wstring()) + L" --options hdrcharset=CP936 -xf " + quote_arg(archive.wstring()) + L" -C " + quote_arg(output.wstring());
-        if (!overwrite) command += L" -k";
-        return run_process(task, std::move(command));
+        // the UTF-8 flag. Explicitly flagged UTF-8 names remain UTF-8.
+        std::wstring command = quote_arg(tar.wstring()) + L" --options hdrcharset=CP936 -xf "
+            + quote_arg(staged_archive.wstring()) + L" -C " + quote_arg(staged_output.wstring());
+        if (!run_process(task, std::move(command))) {
+            cleanup_staging();
+            return false;
+        }
+
+        const auto copy_options = overwrite
+            ? std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing
+            : std::filesystem::copy_options::recursive | std::filesystem::copy_options::skip_existing;
+        std::filesystem::copy(staged_output, output, copy_options, error);
+        if (error) {
+            task->error = "Failed to move extracted Unicode files: " + error.message();
+            cleanup_staging();
+            return false;
+        }
+        cleanup_staging();
+        return true;
     });
 }
 

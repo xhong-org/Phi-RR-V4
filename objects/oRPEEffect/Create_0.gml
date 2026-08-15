@@ -31,6 +31,29 @@ if (os_type == os_windows && external_extension_found) {
 };
 
 var external_lists = [effects_local, effects_global];
+var external_uniforms_parse = function(source) {
+	var result = {};
+	var source_lines = string_split(source, "\n");
+	for (var source_line_i = 0; source_line_i < array_length(source_lines); source_line_i++) {
+		var source_line = string_trim(source_lines[source_line_i]);
+		if (string_pos("uniform ", source_line) != 1) then continue;
+		var declaration = string_replace_all(source_line, ";", "");
+		var declaration_parts_raw = string_split(declaration, " ");
+		var declaration_parts = [];
+		for (var declaration_part_i = 0; declaration_part_i < array_length(declaration_parts_raw); declaration_part_i++) {
+			var declaration_part = string_trim(declaration_parts_raw[declaration_part_i]);
+			if (string_length(declaration_part)) then array_add(declaration_parts, declaration_part);
+		};
+		if (array_length(declaration_parts) < 3) then continue;
+		var uniform_type = string_trim(declaration_parts[1]);
+		var uniform_name = string_trim(declaration_parts[2]);
+		if (!string_length(uniform_name)) then continue;
+		if (uniform_type == "sampler2D") then continue;
+		var component_count = (uniform_type == "vec2" ? 2 : (uniform_type == "vec4" ? 4 : 1));
+		result[$ uniform_name] = component_count;
+	};
+	return result;
+};
 var external_pass_count = 0;
 for (var external_list_i = 0; external_list_i < array_length(external_lists); external_list_i++) {
 	var external_list = external_lists[external_list_i];
@@ -41,6 +64,7 @@ for (var external_list_i = 0; external_list_i < array_length(external_lists); ex
 		if (!external_is_hlsl && !external_is_glsl) then continue;
 		external_pass_count++;
 		external_pass.externalHandle = -1;
+		external_pass.externalUniforms = {};
 		if (!external_hlsl_ready) {
 			print($"[RPE Effect] External pass skipped; backend unavailable: {external_pass.shaderName}");
 			continue;
@@ -64,6 +88,7 @@ for (var external_list_i = 0; external_list_i < array_length(external_lists); ex
 		while (!file_text_eof(external_file)) external_source += file_text_readln(external_file) + "\n";
 		file_text_close(external_file);
 		if (external_is_glsl) {
+			external_pass.externalUniforms = external_uniforms_parse(external_source);
 			external_source = rpe_glsl_translate(external_source, external_relative);
 			if (!string_length(external_source)) {
 				print($"[RPE Effect] GLSL translation failed ({external_relative}): {rpe_hlsl_get_error()}");
@@ -131,9 +156,12 @@ effect_render = function(effect_list) {
 	draw_set_alpha(1);
 	gpu_push_state();
 	gpu_set_blendmode_ext(bm_one, bm_zero);
+	// Finish the caller's batch before changing the render target.
+	draw_flush();
 	surface_set_target(fx_ping);
 	draw_clear_alpha(c_black, 0);
 	draw_surface(application_surface, 0, 0);
+	draw_flush();
 	surface_reset_target();
 
 	var source_surface = fx_ping;
@@ -143,12 +171,21 @@ effect_render = function(effect_list) {
 		if (bool(pass[$ "externalHlsl"] ?? false) || bool(pass[$ "externalGlsl"] ?? false)) {
 			var external_handle = real(pass[$ "externalHandle"] ?? -1);
 			if (external_handle <= 0) then continue;
+			draw_flush();
 			surface_set_target(target_surface);
 			draw_clear_alpha(c_black, 0);
-			var external_uniform_total = 3;
-			var external_uniform_success = bool(rpe_hlsl_set_uniform_component(external_handle, "time", 0, chart_time));
-			external_uniform_success += bool(rpe_hlsl_set_uniform_component(external_handle, "screenSize", 0, surface_get_width(source_surface)));
-			external_uniform_success += bool(rpe_hlsl_set_uniform_component(external_handle, "screenSize", 1, surface_get_height(source_surface)));
+			var external_uniforms = pass.externalUniforms;
+			var external_uniform_total = 0;
+			var external_uniform_success = 0;
+			if (struct_exists(external_uniforms, "time")) {
+				external_uniform_total++;
+				external_uniform_success += bool(rpe_hlsl_set_uniform_component(external_handle, "time", 0, chart_time));
+			};
+			if (struct_exists(external_uniforms, "screenSize")) {
+				external_uniform_total += 2;
+				external_uniform_success += bool(rpe_hlsl_set_uniform_component(external_handle, "screenSize", 0, surface_get_width(source_surface)));
+				external_uniform_success += bool(rpe_hlsl_set_uniform_component(external_handle, "screenSize", 1, surface_get_height(source_surface)));
+			};
 			var external_names = struct_get_names(pass.vars);
 			var external_sampled_values = {};
 			for (var external_var_i = 0; external_var_i < array_length(external_names); external_var_i++) {
@@ -156,6 +193,7 @@ effect_render = function(effect_list) {
 				var external_animation = pass.vars[$ external_name];
 				var external_value = rpe_effect_sample_anim(external_animation, chart_time);
 				external_sampled_values[$ external_name] = external_value;
+				if (!struct_exists(external_uniforms, external_name)) then continue;
 				if (external_animation.kind == 1) {
 					external_uniform_total++;
 					external_uniform_success += bool(rpe_hlsl_set_uniform_component(external_handle, external_name, 0, external_value));
@@ -173,11 +211,23 @@ effect_render = function(effect_list) {
 			};
 			draw_surface(source_surface, 0, 0);
 			draw_flush();
+			// Set uniforms before begin: begin uploads the native constant buffer.
+			// Setting them afterward leaves the GPU with the previous pass values.
+			var external_begin_status = rpe_hlsl_begin(external_handle);
+			if (external_begin_status < 0) {
+				if (!struct_exists(external_draw_logged, pass.shaderName)) {
+					print($"[RPE Effect] External begin failed: shader={pass.shaderName}, status={external_begin_status}, error={rpe_hlsl_get_error()}");
+					external_draw_logged[$ pass.shaderName] = true;
+				};
+				surface_reset_target();
+				continue;
+			};
 			var external_uvs = texture_get_uvs(surface_get_texture(source_surface));
 			var external_draw_status = rpe_hlsl_draw(external_handle,
 				external_uvs[0], external_uvs[1], external_uvs[2], external_uvs[3]);
+			var external_end_status = rpe_hlsl_end();
 			if (!struct_exists(external_draw_logged, pass.shaderName)) {
-				print($"[RPE Effect] External direct draw: shader={pass.shaderName}, status={external_draw_status}, uniforms={external_uniform_success}/{external_uniform_total}, time={chart_time}, vars={json_stringify(external_sampled_values)}, surface={surface_get_width(source_surface)}x{surface_get_height(source_surface)}, target={rpe_hlsl_target_width()}x{rpe_hlsl_target_height()}, uv={external_uvs[0]},{external_uvs[1]},{external_uvs[2]},{external_uvs[3]}");
+				print($"[RPE Effect] External direct draw: shader={pass.shaderName}, begin={external_begin_status}, draw={external_draw_status}, end={external_end_status}, uniforms={external_uniform_success}/{external_uniform_total}, time={chart_time}, vars={json_stringify(external_sampled_values)}, surface={surface_get_width(source_surface)}x{surface_get_height(source_surface)}, target={rpe_hlsl_target_width()}x{rpe_hlsl_target_height()}, uv={external_uvs[0]},{external_uvs[1]},{external_uvs[2]},{external_uvs[3]}");
 				external_draw_logged[$ pass.shaderName] = true;
 			};
 			surface_reset_target();
@@ -188,6 +238,7 @@ effect_render = function(effect_list) {
 		};
 		var pass_shader = rpe_effect_shader_asset(pass.shaderName);
 		if (pass_shader == -1 || !shader_is_compiled(pass_shader)) then continue;
+		draw_flush();
 		surface_set_target(target_surface);
 		draw_clear_alpha(c_black, 0);
 		shader_set(pass_shader);
@@ -206,6 +257,8 @@ effect_render = function(effect_list) {
 			else if (animation.kind == 4) then shader_set_uniform_f(handle, value[0], value[1], value[2], value[3]);
 		};
 		draw_surface(source_surface, 0, 0);
+		// Submit while the intended shader and target are still active.
+		draw_flush();
 		shader_reset();
 		surface_reset_target();
 		var swap_surface = source_surface;
@@ -213,6 +266,8 @@ effect_render = function(effect_list) {
 		target_surface = swap_surface;
 	};
 	draw_surface(source_surface, 0, 0);
+	draw_flush();
+	shader_reset();
 	gpu_pop_state();
 	draw_set_colour(previous_colour);
 	draw_set_alpha(previous_alpha);

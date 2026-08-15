@@ -47,6 +47,11 @@ if (chart_session_has_track()) {
 };
 game_2 = (new PEC());
 
+// Clear the previous chart before PEC runtime creation schedules its notes.
+if (variable_global_exists("render_mode") && global.render_mode) {
+	global.render_hitsounds = [];
+};
+
 instance_create_depth(0,0,0,oBG);
 instance_create_depth(0,0,0,oMedia , { "name" : (string_length(game.folder_chart.music) ? (InChartPath + game.folder_chart.music) : "") });
 
@@ -80,7 +85,22 @@ chart_exit_started = false;
 chart_exit_timer = 0;
 chart_exit_alpha = 1;
 chart_exit_queued = false;
-font_scales = clamp(0.6*((room_width/2)/(string_width(string(game.folder_chart.name))*0.6+40)), 0.2, 0.55);
+play_transition_active = false;
+play_transition_pause_y = 0;
+play_transition_name_y = 0;
+play_transition_level_y = 0;
+play_transition_score_y = 0;
+play_transition_ui_alpha = 1;
+play_transition_bar_alpha = 1;
+play_transition_bg_alpha = 1;
+draw_set_font(game.font);
+var _ui_font_size = max(1, font_get_size(draw_get_font()));
+var _ui_name_width = max(1, string_width(string(game.folder_chart.name)));
+// font_scales is the pre-global-scales factor; draw code applies the window
+// scale once, just like the other HUD elements.
+var _ui_reference_scale = (47 / _ui_font_size);
+var _ui_fit_scale = (((room_width / 2) - (80 * global_scales)) / _ui_name_width) / max(0.000001, global_scales);
+font_scales = clamp(min(_ui_reference_scale, _ui_fit_scale), 0.2, 0.55);
 
 _draw_user_count = 0;
 _draw_fps_user_count = 0;
@@ -94,7 +114,8 @@ event_user(2);
 print($"Usage Times: {(get_timer() - time) / 1000}ms");
 
 if (variable_global_exists("render_mode") && global.render_mode) {
-	instance_create_depth(0, 0, -2000000000, oVideoRenderer);
-} else {
-	alarm[0] = 300;
+	instance_create_depth(0, 0, -9999999, oVideoRenderer);
+};
+if (!instance_exists(oPlayTransition)) {
+	instance_create_depth(0, 0, -999999, oPlayTransition, { owner:id });
 };

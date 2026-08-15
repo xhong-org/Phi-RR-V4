@@ -17,6 +17,7 @@ Optional arguments:
 -fps <1..240>          Output frame rate (default: 60)
 -resolution <label>    Output size: native, 720p, 1080p, 2k, or 4k
 -res <label>           Short alias for -resolution
+-ar <width:height>     Output aspect ratio (default: 16:9)
 -crf <0..51>           H.264 quality; lower is better/larger (default: 18)
 -preset <name>         H.264 speed/compression preset (default: medium)
 -encoder <name>        auto, nvenc, amf, qsv, or x264 (default: auto)
@@ -98,7 +99,14 @@ Common quality examples:
 Supported presets are `ultrafast`, `superfast`, `veryfast`, `faster`, `fast`,
 `medium`, `slow`, `slower`, and `veryslow`.
 
-Resolution labels:
+Resolution labels select the output height. The width is calculated from `-ar`
+and rounded to the nearest even number for H.264 encoder compatibility. The
+default aspect ratio is `16:9`, so omitting `-ar` preserves the original output
+sizes. `-ar` accepts any positive numeric `width:height` pair, such as `4:3`,
+`1:1`, `9:16`, or `21:9`. Invalid values produce a warning and fall back to
+`16:9`. The order of `-ar` and `-resolution`/`-res` does not affect the result.
+
+Resolution labels at the default `16:9` ratio:
 
 ```text
 native   1366x768
@@ -108,8 +116,25 @@ native   1366x768
 4k       3840x2160 (2160p is also accepted)
 ```
 
+Common `1080p` aspect-ratio outputs:
+
+```text
+16:9     1920x1080
+4:3      1440x1080
+1:1      1080x1080
+9:16      608x1080 (rounded from 607.5 to an even width)
+21:9     2520x1080
+```
+
+The interactive render settings screen provides `16:9`, `4:3`, `1:1`, and
+`9:16` presets. Click the Size value to cycle through them. Command-line
+rendering is not limited to these presets.
+
 Example:
 
 ```powershell
 .\pcr.exe -render "D:\Charts\MyChart.zip" -output "D:\Videos\MyChart-4K.mp4" -resolution 4k -fps 60 -crf 18 -preset slow
+
+# Vertical 1080p render (608x1080)
+.\pcr.exe -render "D:\Charts\MyChart.zip" -output "D:\Videos\MyChart-Vertical.mp4" -res 1080p -ar 9:16
 ```

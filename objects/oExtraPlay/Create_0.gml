@@ -107,6 +107,22 @@ if (is_struct(extra)) {
 		array_sort(result.events, function(a, b) { return sign(a.startTime - b.startTime); });
 		return result;
 	};
+	extra_video_scale = function(raw) {
+		var mode = string_lower(string(raw ?? "cropCenter"));
+		if (mode == "fit") then return "fit";
+		if (mode == "inside") then return "inside";
+		return "cropCenter";
+	};
+	extra_video_attach = function(raw) {
+		if (!is_struct(raw)) then return undefined;
+		var line_id = floor(real(raw[$ "line"] ?? -1));
+		if (line_id < 0) then return undefined;
+		return {
+			line: line_id,
+			scale_x: (real(raw[$ "scaleXMode"] ?? 0) != 0),
+			scale_y: (real(raw[$ "scaleYMode"] ?? 0) != 0)
+		};
+	};
 	sample_anim = function(anim, chart_time) {
 		if (anim.fixed || !is_array(anim.events) || array_length(anim.events) <= 0) then return anim.value;
 		var sampled = anim.value;
@@ -131,10 +147,12 @@ if (is_struct(extra)) {
 		array_add(videos, {
 			path: chart_path_join(extra_root, relative_path),
 			startTime: extra_beat_to_second(extra_beat_value(source[$ "time"], 0)),
-			scale: string(source[$ "scale"] ?? "cropCenter"),
+			scale: extra_video_scale(source[$ "scale"] ?? "cropCenter"),
+			zIndex: (is_real(source[$ "zIndex"] ?? undefined) ? real(source[$ "zIndex"]) : undefined),
+			attach: extra_video_attach(source[$ "attach"] ?? undefined),
 			alpha: extra_parse_anim(source[$ "alpha"], 1),
 			dim: extra_parse_anim(source[$ "dim"], 0)
-		});
+	});
 	};
 	array_sort(videos, function(a, b) { return sign(a.startTime - b.startTime); });
 	var parsed_effects = rpe_effect_parse(extra, extra_bpm_points);
@@ -148,4 +166,43 @@ if (is_struct(extra)) {
 
 for (var video_end_i = 0; video_end_i < array_length(videos); video_end_i++) {
 	videos[video_end_i].endTime = (video_end_i + 1 < array_length(videos) ? videos[video_end_i + 1].startTime : infinity);
+};
+
+video_attached_to_line = function(line_instance) {
+	if (!instance_exists(line_instance) || video_index < 0 || video_handle < 0) then return false;
+	var active_video = videos[video_index];
+	return is_struct(active_video.attach) && active_video.attach.line == line_instance.line_id;
+};
+
+draw_attached_video = function(line_instance) {
+	if (video_index < 0 || video_handle < 0 || !instance_exists(line_instance)) then return;
+	var video = videos[video_index];
+	if (!is_struct(video.attach) || video.attach.line != line_instance.line_id) then return;
+	var status = ffvideos_get_status(video_handle);
+	// Render mode prepares an exact frame without entering Playing/Paused.
+	// Ended is also valid here because the decoder can retain the prepared
+	// final frame; only states without a drawable frame are rejected.
+	if (status == FFVideosStatus.Error || status == FFVideosStatus.Closed
+		|| status == FFVideosStatus.Preparing) then return;
+	var video_width = ffvideos_get_width(video_handle);
+	var video_height = ffvideos_get_height(video_handle);
+	if (video_width <= 0 || video_height <= 0) then return;
+
+	var sx = room_width / video_width;
+	var sy = room_height / video_height;
+	var draw_sx = (video.scale == "fit" ? sx : (video.scale == "inside" ? min(sx, sy) : max(sx, sy)));
+	var draw_sy = (video.scale == "fit" ? sy : draw_sx);
+	if (video.attach.scale_x) then draw_sx *= max(0, real(line_instance.__scale_x));
+	if (video.attach.scale_y) then draw_sy *= max(0, real(line_instance.__scale_y));
+	var draw_width = video_width * draw_sx;
+	var draw_height = video_height * draw_sy;
+	var draw_x = line_instance.x - draw_width * 0.5;
+	var draw_y = line_instance.y - draw_height * 0.5;
+	var alpha = clamp(real(video.alpha.value), 0, 1);
+	var dim = clamp(real(video.dim.value), 0, 1);
+	draw_flush();
+	ffvideos_draw(video_handle,
+		draw_x / room_width, draw_y / room_height,
+		(draw_x + draw_width) / room_width, (draw_y + draw_height) / room_height,
+		alpha, dim);
 };

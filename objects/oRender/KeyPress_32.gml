@@ -1,4 +1,5 @@
 /// @description 
+if (variable_global_exists("render_mode") && global.render_mode) exit;
 if (chart_exit_started) then exit;
 // The pause overlay resumes through its countdown. Do not let the same
 // key event run a second resume/ptime compensation during that transition.
@@ -20,6 +21,4 @@ if(game.__time[0] > 0){
 	};
 	
 	game.paused = (!(game.paused));
-}else{
-	alarm[0] = 1;	
 };

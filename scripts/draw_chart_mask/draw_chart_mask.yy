@@ -1,12 +1,12 @@
 {
   "$GMScript":"v1",
-  "%Name":"ChartSession",
+  "%Name":"draw_chart_mask",
   "isCompatibility":false,
   "isDnD":false,
-  "name":"ChartSession",
+  "name":"draw_chart_mask",
   "parent":{
-    "name":"Chart",
-    "path":"folders/Other/Chart.yy",
+    "name":"Tools",
+    "path":"folders/Other/Tools.yy",
   },
   "resourceType":"GMScript",
   "resourceVersion":"2.0",

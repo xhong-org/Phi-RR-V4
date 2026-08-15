@@ -1,4 +1,5 @@
 /// @description Pause or resume PEC playback.
+if (variable_global_exists("render_mode") && global.render_mode) exit;
 if (chart_exit_started) then exit;
 // The pause overlay owns the delayed resume transition.
 if (instance_exists(oPausedUI)) {

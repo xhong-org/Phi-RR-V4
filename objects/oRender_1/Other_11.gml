@@ -5,6 +5,8 @@
 // offX/offY are center-relative (line.xy - room center), PCR-aligned.
 // Final HUD pos = default_layout + offset.
 var ui_fade = (variable_instance_exists(id, "chart_exit_alpha") ? chart_exit_alpha : 1);
+var _transition_active = play_transition_active;
+var _transition_bar_alpha = (_transition_active ? play_transition_bar_alpha : 1);
 
 var _ui_name = game.folder_chart.name;
 var _ui_level = game.folder_chart.level;
@@ -27,6 +29,14 @@ var u_level = [room_width - (40 * global_scales), room_height - (10 * global_sca
 var u_score = [room_width - (40 * global_scales), 70 * global_scales, image_blend, ui_fade, 0, 0.75 * global_scales, 0.75 * global_scales];
 var u_pause = [50 * global_scales, 50 * global_scales, c_white, ui_fade, 0, 0.8 * global_scales, 0.8 * global_scales];
 var u_bar = [0, 0, image_blend, ui_fade, 0, 1, 1];
+
+if (_transition_active) {
+	if (!play_transition_bound_ui.name) then u_name[@ 1] += play_transition_name_y;
+	if (!play_transition_bound_ui.level) then u_level[@ 1] += play_transition_level_y;
+	if (!play_transition_bound_ui.score) then u_score[@ 1] += play_transition_score_y;
+	if (!play_transition_bound_ui.pause) then u_pause[@ 1] += play_transition_pause_y;
+	if (!play_transition_bound_ui.bar) then u_bar[@ 3] *= _transition_bar_alpha;
+};
 
 // apply attached slots: offset from center, not hard absolute line xy
 if (variable_instance_exists(id, "bindUI") && is_struct(bindUI)

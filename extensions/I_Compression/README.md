@@ -18,6 +18,7 @@ Arguments:
 - Both start functions return a positive task ID, or `-1` on immediate failure.
 - `clean_output=true` deletes and recreates the extraction directory on the worker thread.
 - `include_root=false` stores the contents of a source directory, not the source directory itself.
+- Extraction is limited by the ZIP file's on-disk size: archives larger than 1 GiB fail before the output directory is changed. The decompressed size is not limited.
 
 Poll tasks once per Step event:
 

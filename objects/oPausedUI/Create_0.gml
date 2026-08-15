@@ -24,6 +24,10 @@ button_sprite = [spr_back, spr_retry, spr_resume];
 button_hover = [false, false, false];
 
 function paused_ui_can_control() {
+	if (instance_exists(oPlayTransition) && !retry_waiting) {
+		var _transition = instance_find(oPlayTransition, 0);
+		if (_transition.state != PLAY_TRANSITION_STATE.PLAYING) then return false;
+	};
         return !(variable_global_exists("render_mode") && global.render_mode)
                 && instance_exists(owner)
                 && variable_global_exists("game") && is_struct(game)
@@ -89,8 +93,8 @@ function paused_ui_back() {
         game.paused = true;
         m_pause();
         owner.chart_exit_started = true;
-        owner.chart_exit_timer = get_timer() - 500000;
-        owner.chart_exit_alpha = 0;
+        owner.chart_exit_timer = get_timer();
+        owner.chart_exit_alpha = 1;
 }
 
 function paused_ui_reset_score() {
@@ -185,17 +189,44 @@ function paused_ui_reset_rpe() {
                 for (var ext_i = 0; ext_i < array_length(ext_names); ext_i++) {
                         ext_count[$ ext_names[ext_i]] = 0;
                 };
+                for (var event_layer_i = 0; event_layer_i < array_length(events_hold); event_layer_i++) {
+                        var event_layer_hold = events_hold[event_layer_i];
+                        if (!is_struct(event_layer_hold) || !is_struct(events_recall[event_layer_i])) then continue;
+                        var event_layer_hold_names = struct_get_names(event_layer_hold);
+                        for (var event_layer_hold_i = 0; event_layer_hold_i < array_length(event_layer_hold_names); event_layer_hold_i++) {
+                                var event_name = event_layer_hold_names[event_layer_hold_i];
+                                var event_values = events[event_layer_i][$ event_name];
+                                if (is_array(event_values) && array_length(event_values) > 0) {
+                                        event_layer_hold[$ event_name] = event_values[0].start;
+                                        events_recall[event_layer_i][$ event_name] = event_values[0].start;
+                                };
+                        };
+                };
+                var ext_hold_names = struct_get_names(ext_hold);
+                for (var ext_hold_i = 0; ext_hold_i < array_length(ext_hold_names); ext_hold_i++) {
+                        var ext_hold_name = ext_hold_names[ext_hold_i];
+                        if (is_array(extEvents[$ ext_hold_name]) && array_length(extEvents[$ ext_hold_name]) > 0) {
+                                ext_hold[$ ext_hold_name] = extEvents[$ ext_hold_name][0].start;
+                                ext_recall[$ ext_hold_name] = extEvents[$ ext_hold_name][0].start;
+                        };
+                };
                 speed_event_index = 0;
                 line_time = 0; line_sec = 0;
                 __raw_x = 0; __raw_y = 0; __raw_r = 0; __raw_a = 0;
                 __x = 0; __y = 0; __a = 0; __r = 0;
                 __cos = 1; __sin = 0;
                 __value[0] = 0; __value[1] = 0;
+                __scale_x = 1; __scale_y = 1;
+                __incline = 0; __incline_sin = 0;
+                __paint_radius = -1; __gif_progress = 0;
+                __color = c_white; line_text = "";
+                line_text_font = game.font;
+                image_blend = c_white; image_alpha = 1;
                 paint_has_content = false;
                 paint_last_valid = false;
                 paint_last_time = -infinity;
         };
-        with (oNote_1) {
+        with (oNote_1) { // TODO: Retry之后部分音符变滚木,等会修)))))))
                 canDraw = false;
                 isHold = false;
                 notJudge = true;
@@ -213,7 +244,13 @@ function paused_ui_reset_rpe() {
                 _control_position_speed = 0;
                 outside = false;
                 __first__ = false;
+                rpe_control_cursors = [0, 0, 0, 0];
+                _pause_lock_active = false;
                 image_alpha = alpha;
+                image_blend = note_tint;
+                image_xscale = (global_scales / 6) * size;
+                image_yscale = bool(game.settings.noteUniformScale ?? false) ? image_xscale : (global_scales / 6);
+                yscale = 0;
                 if (_is_hold) {
                         _bak_time = 0;
                         _hx0 = 0; _hy0 = 0; _hx1 = 0; _hy1 = 0; _hx2 = 0; _hy2 = 0;
@@ -231,7 +268,40 @@ function paused_ui_reset_rpe() {
                                 if (is_struct(record)) then record.activated = false;
                         };
                 };
-                if (bool(game_1._note_activation_enabled ?? false)) then instance_deactivate_object(oNote_1);
+                // Hold spatial queries remove activated entries by swapping them
+                // out of the active prefix. Rebuild that prefix for a retry.
+                if (is_array(game_1._note_spatial_hold_groups)) {
+                        for (var hold_group_i = 0; hold_group_i < array_length(game_1._note_spatial_hold_groups); hold_group_i++) {
+                                var hold_group = game_1._note_spatial_hold_groups[hold_group_i];
+                                if (!is_struct(hold_group) || !is_array(hold_group.notes)) then continue;
+                                if (is_array(hold_group.originalNotes)) {
+                                        hold_group.count = array_length(hold_group.originalNotes);
+                                        hold_group.notes = array_create(hold_group.count);
+                                        array_copy(hold_group.notes, 0, hold_group.originalNotes, 0, hold_group.count);
+                                } else {
+                                        hold_group.count = array_length(hold_group.notes);
+                                };
+                                for (var hold_note_i = 0; hold_note_i < hold_group.count; hold_note_i++) {
+                                        var hold_record = hold_group.notes[hold_note_i];
+                                        if (is_struct(hold_record)) then hold_record.activated = false;
+                                };
+                        };
+                };
+                if (bool(game_1._note_activation_enabled ?? false) && is_array(game_1._notes)) {
+                        for (var activation_i = 0; activation_i < array_length(game_1._notes); activation_i++) {
+                                var activation_note = game_1._notes[activation_i];
+                                if (!is_struct(activation_note)) then continue;
+                                if (bool(activation_note.alwaysActive ?? false)) {
+                                        var activation_key = string(activation_note.id);
+                                        if (is_struct(game_1._note_activation_records)
+                                                && struct_exists(game_1._note_activation_records, activation_key)) {
+                                                game_1._note_activation_records[$ activation_key].activated = true;
+                                        };
+                                } else {
+                                        instance_deactivate_object(activation_note.id);
+                                };
+                        };
+                };
         };
         with (oExtraPlay) {
                 if (video_handle >= 0) then ffvideos_close(video_handle);

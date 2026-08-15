@@ -1,5 +1,5 @@
 /// @description 
-
+if(!isDraw) then exit;
 // 
 
 var time_offset = max((((get_timer() - _timer) / 1000000) * 60), 1);

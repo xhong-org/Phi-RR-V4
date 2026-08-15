@@ -91,7 +91,32 @@ line_image = line;
 gif_data = undefined;
 if (has_gif_events && is_string(image) && string_length(image)) {
 	if (!struct_exists(game_1, "Gif") || !is_struct(game_1.Gif)) then game_1.Gif = {};
-	if (!struct_exists(game_1.Gif, image)) {
+	var gif_cache_valid = false;
+	if (struct_exists(game_1.Gif, image)) {
+		var cached_gif = game_1.Gif[$ image];
+		gif_cache_valid = is_struct(cached_gif)
+			&& is_array(cached_gif.frames) && array_length(cached_gif.frames) > 0
+			&& is_array(cached_gif.delays)
+			&& array_length(cached_gif.delays) == array_length(cached_gif.frames)
+			&& real(cached_gif.total) > 0;
+		if (gif_cache_valid) {
+			for (var gif_cache_i = 0; gif_cache_i < array_length(cached_gif.frames); gif_cache_i++) {
+				if (!sprite_exists(cached_gif.frames[gif_cache_i])) {
+					gif_cache_valid = false;
+					break;
+				};
+			};
+		};
+		if (!gif_cache_valid) {
+			if (is_struct(cached_gif) && is_array(cached_gif.frames)) {
+				for (var gif_stale_i = 0; gif_stale_i < array_length(cached_gif.frames); gif_stale_i++) {
+					if (sprite_exists(cached_gif.frames[gif_stale_i])) then sprite_delete(cached_gif.frames[gif_stale_i]);
+				};
+			};
+			struct_remove(game_1.Gif, image);
+		};
+	};
+	if (!gif_cache_valid) {
 		var gif_frame_delays_raw = [];
 		var gif_frame_sprites = [];
 		var gif_last_sprite = sprite_add_gif(InChartPath + image, 0, 0, gif_frame_delays_raw, gif_frame_sprites);
@@ -118,14 +143,14 @@ if (has_gif_events && is_string(image) && string_length(image)) {
 	if (is_struct(gif_data) && is_array(gif_data.frames) && array_length(gif_data.frames) > 0
 		&& sprite_exists(gif_data.frames[0])) then line_image = gif_data.frames[0];
 } else if (is_string(image) && string_length(image) && image != "line.png") {
-        var tex_path = InChartPath + image;
+		var tex_path = InChartPath + image;
         if (file_exists(tex_path)) {
                 if (variable_global_exists("game_1") && is_struct(game_1)) {
                         if (!struct_exists(game_1, "Texture") || !is_struct(game_1.Texture)) then game_1.Texture = {};
                         if (!struct_exists(game_1.Texture, image) || !sprite_exists(game_1.Texture[$ image])) {
-                                var spr = sprite_add(tex_path, 0, false, false, 0, 0);
-                                if (sprite_exists(spr)) {
-                                        sprite_set_offset(spr, sprite_get_width(spr) / 2, sprite_get_height(spr) / 2);
+					var spr = sprite_add(tex_path, 0, false, false, 0, 0);
+					if (sprite_exists(spr)) {
+						sprite_set_offset(spr, sprite_get_width(spr) / 2, sprite_get_height(spr) / 2);
                                         game_1.Texture[$ image] = spr;
                                 };
                         };

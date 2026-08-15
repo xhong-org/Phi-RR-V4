@@ -28,6 +28,9 @@ fpsReal = 0;
 show_debug_message("[oRender_1] Creating RPE state");
 game_1 = (new RPE());
 show_debug_message("[oRender_1] RPE state created");
+if (variable_global_exists("render_mode") && global.render_mode) {
+	global.render_hitsounds = [];
+};
 if (!is_struct(game_1.chart_info)) then game_1.chart_info = { name:"", level:"", offset:0, meta_offset:0, info_offset:0, song:"", background:"" };
 
 var _chart_rel = "";
@@ -89,7 +92,10 @@ for (var _spatial_i = 0; _spatial_i < _spatial_group_count; _spatial_i++) {
 var _hold_groups = game_1._note_spatial_hold_groups;
 var _hold_group_count = array_length(_hold_groups);
 for (var _hold_group_i = 0; _hold_group_i < _hold_group_count; _hold_group_i++) {
-	_hold_groups[_hold_group_i].count = array_length(_hold_groups[_hold_group_i].notes);
+	var _hold_group = _hold_groups[_hold_group_i];
+	_hold_group.count = array_length(_hold_group.notes);
+	_hold_group.originalNotes = array_create(_hold_group.count);
+	array_copy(_hold_group.originalNotes, 0, _hold_group.notes, 0, _hold_group.count);
 };
 // Expose created RPE lines for note binding later.
 if (!struct_exists(game_1, "line_list") || !is_array(game_1.line_list)) {
@@ -137,6 +143,18 @@ bindUI_attached = {
 	"name" : false,
 	"level" : false
 };
+play_transition_bound_ui = {
+	"pause" : false,
+	"combonumber" : false,
+	"combo" : false,
+	"score" : false,
+	"bar" : false,
+	"name" : false,
+	"level" : false
+};
+with (oLine_1) {
+	if (is_attach_ui && instance_exists(other.id)) then other.play_transition_bound_ui[$ attach_ui_key] = true;
+};
 
 // UI draw prep (mirrors oRender)
 draw_set_font(game.font);
@@ -145,7 +163,13 @@ if ((!is_string(_ui_name_w) || !string_length(_ui_name_w))
 	&& is_struct(game_1.chart_info) && is_string(game_1.chart_info.name)) {
 	_ui_name_w = game_1.chart_info.name;
 };
-font_scales = clamp(0.6 * ((room_width / 2) / (string_width(string(_ui_name_w)) * 0.6 + 40)), 0.2, 0.55);
+var _ui_font_size = max(1, font_get_size(draw_get_font()));
+var _ui_name_width = max(1, string_width(string(_ui_name_w)));
+// font_scales is the pre-global-scales factor; draw code applies the window
+// scale once, just like the other HUD elements.
+var _ui_reference_scale = (47 / _ui_font_size);
+var _ui_fit_scale = (((room_width / 2) - (80 * global_scales)) / _ui_name_width) / max(0.000001, global_scales);
+font_scales = clamp(min(_ui_reference_scale, _ui_fit_scale), 0.2, 0.55);
 bak_str_combo = (game.settings.comboString);
 image_blend = c_white;
 
@@ -160,11 +184,20 @@ chart_exit_started = false;
 chart_exit_timer = 0;
 chart_exit_alpha = 1;
 chart_exit_queued = false;
+play_transition_active = false;
+play_transition_pause_y = 0;
+play_transition_name_y = 0;
+play_transition_level_y = 0;
+play_transition_score_y = 0;
+play_transition_ui_alpha = 1;
+play_transition_bar_alpha = 1;
+play_transition_bg_alpha = 1;
 if (!instance_exists(oPausedUI)) then instance_create_depth(0, 0, -1000000, oPausedUI, { owner: id });
 event_user(2);
 
 if (variable_global_exists("render_mode") && global.render_mode) {
-	instance_create_depth(0, 0, -2000000000, oVideoRenderer);
-} else {
-	alarm[0] = 200;
+	instance_create_depth(0, 0, -9999999, oVideoRenderer);
+};
+if (!instance_exists(oPlayTransition)) {
+	instance_create_depth(0, 0, -999999, oPlayTransition, { owner:id });
 };

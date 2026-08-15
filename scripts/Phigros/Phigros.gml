@@ -4,8 +4,8 @@
 #macro func function
 #macro isExists file_exists
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal 40497
-#macro VerStr "v.4.0.8"
+#macro VerReal 40508
+#macro VerStr "v.4.0.9b"
 #macro GAME_NAME "Re: Phi-RR - " + VerStr
 #macro HYW_MODE true
 #macro BYD_COLOR_MODE true
@@ -433,7 +433,7 @@ function Phigros() constructor { // 仅仅结构
 	// 音符&字体
 	static notes = ({});
 	font_add_enable_aa(true);
-	static font = (font_add($"{working_directory}resource/saira.ttf" , 45 , true , false , 32 , 255));
+	static font = (font_add($"{working_directory}resource/saira.ttf" , 47 , true , false , 32 , 255));
 	if(asset_font_valid(font)) then font_enable_sdf(font , true);
 	
 	static res_path = {};
@@ -890,7 +890,7 @@ function Phigros() constructor { // 仅仅结构
 	static Resource = (func(){
 		if(!asset_font_valid(self.font)){
 			font_add_enable_aa(true);
-			self.font = (font_add($"{working_directory}resource/saira.ttf" , 45 , true , false , 32 , 255));
+			self.font = (font_add($"{working_directory}resource/saira.ttf" , 47 , true , false , 32 , 255));
 			if(asset_font_valid(self.font)) then font_enable_sdf(self.font , true);
 		};
 		self.Configs();
@@ -1275,29 +1275,36 @@ function render_hitsound_path(_default_sound, _custom_path = "") {
 	return file_exists(_path) ? _path : "";
 };
 
-function render_schedule_hitsound(_default_sound, _event_time, _custom_path = "") {
+function render_schedule_hitsound(_default_sound, _event_time, _custom_path = "", _is_fake = false) {
 	if (!(variable_global_exists("render_mode") && global.render_mode)) then return false;
+	if (bool(_is_fake)) then return false;
 	var _path = render_hitsound_path(_default_sound, _custom_path);
 	if (!string_length(_path)) then return false;
+	// Precomputed events must start on the first frame in which the note is
+	// actually judged and drawn. Runtime fallback events already use that frame.
+	var _fps = max(1, real(global.render_fps));
+	var _scheduled_time = max(0, real(_event_time));
+	_scheduled_time = ceil(_scheduled_time * _fps - 0.000001) / _fps;
 	if (!variable_global_exists("render_hitsounds") || !is_array(global.render_hitsounds)) {
 		global.render_hitsounds = [];
 	};
 	array_add(global.render_hitsounds, {
 		path: _path,
-		time: max(0, real(_event_time)),
-		volume: 0.7
+		time: _scheduled_time,
+		volume: 0.5
 	});
 	return true;
 };
 
 function render_play_hitsound(_default_sound, _custom_path = "") {
+	if (variable_instance_exists(id, "isFake") && bool(variable_instance_get(id, "isFake"))) then return false;
 	if (variable_global_exists("render_mode") && global.render_mode) {
 		if (variable_instance_exists(id, "render_hitsound_scheduled")
 			&& bool(variable_instance_get(id, "render_hitsound_scheduled"))) then return true;
 		var _path = render_hitsound_path(_default_sound, _custom_path);
 		if (string_length(_path)) {
-			var _event_time = global.render_frame / max(1, global.render_fps);
-			return bool(video_renderer_add_hitsound(_path, _event_time, 0.7));
+			var _event_time = max(0, global.render_frame) / max(1, global.render_fps);
+			return bool(video_renderer_add_hitsound(_path, _event_time, 0.5));
 		};
 		return false;
 	};
@@ -1547,6 +1554,7 @@ function RPE() constructor{
 				"events" : (events), // 事件层
 				"extEvents" : (l_s[$ "extended"] ?? {}), // 特殊事件(only 1)
 				"zOrder" : (l_s[$ "zOrder"] ?? 0), // line layer order(depth)
+				"zIndex" : (l_s[$ "zIndex"] ?? undefined), // absolute RPE render layer
 				"bpmfactor" : (l_s[$ "bpmfactor"] ?? 1) // 文本
 			}));
 			self.line_list[i] = l;
@@ -1684,7 +1692,7 @@ function RPE() constructor{
 						note_hitsound_time += note_factor * note_instance.hitTime2 * 0.001;
 					};
 					note_instance.render_hitsound_scheduled = render_schedule_hitsound(
-						note_instance.sound, note_hitsound_time, custom_hitsound_path);
+						note_instance.sound, note_hitsound_time, custom_hitsound_path, isFake);
 				};
 				var note_lead = _note_preload;
 				if (is_finite(n_vis) && n_vis >= 0 && n_vis < 999999) then note_lead = min(note_lead, note_factor * n_vis);
@@ -1786,7 +1794,8 @@ function RPE() constructor{
 				var _l0 = self.line_list[_zi];
 				if (!instance_exists(_l0)) then continue;
 				var _z0 = 0;
-				if (variable_instance_exists(_l0, "zOrder") && is_real(_l0.zOrder)) then _z0 = real(_l0.zOrder);
+				if (variable_instance_exists(_l0, "zIndex") && is_real(_l0.zIndex)) then _z0 = real(_l0.zIndex)
+				else if (variable_instance_exists(_l0, "zOrder") && is_real(_l0.zOrder)) then _z0 = real(_l0.zOrder);
 				if (!is_finite(_z0)) then _z0 = 0;
 				_l0.zOrder = _z0;
 				// PCR alias used by reference project

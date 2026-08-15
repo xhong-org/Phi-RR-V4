@@ -48,7 +48,8 @@ if (phase == 1) {
                 message = "Load failed";
                 detail = string_length(session_fail.error) ? session_fail.error : "Unsupported or invalid chart.";
                 chart_session_cleanup(true);
-                MsgBox_Warning(detail, "Chart Loader");
+                msgbox_warning_async(detail, "Chart Loader" , [ msgbox_button("确认") ] , MSGBOX_BUTTON_ALIGN.RIGHT);
+				//msgbox_warning_async()
                 phase = 99;
                 room_goto(room_menu);
                 exit;
@@ -75,7 +76,7 @@ if (phase == 10) {
                 message = "Load failed";
                 detail = string_length(zip_fail.error) ? zip_fail.error : "Failed to extract chart package.";
                 chart_session_cleanup(true);
-                MsgBox_Warning(detail, "Chart Loader");
+                msgbox_warning_async(detail, "Chart Loader" , [ msgbox_button("确认") ] , MSGBOX_BUTTON_ALIGN.RIGHT);
                 phase = 99;
                 room_goto(room_menu);
                 exit;

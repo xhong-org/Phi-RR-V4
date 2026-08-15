@@ -18,7 +18,7 @@
   "overriddenProperties":[],
   "parent":{
     "name":"Phigros Official",
-    "path":"folders/Objects/Phigros Official.yy",
+    "path":"folders/Objects/Main/Loader/Format/Phigros Official.yy",
   },
   "parentObjectId":null,
   "persistent":false,

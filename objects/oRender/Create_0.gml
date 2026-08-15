@@ -35,6 +35,10 @@ if (chart_session_has_track()) {
 };
 print(game.folder_chart , game.settings.enableDebug);
 var chart_path = (string_length(game.folder_chart.chart) ? (InChartPath + game.folder_chart.chart) : "");
+// Start each render with an empty schedule. CreateLines populates it for this chart.
+if (variable_global_exists("render_mode") && global.render_mode) {
+	global.render_hitsounds = [];
+};
 if (!game.Reader(chart_path)) {
 	show_debug_message($"[Official] Failed to load chart: {chart_path}");
 	room_goto(room_menu);
@@ -86,13 +90,24 @@ chart_exit_started = false;
 chart_exit_timer = 0;
 chart_exit_alpha = 1;
 chart_exit_queued = false;
+play_transition_active = false;
+play_transition_pause_y = 0;
+play_transition_name_y = 0;
+play_transition_level_y = 0;
+play_transition_score_y = 0;
+play_transition_ui_alpha = 1;
+play_transition_bar_alpha = 1;
+play_transition_bg_alpha = 1;
 bak_str_combo = (game.settings.comboString);
 print($"str3: {game.settings.comboString}");
 
 image_blend = c_white;
 if (!instance_exists(oPausedUI)) then instance_create_depth(0, 0, -1000000, oPausedUI, { owner: id });
 if (variable_global_exists("render_mode") && global.render_mode) {
-	instance_create_depth(0, 0, -2000000000, oVideoRenderer);
+	instance_create_depth(0, 0, -9999999, oVideoRenderer);
+};
+if (!instance_exists(oPlayTransition)) {
+	instance_create_depth(0, 0, -999999, oPlayTransition, { owner:id });
 };
 
 //print(load_line_csv());

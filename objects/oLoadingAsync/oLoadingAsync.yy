@@ -10,7 +10,10 @@
   "managed":true,
   "name":"oLoadingAsync",
   "overriddenProperties":[],
-  "parent":{"name":"Objects","path":"folders/Objects.yy",},
+  "parent":{
+    "name":"Loader",
+    "path":"folders/Objects/Main/Loader.yy",
+  },
   "parentObjectId":null,
   "persistent":false,
   "physicsAngularDamping":0.1,

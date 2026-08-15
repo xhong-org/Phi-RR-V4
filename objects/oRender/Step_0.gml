@@ -18,15 +18,6 @@ if (!(variable_global_exists("render_mode") && global.render_mode)
 		m_pause();
 	};
 };
-if (chart_exit_started) {
-	chart_exit_alpha = 1 - clamp((get_timer() - chart_exit_timer) / 500000, 0, 1);
-	if (chart_exit_alpha <= 0 && !chart_exit_queued) {
-		chart_exit_queued = true;
-		m_clean(true);
-		chart_session_cleanup(true);
-		room_goto(room_menu);
-	};
-};
 //if(game.__time[1] >= 97.20 && game.__time[1] <= 121.00){
 //	PhiTime = true;
 //	game.settings.comboString = "PhiTime!!!";
