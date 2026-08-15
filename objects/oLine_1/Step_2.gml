@@ -52,9 +52,13 @@ if (is_array(_father_chain) && array_length(_father_chain) > 0) {
                 };
 };
 
-// get_window_pos_scale: x*(W/1350)+W/2 , -y*(H/900)+H/2
-x = out_x * (room_width / 1350) + room_width * 0.5;
-y = -out_y * (room_height / 900) + room_height * 0.5;
+// Map RPE coordinates into Phira's effective viewport. Narrow windows keep
+// their full height; only the horizontal area is limited by chart aspect.
+var chart_aspect = 16 / 9;
+var chart_view_h = room_height;
+var chart_view_w = min(room_width, chart_view_h * chart_aspect);
+x = out_x * (chart_view_w / 1350) + room_width * 0.5;
+y = -out_y * (chart_view_h / 900) + room_height * 0.5;
 image_angle = -out_r;
 image_blend = __color;
 

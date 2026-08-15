@@ -78,6 +78,10 @@ if (!encoder_started) {
     print($"[Renderer] Started: {frame_width}x{frame_height}, frames={total_frames}");
 };
 
+// Compose the recorded frame as chart (including chart HUD) -> aspect mask.
+// The progress overlay is drawn later by Draw End, after capture, so it stays
+// visible on the render screen without entering the output video.
+//draw_chart_mask(room_width, room_height);
 draw_flush();
 if (!video_renderer_capture()) {
     render_status = "GPU capture stopped unexpectedly";

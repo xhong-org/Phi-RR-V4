@@ -4,7 +4,7 @@
 #macro func function
 #macro isExists file_exists
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal 40506
+#macro VerReal 40508
 #macro VerStr "v.4.0.9b"
 #macro GAME_NAME "Re: Phi-RR - " + VerStr
 #macro HYW_MODE true
@@ -433,7 +433,7 @@ function Phigros() constructor { // 仅仅结构
 	// 音符&字体
 	static notes = ({});
 	font_add_enable_aa(true);
-	static font = (font_add($"{working_directory}resource/saira.ttf" , 45 , true , false , 32 , 255));
+	static font = (font_add($"{working_directory}resource/saira.ttf" , 47 , true , false , 32 , 255));
 	if(asset_font_valid(font)) then font_enable_sdf(font , true);
 	
 	static res_path = {};
@@ -890,7 +890,7 @@ function Phigros() constructor { // 仅仅结构
 	static Resource = (func(){
 		if(!asset_font_valid(self.font)){
 			font_add_enable_aa(true);
-			self.font = (font_add($"{working_directory}resource/saira.ttf" , 45 , true , false , 32 , 255));
+			self.font = (font_add($"{working_directory}resource/saira.ttf" , 47 , true , false , 32 , 255));
 			if(asset_font_valid(self.font)) then font_enable_sdf(self.font , true);
 		};
 		self.Configs();
@@ -1554,6 +1554,7 @@ function RPE() constructor{
 				"events" : (events), // 事件层
 				"extEvents" : (l_s[$ "extended"] ?? {}), // 特殊事件(only 1)
 				"zOrder" : (l_s[$ "zOrder"] ?? 0), // line layer order(depth)
+				"zIndex" : (l_s[$ "zIndex"] ?? undefined), // absolute RPE render layer
 				"bpmfactor" : (l_s[$ "bpmfactor"] ?? 1) // 文本
 			}));
 			self.line_list[i] = l;
@@ -1793,7 +1794,8 @@ function RPE() constructor{
 				var _l0 = self.line_list[_zi];
 				if (!instance_exists(_l0)) then continue;
 				var _z0 = 0;
-				if (variable_instance_exists(_l0, "zOrder") && is_real(_l0.zOrder)) then _z0 = real(_l0.zOrder);
+				if (variable_instance_exists(_l0, "zIndex") && is_real(_l0.zIndex)) then _z0 = real(_l0.zIndex)
+				else if (variable_instance_exists(_l0, "zOrder") && is_real(_l0.zOrder)) then _z0 = real(_l0.zOrder);
 				if (!is_finite(_z0)) then _z0 = 0;
 				_l0.zOrder = _z0;
 				// PCR alias used by reference project

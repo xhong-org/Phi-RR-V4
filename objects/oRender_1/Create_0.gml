@@ -163,7 +163,13 @@ if ((!is_string(_ui_name_w) || !string_length(_ui_name_w))
 	&& is_struct(game_1.chart_info) && is_string(game_1.chart_info.name)) {
 	_ui_name_w = game_1.chart_info.name;
 };
-font_scales = clamp(0.6 * ((room_width / 2) / (string_width(string(_ui_name_w)) * 0.6 + 40)), 0.2, 0.55);
+var _ui_font_size = max(1, font_get_size(draw_get_font()));
+var _ui_name_width = max(1, string_width(string(_ui_name_w)));
+// font_scales is the pre-global-scales factor; draw code applies the window
+// scale once, just like the other HUD elements.
+var _ui_reference_scale = (47 / _ui_font_size);
+var _ui_fit_scale = (((room_width / 2) - (80 * global_scales)) / _ui_name_width) / max(0.000001, global_scales);
+font_scales = clamp(min(_ui_reference_scale, _ui_fit_scale), 0.2, 0.55);
 bak_str_combo = (game.settings.comboString);
 image_blend = c_white;
 

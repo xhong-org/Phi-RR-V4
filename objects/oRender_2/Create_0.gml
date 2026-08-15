@@ -93,7 +93,14 @@ play_transition_score_y = 0;
 play_transition_ui_alpha = 1;
 play_transition_bar_alpha = 1;
 play_transition_bg_alpha = 1;
-font_scales = clamp(0.6*((room_width/2)/(string_width(string(game.folder_chart.name))*0.6+40)), 0.2, 0.55);
+draw_set_font(game.font);
+var _ui_font_size = max(1, font_get_size(draw_get_font()));
+var _ui_name_width = max(1, string_width(string(game.folder_chart.name)));
+// font_scales is the pre-global-scales factor; draw code applies the window
+// scale once, just like the other HUD elements.
+var _ui_reference_scale = (47 / _ui_font_size);
+var _ui_fit_scale = (((room_width / 2) - (80 * global_scales)) / _ui_name_width) / max(0.000001, global_scales);
+font_scales = clamp(min(_ui_reference_scale, _ui_fit_scale), 0.2, 0.55);
 
 _draw_user_count = 0;
 _draw_fps_user_count = 0;

@@ -1,8 +1,11 @@
 /// @description Draw the progress overlay from a dedicated surface.
 if (encoder_finished) exit;
 
-var surface_width = max(1, room_width);
-var surface_height = max(1, room_height);
+// The overlay is a window-only UI surface. In render mode the room stays at
+// the encoded video size, so using room dimensions here would leave a small
+// surface that gets enlarged and makes text blurry after a window resize.
+var surface_width = max(1, window_get_width());
+var surface_height = max(1, window_get_height());
 if (!surface_exists(overlay_surface)
     || overlay_surface_width != surface_width || overlay_surface_height != surface_height) {
     if (surface_exists(overlay_surface)) surface_free(overlay_surface);
@@ -13,14 +16,14 @@ if (!surface_exists(overlay_surface)
 if (!surface_exists(overlay_surface)) exit;
 overlay_ready = true;
 
-var scale = variable_global_exists("global_scales") ? global_scales : 1.0;
+var scale = min(surface_width / 1366, surface_height / 768);
 if (!is_real(scale) || scale <= 0) scale = 1.0;
-// The application surface is stretched to the window after this event. Use
-// inverse display stretch for text only so the final glyphs look proportional.
-var display_width = max(1, window_get_width());
-var display_height = max(1, window_get_height());
-var text_scale_x = scale * surface_width / display_width;
-var text_scale_y = scale * surface_height / display_height;
+// The overlay surface is rendered at the current window size and then
+// displayed through the room surface. Those display transforms cancel out,
+// so the text only needs the current window adaptation scale. Applying a
+// room/window factor here would compensate the same transform twice.
+var text_scale_x = scale;
+var text_scale_y = scale;
 var panel_width = min(920 * scale, max(240 * scale, surface_width - 64 * scale));
 var panel_left = (surface_width - panel_width) * 0.5;
 var panel_top = surface_height * 0.5 - 150 * scale;

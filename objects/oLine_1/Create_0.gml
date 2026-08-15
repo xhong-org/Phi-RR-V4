@@ -143,14 +143,14 @@ if (has_gif_events && is_string(image) && string_length(image)) {
 	if (is_struct(gif_data) && is_array(gif_data.frames) && array_length(gif_data.frames) > 0
 		&& sprite_exists(gif_data.frames[0])) then line_image = gif_data.frames[0];
 } else if (is_string(image) && string_length(image) && image != "line.png") {
-        var tex_path = InChartPath + image;
+		var tex_path = InChartPath + image;
         if (file_exists(tex_path)) {
                 if (variable_global_exists("game_1") && is_struct(game_1)) {
                         if (!struct_exists(game_1, "Texture") || !is_struct(game_1.Texture)) then game_1.Texture = {};
                         if (!struct_exists(game_1.Texture, image) || !sprite_exists(game_1.Texture[$ image])) {
-                                var spr = sprite_add(tex_path, 0, false, false, 0, 0);
-                                if (sprite_exists(spr)) {
-                                        sprite_set_offset(spr, sprite_get_width(spr) / 2, sprite_get_height(spr) / 2);
+					var spr = sprite_add(tex_path, 0, false, false, 0, 0);
+					if (sprite_exists(spr)) {
+						sprite_set_offset(spr, sprite_get_width(spr) / 2, sprite_get_height(spr) / 2);
                                         game_1.Texture[$ image] = spr;
                                 };
                         };
