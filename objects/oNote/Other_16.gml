@@ -9,7 +9,6 @@ if(now_time >= now_hit_time && !isMiss && notJudge && hit_status == TYPE.NONE){
 		isMiss = true;
 		judgeCalc(self.time, now_hit_time, self.bpm, _hx0, _hy0, self.type, true, true);
 	}else{
-		_eff_c(_hx0, _hy0, hit_status == TYPE.PREFECT ? #ffeca0 : make_colour_rgb(162, 238, 255));
 		_bak_time = _now_seconds;
 		render_play_hitsound(sound);
 	};

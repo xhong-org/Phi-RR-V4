@@ -49,8 +49,11 @@ if (!game.Reader(chart_path)) {
 //if(success) then game.PhiTool.SaveTrack($"{game_save_id}123.json");
 
 //game.background()
-depth = DEPTH.DEBUG;
+// Draw after the chart composition so the aspect mask is final.
+depth = DEPTH.HEF + 1;
 if(game.settings.showBG) then instance_create_depth(0,0,0,oBG);
+instance_create_depth(0, 0, -12001, oBG_1);
+instance_create_depth(0, 0, -12000, oChartMask);
 
 instance_create_depth(0,0,0,oMedia , { "name" : (string_length(game.folder_chart.music) ? (InChartPath + game.folder_chart.music) : "") });
 instance_create_depth(0,0,DEPTH.BG - 1,oExtraPlay);

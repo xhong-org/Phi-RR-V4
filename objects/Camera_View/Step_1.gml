@@ -30,6 +30,7 @@ if (start_width > 0 && start_height > 0) {
 } else {
 	global_scales = 1.0;
 };
+chart_view_refresh(room_width, room_height);
 
 if (os_type == os_windows && extension_exists("I_Pulse")) {
 	var render_window = variable_global_exists("render_mode") && global.render_mode;

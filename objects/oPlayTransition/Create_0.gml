@@ -1,6 +1,7 @@
 /// @description Shared prepare/start/end playback transition.
 if (!variable_instance_exists(id, "owner")) then owner = noone;
-depth = -999999;
+// Draw before the chart composition mask so the animation line is clipped with it.
+depth = DEPTH.HEF + 2;
 
 enum PLAY_TRANSITION_STATE {
 	WAIT_MEDIA,

@@ -15,4 +15,6 @@ if (application_surface_is_enabled()) {
 	};
 };
 
+chart_view_refresh(room_width, room_height);
+
 /* ended */

@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"__id3d11_api",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"__id3d11_api",
+  "parent":{
+    "name":"ID3D11",
+    "path":"folders/Extensions/ID3D11.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

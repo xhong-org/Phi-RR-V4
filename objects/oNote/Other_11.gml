@@ -7,8 +7,8 @@ var line_floor = (_line_ref.__value[0]),
 
 var line_x = (_line_ref.x),
 	line_y = (_line_ref.y),
-	local_x = (self.xOffset * room_width * 0.05625),
-	local_y = (floor_delta * self.speed * room_height * 0.6),
+	local_x = (self.xOffset * chart_view_width * 0.05625),
+	local_y = (floor_delta * self.speed * chart_view_height * 0.6),
 	rotation = (_line_ref.image_angle),
 	rotation_cos = (_line_ref.__cos),
 	rotation_sin = (_line_ref.__sin);

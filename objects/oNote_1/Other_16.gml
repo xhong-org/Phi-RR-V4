@@ -12,7 +12,6 @@ if (now_time >= now_hit && !isMiss && notJudge && hit_status == TYPE.NONE) {
 			isMiss = true;
 			judgeCalc(start_sec, now_hit, 0, _hx0, _hy0, type, true, true, true);
 		} else {
-			if (variable_global_exists("_eff_c")) then _eff_c(_hx0, _hy0, has_hit_tint ? hit_tint : (hit_status == TYPE.PREFECT ? #ffeca0 : make_colour_rgb(162, 238, 255)));
 			_bak_time = _now_seconds;
 			rpe_play_hitsound(sound, custom_fmod_sound, custom_hitsound_path);
 		};

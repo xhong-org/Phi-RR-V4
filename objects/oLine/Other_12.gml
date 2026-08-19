@@ -35,8 +35,8 @@ if(!is_nan(next_alpha)) then __a = next_alpha;
 if(!is_nan(next_rotation)) then __r = next_rotation;
 
 // The previous scale expression algebraically reduced to these two products.
-x = (room_width * __x);
-y = (room_height * (1 - __y));
+x = (chart_view_left + chart_view_width * __x);
+y = (chart_view_height * (1 - __y));
 image_alpha = __a;
 image_angle = __r;
 __cos = dcos(__r);

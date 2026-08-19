@@ -1,4 +1,5 @@
 /// @description Background instance (YYC-safe, accepts asset refs)
+// Background must be behind chart lines, notes, UI, and effects.
 depth = DEPTH.BG;
 surface = -1;
 size = [ room_width , room_height ];

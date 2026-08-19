@@ -4,10 +4,10 @@ if(image_alpha <= 0) then exit;
 var draw_scale_x,
 	draw_scale_y;
 if(self.image_id == line_2){
-	draw_scale_x = (0.71 * room_height / 768);
-	draw_scale_y = (0.68 * room_width / 1366);
+		draw_scale_x = (0.71 * chart_view_height / 768);
+		draw_scale_y = (0.68 * chart_view_width / 1366);
 }else{
-	draw_scale_x = (self.Scales * room_height / 1080 * 1.35);
+		draw_scale_x = (self.Scales * chart_view_height / 1080 * 1.35);
 	draw_scale_y = draw_scale_x;
 };
 

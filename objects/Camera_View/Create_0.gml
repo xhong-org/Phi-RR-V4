@@ -19,11 +19,30 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 // Global UI/world scale. Other objects should read this, not recompute window scale.
 globalvar global_scales;
 global_scales = 1.0;
+// Aspect ratio of the effective chart area. Keep this global so the mask,
+// chart layout, and custom judge-line textures use the same viewport.
+globalvar chart_aspect_ratio;
+chart_aspect_ratio = 16 / 9;
+if (variable_global_exists("chart_session") && is_struct(global.chart_session)) {
+	var _session_aspect = real(global.chart_session[$ "aspect_ratio"] ?? (16 / 9));
+	if (is_finite(_session_aspect) && _session_aspect > 0) then chart_aspect_ratio = _session_aspect;
+};
+globalvar chart_clip_ready, chart_clip_context, chart_clip_original_state, chart_clip_state;
+chart_clip_ready = false;
+chart_clip_context = 0;
+chart_clip_original_state = 0;
+chart_clip_state = 0;
+globalvar chart_surface, chart_surface_active;
+chart_surface = -1;
+chart_surface_active = false;
+globalvar chart_background_surface;
+chart_background_surface = -1;
 
 // Immediate scale for current room size.
 if (start_width > 0 && start_height > 0) {
         global_scales = min(room_width / start_width, room_height / start_height);
 };
+chart_view_refresh(room_width, room_height);
 
 depth = -100000; // run early relative to normal gameplay objects when possible
 

@@ -7,8 +7,9 @@ var worker_enabled = bool(game.settings.enableRPEMulticore ?? true);
 var worker_min_lines = max(1, floor(real(game.settings.rpeWorkerMinLines ?? 32)));
 var worker_profile_frames = max(60, floor(real(game.settings.rpeWorkerProfileFrames ?? 1800)));
 var worker_render_mode = variable_global_exists("render_mode") && global.render_mode;
-var worker_window_width = worker_render_mode ? room_width : window_get_width();
-var worker_window_height = worker_render_mode ? room_height : window_get_height();
+var worker_window_width = chart_view_width;
+var worker_window_height = chart_view_height;
+var worker_view_left = chart_view_left;
 var worker_scale_x = worker_window_width / 1350.0;
 var worker_scale_y = worker_window_height / 900.0;
 var worker_half_width = worker_window_width * 0.5;
@@ -85,7 +86,7 @@ if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") &&
 			var result_world_y = buffer_read(_rpe_worker_output, buffer_f64);
 			var result_world_r = buffer_read(_rpe_worker_output, buffer_f64);
 			if (!instance_exists(result_child)) then continue;
-			result_child.x = result_world_x * worker_scale_x + worker_half_width;
+			result_child.x = result_world_x * worker_scale_x + worker_view_left + worker_half_width;
 			result_child.y = -result_world_y * worker_scale_y + worker_half_height;
 			result_child.image_angle = -result_world_r;
 			result_child.__x = result_child.x;
@@ -97,7 +98,7 @@ if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") &&
 				&& is_struct(bindUI) && struct_exists(bindUI, result_child.attach_ui_key)) {
 				var result_ui_slot = bindUI[$ result_child.attach_ui_key];
 				if (is_array(result_ui_slot) && array_length(result_ui_slot) >= 7) {
-					result_ui_slot[@ 0] = result_child.x - room_width * 0.5;
+					result_ui_slot[@ 0] = result_child.x - (worker_view_left + worker_half_width);
 					result_ui_slot[@ 1] = result_child.y - room_height * 0.5;
 					result_ui_slot[@ 2] = result_child.image_blend;
 					result_ui_slot[@ 3] = clamp(real(result_child.__raw_a) / 255, 0, 1);
@@ -192,7 +193,7 @@ if (!worker_resolved) {
 		};
 	};
 
-	child.x = world_x * worker_scale_x + worker_half_width;
+	child.x = world_x * worker_scale_x + worker_view_left + worker_half_width;
 	child.y = -world_y * worker_scale_y + worker_half_height;
 	child.image_angle = -world_r;
 	child.__x = child.x;
@@ -202,18 +203,18 @@ if (!worker_resolved) {
 	child.__sin = dsin(child.image_angle);
 	if (child.is_attach_ui && is_string(child.attach_ui_key) && string_length(child.attach_ui_key)
 			&& is_struct(bindUI) && struct_exists(bindUI, child.attach_ui_key)) {
-			var ui_slot = bindUI[$ child.attach_ui_key];
-			if (is_array(ui_slot) && array_length(ui_slot) >= 7) {
-				ui_slot[@ 0] = child.x - room_width * 0.5;
-				ui_slot[@ 1] = child.y - room_height * 0.5;
-				ui_slot[@ 2] = child.image_blend;
-				ui_slot[@ 3] = clamp(real(child.__raw_a) / 255, 0, 1);
-				ui_slot[@ 4] = child.image_angle;
-				ui_slot[@ 5] = child.__scale_x;
-				ui_slot[@ 6] = child.__scale_y;
-				if (is_struct(bindUI_attached)) then bindUI_attached[$ child.attach_ui_key] = true;
-			};
+		var ui_slot = bindUI[$ child.attach_ui_key];
+		if (is_array(ui_slot) && array_length(ui_slot) >= 7) {
+			ui_slot[@ 0] = child.x - (worker_view_left + worker_half_width);
+			ui_slot[@ 1] = child.y - room_height * 0.5;
+			ui_slot[@ 2] = child.image_blend;
+			ui_slot[@ 3] = clamp(real(child.__raw_a) / 255, 0, 1);
+			ui_slot[@ 4] = child.image_angle;
+			ui_slot[@ 5] = child.__scale_x;
+			ui_slot[@ 6] = child.__scale_y;
+			if (is_struct(bindUI_attached)) then bindUI_attached[$ child.attach_ui_key] = true;
 		};
+	};
 	};
 	var fallback_total_us = get_timer() - line_resolve_start;
 	if (!variable_instance_exists(id, "_rpe_fallback_profile_samples")) {

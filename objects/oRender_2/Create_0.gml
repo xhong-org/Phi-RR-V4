@@ -1,7 +1,8 @@
 /// @description 
 window_set_caption($"{GAME_NAME}");
 
-depth = DEPTH.DEBUG;
+// Draw after the chart composition so the aspect mask is final.
+depth = DEPTH.HEF + 1;
 
 gml_release_mode(true);
 
@@ -53,6 +54,8 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 };
 
 instance_create_depth(0,0,0,oBG);
+instance_create_depth(0, 0, -12001, oBG_1);
+instance_create_depth(0, 0, -12000, oChartMask);
 instance_create_depth(0,0,0,oMedia , { "name" : (string_length(game.folder_chart.music) ? (InChartPath + game.folder_chart.music) : "") });
 
 var pec_path = (string_length(game.folder_chart.chart) ? (InChartPath + game.folder_chart.chart) : "");

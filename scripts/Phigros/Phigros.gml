@@ -4,7 +4,7 @@
 #macro func function
 #macro isExists file_exists
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal 40508
+#macro VerReal 40511
 #macro VerStr "v.4.0.9b"
 #macro GAME_NAME "Re: Phi-RR - " + VerStr
 #macro HYW_MODE true
@@ -348,7 +348,7 @@ function File_Discoverer(disc_path){
         return(return_path);
 };
 
-///@desc 闂備浇宕垫慨鎾敄婢跺顩查悹杞拌閻掍粙鏌熷▓鍨灍闁哥姴妫濋弻銊モ攽閸℃ê娅ｇ紓浣规缁犳牠寮诲☉銏℃櫜閹艰揪绲界敮銊х磽娴ｄ粙鍝洪柣鐔叉櫅閻ｅ嘲螖閸涱喖浜楅柟鍏兼儗閸犳牠寮查敐澶嬧拺闁告繂瀚弫鎶芥煕閳╁啰鎳勬い鏂跨Ч濮婂搫效閸パ呭姶闂佺粯鎸搁ˇ鍗炍ｉ幇顓熺秶闁宠鍎虫禍楣冩煟閻斿搫顣兼繝鈧导瀛樼厸闁糕槅鍘鹃崚浼存婢跺⊕褰掓晲閸稈鍋撻埀顒勬煛鐏炶鈧繈骞冭ぐ鎺戠倞闁冲搫鍊婚崝褰掓⒑?ChartSession闂?
+///@desc 
 function TrackZ(path) {
         if(!file_exists(path)) then return(false);
         var ok = chart_session_load_zip(path);

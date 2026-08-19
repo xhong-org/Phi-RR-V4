@@ -7,7 +7,7 @@ if (current_scale != _last_scale || room_height != _last_room_height) {
 		image_xscale = 0.9204 * current_scale;
 		image_yscale = 0.52 * current_scale;
 	} else {
-		var custom_scale = _custom_scale_factor * room_height * current_scale;
+		var custom_scale = _custom_scale_factor * chart_view_height * current_scale;
 		image_xscale = custom_scale;
 		image_yscale = custom_scale;
 	};
@@ -67,8 +67,8 @@ if (_speed_count > 0 && line_sec >= _speed_events[0].startSec) {
 	floor_position = speed_event.floor + (line_sec-speed_event.startSec)*speed_event.value;
 } else floor_position = 0;
 
-x = room_width * _move_x;
-y = room_height * _move_y;
+x = chart_view_left + chart_view_width * _move_x;
+y = chart_view_height * _move_y;
 image_alpha = clamp(_alpha_value, 0, 1);
 image_angle = _rotate_value;
 if (image_angle != _last_angle) {

@@ -22,13 +22,13 @@ if ((!is_string(_ui_level) || !string_length(_ui_level))
 };
 
 // default HUD layout (Phigros absolute screen positions)
-var u_combo_num = [room_width / 2, 60 * global_scales, image_blend, ui_fade, 0, global_scales, global_scales];
-var u_combo = [room_width / 2, 90 * global_scales, image_blend, ui_fade, 0, 0.3 * global_scales, 0.3 * global_scales];
-var u_name = [40 * global_scales, room_height - (35 * global_scales), image_blend, ui_fade, 0, font_scales * global_scales, font_scales * global_scales];
-var u_level = [room_width - (40 * global_scales), room_height - (10 * global_scales), image_blend, ui_fade, 0, 0.55 * global_scales, 0.55 * global_scales];
-var u_score = [room_width - (40 * global_scales), 70 * global_scales, image_blend, ui_fade, 0, 0.75 * global_scales, 0.75 * global_scales];
-var u_pause = [50 * global_scales, 50 * global_scales, c_white, ui_fade, 0, 0.8 * global_scales, 0.8 * global_scales];
-var u_bar = [0, 0, image_blend, ui_fade, 0, 1, 1];
+var u_combo_num = [chart_view_left + chart_view_width / 2, 60 * global_scales, image_blend, ui_fade, 0, global_scales, global_scales];
+var u_combo = [chart_view_left + chart_view_width / 2, 90 * global_scales, image_blend, ui_fade, 0, 0.3 * global_scales, 0.3 * global_scales];
+var u_name = [chart_view_left + 40 * global_scales, room_height - (35 * global_scales), image_blend, ui_fade, 0, font_scales * global_scales, font_scales * global_scales];
+var u_level = [chart_view_right - (40 * global_scales), room_height - (10 * global_scales), image_blend, ui_fade, 0, 0.55 * global_scales, 0.55 * global_scales];
+var u_score = [chart_view_right - (40 * global_scales), 70 * global_scales, image_blend, ui_fade, 0, 0.75 * global_scales, 0.75 * global_scales];
+var u_pause = [chart_view_left + 50 * global_scales, 50 * global_scales, c_white, ui_fade, 0, 0.8 * global_scales, 0.8 * global_scales];
+var u_bar = [chart_view_left, 0, image_blend, ui_fade, 0, 1, 1];
 
 if (_transition_active) {
 	if (!play_transition_bound_ui.name) then u_name[@ 1] += play_transition_name_y;
@@ -103,14 +103,14 @@ var bar_y = u_bar[1];
 var bar_angle = u_bar[4];
 var bar_scale_x = u_bar[5];
 var bar_scale_y = u_bar[6];
-var bar_progress_length = room_width * bar_scale_x * val;
+var bar_progress_length = chart_view_width * bar_scale_x * val;
 var marker_local_x = bar_progress_length - sprite_get_width(spr_pixel_2) * bar_scale_x;
 var marker_x = bar_x + marker_local_x * dcos(bar_angle);
 var marker_y = bar_y - marker_local_x * dsin(bar_angle);
 
 draw_sprite_ext(
 	spr_pixel_2, 0, bar_x, bar_y,
-	(room_width / sprite_get_width(spr_pixel_2)) * bar_scale_x * val,
+	(chart_view_width / sprite_get_width(spr_pixel_2)) * bar_scale_x * val,
 	4 * global_scales * bar_scale_y,
 	bar_angle, c_gray, u_bar[3]
 );

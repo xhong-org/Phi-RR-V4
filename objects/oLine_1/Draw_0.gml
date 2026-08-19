@@ -96,9 +96,8 @@ if ((__scale_x == 0) || (__scale_y == 0)) then exit;
 // Phira renders the chart inside a viewport whose aspect is limited by the
 // chart aspect. Narrow windows keep their full height; wide windows crop the
 // sides. Use that viewport for texture dimensions.
-var chart_aspect = 16 / 9;
 var texture_view_h = _room_h;
-var texture_view_w = min(_room_w , _room_h); //min(_room_w, texture_view_h * chart_aspect);
+var texture_view_w = chart_view_width;
 var line_canvas_scale = texture_view_h / 768;
 var sx;
 var sy;
@@ -112,13 +111,21 @@ if (is_default_line) {
 	// RPE custom textures are drawn at their native pixel size on the
 	// chart viewport. Use one factor for both axes so a texture keeps its
 	// aspect ratio and scales proportionally when the window changes.
-	var texture_scale = texture_view_w / 1350;
+	// Fit custom RPE textures to the same logical viewport as the mask. Width
+	// alone is wrong on wide masked windows, while height alone overflows a
+	// narrow window.
+	var custom_aspect = 16 / 9;
+	if (variable_global_exists("chart_aspect_ratio") && is_real(chart_aspect_ratio)
+		&& is_finite(chart_aspect_ratio) && chart_aspect_ratio > 0) {
+		custom_aspect = chart_aspect_ratio;
+	};
+	var texture_scale = min(texture_view_w / (768 * custom_aspect), texture_view_h / 768);
 	var sxy = [
 		(texture_scale * __scale_x * line_csv_scale),
 		(texture_scale * __scale_y * line_csv_scale)
 	]
-	sx = sxy[0] * 1.5//(1 - (sxy[0] / 10)); // line_csv_scale
-	sy = sxy[1] * 1.5//(1 - (sxy[1] / 10));
+	sx = sxy[0];
+	sy = sxy[1];
 };
 
 // Apply color from extended colorEvents (or default white)

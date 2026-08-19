@@ -54,11 +54,10 @@ if (is_array(_father_chain) && array_length(_father_chain) > 0) {
 
 // Map RPE coordinates into Phira's effective viewport. Narrow windows keep
 // their full height; only the horizontal area is limited by chart aspect.
-var chart_aspect = 16 / 9;
-var chart_view_h = room_height;
-var chart_view_w = min(room_width, chart_view_h * chart_aspect);
-x = out_x * (chart_view_w / 1350) + room_width * 0.5;
-y = -out_y * (chart_view_h / 900) + room_height * 0.5;
+var chart_view_h = chart_view_height;
+var chart_view_w = chart_view_width;
+x = out_x * (chart_view_w / 1350) + chart_view_left + chart_view_w * 0.5;
+y = -out_y * (chart_view_h / 900) + chart_view_h * 0.5;
 image_angle = -out_r;
 image_blend = __color;
 
@@ -75,8 +74,8 @@ __sin = dsin(image_angle);
 var ui_alpha = clamp(__raw_a / 255, 0, 1);
 _alpha_decimal = __raw_a;
 if (is_attach_ui && is_string(attach_ui_key) && string_length(attach_ui_key) > 0 && instance_exists(oRender_1)) {
-        var ui_off_x = x - (room_width * 0.5);
-        var ui_off_y = y - (room_height * 0.5);
+		var ui_off_x = x - (chart_view_left + chart_view_w * 0.5);
+		var ui_off_y = y - (chart_view_h * 0.5);
         with (oRender_1) {
                 if (is_struct(bindUI) && struct_exists(bindUI, other.attach_ui_key)) {
                         var slot = bindUI[$ other.attach_ui_key];

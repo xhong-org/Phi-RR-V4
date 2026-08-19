@@ -21,6 +21,7 @@ function chart_session_default() {
                 "line_overrides" : [],
                 "extra_file" : "",
                 "info_offset_ms" : 0,
+                "aspect_ratio" : 16 / 9,
                 "name" : "",
                 "level" : "",
                 "play_room" : -1,
@@ -447,6 +448,53 @@ function chart_info_trim_value(val) {
         return v;
 }
 
+function chart_info_apply_value(info, key, val) {
+        var normalized_key = string_lower(string_replace_all(string(key), " ", ""));
+        normalized_key = string_replace_all(normalized_key, "\t", "");
+        var value = chart_info_trim_value(val);
+        if (!string_length(value)) then return;
+
+        switch (normalized_key) {
+                case "name":
+                case "title":
+                        info.name = value;
+                break;
+                case "level":
+                        info.level = value;
+                break;
+                case "difficulty":
+                        if (!string_length(info.level)) then info.level = value;
+                break;
+                case "image":
+                case "illustration":
+                case "background":
+                case "bg":
+                case "picture":
+                        info.image = value;
+                break;
+                case "music":
+                case "song":
+                case "songfile":
+                case "audio":
+                        info.music = value;
+                break;
+                case "chart":
+                case "track":
+                case "chartfile":
+                        info.chart = value;
+                break;
+                case "offset":
+                        info.offset_ms = number(value, 0);
+                break;
+                case "aspectratio":
+                        var parsed_aspect = number(value, 0);
+                        if (is_real(parsed_aspect) && is_finite(parsed_aspect) && parsed_aspect > 0) {
+                                info.aspect_ratio = parsed_aspect;
+                        };
+                break;
+        };
+}
+
 /// @desc Parse root-only info.txt / info.yml style metadata.
 function chart_parse_info_file(info_path) {
         var info = {
@@ -455,7 +503,8 @@ function chart_parse_info_file(info_path) {
                 "image" : "",
                 "music" : "",
                 "chart" : "",
-                "offset_ms" : 0
+                "offset_ms" : 0,
+                "aspect_ratio" : 16 / 9
         };
         if (!file_exists(info_path)) then return info;
 
@@ -475,49 +524,38 @@ function chart_parse_info_file(info_path) {
                 if (sep <= 0) then sep = string_pos("=", text_ln);
                 if (sep <= 0) then continue;
 
-                var key = string_lower(string_replace_all(string_copy(text_ln, 1, sep - 1), " ", ""));
-                key = string_replace_all(key, "\t", "");
+                var key = string_copy(text_ln, 1, sep - 1);
                 var val = chart_info_trim_value(string_copy(text_ln, sep + 1, string_length(text_ln) - sep));
-                if (!string_length(val)) then continue;
-
-                // info.txt: Name/Song/Picture/Chart/Level
-                // info.yml: name/music/illustration/chart/level/difficulty
-                switch (key) {
-                        case "name":
-                        case "title":
-                                info.name = val;
-                        break;
-                        case "level":
-                                info.level = val;
-                        break;
-                        case "difficulty":
-                                // Prefer explicit level; difficulty is fallback only.
-                                if (!string_length(info.level)) then info.level = val;
-                        break;
-                        case "image":
-                        case "illustration":
-                        case "background":
-                        case "bg":
-                        case "picture":
-                                info.image = val;
-                        break;
-                        case "music":
-                        case "song":
-                        case "songfile":
-                        case "audio":
-                                info.music = val;
-                        break;
-                        case "chart":
-                        case "track":
-                        case "chartfile":
-                                info.chart = val;
-                        break;
-                        case "offset":
-                                info.offset_ms = number(val, 0);
-                        break;
-                };
+                chart_info_apply_value(info, key, val);
         };
         file_text_close(handle);
+        return info;
+}
+
+function chart_parse_info_csv(info_path) {
+        var info = {
+                "name" : "", "level" : "", "image" : "", "music" : "", "chart" : "",
+                "offset_ms" : 0, "aspect_ratio" : 16 / 9
+        };
+        if (!file_exists(info_path)) then return info;
+        var grid = load_csv(info_path);
+        if (!ds_exists(grid, ds_type_grid)) then return info;
+
+        var width = ds_grid_width(grid);
+        var height = ds_grid_height(grid);
+        if (width >= 2 && height >= 2
+                && string_lower(chart_info_trim_value(ds_grid_get(grid, 0, 0))) == "key"
+                && string_lower(chart_info_trim_value(ds_grid_get(grid, 1, 0))) == "value") {
+                for (var row = 1; row < height; row++) {
+                        chart_info_apply_value(info, ds_grid_get(grid, 0, row), ds_grid_get(grid, 1, row));
+                };
+        } else if (height >= 2) {
+                // Standard info.csv: first row contains field names, second row values.
+                for (var column = 0; column < width; column++) {
+                        chart_info_apply_value(info, ds_grid_get(grid, column, 0), ds_grid_get(grid, column, 1));
+                };
+        };
+        ds_grid_destroy(grid);
         return info;
 }
 
@@ -529,7 +567,8 @@ function chart_load_root_info(root_dir) {
                 "image" : "",
                 "music" : "",
                 "chart" : "",
-                "offset_ms" : 0
+                "offset_ms" : 0,
+                "aspect_ratio" : 16 / 9
         };
         var root = chart_path_norm(root_dir);
         if (string_length(root) && string_char_at(root, string_length(root)) != "/") then root += "/";
@@ -549,6 +588,15 @@ function chart_load_root_info(root_dir) {
                         "info" : chart_parse_info_file(yml),
                         "has_info" : true,
                         "source" : "info.yml"
+                };
+        };
+
+        var csv = chart_path_join(root, "info.csv");
+        if (file_exists(csv)) {
+                return {
+                        "info" : chart_parse_info_csv(csv),
+                        "has_info" : true,
+                        "source" : "info.csv"
                 };
         };
 
@@ -672,6 +720,7 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
         session.line_overrides = chart_load_line_overrides(line_full, chart_full, root);
         session.extra_file = string_length(extra_full) ? chart_path_rel(root, extra_full) : "";
         session.info_offset_ms = real(info.offset_ms ?? 0);
+        session.aspect_ratio = real(info.aspect_ratio ?? (16 / 9));
 
         // name/level only from root info; otherwise keep empty strings.
         session.name = (has_info && string_length(info.name)) ? info.name : "";

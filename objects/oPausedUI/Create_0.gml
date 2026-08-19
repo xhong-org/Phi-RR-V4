@@ -1,6 +1,7 @@
 /// @description Shared PCR-style pause overlay.
 if (!variable_instance_exists(id, "owner")) then owner = noone;
-depth = -1000000;
+// Draw End must run after oChartMask (-12000), on the final application target.
+depth = -99999999//-11999;
 
 opened_at = get_timer();
 was_paused = false;
@@ -15,6 +16,53 @@ retry_mode = 0;
 retry_started_at = 0;
 retry_delay = 3000000;
 
+paused_ui_draw = function() {
+    if (!paused_ui_can_control() || (!game.paused && !retry_waiting)) then exit;
+    var _old_colour = draw_get_colour();
+    var _old_alpha = draw_get_alpha();
+    var _fade = clamp((get_timer() - opened_at) / 100000, 0, 1);
+    var _countdown_progress = retry_waiting
+        ? clamp((get_timer() - retry_started_at) / retry_delay, 0, 1) : 0;
+    var _overlay_alpha = retry_waiting
+        ? (retry_mode == 2 ? 0.6 * (1 - _countdown_progress) : 0.6)
+        : (0.6 * _fade);
+
+    draw_flush();
+    gpu_set_blendmode(bm_normal);
+    draw_set_colour(c_white);
+    draw_set_alpha(1);
+    var _black_scale_x = chart_view_width / max(1, sprite_get_width(spr_black));
+    var _black_scale_y = chart_view_height / max(1, sprite_get_height(spr_black));
+    draw_sprite_ext(spr_black, 0,
+        chart_view_left + chart_view_width * 0.5,
+        chart_view_height * 0.5,
+        _black_scale_x, _black_scale_y, 0, c_white, _overlay_alpha);
+
+    draw_set_alpha(retry_waiting ? 1 : _fade);
+    if (retry_waiting && retry_mode == 2) {
+        var _seconds_left = max(1, ceil((retry_delay - (get_timer() - retry_started_at)) / 1000000));
+        draw_set_font(game.font);
+        draw_set_halign(fa_center);
+        draw_set_valign(fa_middle);
+        draw_text_transformed(room_width * 0.5, room_height * 0.5, string(_seconds_left),
+            1.4 * ui_scale, 1.4 * ui_scale, 0);
+    } else if (!retry_waiting) {
+        var _base_scale = 0.9 * ui_scale;
+        for (var _i = 0; _i < 3; _i++) {
+            var _sprite = button_sprite[_i];
+            var _scale = _base_scale * (button_hover[_i] ? 1.1 : 1);
+            draw_sprite_ext(_sprite, 0,
+                button_x[_i] - sprite_get_width(_sprite) * _scale * 0.5,
+                button_y - sprite_get_height(_sprite) * _scale * 0.5,
+                _scale, _scale, 0,
+                button_hover[_i] ? make_colour_rgb(210, 235, 255) : c_white, _fade);
+        };
+    };
+    draw_set_colour(_old_colour);
+    draw_set_alpha(_old_alpha);
+    gpu_set_blendmode(bm_normal);
+};
+
 gui_width = room_width;
 gui_height = room_height;
 ui_scale = 1;
@@ -22,6 +70,11 @@ button_y = 384;
 button_x = [453, 683, 913];
 button_sprite = [spr_back, spr_retry, spr_resume];
 button_hover = [false, false, false];
+pause_button_x = 50;
+pause_button_y = 50;
+pause_button_radius = 42;
+pause_layout_width = -1;
+pause_layout_height = -1;
 
 function paused_ui_can_control() {
 	if (instance_exists(oPlayTransition) && !retry_waiting) {
@@ -35,6 +88,18 @@ function paused_ui_can_control() {
                 && is_array(game.__time) && (retry_waiting || game.__time[0] > 0)
                 && variable_instance_exists(owner, "chart_exit_started")
                 && !owner.chart_exit_started;
+}
+
+function paused_ui_refresh_layout() {
+	var _width = max(1, room_width);
+	var _height = max(1, room_height);
+	if (pause_layout_width == _width && pause_layout_height == _height) then return;
+	pause_layout_width = _width;
+	pause_layout_height = _height;
+	var _scale = variable_global_exists("global_scales") ? global_scales : 1;
+	pause_button_x = chart_view_left + 50 * _scale;
+	pause_button_y = 50 * _scale;
+	pause_button_radius = max(36, 42 * _scale);
 }
 
 function paused_ui_pause() {

@@ -5,6 +5,7 @@ if (!variable_instance_exists(id, "effects_global") || !is_array(effects_global)
 fx_ping = -1;
 fx_pong = -1;
 chart_time = 0;
+effect_caller_target = -1;
 external_hlsl_ready = false;
 external_hlsl_handles = {};
 external_draw_logged = {};
@@ -150,6 +151,24 @@ effect_render = function(effect_list) {
 	if (array_length(active) <= 0) then return;
 	if (!effect_surfaces_ensure()) then return;
 
+	// Effects can run while oChartMask owns a render target. Reading from the
+	// application surface in that state replaces the in-progress chart with
+	// the previous frame, which makes lines/notes/UI disappear.
+	// GML closures resolve instance variables, not local variables from the
+	// enclosing function. Keep the target on this controller for the restore
+	// callback below.
+	effect_caller_target = surface_get_target();
+	var input_surface = application_surface;
+	if (variable_global_exists("chart_surface_active") && chart_surface_active
+		&& instance_exists(oChartMask)) {
+		var chart_mask = instance_find(oChartMask, 0);
+		if (surface_exists(chart_mask.surface_id)) then input_surface = chart_mask.surface_id;
+	};
+	var restore_caller_target = function() {
+		surface_reset_target();
+		if (surface_exists(effect_caller_target)) then surface_set_target(effect_caller_target);
+	};
+
 	var previous_colour = draw_get_colour();
 	var previous_alpha = draw_get_alpha();
 	draw_set_colour(c_white);
@@ -158,11 +177,23 @@ effect_render = function(effect_list) {
 	gpu_set_blendmode_ext(bm_one, bm_zero);
 	// Finish the caller's batch before changing the render target.
 	draw_flush();
+	if (surface_exists(effect_caller_target)) then surface_reset_target();
 	surface_set_target(fx_ping);
 	draw_clear_alpha(c_black, 0);
-	draw_surface(application_surface, 0, 0);
+	// The sides of the aspect-masked room are outside the effective chart.
+	// Keep them transparent so built-in shaders never process or overwrite
+	// pixels outside the chart viewport.
+	var effect_left = 0;
+	var effect_width = surface_get_width(input_surface);
+	var effect_height = surface_get_height(input_surface);
+	if (variable_global_exists("chart_view_left") && variable_global_exists("chart_view_width")) {
+		effect_left = clamp(floor(chart_view_left), 0, effect_width);
+		effect_width = clamp(ceil(chart_view_width), 0, effect_width - effect_left);
+		effect_height = clamp(ceil(chart_view_height), 0, surface_get_height(input_surface));
+	};
+	draw_surface_part(input_surface, effect_left, 0, effect_width, effect_height, effect_left, 0);
 	draw_flush();
-	surface_reset_target();
+	restore_caller_target();
 
 	var source_surface = fx_ping;
 	var target_surface = fx_pong;
@@ -172,6 +203,7 @@ effect_render = function(effect_list) {
 			var external_handle = real(pass[$ "externalHandle"] ?? -1);
 			if (external_handle <= 0) then continue;
 			draw_flush();
+			if (surface_exists(effect_caller_target)) then surface_reset_target();
 			surface_set_target(target_surface);
 			draw_clear_alpha(c_black, 0);
 			var external_uniforms = pass.externalUniforms;
@@ -209,7 +241,7 @@ effect_render = function(effect_list) {
 					};
 				};
 			};
-			draw_surface(source_surface, 0, 0);
+			draw_surface_part(source_surface, effect_left, 0, effect_width, effect_height, effect_left, 0);
 			draw_flush();
 			// Set uniforms before begin: begin uploads the native constant buffer.
 			// Setting them afterward leaves the GPU with the previous pass values.
@@ -219,7 +251,7 @@ effect_render = function(effect_list) {
 					print($"[RPE Effect] External begin failed: shader={pass.shaderName}, status={external_begin_status}, error={rpe_hlsl_get_error()}");
 					external_draw_logged[$ pass.shaderName] = true;
 				};
-				surface_reset_target();
+				restore_caller_target();
 				continue;
 			};
 			var external_uvs = texture_get_uvs(surface_get_texture(source_surface));
@@ -230,7 +262,7 @@ effect_render = function(effect_list) {
 				print($"[RPE Effect] External direct draw: shader={pass.shaderName}, begin={external_begin_status}, draw={external_draw_status}, end={external_end_status}, uniforms={external_uniform_success}/{external_uniform_total}, time={chart_time}, vars={json_stringify(external_sampled_values)}, surface={surface_get_width(source_surface)}x{surface_get_height(source_surface)}, target={rpe_hlsl_target_width()}x{rpe_hlsl_target_height()}, uv={external_uvs[0]},{external_uvs[1]},{external_uvs[2]},{external_uvs[3]}");
 				external_draw_logged[$ pass.shaderName] = true;
 			};
-			surface_reset_target();
+			restore_caller_target();
 			var external_swap = source_surface;
 			source_surface = target_surface;
 			target_surface = external_swap;
@@ -239,6 +271,7 @@ effect_render = function(effect_list) {
 		var pass_shader = rpe_effect_shader_asset(pass.shaderName);
 		if (pass_shader == -1 || !shader_is_compiled(pass_shader)) then continue;
 		draw_flush();
+		if (surface_exists(effect_caller_target)) then surface_reset_target();
 		surface_set_target(target_surface);
 		draw_clear_alpha(c_black, 0);
 		shader_set(pass_shader);
@@ -256,16 +289,16 @@ effect_render = function(effect_list) {
 			else if (animation.kind == 2) then shader_set_uniform_f(handle, value[0], value[1]);
 			else if (animation.kind == 4) then shader_set_uniform_f(handle, value[0], value[1], value[2], value[3]);
 		};
-		draw_surface(source_surface, 0, 0);
+		draw_surface_part(source_surface, effect_left, 0, effect_width, effect_height, effect_left, 0);
 		// Submit while the intended shader and target are still active.
 		draw_flush();
 		shader_reset();
-		surface_reset_target();
+			restore_caller_target();
 		var swap_surface = source_surface;
 		source_surface = target_surface;
 		target_surface = swap_surface;
 	};
-	draw_surface(source_surface, 0, 0);
+	draw_surface_part(source_surface, effect_left, 0, effect_width, effect_height, effect_left, 0);
 	draw_flush();
 	shader_reset();
 	gpu_pop_state();

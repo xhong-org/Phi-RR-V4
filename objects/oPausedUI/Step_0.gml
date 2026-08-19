@@ -2,6 +2,7 @@ if (!instance_exists(owner)) {
         instance_destroy();
         exit;
 };
+paused_ui_refresh_layout();
 if (!paused_ui_can_control()) then exit;
 
 gui_width = max(1, room_width);
@@ -52,13 +53,9 @@ var mouse_gui_y = mouse_y;
 var button_pressed = mouse_check_button_pressed(mb_left);
 
 if (!game.paused) {
-        var pause_scale = variable_global_exists("global_scales") ? global_scales : ui_scale;
-        var pause_x = 50 * pause_scale;
-        var pause_y = 50 * pause_scale;
-        var pause_radius = max(36, 42 * pause_scale);
-        if (button_pressed && point_in_rectangle(mouse_gui_x, mouse_gui_y,
-                pause_x - pause_radius, pause_y - pause_radius,
-                pause_x + pause_radius, pause_y + pause_radius)) {
+		if (button_pressed && point_in_rectangle(mouse_gui_x, mouse_gui_y,
+				pause_button_x - pause_button_radius, pause_button_y - pause_button_radius,
+				pause_button_x + pause_button_radius, pause_button_y + pause_button_radius)) {
                 var click_now = get_timer();
                 if (click_now > pause_click_deadline) then pause_click_count = 0;
                 pause_click_count++;

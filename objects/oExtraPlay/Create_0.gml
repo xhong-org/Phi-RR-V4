@@ -188,8 +188,8 @@ draw_attached_video = function(line_instance) {
 	var video_height = ffvideos_get_height(video_handle);
 	if (video_width <= 0 || video_height <= 0) then return;
 
-	var sx = room_width / video_width;
-	var sy = room_height / video_height;
+	var sx = chart_view_width / video_width;
+	var sy = chart_view_height / video_height;
 	var draw_sx = (video.scale == "fit" ? sx : (video.scale == "inside" ? min(sx, sy) : max(sx, sy)));
 	var draw_sy = (video.scale == "fit" ? sy : draw_sx);
 	if (video.attach.scale_x) then draw_sx *= max(0, real(line_instance.__scale_x));

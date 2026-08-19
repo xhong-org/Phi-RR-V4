@@ -1,6 +1,7 @@
 /// @description
 window_set_caption($"{GAME_NAME}");
-depth = DEPTH.DEBUG;
+// Draw after the chart composition so the aspect mask is final.
+depth = DEPTH.HEF + 1;
 gml_release_mode(false);
 globalvar game , game_1 , _eff_c , combo , maxcombo , rpe_bpm , fpsReal , PhiTime;
 bpm_count = 0;
@@ -66,6 +67,8 @@ if ((!is_string(_bg) || !string_length(_bg))
 if (is_string(_bg) && string_length(_bg)) then game.Background(InChartPath + _bg);
 
 instance_create_depth(0,0,0,oBG);
+instance_create_depth(0, 0, -12001, oBG_1);
+instance_create_depth(0, 0, -12000, oChartMask);
 instance_create_depth(0,0,0,oMedia , { "name" : (string_length(game.folder_chart.music) ? (InChartPath + game.folder_chart.music) : "") });
 instance_create_depth(0,0,DEPTH.BG - 1,oExtraPlay);
 // Seed BPM from the same normalized timeline used by parser and runtime.

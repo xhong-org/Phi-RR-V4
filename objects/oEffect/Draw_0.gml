@@ -16,7 +16,6 @@ if (!game.paused) {
     part_type_sprite(_hitFX, effect, false, 0, 0);
 }
 
-// 
 part_system_drawit(p1);
 
 

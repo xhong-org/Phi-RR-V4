@@ -8,14 +8,14 @@ _position_floor_delta = floorPosition - line_floor;
 _note_position_speed = speed * _position_floor_delta;
 _control_position_speed = _note_position_speed;
 
-var notes_w = room_width * 0.05625;
-var notes_h = room_height * 0.6;
+	var notes_w = chart_view_width * 0.05625;
+	var notes_h = chart_view_height * 0.6;
 var posx = (xOffset / 75.375) * notes_w;
 if (variable_instance_exists(_line, "__incline_sin")) {
 	var incline_y = _note_position_speed + (2 * yOffset / 900 * speed);
 	posx *= 1 - real(_line.__incline_sin) * incline_y * 1.25;
 };
-var posy = (yorigin * room_height) + (_note_position_speed * notes_h);
+	var posy = (yorigin * chart_view_height) + (_note_position_speed * notes_h);
 posx *= rpe_sample_control(1, _note_position_speed, 1);
 posy *= rpe_sample_control(3, _note_position_speed, 1);
 var control_size = rpe_sample_control(2, _note_position_speed, 1);

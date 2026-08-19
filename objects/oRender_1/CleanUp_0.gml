@@ -1,4 +1,10 @@
 /// @description Release RPE and shared chart resources on room exit.
+chart_clip_shutdown();
+if (variable_global_exists("chart_surface") && !is_undefined(chart_surface) && surface_exists(chart_surface)) then surface_free(chart_surface);
+if (variable_global_exists("chart_surface")) then chart_surface = -1;
+if (variable_global_exists("chart_background_surface") && !is_undefined(chart_background_surface)
+	&& surface_exists(chart_background_surface)) then surface_free(chart_background_surface);
+if (variable_global_exists("chart_background_surface")) then chart_background_surface = -1;
 if (os_type == os_windows && extension_exists("I_Parallel")) rpe_worker_shutdown();
 if (variable_instance_exists(id, "_rpe_worker_hierarchy") && buffer_exists(_rpe_worker_hierarchy)) buffer_delete(_rpe_worker_hierarchy);
 if (variable_instance_exists(id, "_rpe_worker_input") && buffer_exists(_rpe_worker_input)) buffer_delete(_rpe_worker_input);

@@ -26,8 +26,8 @@ if (time_before) {
 	_is_out_line = true;
 };
 
-var scene_w = room_width;
-var scene_h = room_height;
+	var scene_w = chart_view_width;
+	var scene_h = chart_view_height;
 var notes_w = scene_w * 0.05625;
 var notes_h = scene_h * 0.6;
 var posx = (xOffset / 75.375) * notes_w;
