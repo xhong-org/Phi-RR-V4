@@ -17,4 +17,6 @@ if (instance_exists(oLoading)) {
 };
 
 // Judged PEC notes are inactive and otherwise escape normal room teardown.
-instance_activate_object(oNote_2);
+if (!(variable_global_exists("loading_animation_active") && global.loading_animation_active)) {
+    instance_activate_object(oNote_2);
+};

@@ -25,32 +25,46 @@ line_progress = 0;
 render_started_frame = 0;
 render_outro_started_frame = 0;
 transition_instances = [];
+chart_instances_activation_requested = false;
 
 function play_transition_deactivate_gameplay() {
 	if (array_length(transition_instances) > 0) then return;
-	// Pausing already stops gameplay updates. Keep instances active so line
-	// parent references and the note preload activation set survive the
-	// transition unchanged; only suppress their drawing temporarily.
-	with (oLine) { array_add(other.transition_instances, [id, visible]); visible = false; };
-	with (oLine_1) { array_add(other.transition_instances, [id, visible]); visible = false; };
-	with (oLine_2) { array_add(other.transition_instances, [id, visible]); visible = false; };
-	with (oNote) { array_add(other.transition_instances, [id, visible]); visible = false; };
-	with (oNote_1) { array_add(other.transition_instances, [id, visible]); visible = false; };
-	with (oNote_2) { array_add(other.transition_instances, [id, visible]); visible = false; };
+	// Never deactivate judge lines here. Loading already hid them; a second
+	// deactivate/activate pair is deferred and skips line event init.
+	chart_set_gameplay_visible(false);
 	if (instance_exists(oEffect)) then with (oEffect) isDraw = false;
 	if (instance_exists(oEffectNew)) then with (oEffectNew) isDraw = false;
+	transition_instances = [true];
 }
 
 function play_transition_activate_gameplay() {
-	for (var _i = 0; _i < array_length(transition_instances); _i++) {
-		var _record = transition_instances[_i];
-		if (is_array(_record) && array_length(_record) >= 2 && instance_exists(_record[0])) {
-			_record[0].visible = _record[1];
-		};
-	};
+	chart_set_gameplay_visible(true);
 	transition_instances = [];
 	if (instance_exists(oEffect)) then with (oEffect) isDraw = true;
 	if (instance_exists(oEffectNew)) then with (oEffectNew) isDraw = true;
+}
+
+function play_transition_activate_chart_instances() {
+    if (!instance_exists(owner)) then return;
+    if (owner.object_index == oRender_1) {
+        rpe_sync_note_activation();
+    } else if (owner.object_index == oRender_2) {
+        if (variable_global_exists("game_2") && is_struct(game_2)
+			&& !(bool(game_2._note_activation_enabled ?? false))
+			&& is_array(game_2.runtime_note_instances)) {
+            for (var _pni = 0; _pni < array_length(game_2.runtime_note_instances); _pni++) {
+                instance_activate_object(game_2.runtime_note_instances[_pni]);
+            };
+        };
+    } else if (owner.object_index == oRender) {
+        if (variable_global_exists("game") && is_struct(game)
+			&& is_array(game.runtime_note_instances)) {
+            for (var _oni = 0; _oni < array_length(game.runtime_note_instances); _oni++) {
+                instance_activate_object(game.runtime_note_instances[_oni]);
+            };
+        };
+    };
+    chart_instances_activation_requested = true;
 }
 
 function play_transition_sync_bound_ui() {
@@ -58,13 +72,9 @@ function play_transition_sync_bound_ui() {
 	if (!variable_instance_exists(owner, "play_transition_bound_ui")
 		|| !is_struct(owner.play_transition_bound_ui)) then return;
 
-	// Lines are created after the renderer in some load paths. Refresh this
-	// relationship while the transition is active instead of relying on the
-	// renderer's one-time Create scan.
+	// Lines stay active (only hidden) during the transition. Enumerate the
+	// retained line list so attachUI bindings survive child lines.
 	var _render_owner = owner;
-	// The gameplay objects are inactive during the transition, so enumerate
-	// the chart's retained line list instead of relying on an active-object
-	// query. This also preserves bindings for child lines.
 	if (variable_global_exists("game_1") && is_struct(game_1)
 		&& is_array(game_1.line_list)) {
 		var _lines = game_1.line_list;
@@ -123,7 +133,8 @@ function play_transition_finish_exit() {
 	m_clean(true);
 	chart_session_cleanup(true);
 	state = PLAY_TRANSITION_STATE.FINISHED;
-	room_goto(room_menu);
+	if (variable_global_exists("pls_environment_run") && global.pls_environment_run) then game_end();
+	else room_goto(room_menu);
 }
 
 play_transition_apply(0);

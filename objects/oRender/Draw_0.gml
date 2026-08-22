@@ -1,4 +1,5 @@
 /// @description 
+if (!chart_hud_ready()) then exit;
 draw_set_font(game.font);
 event_user(_draw_user_count);
 draw_set_valign(fa_center);

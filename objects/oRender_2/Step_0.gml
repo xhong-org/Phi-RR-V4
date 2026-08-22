@@ -1,7 +1,28 @@
 /// @description 
+if (variable_global_exists("loading_animator_finished") && global.loading_animator_finished) {
+    if (!instance_exists(oChartMask)) then instance_create_depth(0, 0, -12000, oChartMask);
+    instance_activate_object(oRPEEffect);
+    instance_activate_object(oEffect);
+    instance_activate_object(oEffectNew);
+    if (!instance_exists(oPlayTransition)) then instance_create_depth(0, 0, -999999, oPlayTransition, { owner:id });
+    global.loading_animator_finished = false;
+};
+if (variable_global_exists("loading_animation_active") && global.loading_animation_active) exit;
 if(!game.paused){
 	game.Math.ctime();
 	event_user(0);
+	if (variable_global_exists("game_2") && is_struct(game_2)
+		&& bool(game_2._note_activation_enabled ?? false) && is_array(game_2._notes)) {
+		var _pec_now = game.__time[1] - real(game_2.chart.offsetSeconds ?? 0);
+		var _pec_notes = game_2._notes;
+		var _pec_count = array_length(_pec_notes);
+		var _pec_index = clamp(real(game_2._note_activation_index ?? 0), 0, _pec_count);
+		while (_pec_index < _pec_count && _pec_notes[_pec_index].activateSec <= _pec_now) {
+			instance_activate_object(_pec_notes[_pec_index].id);
+			_pec_index++;
+		};
+		game_2._note_activation_index = _pec_index;
+	};
 }elif(game.paused && game.__time[0] > 0){
 		
 };

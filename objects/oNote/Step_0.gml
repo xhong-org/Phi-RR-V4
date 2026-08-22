@@ -1,4 +1,5 @@
 /// @description Skip distant notes, then update only the active working set.
+if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then exit;
 _now_seconds = game.__time[1];
 _now_beat = (_now_seconds * _beat_per_second);
 

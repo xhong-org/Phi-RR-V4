@@ -24,6 +24,9 @@ function chart_session_default() {
                 "aspect_ratio" : 16 / 9,
                 "name" : "",
                 "level" : "",
+                "composer" : "",
+                "charter" : "",
+                "illustrator" : "",
                 "play_room" : -1,
                 "ready" : false,
                 "from_zip" : false,
@@ -93,6 +96,66 @@ function chart_session_cleanup(full_reset = true) {
         return true;
 }
 
+function chart_hud_ready() {
+        if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return false;
+        if (instance_exists(oPlayTransition)) then return true;
+        if (variable_global_exists("game") && is_struct(game) && !game.paused) then return true;
+        return false;
+}
+
+/// Hide or show chart objects without deactivate/activate.
+/// Activating is deferred to the end of the event, so a following
+/// event_perform or first Step is skipped and judge-line init is lost.
+function chart_set_gameplay_visible(_visible) {
+        var _show = bool(_visible);
+        var _apply_line_list = function(_owner, _visible_flag) {
+                if (!is_struct(_owner) || !struct_exists(_owner, "runtime_line_instances")) then return;
+                var _lines = _owner.runtime_line_instances;
+                if (!is_array(_lines)) then return;
+                for (var _i = 0; _i < array_length(_lines); _i++) {
+                        var _line = _lines[_i];
+                        if (instance_exists(_line)) then _line.visible = _visible_flag;
+                };
+        };
+        if (variable_global_exists("game")) then _apply_line_list(game, _show);
+        if (variable_global_exists("game_1")) then _apply_line_list(game_1, _show);
+        if (variable_global_exists("game_2")) then _apply_line_list(game_2, _show);
+        with (oLine) visible = _show;
+        with (oLine_1) visible = _show;
+        with (oLine_2) visible = _show;
+        with (oNote) visible = _show;
+        with (oNote_1) visible = _show;
+        with (oNote_2) visible = _show;
+}
+
+/// Park FX behind the loading overlay. Judge lines stay active so CreateLines
+/// init is not thrown away by a later activate.
+function chart_idle_behind_loading() {
+        if (!(variable_global_exists("loading_animation_active") && global.loading_animation_active)) then return;
+        chart_set_gameplay_visible(false);
+        instance_deactivate_object(oRPEEffect);
+        instance_deactivate_object(oEffect);
+        instance_deactivate_object(oEffectNew);
+}
+
+function chart_loading_animation_abort() {
+        if (instance_exists(oLoadAnimator)) {
+                with (oLoadAnimator) instance_destroy();
+        };
+        if (variable_global_exists("loading_animation_active")) {
+                global.loading_animation_active = false;
+        };
+        if (variable_global_exists("loading_animation_load_start")) {
+                global.loading_animation_load_start = false;
+        };
+        if (variable_global_exists("loading_animator_finished")) {
+                global.loading_animator_finished = false;
+        };
+        if (variable_global_exists("load_animator_instance")) {
+                global.load_animator_instance = noone;
+        };
+}
+
 function chart_session_fail(message, cleanup = true) {
         var session = chart_session_ensure();
         session.ready = false;
@@ -106,6 +169,9 @@ function chart_session_fail(message, cleanup = true) {
         session.image_file = "";
         session.name = "";
         session.level = "";
+        session.composer = "";
+        session.charter = "";
+        session.illustrator = "";
         session.play_room = -1;
         print($"[ChartSession][Error] {message}");
         if (cleanup) then chart_session_cleanup(true);
@@ -189,13 +255,67 @@ function chart_load_line_overrides(line_path, chart_path, root_dir) {
                 var image_name = chart_path_norm(string(row.Image));
                 var image_full = chart_path_join(line_dir, image_name);
                 if (!file_exists(image_full)) then image_full = chart_path_join(root_dir, image_name);
+                var scale_cell = row[$ "Scale"];
+                var has_scale = !is_undefined(scale_cell) && string_length(string_trim(string(scale_cell)));
                 array_add(result, {
                         LineId: floor(real(row.LineId)),
                         Image: chart_path_rel(root_dir, image_full),
-                        Scale: real(row[$ "Scale"] ?? 1)
+                        Scale: (has_scale ? number(scale_cell, 1) : undefined),
+                        Aspect: number(row[$ "Aspect"] ?? (row[$ "Horz"] ?? 1), 1),
+                        UseLineScale: chart_line_csv_parse_bool(row[$ "UseLineScale"], true),
+                        Vert: row[$ "Vert"]
                 });
         };
         return result;
+}
+
+function chart_line_csv_parse_bool(value, fallback = true) {
+        if (is_bool(value)) then return value;
+        if (is_real(value) && is_finite(value)) then return value != 0;
+        var text = string_lower(string_trim(string(value ?? "")));
+        if (text == "true" || text == "1" || text == "yes") then return true;
+        if (text == "false" || text == "0" || text == "no") then return false;
+        return fallback;
+}
+
+function chart_line_csv_sprite_scale(_override, _sprite = -1) {
+        var _scale = 1;
+        var _aspect = 1;
+        var _use_line_scale = true;
+        if (is_struct(_override)) {
+                if (is_real(_override[$ "Scale"]) && is_finite(_override.Scale)) {
+                        _scale = _override.Scale;
+                } else if (!is_undefined(_override[$ "Vert"])) {
+                        var _vert = real(_override.Vert);
+                        if (is_finite(_vert) && _vert != 0 && sprite_exists(_sprite)) {
+                                _scale = abs(_vert) * (1080 / max(1, sprite_get_height(_sprite)));
+                                _use_line_scale = (_vert > 0);
+                        };
+                };
+                if (is_real(_override[$ "Aspect"]) && is_finite(_override.Aspect) && _override.Aspect > 0) {
+                        _aspect = _override.Aspect;
+                };
+                if (struct_exists(_override, "UseLineScale")) {
+                        _use_line_scale = bool(_override.UseLineScale);
+                };
+        };
+        var _view_h = room_height;
+        var _view_w = room_width;
+        if (variable_global_exists("chart_view_height") && is_real(chart_view_height) && chart_view_height > 0) {
+                _view_h = chart_view_height;
+        };
+        if (variable_global_exists("chart_view_width") && is_real(chart_view_width) && chart_view_width > 0) {
+                _view_w = chart_view_width;
+        };
+        var _d_scale;
+        if (_use_line_scale) {
+                var _ui_scale = (_view_w > _view_h * 0.75) ? (_view_h / 18.75) : (_view_w / 14.0625);
+                _d_scale = (_ui_scale * 18.75) / 1080;
+        } else {
+                _d_scale = _view_h / 1080;
+        };
+        var _base = _d_scale * _scale;
+        return [_base * _aspect, _base];
 }
 
 function chart_line_override(line_id) {
@@ -448,6 +568,25 @@ function chart_info_trim_value(val) {
         return v;
 }
 
+function chart_parse_aspect_ratio(value, fallback = 16 / 9) {
+        if (is_real(value) && is_finite(value) && value > 0) then return value;
+        var text = string_trim(string(value ?? ""));
+        if (!string_length(text)) then return fallback;
+        var sep = string_pos(":", text);
+        if (sep <= 0) then sep = string_pos("/", text);
+        if (sep > 1 && sep < string_length(text)) {
+                var aspect_w = number(string_trim(string_copy(text, 1, sep - 1)), 0);
+                var aspect_h = number(string_trim(string_copy(text, sep + 1, string_length(text) - sep)), 0);
+                if (is_real(aspect_w) && is_real(aspect_h) && is_finite(aspect_w) && is_finite(aspect_h)
+                        && aspect_w > 0 && aspect_h > 0) {
+                        return aspect_w / aspect_h;
+                };
+        };
+        var parsed = number(text, 0);
+        if (is_real(parsed) && is_finite(parsed) && parsed > 0) then return parsed;
+        return fallback;
+}
+
 function chart_info_apply_value(info, key, val) {
         var normalized_key = string_lower(string_replace_all(string(key), " ", ""));
         normalized_key = string_replace_all(normalized_key, "\t", "");
@@ -461,6 +600,21 @@ function chart_info_apply_value(info, key, val) {
                 break;
                 case "level":
                         info.level = value;
+                break;
+                case "composer":
+                case "musiccomposer":
+                case "artist":
+                        info.composer = value;
+                break;
+                case "charter":
+                case "chartcharter":
+                case "designer":
+                        info.charter = value;
+                break;
+                case "illustrator":
+                case "illustrationauthor":
+                case "illustrationartist":
+                        info.illustrator = value;
                 break;
                 case "difficulty":
                         if (!string_length(info.level)) then info.level = value;
@@ -487,10 +641,8 @@ function chart_info_apply_value(info, key, val) {
                         info.offset_ms = number(value, 0);
                 break;
                 case "aspectratio":
-                        var parsed_aspect = number(value, 0);
-                        if (is_real(parsed_aspect) && is_finite(parsed_aspect) && parsed_aspect > 0) {
-                                info.aspect_ratio = parsed_aspect;
-                        };
+                        var parsed_aspect = chart_parse_aspect_ratio(value, 0);
+                        if (parsed_aspect > 0) then info.aspect_ratio = parsed_aspect;
                 break;
         };
 }
@@ -500,6 +652,9 @@ function chart_parse_info_file(info_path) {
         var info = {
                 "name" : "",
                 "level" : "",
+                "composer" : "",
+                "charter" : "",
+                "illustrator" : "",
                 "image" : "",
                 "music" : "",
                 "chart" : "",
@@ -535,6 +690,7 @@ function chart_parse_info_file(info_path) {
 function chart_parse_info_csv(info_path) {
         var info = {
                 "name" : "", "level" : "", "image" : "", "music" : "", "chart" : "",
+                "composer" : "", "charter" : "", "illustrator" : "",
                 "offset_ms" : 0, "aspect_ratio" : 16 / 9
         };
         if (!file_exists(info_path)) then return info;
@@ -564,6 +720,9 @@ function chart_load_root_info(root_dir) {
         var info = {
                 "name" : "",
                 "level" : "",
+                "composer" : "",
+                "charter" : "",
+                "illustrator" : "",
                 "image" : "",
                 "music" : "",
                 "chart" : "",
@@ -725,6 +884,9 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
         // name/level only from root info; otherwise keep empty strings.
         session.name = (has_info && string_length(info.name)) ? info.name : "";
         session.level = (has_info && string_length(info.level)) ? info.level : "";
+        session.composer = (has_info && string_length(info.composer)) ? info.composer : "";
+        session.charter = (has_info && string_length(info.charter)) ? info.charter : "";
+        session.illustrator = (has_info && string_length(info.illustrator)) ? info.illustrator : "";
         session.play_room = chart_session_play_room_for(format_id);
         session.ready = true;
         session.error = "";

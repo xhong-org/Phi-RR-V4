@@ -1,4 +1,5 @@
 /// @description Apply global effects after chart UI rendering.
+if (variable_instance_exists(id, "effect_boundary_role")) then exit;
 var _transition_allows_shaders = true;
 if (instance_exists(oPlayTransition)) {
 	var _transition = instance_find(oPlayTransition, 0);

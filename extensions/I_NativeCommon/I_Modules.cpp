@@ -276,6 +276,7 @@ ID3D11VertexShader* g_fullscreenVertexShader = nullptr;
 ID3D11RasterizerState* g_fullscreenRasterizer = nullptr;
 ID3D11DepthStencilState* g_fullscreenDepthStencil = nullptr;
 ID3D11BlendState* g_fullscreenBlend = nullptr;
+ID3D11SamplerState* g_fullscreenSampler = nullptr;
 UINT g_previousSlot = 0;
 bool g_active = false;
 std::int32_t g_lastTargetWidth = 0;
@@ -526,6 +527,13 @@ VSOutput main(uint vertexId : SV_VertexID) {
     D3D11_BLEND_DESC blendDesc{};
     blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
     if (FAILED(g_device->CreateBlendState(&blendDesc, &g_fullscreenBlend))) return -1;
+    D3D11_SAMPLER_DESC samplerDesc{};
+    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+    if (FAILED(g_device->CreateSamplerState(&samplerDesc, &g_fullscreenSampler))) return -1;
     setError({});
     return 3;
 }
@@ -710,6 +718,8 @@ std::int32_t rpe_hlsl_draw(std::int32_t handle, float uvLeft, float uvTop,
 
     ID3D11VertexShader* previousVertexShader = nullptr;
     ID3D11PixelShader* previousPixelShader = nullptr;
+    ID3D11ShaderResourceView* previousSourceView = nullptr;
+    ID3D11SamplerState* previousSampler = nullptr;
     ID3D11InputLayout* previousInputLayout = nullptr;
     ID3D11Buffer* previousConstants = nullptr;
     ID3D11Buffer* previousVertexBuffer = nullptr;
@@ -728,6 +738,8 @@ std::int32_t rpe_hlsl_draw(std::int32_t handle, float uvLeft, float uvTop,
     UINT previousSampleMask = 0;
     g_context->VSGetShader(&previousVertexShader, nullptr, nullptr);
     g_context->PSGetShader(&previousPixelShader, nullptr, nullptr);
+    g_context->PSGetShaderResources(0, 1, &previousSourceView);
+    g_context->PSGetSamplers(0, 1, &previousSampler);
     g_context->IAGetInputLayout(&previousInputLayout);
     g_context->IAGetPrimitiveTopology(&previousTopology);
     g_context->IAGetVertexBuffers(0, 1, &previousVertexBuffer, &previousVertexStride, &previousVertexOffset);
@@ -841,6 +853,10 @@ std::int32_t rpe_hlsl_draw(std::int32_t handle, float uvLeft, float uvTop,
     const FLOAT blendFactor[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     g_context->OMSetBlendState(g_fullscreenBlend, blendFactor, 0xffffffffu);
     g_context->VSSetShader(record.vertexShader ? record.vertexShader : g_fullscreenVertexShader, nullptr, 0);
+    // GameMaker's batch flush does not guarantee which texture stage remains
+    // bound. Bind the input captured above explicitly before sampling it.
+    g_context->PSSetShaderResources(0, 1, &sourceView);
+    g_context->PSSetSamplers(0, 1, &g_fullscreenSampler);
     g_context->PSSetShader(record.shader, nullptr, 0);
     g_context->Draw(record.vertexShader ? 4 : 6, 0);
 
@@ -852,6 +868,8 @@ std::int32_t rpe_hlsl_draw(std::int32_t handle, float uvLeft, float uvTop,
     g_context->RSSetState(previousRasterizer);
     g_context->OMSetDepthStencilState(previousDepthStencil, previousStencilRef);
     g_context->OMSetBlendState(previousBlend, previousBlendFactor, previousSampleMask);
+    g_context->PSSetShaderResources(0, 1, &previousSourceView);
+    g_context->PSSetSamplers(0, 1, &previousSampler);
     if (previousViewportCount > 0) g_context->RSSetViewports(previousViewportCount, previousViewports);
     g_context->PSSetConstantBuffers(record.constantSlot, 1, &previousConstants);
     if (record.vertexConstants) g_context->VSSetConstantBuffers(record.vertexConstantSlot, 1, &previousVertexConstants);
@@ -859,6 +877,8 @@ std::int32_t rpe_hlsl_draw(std::int32_t handle, float uvLeft, float uvTop,
     if (previousConstants) previousConstants->Release();
     if (previousInputLayout) previousInputLayout->Release();
     if (previousPixelShader) previousPixelShader->Release();
+    if (previousSourceView) previousSourceView->Release();
+    if (previousSampler) previousSampler->Release();
     if (previousVertexShader) previousVertexShader->Release();
     if (previousVertexBuffer) previousVertexBuffer->Release();
     if (previousVertexConstants) previousVertexConstants->Release();
@@ -1027,10 +1047,12 @@ void rpe_hlsl_shutdown() {
     restoreState();
     g_shaders.clear();
     if (g_fullscreenVertexShader) g_fullscreenVertexShader->Release();
+    if (g_fullscreenSampler) g_fullscreenSampler->Release();
     if (g_fullscreenBlend) g_fullscreenBlend->Release();
     if (g_fullscreenDepthStencil) g_fullscreenDepthStencil->Release();
     if (g_fullscreenRasterizer) g_fullscreenRasterizer->Release();
     g_fullscreenVertexShader = nullptr;
+    g_fullscreenSampler = nullptr;
     g_fullscreenBlend = nullptr;
     g_fullscreenDepthStencil = nullptr;
     g_fullscreenRasterizer = nullptr;

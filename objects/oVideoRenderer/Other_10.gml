@@ -30,6 +30,14 @@ if (surface_recovery_logged) {
     render_status = encoder_started ? "Rendering video" : "Preparing chart and encoder";
 };
 
+// Do not encode loading frames or the pre-animation wait. Extra frames at
+// the start make the delayed chart audio begin during the intro.
+if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then exit;
+if (!instance_exists(oPlayTransition)) then exit;
+var _transition = instance_find(oPlayTransition, 0);
+if (!variable_instance_exists(_transition, "state")
+    || _transition.state < PLAY_TRANSITION_STATE.INTRO) then exit;
+
 if (!encoder_started) {
     frame_width = width;
     frame_height = height;
@@ -78,12 +86,23 @@ if (!encoder_started) {
     print($"[Renderer] Started: {frame_width}x{frame_height}, frames={total_frames}");
 };
 
-// Compose the recorded frame as chart (including chart HUD) -> aspect mask.
-// The progress overlay is drawn later by Draw End, after capture, so it stays
-// visible on the render screen without entering the output video.
-// Capture always uses the complete application surface. chart_view_width and
-// chart_view_height only describe the chart content inside this full frame.
-draw_chart_mask(room_width, room_height);
+// Capture the application surface. The progress overlay is drawn later by
+// Draw End so it stays out of the output video. Paint the undimmed
+// illustration only outside the viewport so the encoder sees the same
+// aspect mask as interactive play, without covering shader-processed notes.
+// Do not surface_reset_target here: oChartMask already popped its target.
+var _mask_left = floor(chart_view_left);
+var _mask_right = ceil(chart_view_right);
+var _mask_height = max(1, ceil(chart_view_height));
+if (_mask_left > 0) {
+    gpu_set_scissor(0, 0, _mask_left, _mask_height);
+    chart_draw_background(false);
+};
+if (_mask_right < room_width) {
+    gpu_set_scissor(_mask_right, 0, max(1, room_width - _mask_right), _mask_height);
+    chart_draw_background(false);
+};
+gpu_set_scissor(0, 0, room_width, room_height);
 draw_flush();
 if (!video_renderer_capture()) {
     render_status = "GPU capture stopped unexpectedly";

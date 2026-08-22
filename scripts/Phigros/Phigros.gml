@@ -4,7 +4,7 @@
 #macro func function
 #macro isExists file_exists
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal 40511
+#macro VerReal 40517
 #macro VerStr "v.4.0.9b"
 #macro GAME_NAME "Re: Phi-RR - " + VerStr
 #macro HYW_MODE true
@@ -207,6 +207,26 @@ function judgeCalc(oHTime , nHTime , bpm , xx , yy , _type , isFHitEf = true, in
 	if(isFHitEf && (status == TYPE.GOOD || status == TYPE.PREFECT)) then _eff_c(xx , yy , is_undefined(effectColor) ? color : effectColor);
 	
 	return(status);
+};
+
+/// @desc Recalculate the on-line hit-effect position for an RPE note.
+/// Official notes refresh geometry then project local X with the line's
+/// current transform immediately before spawning the effect.
+function rpe_note_hit_effect_xy() {
+	if (instance_exists(_line_ref)) {
+		with (_line_ref) event_perform(ev_step, ev_step_end);
+		event_user(_step_user_count);
+	};
+	return [_x_h, _y_h];
+};
+
+/// @desc Recalculate the on-line hit-effect position for a PEC note.
+function pec_note_hit_effect_xy() {
+	if (!instance_exists(line_ref)) then return [x, y];
+	var _local_x = localXFactor * chart_view_width;
+	var _c = line_ref.__cos;
+	var _s = line_ref.__sin;
+	return [line_ref.x + _c * _local_x, line_ref.y - _s * _local_x];
 };
 
 ///@desc 分数系统
@@ -508,6 +528,8 @@ function Phigros() constructor { // 仅仅结构
 		if(instance_exists(oEffectNew)) then with(oEffectNew) effect_events = [];
 		self._notes = [];
 		self.line_list = [];
+		self.runtime_line_instances = [];
+		self.runtime_note_instances = [];
 		if(lmode == 0){
 			var f = (string_length(_chart) ? _chart : ($"{working_directory}chart/Chart_IN.json"));
 			if (!file_exists(f)) {
@@ -1136,6 +1158,7 @@ function Phigros() constructor { // 仅仅结构
 				Scales : (scales)
 			}));
 			array_add(self.line_list , l);
+			array_add(self.runtime_line_instances, l);
 		};
 		//print($"cl: {array_length(game.__time)}");
 		// print($"cl: {
@@ -1155,6 +1178,7 @@ function Phigros() constructor { // 仅仅结构
 				"speed" : (na[$ "speed"]),
 				"_hl" : (na[$ "hl"])
 			});
+			array_add(self.runtime_note_instances, note_instance);
 			if (variable_global_exists("render_mode") && global.render_mode && instance_exists(note_instance)) {
 				var note_hitsound_time = (note_instance.type == 2 || note_instance.type == 4)
 					? note_instance.realHitTime : note_instance.judgeRealTime;
@@ -1204,11 +1228,70 @@ function rpe_read_info_offset_ms(root_path) {
 };
 
 function rpe_array_to_beat(_time_array) {
-	if (!is_array(_time_array)) then return _time_array;
-	if (array_length(_time_array) < 3) then return 0;
-	var _denominator = array_get(_time_array, 2);
-	if (_denominator == 0) then return array_get(_time_array, 0);
-	return array_get(_time_array, 0) + array_get(_time_array, 1) / _denominator;
+	if (is_real(_time_array)) then return _time_array;
+	if (!is_array(_time_array)) then return 0;
+	var _n = array_length(_time_array);
+	if (_n <= 0) then return 0;
+	var _beat = real(array_get(_time_array, 0));
+	if (_n == 1) then return _beat;
+	var _num = real(array_get(_time_array, 1));
+	var _den = (_n >= 3) ? real(array_get(_time_array, 2)) : 1;
+	if (_den == 0) then return _beat;
+	return _beat + _num / _den;
+};
+
+/// Activate RPE notes that should already be live after loading / retry / intro.
+function rpe_sync_note_activation(_now_sec = undefined) {
+	if (!variable_global_exists("game_1") || !is_struct(game_1)) then return;
+	var _notes = game_1._notes;
+	if (!is_array(_notes)) then return;
+	if (_now_sec == undefined) {
+		_now_sec = (variable_global_exists("game") && is_struct(game) && is_array(game.__time))
+			? real(game.__time[1]) : 0;
+	};
+	var _records = game_1._note_activation_records;
+	var _enabled = bool(game_1._note_activation_enabled ?? false);
+	if (!_enabled) {
+		for (var _i = 0; _i < array_length(_notes); _i++) {
+			var _note = _notes[_i];
+			if (!is_struct(_note)) then continue;
+			instance_activate_object(_note.id);
+			var _key = string(_note.id);
+			if (is_struct(_records) && struct_exists(_records, _key)) {
+				_records[$ _key].activated = true;
+			};
+		};
+		game_1._note_activation_index = array_length(_notes);
+		return;
+	};
+	var _index = 0;
+	var _count = array_length(_notes);
+	while (_index < _count) {
+		var _item = _notes[_index];
+		if (!is_struct(_item)) {
+			_index++;
+			continue;
+		};
+		var _always = bool(_item.alwaysActive ?? false);
+		if (!_always && real(_item.activateSec ?? infinity) > _now_sec) then break;
+		instance_activate_object(_item.id);
+		var _item_key = string(_item.id);
+		if (is_struct(_records) && struct_exists(_records, _item_key)) {
+			_records[$ _item_key].activated = true;
+		};
+		_index++;
+	};
+	for (var _rest = _index; _rest < _count; _rest++) {
+		var _late = _notes[_rest];
+		if (!is_struct(_late) || !bool(_late.alwaysActive ?? false)) then continue;
+		instance_activate_object(_late.id);
+		var _late_key = string(_late.id);
+		if (is_struct(_records) && struct_exists(_records, _late_key)) {
+			_records[$ _late_key].activated = true;
+		};
+	};
+	game_1._note_activation_index = _index;
+	game_1._note_activation_last_time = _now_sec;
 };
 
 function chart_default_resources_load() {
@@ -1442,6 +1525,14 @@ function RPE() constructor{
 		self.chart_info.meta_offset = meta_offset;
 		self.chart_info.info_offset = info_offset;
 		self.chart_info.offset = meta_offset + info_offset;
+		var meta_aspect = meta[$ "aspectRatio"] ?? (meta[$ "aspect_ratio"] ?? undefined);
+		var parsed_meta_aspect = chart_parse_aspect_ratio(meta_aspect, 0);
+		if (parsed_meta_aspect > 0) {
+			chart_aspect_ratio = parsed_meta_aspect;
+			if (variable_global_exists("chart_session") && is_struct(global.chart_session)) {
+				global.chart_session.aspect_ratio = parsed_meta_aspect;
+			};
+		};
 		print($"RPE offset(ms): META={meta_offset}, info={info_offset}, total={self.chart_info.offset}", game.settings.enableDebug);
 		
 		delete(self.chart.META);
@@ -1456,6 +1547,13 @@ function RPE() constructor{
 		var judge_lines = game_1.chart[$ "judgeLineList"] ?? [];
 		if (!is_array(judge_lines)) then judge_lines = [];
 		var line_group_size = array_length(judge_lines);
+		// These are runtime-owned containers. Reset them for every chart, because
+		// constructor statics can survive a room/chart transition.
+		self.fatherLineList = [];
+		self.line_list = array_create(line_group_size, noone);
+		self.runtime_line_instances = [];
+		self.runtime_note_instances = [];
+		self._notes = [];
 		self.Fonts = {};
 		font_add_enable_aa(true);
 		for (var font_line_i = 0; font_line_i < line_group_size; font_line_i++) {
@@ -1514,8 +1612,6 @@ function RPE() constructor{
 		print(eff_line_count);
 		
 		// Preserve chart indices even when a line has no usable event layers.
-		self.line_list = array_create(line_group_size, noone);
-		self._notes = [];
 		var _note_preload = real(game.settings.notePreloadSeconds ?? 15);
 		var _chart_offset_sec = real(game_1.chart_info.offset ?? 0) / 1000;
 		for(var i = 0 ; i < line_group_size - eff_line_count ; i ++){	
@@ -1531,12 +1627,12 @@ function RPE() constructor{
 				if(!is_array(events)) then events = [];
 			};
 			
-			var _isFather = (l_s[$ "father"]);
+			var _isFather = (l_s[$ "father"] ?? -1);
 			if (!is_real(_isFather)) then _isFather = -1; 
 			print($"Line[{i}]FatherID->{_isFather >= 0 ? _isFather : "undefined"}" , game.settings.enableDebug);
 				//enableFatherLine = ()
 			var line_override = chart_line_override(i);
-			var line_image = is_struct(line_override) ? line_override.Image : l_s[$ "Texture"];
+			var line_image = is_struct(line_override) ? line_override.Image : (l_s[$ "Texture"] ?? "line.png");
 			var l = (instance_create_depth(room_width / 2 , room_height / 2 , 0 , oLine_1 , {
 				"line_id" : i, // 线ID
 				"bindUI" : (is_undefined(l_s[$ "attachUI"]) ? 0 : l_s[$ "attachUI"]), // UI判定
@@ -1546,11 +1642,11 @@ function RPE() constructor{
 				"isFather" : (_isFather), // 是否为父线
 				"isGif" : (l_s[$ "isGif"] ?? false), // 是否为Gif
 				"isCover" : ((l_s[$ "isCover"] ?? true)), // 是否启用遮罩
-				"sizeControl" : (l_s[$ "sizeControl"]), // notes
-				"alphaControl" : (l_s[$ "alphaControl"]), // notes
-				"posControl" : (l_s[$ "posControl"]), // notes
-				"yControl" : (l_s[$ "yControl"]), // notes
-				"rotFatherLine" : (l_s[$ "rotateWithFather"]), // 反正跟旋转有关
+				"sizeControl" : (l_s[$ "sizeControl"] ?? []), // notes
+				"alphaControl" : (l_s[$ "alphaControl"] ?? []), // notes
+				"posControl" : (l_s[$ "posControl"] ?? []), // notes
+				"yControl" : (l_s[$ "yControl"] ?? []), // notes
+				"rotFatherLine" : (l_s[$ "rotateWithFather"] ?? false), // 反正跟旋转有关
 				"events" : (events), // 事件层
 				"extEvents" : (l_s[$ "extended"] ?? {}), // 特殊事件(only 1)
 				"zOrder" : (l_s[$ "zOrder"] ?? 0), // line layer order(depth)
@@ -1558,6 +1654,17 @@ function RPE() constructor{
 				"bpmfactor" : (l_s[$ "bpmfactor"] ?? 1) // 文本
 			}));
 			self.line_list[i] = l;
+			array_add(self.runtime_line_instances, l);
+			// Initialize the event-layer cursors and raw transform immediately.
+			// Waiting for the next Step leaves newly-created lines at Create defaults
+			// while loading, pausing, and audit code already consumes their state.
+			if (instance_exists(l)) {
+				with (l) {
+					rpe_force_event_init = true;
+					event_perform(ev_step, ev_step_normal);
+					rpe_force_event_init = false;
+				};
+			};
 			
 			var line_notes = l_s[$ "notes"] ?? [];
 			if (!is_array(line_notes)) then line_notes = [];
@@ -1704,6 +1811,7 @@ function RPE() constructor{
 					hitSec: note_hit_sec,
 					alwaysActive: (n_speed == 0 || (off_type == 3 && note_hit_sec <= 0 && note_end_hit_sec > 0))
 				});
+				array_add(self.runtime_note_instances, note_instance);
 			};
 		};
 		// PCR multi-highlight groups every note with the same unscaled RPE down time.
@@ -1833,6 +1941,19 @@ function RPE() constructor{
 			};
 			for (var _ri = 0; _ri < _line_count; _ri++) {
 				_order[_ri].depth = DEPTH.LINE - _ri * _depth_step;
+			};
+		};
+		// Complete the initial line state after every parent chain exists. This
+		// applies raw event values to world transforms, alpha and attached UI in
+		// the same construction frame instead of exposing Create defaults.
+		for (var _initial_line_i = 0; _initial_line_i < array_length(self.line_list); _initial_line_i++) {
+			var _initial_line = self.line_list[_initial_line_i];
+			if (instance_exists(_initial_line)) {
+				with (_initial_line) {
+					rpe_force_event_init = true;
+					event_perform(ev_step, ev_step_end);
+					rpe_force_event_init = false;
+				};
 			};
 		};
 		print("[C-Lines] Done." , game.settings.enableDebug);
@@ -2361,6 +2482,16 @@ function PEC() constructor{
 	});
 };
 
+function pec_note_alpha_visible(_raw, _is_above, _sec_to_hit) {
+	if (_raw >= -0.5) then return true;
+	if (abs(_raw + 1) <= 0.5) then return false;
+	if (abs(_raw + 2) <= 0.5) then return bool(_is_above);
+	if (_raw > -1000 && _raw <= -100) {
+		return (_sec_to_hit < ((abs(_raw) - 100) / 18.75));
+	};
+	return false;
+}
+
 function pec_line_data() {
 	return { moveEvents: [], alphaEvents: [], rotateEvents: [], speedEvents: [] };
 }
@@ -2463,12 +2594,17 @@ function pec_reader_load(ctx, chart_path) {
 		pec_info_offset_ms = real(global.chart_session.info_offset_ms ?? 0);
 	};
 	ctx.chart.offsetSeconds = (pec_header_offset_ms + pec_info_offset_ms) / 1000 - 0.175;
-	var lines = [];
-	while (!file_text_eof(handle)) array_add(lines, file_text_readln(handle));
-	file_text_close(handle);
-
-	for (var row = 0; row < array_length(lines); row++) {
-		var tokens = string_split_ext(lines[row], [" ", "\t", "\r", "\n"], true);
+	var pending_line = "";
+	var has_pending_line = false;
+	while (has_pending_line || !file_text_eof(handle)) {
+		var source_line;
+		if (has_pending_line) {
+			source_line = pending_line;
+			has_pending_line = false;
+		} else {
+			source_line = file_text_readln(handle);
+		};
+		var tokens = string_split_ext(source_line, [" ", "\t", "\r", "\n"], true);
 		if (array_length(tokens) <= 0) then continue;
 		var command = string_lower(tokens[0]);
 		if (command == "bp" && array_length(tokens) >= 3) {
@@ -2484,19 +2620,32 @@ function pec_reader_load(ctx, chart_path) {
 		var _l = ctx.chart.judgeLineList[line_id];
 
 		if (is_note) {
-			var _speed = 1;
-			var width_scale = 1;
-			if (row + 1 < array_length(lines)) {
-				var speed_modifier = string_split_ext(lines[row + 1], [" ", "\t", "\r", "\n"], true);
-				if (array_length(speed_modifier) >= 2 && speed_modifier[0] == "#") { _speed = number(speed_modifier[1], 1); row++; };
-			};
-			if (row + 1 < array_length(lines)) {
-				var scale_modifier = string_split_ext(lines[row + 1], [" ", "\t", "\r", "\n"], true);
-				if (array_length(scale_modifier) >= 2 && scale_modifier[0] == "&") { width_scale = number(scale_modifier[1], 1); row++; };
-			};
 			var hold = (command == "n2");
 			var minimum = (hold ? 7 : 6);
 			if (array_length(tokens) < minimum) then continue;
+			var _speed = 1;
+			var width_scale = 1;
+			for (var modifier_i = 0; modifier_i < 2; modifier_i++) {
+				if (!has_pending_line && file_text_eof(handle)) break;
+				var modifier_line;
+				if (has_pending_line) {
+					modifier_line = pending_line;
+					has_pending_line = false;
+				} else modifier_line = file_text_readln(handle);
+				var modifier = string_split_ext(modifier_line, [" ", "\t", "\r", "\n"], true);
+				if (array_length(modifier) < 2) {
+					pending_line = modifier_line;
+					has_pending_line = true;
+					break;
+				};
+				if (modifier[0] == "#") _speed = number(modifier[1], 1);
+				else if (modifier[0] == "&") width_scale = number(modifier[1], 1);
+				else {
+					pending_line = modifier_line;
+					has_pending_line = true;
+					break;
+				};
+			};
 			var start_beat = number(tokens[2], 0);
 			var end_beat = (hold ? number(tokens[3], start_beat) : start_beat);
 			var x_index = (hold ? 4 : 3);
@@ -2526,6 +2675,7 @@ function pec_reader_load(ctx, chart_path) {
 			case "cf": if (array_length(tokens) >= 5) array_add(_l.alphaEvents, { startBeat:number(tokens[2],0), endBeat:number(tokens[3],0), target:number(tokens[4],0)/255, easing:1 }); break;
 		};
 	};
+	file_text_close(handle);
 
 	if (array_length(ctx.chart.bpmList) <= 0) then array_add(ctx.chart.bpmList, { beat:0, bpm:60, second:0 });
 	array_sort(ctx.chart.bpmList, function(a,b) { return a.beat-b.beat; });
@@ -2560,7 +2710,7 @@ function pec_reader_load(ctx, chart_path) {
 		note.endSec = pec_beat_to_sec(ctx.chart.bpmList, note.endBeat);
 		note.floorPosition = pec_floor_at_sec(speed_events, note.startSec);
 		note.endFloorPosition = pec_floor_at_sec(speed_events, note.endSec);
-		note.highlightKey = round(note.startSec * 1000);
+		note.highlightKey = note.startBeat;
 		note.localXFactor = note.xOffset * 0.05625;
 		note.sideDirection = note.isAbove ? -1 : 1;
 		note.angleOffset = note.isAbove ? 0 : 180;
@@ -2591,15 +2741,22 @@ function pec_reader_load(ctx, chart_path) {
 
 function pec_create_runtime(ctx) {
 	ctx.line_group = [];
+	ctx.runtime_line_instances = [];
+	ctx.runtime_note_instances = [];
+	ctx._notes = [];
+	ctx._note_activation_index = 0;
+	ctx._note_activation_enabled = false;
 	for (var line_i = 0; line_i < array_length(ctx.chart.judgeLineList); line_i++) {
 		var line_override = chart_line_override(line_i);
 		var line_sprite = chart_line_override_sprite(line_i);
-		array_add(ctx.line_group, instance_create_depth(room_width/2, room_height/2, DEPTH.LINE, oLine_2, {
+		var pec_line_instance = instance_create_depth(room_width/2, room_height/2, DEPTH.LINE, oLine_2, {
 			line_id:line_i,
 			events:ctx.chart.judgeLineList[line_i],
 			image_id:(sprite_exists(line_sprite) ? line_sprite : line),
 			line_csv_scale:(is_struct(line_override) ? real(line_override.Scale ?? 1) : 1)
-		}));
+		});
+		array_add(ctx.line_group, pec_line_instance);
+		array_add(ctx.runtime_line_instances, pec_line_instance);
 	};
 	for (var note_i = 0; note_i < array_length(ctx.chart.notes); note_i++) {
 		var note = ctx.chart.notes[note_i];
@@ -2612,6 +2769,7 @@ function pec_create_runtime(ctx) {
 			angleOffset:note.angleOffset, speedFloorStart:note.speedFloorStart,
 			speedFloorEnd:note.speedFloorEnd, speedHoldFloorLength:note.speedHoldFloorLength
 		});
+		array_add(ctx.runtime_note_instances, note_instance);
 		if (variable_global_exists("render_mode") && global.render_mode && !note.isFake
 			&& instance_exists(note_instance)) {
 			var note_hitsound_time = note.startSec;
@@ -2621,6 +2779,30 @@ function pec_create_runtime(ctx) {
 				note_instance.sound, note_hitsound_time);
 		};
 		if (!note.isFake) then maxcombo++;
+	};
+	var _preload = 15;
+	if (variable_global_exists("game") && is_struct(game) && is_struct(game.settings)) {
+		_preload = real(game.settings.notePreloadSeconds ?? 15);
+	};
+	ctx._note_activation_enabled = (_preload > 0);
+	if (ctx._note_activation_enabled) {
+		for (var _pai = 0; _pai < array_length(ctx.runtime_note_instances); _pai++) {
+			var _pinst = ctx.runtime_note_instances[_pai];
+			if (!instance_exists(_pinst)) then continue;
+			array_add(ctx._notes, {
+				id: _pinst,
+				startSec: real(_pinst.startSec),
+				endSec: real(_pinst.endSec),
+				activateSec: real(_pinst.startSec) - _preload,
+				type: real(_pinst.type)
+			});
+			instance_deactivate_object(_pinst);
+		};
+		array_sort(ctx._notes, function(a, b) {
+			if (a.activateSec < b.activateSec) then return -1;
+			if (a.activateSec > b.activateSec) then return 1;
+			return 0;
+		});
 	};
 }
 

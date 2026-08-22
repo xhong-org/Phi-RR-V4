@@ -1,4 +1,11 @@
 /// @description Release post-processing surfaces.
+if (variable_instance_exists(id, "effect_boundary_role")) {
+	if (effect_boundary_role == "start" && surface_exists(effect_boundary_state.surface)) {
+		surface_free(effect_boundary_state.surface);
+		effect_boundary_state.surface = -1;
+	};
+	exit;
+};
 shader_reset();
 if (extension_exists("I_Shaders")
 	&& variable_instance_exists(id, "external_hlsl_handles") && is_struct(external_hlsl_handles)) {

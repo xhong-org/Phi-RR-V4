@@ -23,6 +23,8 @@ global.default_notes_texture_loaded = false;
 global.default_hitsounds_load_requested = false;
 
 var param_count = parameter_count();
+var environment_archive_source = environment_get_variable("PLS_ARCHIVE_SOURCE");
+global.pls_environment_run = string_length(environment_archive_source) > 0;
 var render_base_height = 768;
 var render_aspect_width = 16;
 var render_aspect_height = 9;
@@ -131,6 +133,11 @@ if (global.render_mode) {
         var session = chart_session_reset();
         session.source_path = global.pls_archive_test_path;
         print($"[ArchiveTest] Source: {global.pls_archive_test_path}");
+        room_goto(room_loading);
+} else if (string_length(environment_archive_source)) {
+        var environment_session = chart_session_reset();
+        environment_session.source_path = environment_archive_source;
+        print($"[ArchiveRun] Source: {environment_archive_source}");
         room_goto(room_loading);
 } else {
         room_goto(room_menu);

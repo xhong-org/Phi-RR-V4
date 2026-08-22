@@ -1,4 +1,16 @@
 /// @description
+if (variable_global_exists("loading_animator_finished") && global.loading_animator_finished) {
+    if (!instance_exists(oChartMask)) then instance_create_depth(0, 0, -12000, oChartMask);
+    // Lines stayed active during loading. Only bring FX back; the start
+    // animation hides gameplay without another deactivate/activate cycle.
+    instance_activate_object(oRPEEffect);
+    instance_activate_object(oEffect);
+    instance_activate_object(oEffectNew);
+    rpe_sync_note_activation();
+    if (!instance_exists(oPlayTransition)) then instance_create_depth(0, 0, -999999, oPlayTransition, { owner:id });
+    global.loading_animator_finished = false;
+};
+if (variable_global_exists("loading_animation_active") && global.loading_animation_active) exit;
 //if(game.settings.enableFPS) then window_set_caption($"{GAME_NAME} - FPS: {fps} / {fps_real}");
 if(!game.paused){
 	// The chart clock stays entirely on get_timer()'s microsecond timebase.

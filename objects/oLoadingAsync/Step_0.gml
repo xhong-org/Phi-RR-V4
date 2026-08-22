@@ -1,7 +1,14 @@
 /// @description Stepwise loading with non-blocking ZIP extraction.
+// Resolve the package and illustration first. Expensive default resources wait
+// until the black cover has crossed the screen.
+if (variable_global_exists("loading_animation_load_start")
+        && !global.loading_animation_load_start && phase == 2) exit;
 if (done || failed) {
         if (keyboard_check_pressed(vk_escape) || keyboard_check_pressed(vk_enter) || mouse_check_button_pressed(mb_left)) {
-                if (failed) then room_goto(room_menu);
+                if (failed) {
+                        chart_loading_animation_abort();
+                        room_goto(room_menu);
+                };
         };
         exit;
 };
@@ -51,6 +58,7 @@ if (phase == 1) {
                 msgbox_warning_async(detail, "Chart Loader" , [ msgbox_button("确认") ] , MSGBOX_BUTTON_ALIGN.RIGHT);
 				//msgbox_warning_async()
                 phase = 99;
+                chart_loading_animation_abort();
                 room_goto(room_menu);
                 exit;
         };
@@ -78,6 +86,7 @@ if (phase == 10) {
                 chart_session_cleanup(true);
                 msgbox_warning_async(detail, "Chart Loader" , [ msgbox_button("确认") ] , MSGBOX_BUTTON_ALIGN.RIGHT);
                 phase = 99;
+                chart_loading_animation_abort();
                 room_goto(room_menu);
                 exit;
         };
@@ -104,6 +113,7 @@ if (phase == 2) {
                 detail = session2.format_name;
                 chart_session_fail(detail, true);
                 phase = 99;
+                chart_loading_animation_abort();
                 room_goto(room_menu);
                 exit;
         };
@@ -123,5 +133,11 @@ if (phase == 3) {
         message = "Entering play room";
         detail = session3.name;
         done = true;
+        if (instance_exists(oLoadAnimator)) {
+                var _animator = instance_find(oLoadAnimator, 0);
+                _animator.target_room = session3.play_room;
+        };
+        // Enter the render room now so its lines and notes can be built under
+        // the persistent loading overlay. The overlay decides when to reveal it.
         room_goto(session3.play_room);
 };

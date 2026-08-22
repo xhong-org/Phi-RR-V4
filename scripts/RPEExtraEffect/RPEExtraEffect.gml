@@ -248,12 +248,20 @@ function rpe_effect_parse(extra, bpm_points) {
 		};
 		var start_beat = rpe_effect_beat_value(source[$ "start"], 0);
 		var end_beat = rpe_effect_beat_value(source[$ "end"], start_beat);
+		var target_min = -infinity;
+		var target_max = infinity;
+		if (is_struct(source[$ "targetRange"])) {
+			target_min = real(source.targetRange[$ "minZIndex"] ?? -infinity);
+			target_max = real(source.targetRange[$ "maxZIndex"] ?? infinity);
+		};
 		var effect_record = {
 			shaderName:shader_name,
 			externalHlsl:is_external_hlsl,
 			externalGlsl:is_external_glsl,
 			startTime:rpe_effect_beat_to_second(bpm_points, start_beat),
 			endTime:rpe_effect_beat_to_second(bpm_points, end_beat),
+			targetMin:target_min,
+			targetMax:target_max,
 			vars:defaults
 		};
 		if (bool(source[$ "global"] ?? false)) array_add(result.global, effect_record);

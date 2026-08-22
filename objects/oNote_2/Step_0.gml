@@ -1,4 +1,5 @@
 /// @description Update PEC note geometry and autoplay judgment.
+if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then exit;
 if (game.paused || !instance_exists(line_ref)) then exit;
 var chart_sec = game.__time[1] - game_2.chart.offsetSeconds;
 var line_floor = line_ref.floor_position;
@@ -11,13 +12,22 @@ var axis_x = line_ref.__sin * sideDirection;
 var axis_y = line_ref.__cos * sideDirection;
 var base_x = line_ref.x + line_ref.__cos * local_x;
 var base_y = line_ref.y - line_ref.__sin * local_x;
-var distance = (speedFloorStart - speed * line_floor) * scene_height;
+var before_hold = (type == 2 && chart_sec < startSec);
+// PCR: note travel is speed * (noteFloor - lineFloor). Holds used the
+// unscaled floor delta, so speed != 1 holds sat at the wrong height.
+var speed_pos = speed * (floorPosition - line_floor);
+var distance_units = (type == 2 && !before_hold) ? 0 : speed_pos;
+var distance = distance_units * scene_height;
 var note_x = base_x + axis_x * distance;
 var note_y = base_y + axis_y * distance;
 image_angle = line_ref.image_angle + angleOffset;
+var pec_alpha_raw = real(line_ref._alpha_raw ?? (line_ref._alpha_value * 255));
+var line_notes_visible = pec_note_alpha_visible(pec_alpha_raw, isAbove, startSec - chart_sec);
+var behind_line = (speed_pos < -0.000001);
+image_alpha = 1;
 
 if (type == 2) {
-	var before = (chart_sec < startSec);
+	var before = before_hold;
 	var head_offset = 0;
 	if (before) {
 		head_offset = max(0, hold_head_attach * image_yscale);
@@ -34,12 +44,13 @@ if (type == 2) {
 		hx1 = base_x + axis_x * hold_length; hy1 = base_y + axis_y * hold_length;
 	};
 	yscale = body_scale;
-	canDraw = (hold_length > 0 || before);
+	canDraw = line_notes_visible && (hold_length > 0 || before) && (before ? !behind_line : true);
 	if (!hold_started && chart_sec >= judge_sec) {
 		hold_started = true;
 		if (!isFake) {
 			var hold_sample_sec = (!use_acc_judgment && chart_sec > late_deadline_sec) ? chart_sec : judge_sec;
-			hit_status = judgeCalc(startSec, hold_sample_sec, 0, base_x, base_y, judge_type, true, false, true);
+			var _hold_xy = pec_note_hit_effect_xy();
+			hit_status = judgeCalc(startSec, hold_sample_sec, 0, _hold_xy[0], _hold_xy[1], judge_type, true, false, true);
 			if (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) {
 				hold_effect_sec = chart_sec;
 				render_play_hitsound(sound);
@@ -52,7 +63,8 @@ if (type == 2) {
 		while (hold_bpm_index + 1 < array_length(bpm_events) && bpm_events[hold_bpm_index + 1].second <= chart_sec) hold_bpm_index++;
 		hold_bpm_last_sec = chart_sec;
 		if (chart_sec - hold_effect_sec >= bpm_events[hold_bpm_index].holdTickInterval) {
-			if (variable_global_exists("_eff_c")) then _eff_c(base_x, base_y, hit_status == TYPE.PREFECT ? #ffeca0 : make_colour_rgb(162, 238, 255));
+			var _tick_xy = pec_note_hit_effect_xy();
+			if (variable_global_exists("_eff_c")) then _eff_c(_tick_xy[0], _tick_xy[1], hit_status == TYPE.PREFECT ? #ffeca0 : make_colour_rgb(162, 238, 255));
 			hold_effect_sec = chart_sec;
 		};
 	};
@@ -72,12 +84,13 @@ if (type == 2) {
 
 x = note_x;
 y = note_y;
-canDraw = (chart_sec < startSec);
+canDraw = line_notes_visible && !behind_line && !judged && chart_sec < startSec;
 if (chart_sec >= trigger_sec && !judged) {
 	judged = true;
 	if (!isFake) {
 		var note_sample_sec = (!use_acc_judgment && chart_sec > late_deadline_sec) ? chart_sec : judge_sec;
-		hit_status = judgeCalc(startSec, note_sample_sec, 0, base_x, base_y, judge_type, true, true, true);
+		var _hit_xy = pec_note_hit_effect_xy();
+		hit_status = judgeCalc(startSec, note_sample_sec, 0, _hit_xy[0], _hit_xy[1], judge_type, true, true, true);
 		if (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) then render_play_hitsound(sound);
 	};
 	canDraw = false;

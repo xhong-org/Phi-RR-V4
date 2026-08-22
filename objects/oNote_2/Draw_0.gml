@@ -7,5 +7,5 @@ if (type != 2) {
 		image_angle, hl, image_blend, image_alpha, false);
 } else {
 	draw_hold(hx0, hy0, image_xscale, image_yscale, yscale,
-		image_angle, hl, image_blend, image_alpha, true);
+		image_angle, hl, image_blend, image_alpha, true, false, 1);
 };

@@ -14,8 +14,8 @@
   "exportDir":"",
   "name":"snd_note_tap",
   "parent":{
-    "name":"SFX",
-    "path":"folders/SFX.yy",
+    "name":"notes",
+    "path":"folders/SFX/notes.yy",
   },
   "preload":false,
   "resourceType":"GMSound",

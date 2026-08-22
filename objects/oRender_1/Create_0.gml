@@ -47,7 +47,8 @@ show_debug_message($"[oRender_1] RPE chart path: {_chart_path}");
 var _rpe_loaded = game_1.Reader(_chart_path);
 if (!_rpe_loaded) {
 	show_debug_message("[oRender_1] RPE chart loading failed");
-	instance_destroy();
+	chart_loading_animation_abort();
+	room_goto(room_menu);
 	exit;
 };
 var _bg = "";
@@ -68,7 +69,6 @@ if (is_string(_bg) && string_length(_bg)) then game.Background(InChartPath + _bg
 
 instance_create_depth(0,0,0,oBG);
 instance_create_depth(0, 0, -12001, oBG_1);
-instance_create_depth(0, 0, -12000, oChartMask);
 instance_create_depth(0,0,0,oMedia , { "name" : (string_length(game.folder_chart.music) ? (InChartPath + game.folder_chart.music) : "") });
 instance_create_depth(0,0,DEPTH.BG - 1,oExtraPlay);
 // Seed BPM from the same normalized timeline used by parser and runtime.
@@ -201,6 +201,7 @@ event_user(2);
 if (variable_global_exists("render_mode") && global.render_mode) {
 	instance_create_depth(0, 0, -9999999, oVideoRenderer);
 };
-if (!instance_exists(oPlayTransition)) {
-	instance_create_depth(0, 0, -999999, oPlayTransition, { owner:id });
-};
+// Hide chart objects behind the loading overlay. Do not deactivate judge
+// lines: activate is deferred and would skip the next event_perform / Step.
+chart_idle_behind_loading();
+global.loading_render_ready = true;

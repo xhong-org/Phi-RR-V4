@@ -1,4 +1,13 @@
 /// @description 
+if (variable_global_exists("loading_animator_finished") && global.loading_animator_finished) {
+    if (!instance_exists(oChartMask)) then instance_create_depth(0, 0, -12000, oChartMask);
+    instance_activate_object(oRPEEffect);
+    instance_activate_object(oEffect);
+    instance_activate_object(oEffectNew);
+    if (!instance_exists(oPlayTransition)) then instance_create_depth(0, 0, -999999, oPlayTransition, { owner:id });
+    global.loading_animator_finished = false;
+};
+if (variable_global_exists("loading_animation_active") && global.loading_animation_active) exit;
 //if(game.settings.enableFPS) then window_set_caption($"{GAME_NAME} - FPS: {fps} / {fps_real}");
 if(!game.paused){
 	//print(array_length(game.__time));	

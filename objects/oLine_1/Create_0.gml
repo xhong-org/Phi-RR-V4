@@ -5,6 +5,7 @@
 // - notes/rpe_parse CoordinateSystemConversion + speed integrals
 
 // depth applied after zOrder/line_id resolve
+_father_chain = [];
 sprite_index = line;
 image_blend = c_white;
 image_alpha = 1;
@@ -167,6 +168,8 @@ image_speed = 0;
 events_count = [];
 events_hold = [];
 events_recall = [];
+rpe_speed_events = [];
+speed_event_index = 0;
 
 // Instance-bound sorter so nested methods can resolve it (local var is not captured).
 rpe_sort_events = function(a, b) {
@@ -309,8 +312,9 @@ rpe_prep_event_array = function(arr, is_speed) {
 
 // Evaluate one event channel at line_time (CCLEExecute-like cursor)
 rpe_eval_events = function(layer_index, event_name, default_value) {
-        if (!is_struct(events[layer_index])) then return default_value;
-        var arr = events[layer_index][$ event_name];
+         if (!is_struct(events[layer_index])) then return default_value;
+         if (!struct_exists(events[layer_index], event_name)) then return default_value;
+         var arr = events[layer_index][$ event_name];
         if (!is_array(arr) || array_length(arr) <= 0) then return default_value;
 
         if (!is_struct(events_count[layer_index])) then events_count[layer_index] = {};
@@ -412,11 +416,7 @@ rpe_speed_floor = function() {
         speed_event_index = idx;
         var ev = rpe_speed_events[idx];
         var elapsed = max(0, t - ev.startTime);
-        if (!is_finite(ev.endTime) || ev.endTime <= ev.startTime) then return ev.floorPosition + elapsed * ev.value;
-        elapsed = min(elapsed, ev.endTime - ev.startTime);
-        var progress = elapsed / (ev.endTime - ev.startTime);
-        var end_value = real(ev[$ "endValue"] ?? ev.value);
-        return ev.floorPosition + elapsed * (ev.value + (end_value - ev.value) * progress * 0.5);
+        return ev.floorPosition + elapsed * ev.value;
 };
 
 // ---- extended (special) events: single channel, not multi-layer ----
@@ -457,8 +457,9 @@ rpe_event_progress = function(ev, st, et) {
 };
 
 rpe_eval_ext_events = function(event_name, default_value) {
-        if (!is_struct(extEvents)) then return default_value;
-        var arr = extEvents[$ event_name];
+         if (!is_struct(extEvents)) then return default_value;
+         if (!struct_exists(extEvents, event_name)) then return default_value;
+         var arr = extEvents[$ event_name];
         if (!is_array(arr) || array_length(arr) <= 0) then return default_value;
 
         if (!struct_exists(ext_count, event_name)) then ext_count[$ event_name] = 0;
@@ -507,8 +508,9 @@ rpe_eval_ext_events = function(event_name, default_value) {
 };
 
 rpe_eval_color_events = function(default_value) {
-        if (!is_struct(extEvents)) then return default_value;
-        var arr = extEvents[$ "colorEvents"];
+         if (!is_struct(extEvents)) then return default_value;
+         if (!struct_exists(extEvents, "colorEvents")) then return default_value;
+         var arr = extEvents[$ "colorEvents"];
         if (!is_array(arr) || array_length(arr) <= 0) then return default_value;
 
         var event_name = "colorEvents";
@@ -554,6 +556,7 @@ rpe_eval_color_events = function(default_value) {
 rpe_eval_text_events = function(default_value) {
 		line_text_font = (!is_undefined(game.font) && font_exists(game.font)) ? game.font : -1;
 		if (!is_struct(extEvents)) then return default_value;
+		if (!struct_exists(extEvents, "textEvents")) then return default_value;
 		var arr = extEvents[$ "textEvents"];
 		if (!is_array(arr) || array_length(arr) <= 0) then return default_value;
 
@@ -639,9 +642,22 @@ rpe_eval_text_events = function(default_value) {
 if (!is_array(events)) then events = [];
 var _clean_layers = [];
 for (var li = 0; li < array_length(events); li++) {
-        if (is_struct(events[li])) then array_add(_clean_layers, events[li]);
+        if (is_struct(events[li])) {
+                // RPE permits omitted channels. Materialize the canonical
+                // channels before creating cursors so every layer has a
+                // stable runtime shape from its first Step.
+                if (!struct_exists(events[li], "moveXEvents")) then events[li].moveXEvents = [];
+                if (!struct_exists(events[li], "moveYEvents")) then events[li].moveYEvents = [];
+                if (!struct_exists(events[li], "alphaEvents")) then events[li].alphaEvents = [];
+                if (!struct_exists(events[li], "rotateEvents")) then events[li].rotateEvents = [];
+                if (!struct_exists(events[li], "speedEvents")) then events[li].speedEvents = [];
+                array_add(_clean_layers, events[li]);
+        };
 };
 events = _clean_layers;
+rpe_events_initialized = true;
+rpe_events_test_logged = false;
+rpe_force_event_init = false;
 
 for (var li = 0; li < array_length(events); li++) {
         var ev_layer = events[li];
@@ -668,18 +684,20 @@ for (var li = 0; li < array_length(events); li++) {
         array_add(events_recall, rmap);
 };
 
-// Merge speed layers in beat space before converting through BPMList.
+// PCR fittingEvents: linear sample per layer, then toSpeedEvents (1/32).
 rpe_speed_layer_value = function(layer, beat, use_left_limit) {
         if (!is_array(layer) || array_length(layer) <= 0) then return 0;
-        // Before the first event, RPE/PCR keeps that layer's first start value.
         var result = real(layer[0][$ "start"] ?? 0);
         for (var i = 0; i < array_length(layer); i++) {
                 var ev = layer[i];
                 if (beat < ev.startTime) then break;
                 if (use_left_limit && beat == ev.startTime) then break;
                 if (beat >= ev.endTime) then result = real(ev.stop);
-                else result = tween_execute(beat, ev.startTime, ev.endTime, real(ev.start), real(ev.stop),
-                        real(ev[$ "easingType"] ?? 1), real(ev[$ "easingLeft"] ?? 0), real(ev[$ "easingRight"] ?? 1));
+                else {
+                        var span = ev.endTime - ev.startTime;
+                        if (span <= 0) then result = real(ev.stop);
+                        else result = real(ev.start) + (beat - ev.startTime) * ((real(ev.stop) - real(ev.start)) / span);
+                };
         };
         return result;
 };
@@ -687,28 +705,13 @@ rpe_speed_layer_value = function(layer, beat, use_left_limit) {
 var speed_layers = [];
 var speed_splits = [];
 for (var sli = 0; sli < array_length(events); sli++) {
-        var speed_layer = events[sli][$ "speedEvents"];
+        var speed_layer = (struct_exists(events[sli], "speedEvents") ? events[sli][$ "speedEvents"] : []);
         if (!is_array(speed_layer) || array_length(speed_layer) <= 0) then continue;
-                array_add(speed_layers, speed_layer);
+        array_add(speed_layers, speed_layer);
         for (var sei = 0; sei < array_length(speed_layer); sei++) {
                 array_add(speed_splits, speed_layer[sei].startTime);
                 array_add(speed_splits, speed_layer[sei].endTime);
-                if (real(speed_layer[sei][$ "easingType"] ?? 1) > 1 && speed_layer[sei].endTime > speed_layer[sei].startTime) {
-                        var split_left = real(speed_layer[sei][$ "easingLeft"] ?? 0);
-                        var split_right = real(speed_layer[sei][$ "easingRight"] ?? 1);
-                        for (var ease_split_i = 1; ease_split_i < 100; ease_split_i++) {
-                                var ease_knot = ease_split_i / 100;
-                                var ease_progress = (ease_knot - split_left) / (split_right - split_left);
-                                if (ease_progress > 0 && ease_progress < 1) {
-                                        array_add(speed_splits, lerp(speed_layer[sei].startTime, speed_layer[sei].endTime, ease_progress));
-                                };
-                        };
-                };
         };
-};
-var speed_bpm_timeline = game_1.Math.ensureBpmTimeline();
-for (var speed_bpm_i = 0; speed_bpm_i < array_length(speed_bpm_timeline); speed_bpm_i++) {
-        array_add(speed_splits, real(speed_bpm_timeline[speed_bpm_i].startBeat));
 };
 array_sort(speed_splits, function(a, b) {
         if (a < b) then return -1;
@@ -733,41 +736,44 @@ for (var ssi = 0; ssi < array_length(speed_splits) - 1; ssi++) {
         });
 };
 
-rpe_speed_events = [];
-var speed_floor = 0;
+var speed_samples = [];
 for (var fsi = 0; fsi < array_length(fitted_speed); fsi++) {
         var fitted = fitted_speed[fsi];
-        var sample_start_sec = game_1.Math.beatToAbsSec(fitted.startTime);
-        var sample_end_sec = game_1.Math.beatToAbsSec(fitted.endTime);
-        if (!is_finite(sample_start_sec) || !is_finite(sample_end_sec) || sample_end_sec <= sample_start_sec) then continue;
-        var start_value = real(fitted.start) / 4.5;
-        var end_value = real(fitted.stop) / 4.5;
+        var sample_start = real(fitted.start);
+        var sample_stop = real(fitted.stop);
+        if (sample_start != sample_stop) {
+                for (var nval = 0; nval <= 1; nval += 0.03125) {
+                        array_add(speed_samples, {
+                                time: lerp(fitted.startTime, fitted.endTime, nval),
+                                value: lerp(sample_start, sample_stop, nval)
+                        });
+                };
+        } else {
+                array_add(speed_samples, { time: fitted.startTime, value: sample_stop });
+        };
+};
+
+rpe_speed_events = [];
+var speed_floor = 0;
+var sample_count = array_length(speed_samples);
+for (var spi = 0; spi < sample_count; spi++) {
+        var sample = speed_samples[spi];
+        var sample_start_sec = game_1.Math.beatToAbsSec(sample.time);
+        if (!is_finite(sample_start_sec)) then continue;
+        var sample_end_sec = infinity;
+        if (spi < sample_count - 1) {
+                sample_end_sec = game_1.Math.beatToAbsSec(speed_samples[spi + 1].time);
+                if (!is_finite(sample_end_sec) || sample_end_sec <= sample_start_sec) then continue;
+        };
+        var sample_value = real(sample.value) / 4.5;
         array_add(rpe_speed_events, {
                 startTime: sample_start_sec,
                 endTime: sample_end_sec,
-                value: start_value,
-                endValue: end_value,
+                value: sample_value,
+                endValue: sample_value,
                 floorPosition: speed_floor
         });
-        speed_floor += (sample_end_sec - sample_start_sec) * (start_value + end_value) * 0.5;
-};
-if (array_length(speed_splits) > 0) {
-        var final_beat = speed_splits[array_length(speed_splits) - 1];
-        var final_start_sec = game_1.Math.beatToAbsSec(final_beat);
-        if (is_finite(final_start_sec)) {
-                var final_raw_value = 0;
-                for (var final_layer_i = 0; final_layer_i < array_length(speed_layers); final_layer_i++) {
-                        final_raw_value += rpe_speed_layer_value(speed_layers[final_layer_i], final_beat, false);
-                };
-                var final_value = final_raw_value / 4.5;
-                array_add(rpe_speed_events, {
-                        startTime: final_start_sec,
-                        endTime: infinity,
-                        value: final_value,
-                        endValue: final_value,
-                        floorPosition: speed_floor
-                });
-        };
+        if (is_finite(sample_end_sec)) then speed_floor += (sample_end_sec - sample_start_sec) * sample_value;
 };
 speed_event_index = 0;
 
@@ -889,13 +895,7 @@ rpe_floor_at_sec = function(sec) {
                 break;
         };
         var elapsed = max(0, sec - selected_event.startTime);
-        if (!is_finite(selected_event.endTime) || selected_event.endTime <= selected_event.startTime) {
-                return selected_event.floorPosition + selected_event.value * elapsed;
-        };
-        elapsed = min(elapsed, selected_event.endTime - selected_event.startTime);
-        var progress = elapsed / (selected_event.endTime - selected_event.startTime);
-        var end_value = real(selected_event[$ "endValue"] ?? selected_event.value);
-        return selected_event.floorPosition + elapsed * (selected_event.value + (end_value - selected_event.value) * progress * 0.5);
+        return selected_event.floorPosition + selected_event.value * elapsed;
 };
 
 rpe_floor_at_beat = function(beat) {

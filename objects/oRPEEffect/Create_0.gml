@@ -1,4 +1,8 @@
 /// @description RPE extra.json post-processing controller.
+if (variable_instance_exists(id, "effect_boundary_role")) {
+	depth = real(effect_boundary_depth);
+	exit;
+};
 depth = DEPTH.DEBUG + 1;
 if (!variable_instance_exists(id, "effects_local") || !is_array(effects_local)) then effects_local = [];
 if (!variable_instance_exists(id, "effects_global") || !is_array(effects_global)) then effects_global = [];
@@ -6,8 +10,10 @@ fx_ping = -1;
 fx_pong = -1;
 chart_time = 0;
 effect_caller_target = -1;
+effect_boundaries_initialized = false;
 external_hlsl_ready = false;
 external_hlsl_handles = {};
+external_hlsl_uniforms = {};
 external_draw_logged = {};
 var external_extension_found = extension_exists("I_Shaders");
 print($"[RPE Effect] External backend probe: os={os_type}, windows={os_type == os_windows}, extension={external_extension_found}");
@@ -73,6 +79,7 @@ for (var external_list_i = 0; external_list_i < array_length(external_lists); ex
 		var external_relative = string_delete(external_pass.shaderName, 1, 6);
 		if (struct_exists(external_hlsl_handles, external_relative)) {
 			external_pass.externalHandle = external_hlsl_handles[$ external_relative];
+			external_pass.externalUniforms = external_hlsl_uniforms[$ external_relative];
 			continue;
 		};
 		var external_full_path = chart_extra_asset_path(external_relative);
@@ -103,6 +110,7 @@ for (var external_list_i = 0; external_list_i < array_length(external_lists); ex
 			continue;
 		};
 		external_hlsl_handles[$ external_relative] = external_handle;
+		external_hlsl_uniforms[$ external_relative] = external_pass.externalUniforms;
 		external_pass.externalHandle = external_handle;
 		print($"[RPE Effect] HLSL compiled: {external_relative}, handle={external_handle}");
 	};
@@ -141,7 +149,7 @@ effect_surfaces_ensure = function() {
 	return surface_exists(fx_ping) && surface_exists(fx_pong);
 };
 
-effect_render = function(effect_list) {
+effect_render = function(effect_list, input_override = -1) {
 	if (!is_array(effect_list) || array_length(effect_list) <= 0) then return;
 	var active = [];
 	for (var active_i = 0; active_i < array_length(effect_list); active_i++) {
@@ -158,8 +166,9 @@ effect_render = function(effect_list) {
 	// enclosing function. Keep the target on this controller for the restore
 	// callback below.
 	effect_caller_target = surface_get_target();
-	var input_surface = application_surface;
-	if (variable_global_exists("chart_surface_active") && chart_surface_active
+	var input_surface = surface_exists(input_override) ? input_override : application_surface;
+	if (!surface_exists(input_override)
+		&& variable_global_exists("chart_surface_active") && chart_surface_active
 		&& instance_exists(oChartMask)) {
 		var chart_mask = instance_find(oChartMask, 0);
 		if (surface_exists(chart_mask.surface_id)) then input_surface = chart_mask.surface_id;
@@ -202,6 +211,7 @@ effect_render = function(effect_list) {
 		if (bool(pass[$ "externalHlsl"] ?? false) || bool(pass[$ "externalGlsl"] ?? false)) {
 			var external_handle = real(pass[$ "externalHandle"] ?? -1);
 			if (external_handle <= 0) then continue;
+			var external_draw_key = $"{pass.shaderName}@{pass.startTime}";
 			draw_flush();
 			if (surface_exists(effect_caller_target)) then surface_reset_target();
 			surface_set_target(target_surface);
@@ -247,9 +257,9 @@ effect_render = function(effect_list) {
 			// Setting them afterward leaves the GPU with the previous pass values.
 			var external_begin_status = rpe_hlsl_begin(external_handle);
 			if (external_begin_status < 0) {
-				if (!struct_exists(external_draw_logged, pass.shaderName)) {
+				if (!struct_exists(external_draw_logged, external_draw_key)) {
 					print($"[RPE Effect] External begin failed: shader={pass.shaderName}, status={external_begin_status}, error={rpe_hlsl_get_error()}");
-					external_draw_logged[$ pass.shaderName] = true;
+					external_draw_logged[$ external_draw_key] = true;
 				};
 				restore_caller_target();
 				continue;
@@ -258,9 +268,9 @@ effect_render = function(effect_list) {
 			var external_draw_status = rpe_hlsl_draw(external_handle,
 				external_uvs[0], external_uvs[1], external_uvs[2], external_uvs[3]);
 			var external_end_status = rpe_hlsl_end();
-			if (!struct_exists(external_draw_logged, pass.shaderName)) {
+			if (!struct_exists(external_draw_logged, external_draw_key)) {
 				print($"[RPE Effect] External direct draw: shader={pass.shaderName}, begin={external_begin_status}, draw={external_draw_status}, end={external_end_status}, uniforms={external_uniform_success}/{external_uniform_total}, time={chart_time}, vars={json_stringify(external_sampled_values)}, surface={surface_get_width(source_surface)}x{surface_get_height(source_surface)}, target={rpe_hlsl_target_width()}x{rpe_hlsl_target_height()}, uv={external_uvs[0]},{external_uvs[1]},{external_uvs[2]},{external_uvs[3]}");
-				external_draw_logged[$ pass.shaderName] = true;
+				external_draw_logged[$ external_draw_key] = true;
 			};
 			restore_caller_target();
 			var external_swap = source_surface;
@@ -298,10 +308,71 @@ effect_render = function(effect_list) {
 		source_surface = target_surface;
 		target_surface = swap_surface;
 	};
+	// A targetRange surface contains only the selected zIndex layers. Replacing
+	// the parent target would clear every layer outside that range.
+	if (surface_exists(input_override)) then gpu_set_blendmode(bm_normal);
 	draw_surface_part(source_surface, effect_left, 0, effect_width, effect_height, effect_left, 0);
 	draw_flush();
 	shader_reset();
 	gpu_pop_state();
 	draw_set_colour(previous_colour);
 	draw_set_alpha(previous_alpha);
+};
+
+effect_boundaries_create = function() {
+	if (effect_boundaries_initialized || !variable_global_exists("game_1")
+		|| !is_struct(game_1) || !is_array(game_1.line_list)) then return;
+	effect_boundaries_initialized = true;
+	var ranged = {};
+	var unranged = [];
+	for (var effect_i = 0; effect_i < array_length(effects_local); effect_i++) {
+		var range_effect = effects_local[@ effect_i];
+		var range_min = real(range_effect[$ "targetMin"] ?? -infinity);
+		var range_max = real(range_effect[$ "targetMax"] ?? infinity);
+		if (!is_finite(range_min) || !is_finite(range_max) || range_max <= range_min) {
+			array_add(unranged, range_effect);
+			continue;
+		};
+		var range_key = $"{range_min}:{range_max}";
+		if (!struct_exists(ranged, range_key)) {
+			ranged[$ range_key] = { min:range_min, max:range_max, effects:[] };
+		};
+		var range_record = ranged[$ range_key];
+		array_add(range_record.effects, range_effect);
+	};
+	effects_local = unranged;
+	var range_names = struct_get_names(ranged);
+	for (var range_i = 0; range_i < array_length(range_names); range_i++) {
+		var range_name = range_names[@ range_i];
+		var range = ranged[$ range_name];
+		var first_depth = -infinity;
+		var last_depth = infinity;
+		for (var line_i = 0; line_i < array_length(game_1.line_list); line_i++) {
+			var line_instance = game_1.line_list[@ line_i];
+			if (!instance_exists(line_instance)) then continue;
+			var line_z = real(line_instance.zOrder);
+			if (variable_instance_exists(line_instance, "zIndex")
+				&& is_real(line_instance.zIndex)) then line_z = real(line_instance.zIndex);
+			if (line_z < range.min || line_z >= range.max) then continue;
+			first_depth = max(first_depth, line_instance.depth);
+			last_depth = min(last_depth, line_instance.depth);
+		};
+		if (!is_finite(first_depth) || !is_finite(last_depth)) then continue;
+		var boundary_state = { surface:-1, active:false };
+		var span_bias = (range.max - range.min) * 0.000000001;
+		instance_create_depth(0, 0, first_depth + 0.25 + span_bias, oRPEEffect, {
+			effect_boundary_role:"start",
+			effect_boundary_depth:first_depth + 0.25 + span_bias,
+			effect_boundary_state:boundary_state,
+			effect_boundary_controller:id,
+			effect_boundary_effects:range.effects
+		});
+		instance_create_depth(0, 0, last_depth - 0.25 - span_bias, oRPEEffect, {
+			effect_boundary_role:"end",
+			effect_boundary_depth:last_depth - 0.25 - span_bias,
+			effect_boundary_state:boundary_state,
+			effect_boundary_controller:id,
+			effect_boundary_effects:range.effects
+		});
+	};
 };

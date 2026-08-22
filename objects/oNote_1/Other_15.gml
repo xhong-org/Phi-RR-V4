@@ -14,7 +14,8 @@ if (now_time > start_sec + lateHitTime && !isBad && !isJudge && !game.settings.e
 
 if ((type == 2 || type == 4) && !isJudge && now_time >= start_sec && now_hit >= start_sec - lateHitTime && now_hit <= start_sec + lateHitTime) {
 	if (is_real_note) {
-		hit_status = judgeCalc(start_sec, now_hit, 0, _x_h, _y_h, type, true, true, true, has_hit_tint ? hit_tint : undefined);
+		var _hit_xy = rpe_note_hit_effect_xy();
+		hit_status = judgeCalc(start_sec, now_hit, 0, _hit_xy[0], _hit_xy[1], type, true, true, true, has_hit_tint ? hit_tint : undefined);
 		rpe_play_hitsound(sound, custom_fmod_sound, custom_hitsound_path);
 	};
 	isJudge = true;
@@ -27,7 +28,8 @@ if ((type == 2 || type == 4) && !isJudge && now_time >= start_sec && now_hit >= 
 if (now_time >= now_hit) {
 	if (!isJudge && hit_status == TYPE.NONE && type == 1) {
 		if (is_real_note) {
-			hit_status = judgeCalc(start_sec, now_hit, 0, _x_h, _y_h, type, true, true, true, has_hit_tint ? hit_tint : undefined);
+			var _tap_xy = rpe_note_hit_effect_xy();
+			hit_status = judgeCalc(start_sec, now_hit, 0, _tap_xy[0], _tap_xy[1], type, true, true, true, has_hit_tint ? hit_tint : undefined);
 			if (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) then rpe_play_hitsound(sound, custom_fmod_sound, custom_hitsound_path);
 		};
 		isJudge = true;

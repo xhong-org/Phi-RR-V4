@@ -1,7 +1,10 @@
 /// @description Stepwise loading so the UI can refresh between stages
 if (done || failed) {
         if (keyboard_check_pressed(vk_escape) || keyboard_check_pressed(vk_enter) || mouse_check_button_pressed(mb_left)) {
-                if (failed) then room_goto(room_menu);
+                if (failed) {
+                        chart_loading_animation_abort();
+                        room_goto(room_menu);
+                };
         };
         exit;
 };
@@ -45,6 +48,7 @@ if (phase == 1) {
                 msgbox_warning_async(detail, "Chart Loader");
                 phase = 99;
                 // Return to menu after failure.
+                chart_loading_animation_abort();
                 room_goto(room_menu);
                 exit;
         };
@@ -68,6 +72,7 @@ if (phase == 2) {
                 detail = session2.format_name;
                 chart_session_fail(detail, true);
                 phase = 99;
+                chart_loading_animation_abort();
                 room_goto(room_menu);
                 exit;
         };

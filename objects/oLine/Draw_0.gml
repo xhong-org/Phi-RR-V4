@@ -1,4 +1,5 @@
 /// @description Draw without allocating a temporary scale array.
+if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then exit;
 if(image_alpha <= 0) then exit;
 
 var draw_scale_x,
@@ -7,8 +8,9 @@ if(self.image_id == line_2){
 		draw_scale_x = (0.71 * chart_view_height / 768);
 		draw_scale_y = (0.68 * chart_view_width / 1366);
 }else{
-		draw_scale_x = (self.Scales * chart_view_height / 1080 * 1.35);
-	draw_scale_y = draw_scale_x;
+	var _csv_scale = chart_line_csv_sprite_scale(chart_line_override(line_id), sprite_index);
+	draw_scale_x = _csv_scale[0];
+	draw_scale_y = _csv_scale[1];
 };
 
 BYD_COLOR_FUNC;

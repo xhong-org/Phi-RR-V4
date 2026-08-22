@@ -41,6 +41,7 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 };
 if (!game.Reader(chart_path)) {
 	show_debug_message($"[Official] Failed to load chart: {chart_path}");
+	chart_loading_animation_abort();
 	room_goto(room_menu);
 	exit;
 };
@@ -53,7 +54,6 @@ if (!game.Reader(chart_path)) {
 depth = DEPTH.HEF + 1;
 if(game.settings.showBG) then instance_create_depth(0,0,0,oBG);
 instance_create_depth(0, 0, -12001, oBG_1);
-instance_create_depth(0, 0, -12000, oChartMask);
 
 instance_create_depth(0,0,0,oMedia , { "name" : (string_length(game.folder_chart.music) ? (InChartPath + game.folder_chart.music) : "") });
 instance_create_depth(0,0,DEPTH.BG - 1,oExtraPlay);
@@ -109,9 +109,10 @@ if (!instance_exists(oPausedUI)) then instance_create_depth(0, 0, -1000000, oPau
 if (variable_global_exists("render_mode") && global.render_mode) {
 	instance_create_depth(0, 0, -9999999, oVideoRenderer);
 };
-if (!instance_exists(oPlayTransition)) {
-	instance_create_depth(0, 0, -999999, oPlayTransition, { owner:id });
-};
+// Hide chart objects behind the loading overlay. Do not deactivate judge
+// lines: activate is deferred and would skip the next event_perform / Step.
+chart_idle_behind_loading();
+global.loading_render_ready = true;
 
 //print(load_line_csv());
 //var arr = [0 , 1 , 2];

@@ -1,6 +1,7 @@
 /// @description Initialize a normalized PEC note.
 depth = DEPTH.NOTE;
 canDraw = false;
+
 judged = false;
 hold_started = false;
 hit_status = TYPE.NONE;

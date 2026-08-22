@@ -1,18 +1,21 @@
 /// @description Evaluate normalized PEC events and speed floor.
+if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then exit;
 if (game.paused) then exit;
 line_sec = game.__time[1] - game_2.chart.offsetSeconds;
 var current_scale = (variable_global_exists("global_scales") ? global_scales : 1);
-if (current_scale != _last_scale || room_height != _last_room_height) {
+if (current_scale != _last_scale || room_height != _last_room_height
+	|| chart_view_width != _last_view_width) {
 	if (image_id == line) {
 		image_xscale = 0.9204 * current_scale;
 		image_yscale = 0.52 * current_scale;
 	} else {
-		var custom_scale = _custom_scale_factor * chart_view_height * current_scale;
-		image_xscale = custom_scale;
-		image_yscale = custom_scale;
+		var _csv_scale = chart_line_csv_sprite_scale(chart_line_override(line_id), image_id);
+		image_xscale = _csv_scale[0];
+		image_yscale = _csv_scale[1];
 	};
 	_last_scale = current_scale;
 	_last_room_height = room_height;
+	_last_view_width = chart_view_width;
 };
 image_blend = c_white;
 if (game.settings.enableLineJudge) {
@@ -22,7 +25,7 @@ if (game.settings.enableLineJudge) {
 };
 if (line_sec < _last_line_sec) {
 	_move_index = 0; _alpha_index = 0; _rotate_index = 0; _speed_index = 0;
-	_move_x = 0; _move_y = 0; _alpha_value = 0; _rotate_value = 0;
+	_move_x = 0; _move_y = 0; _alpha_value = 1; _rotate_value = 0;
 };
 _last_line_sec = line_sec;
 
@@ -69,6 +72,7 @@ if (_speed_count > 0 && line_sec >= _speed_events[0].startSec) {
 
 x = chart_view_left + chart_view_width * _move_x;
 y = chart_view_height * _move_y;
+_alpha_raw = _alpha_value * 255;
 image_alpha = clamp(_alpha_value, 0, 1);
 image_angle = _rotate_value;
 if (image_angle != _last_angle) {

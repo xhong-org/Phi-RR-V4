@@ -3,15 +3,33 @@
 // End Step runs after every line finished writing __raw_* this frame.
 // Parent world position is resolved with a small stack (no nested function defs).
 
+if (variable_global_exists("loading_animation_active") && global.loading_animation_active
+	&& !rpe_force_event_init) then exit;
 var _transition_updates = instance_exists(oRender_1)
 	&& variable_instance_exists(oRender_1, "play_transition_active")
 	&& bool(oRender_1.play_transition_active);
 if (variable_global_exists("game") && is_struct(game) && game.paused
-	&& !_transition_updates) then exit;
+	&& !_transition_updates && !rpe_force_event_init) then exit;
 
 var out_x = __raw_x;
 var out_y = __raw_y;
 var out_r = __raw_r;
+
+if (!is_array(_father_chain)) then _father_chain = [];
+if (array_length(_father_chain) == 0 && is_real(isFather) && isFather >= 0
+        && variable_global_exists("game_1") && is_struct(game_1)
+        && is_array(game_1.line_list)) {
+    var _lazy_parent = isFather;
+    var _lazy_guard = 0;
+    while (_lazy_parent >= 0 && _lazy_parent < array_length(game_1.line_list)
+            && _lazy_guard < 16) {
+        var _lazy_line = game_1.line_list[_lazy_parent];
+        if (!instance_exists(_lazy_line)) then break;
+        array_add(_father_chain, _lazy_line);
+        _lazy_parent = is_real(_lazy_line.isFather) ? _lazy_line.isFather : -1;
+        _lazy_guard++;
+    };
+};
 
 if (is_array(_father_chain) && array_length(_father_chain) > 0) {
                 var chain = _father_chain;
@@ -73,7 +91,8 @@ __sin = dsin(image_angle);
 // drawable value. Multi-layer RPE charts commonly sum to 510/1020/1530.
 var ui_alpha = clamp(__raw_a / 255, 0, 1);
 _alpha_decimal = __raw_a;
-if (is_attach_ui && is_string(attach_ui_key) && string_length(attach_ui_key) > 0 && instance_exists(oRender_1)) {
+if (is_attach_ui && is_string(attach_ui_key) && string_length(attach_ui_key) > 0
+        && instance_exists(oRender_1) && variable_instance_exists(oRender_1, "bindUI")) {
 		var ui_off_x = x - (chart_view_left + chart_view_w * 0.5);
 		var ui_off_y = y - (chart_view_h * 0.5);
         with (oRender_1) {

@@ -3,6 +3,11 @@ if (!instance_exists(owner) || !variable_global_exists("game") || !is_struct(gam
 	exit;
 };
 
+if (state == PLAY_TRANSITION_STATE.PLAYING && chart_instances_activation_requested) {
+    play_transition_activate_chart_instances();
+    chart_instances_activation_requested = false;
+};
+
 var _now = get_timer();
 var _elapsed = max(0, _now - state_started_at);
 
@@ -16,9 +21,21 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 		if (!bool(variable_instance_get(_render_media, "isExists"))
 			|| !bool(variable_instance_get(_render_media, "success"))) then exit;
 		render_started_frame = global.render_frame;
-		state = PLAY_TRANSITION_STATE.INTRO_DELAY;
+		// Recording starts with the start animation; skip the pre-animation wait.
+		state = PLAY_TRANSITION_STATE.INTRO;
 	};
 	var _render_elapsed = max(0, (global.render_frame - render_started_frame) / max(1, global.render_fps));
+	var _intro_animation = 1.0;
+	var _intro_play_delay = 0.5;
+	if (variable_global_exists("render_intro_animation_seconds")
+		&& is_real(global.render_intro_animation_seconds)) {
+		_intro_animation = global.render_intro_animation_seconds;
+	};
+	if (variable_global_exists("render_intro_start_delay_seconds")
+		&& is_real(global.render_intro_start_delay_seconds)) {
+		_intro_play_delay = global.render_intro_start_delay_seconds;
+	};
+	var _intro_total = _intro_animation + _intro_play_delay;
 	if (state == PLAY_TRANSITION_STATE.PLAYING
 		&& variable_global_exists("render_chart_frames")
 		&& global.render_frame >= global.render_chart_frames) {
@@ -48,22 +65,19 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 		game.paused = true;
 		exit;
 	};
-	if (_render_elapsed < 0.1) {
+	if (_render_elapsed < _intro_animation) {
 		game.paused = true;
-		play_transition_apply(0);
-		state = PLAY_TRANSITION_STATE.INTRO_DELAY;
-	} else if (_render_elapsed < 1.1) {
-		game.paused = true;
-		progress = clamp((_render_elapsed - 0.1) / 1.0, 0, 1);
+		progress = clamp(_render_elapsed / max(0.000001, _intro_animation), 0, 1);
 		play_transition_apply(Easings.InOutExpo(progress));
 		state = PLAY_TRANSITION_STATE.INTRO;
-	} else if (_render_elapsed < 1.6) {
+	} else if (_render_elapsed < _intro_total) {
 		game.paused = true;
 		play_transition_apply(1);
 		state = PLAY_TRANSITION_STATE.START_DELAY;
 	} else {
 		if (state != PLAY_TRANSITION_STATE.PLAYING) {
 			play_transition_activate_gameplay();
+			play_transition_activate_chart_instances();
 			if (owner.object_index == oRender) then with (oNote) canDraw = true;
 			game.__time[0] = 1;
 			game.paused = false;
@@ -111,6 +125,7 @@ switch (state) {
 		game.paused = true;
 		if (_elapsed >= play_delay) {
 			play_transition_activate_gameplay();
+			play_transition_activate_chart_instances();
 			if (owner.object_index == oRender) then with (oNote) canDraw = true;
 			m_play();
 			game.Math.now(0);

@@ -1,4 +1,4 @@
-/// @function draw_hold(x, y, scalex, scaley, hold_body_scale, angle, subimg, colour, alpha, draw_head, attach_head, tail_trim)
+/// @function draw_hold(x, y, scalex, scaley, hold_body_scale, angle, subimg, colour, alpha, draw_head, attach_head, tail_trim, head_attach_scale)
 /// @description Draws a Hold from its head reference point with sprite-origin joins.
 /// @param {Real} x
 /// @param {Real} y
@@ -12,8 +12,10 @@
 /// @param {Bool} draw_head
 /// @param {Bool} attach_head Whether the body starts at the head's visible edge.
 /// @param {Real} tail_trim Distance in screen pixels that the tail overlaps the body.
+/// @param {Real} head_attach_scale Fraction of the head origin used for attachment.
 function draw_hold(x, y, scalex, scaley, hold_body_scale, angle = 0, subimg = 0,
-		colour = c_white, alpha = 1, draw_head = true, attach_head = draw_head, tail_trim = 0) {
+		colour = c_white, alpha = 1, draw_head = true, attach_head = draw_head,
+		tail_trim = 0, head_attach_scale = 0.25) {
 	static _head_attach = max(0, sprite_get_yoffset(note_hold_head));
 	static _body_height = max(1, sprite_get_height(note_hold_body));
 
@@ -28,13 +30,13 @@ function draw_hold(x, y, scalex, scaley, hold_body_scale, angle = 0, subimg = 0,
 	var _axis_y = -dcos(angle);
 	var _head_distance = 0;
 	if (attach_head) {
-		_head_distance = (_head_attach * _yscale) / 4;
+		_head_distance = (_head_attach * 1.35) * _yscale * max(0, real(head_attach_scale));
 	};
 
 	// The body scale is calculated from the complete sprite height. Keeping the
 	// same origin convention for every frame is required by the highlight frame.
 	var _body_origin_distance = _head_distance;
-	var _tail_origin_distance = _head_distance + _body_length - max(0, real(tail_trim));
+	var _tail_origin_distance = _head_distance + (_body_length) - max(0, real(tail_trim));
 
 	var _body_x = x + _axis_x * _body_origin_distance;
 	var _body_y = y + _axis_y * _body_origin_distance;

@@ -11,57 +11,19 @@ function chart_view_refresh(_room_w, _room_h) {
 	};
 	chart_view_height = max(1, _room_h);
 	chart_view_width = min(max(1, _room_w), chart_view_height * _aspect);
-	chart_view_left = (_room_w - chart_view_width) * 0.5;
+	// Pixel-align the effective viewport so composition, clipping and the
+	// aspect mask share the same edge. Fractional coordinates leave a dark
+	// seam under MSAA in render mode.
+	chart_view_width = max(1, round(chart_view_width));
+	chart_view_left = round((_room_w - chart_view_width) * 0.5);
 	chart_view_right = chart_view_left + chart_view_width;
 }
 
 function draw_chart_mask(_room_w , _room_h){
-	// Playback uses the chart aspect for its viewport. Only offline capture
-	// gets black bars, and only when the requested video aspect differs from
-	// the chart aspect. Do not affect the normal window presentation.
-	if (!variable_global_exists("render_mode") || !global.render_mode) then return;
-	if (!variable_global_exists("render_width") || !variable_global_exists("render_height")) then return;
-	var _video_w = real(global.render_width);
-	var _video_h = real(global.render_height);
-	if (!is_finite(_video_w) || !is_finite(_video_h) || _video_w <= 0 || _video_h <= 0) then return;
-
-	var _chart_aspect = 16 / 9;
-	if (variable_global_exists("chart_aspect_ratio") && is_real(chart_aspect_ratio)
-		&& is_finite(chart_aspect_ratio) && chart_aspect_ratio > 0) {
-		_chart_aspect = chart_aspect_ratio;
-	};
-	var _video_aspect = _video_w / _video_h;
-	if (abs(_chart_aspect - _video_aspect) <= 0.0001) then return;
-
-	var _effective_w = _room_w;
-	var _effective_h = _room_h;
-	if (_chart_aspect < _video_aspect) {
-		// The chart is narrower than the video: add pillarbox bars.
-		_effective_w = _room_h * _chart_aspect;
-	} else {
-		// The chart is wider than the video: add letterbox bars.
-		_effective_h = _room_w / _chart_aspect;
-	};
-	var _left = (_room_w - _effective_w) * 0.5;
-	var _top = (_room_h - _effective_h) * 0.5;
-	var _old_colour = draw_get_colour();
-	var _old_alpha = draw_get_alpha();
-	draw_flush();
-	gpu_set_blendmode(bm_normal);
-	draw_set_colour(c_black);
-	draw_set_alpha(1);
-	if (_left > 0) {
-		draw_rectangle(0, 0, _left, _room_h, true);
-		draw_rectangle(_room_w - _left, 0, _room_w, _room_h, true);
-	};
-	if (_top > 0) {
-		draw_rectangle(0, 0, _room_w, _top, true);
-		draw_rectangle(0, _room_h - _top, _room_w, _room_h, true);
-	};
-	draw_set_alpha(_old_alpha);
-	draw_set_colour(_old_colour);
-	gpu_set_blendmode(bm_normal);
-	draw_flush();
+	// The aspect mask is the undimmed illustration oBG draws on the full
+	// application surface. The chart composite only covers the effective
+	// viewport, so the sides stay visible. Do not paint black bars over it.
+	return;
 };
 
 function chart_draw_background(_dim = true) {

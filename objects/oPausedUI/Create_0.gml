@@ -180,6 +180,7 @@ function paused_ui_reset_score() {
 }
 
 function paused_ui_reset_official() {
+        if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return;
         instance_activate_object(oNote);
         with (oLine) {
                 _counts = [0, 0, 0, 0];
@@ -210,12 +211,14 @@ function paused_ui_reset_official() {
 }
 
 function paused_ui_reset_pec() {
+        if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return;
         instance_activate_object(oNote_2);
         with (oLine_2) {
                 _move_index = 0; _alpha_index = 0; _rotate_index = 0; _speed_index = 0;
                 _move_value = [0, 0];
                 _move_x = 0; _move_y = 0;
-                _alpha_value = 0; _rotate_value = 0;
+		_alpha_value = 1; _rotate_value = 0;
+		image_alpha = 1;
                 floor_position = 0;
                 line_sec = 0;
                 _last_line_sec = -infinity;
@@ -241,6 +244,7 @@ function paused_ui_reset_pec() {
 }
 
 function paused_ui_reset_rpe() {
+        if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return;
         instance_activate_object(oNote_1);
         with (oLine_1) {
                 for (var layer_index = 0; layer_index < array_length(events_count); layer_index++) {

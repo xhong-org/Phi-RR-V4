@@ -33,7 +33,11 @@ if (os_type == os_windows) {
     };
 };
 
-global.render_intro_seconds = 1.6;
+// Record from the chart start animation. The 0.1s pre-animation wait is not
+// written to the file, so audio delay is animation + start delay only.
+global.render_intro_animation_seconds = 1.0;
+global.render_intro_start_delay_seconds = 0.5;
+global.render_intro_seconds = global.render_intro_animation_seconds + global.render_intro_start_delay_seconds;
 global.render_intro_frames = ceil(global.render_intro_seconds * global.render_fps);
 global.render_intro_seconds = global.render_intro_frames / max(1, global.render_fps);
 global.render_outro_seconds = 1.5;

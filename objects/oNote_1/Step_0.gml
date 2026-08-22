@@ -1,5 +1,6 @@
 /// @description RPE note step: time, position, auto-judge
 if (!inition) then exit;
+if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then exit;
 if (variable_global_exists("game") && is_struct(game) && game.paused) then exit;
 if (!instance_exists(_line_ref)) { canDraw = false; exit; };
 
