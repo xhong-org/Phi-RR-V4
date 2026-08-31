@@ -153,7 +153,16 @@ function rpe_effect_external_mapping(shader_path) {
 			|| string_pos("/" + lower_name + ".", probe) > 0
 			|| string_pos("/" + string_replace_all(lower_name, "blur", "_blur") + ".", probe) > 0) return shader_name;
 	};
-	print($"[RPE Effect] GLSL runtime translation is unavailable; use HLSL or add '// @gamemaker-effect <builtin>': {relative_path}");
+	if (string_pos("float4", probe) > 0 || string_pos("sv_target", probe) > 0
+		|| string_pos("samplerstate", probe) > 0 || string_pos("texture2d", probe) > 0
+		|| string_pos("tex2d(", probe) > 0 || string_pos("cbuffer ", probe) > 0) {
+		return "@hlsl:" + relative_path;
+	};
+	if (os_type == os_android) {
+		print($"[RPE Effect] Unrecognized shader; Android needs GLSL ES, HLSL, or '// @gamemaker-effect <builtin>': {relative_path}");
+	} else {
+		print($"[RPE Effect] GLSL runtime translation is unavailable; use HLSL or add '// @gamemaker-effect <builtin>': {relative_path}");
+	};
 	return "";
 }
 
@@ -168,19 +177,25 @@ function rpe_effect_external_defaults(shader_name) {
 	if (is_undefined(handle) || handle < 0) then return result;
 	while (!file_text_eof(handle)) {
 		var shader_line = string_trim(string_replace_all(file_text_readln(handle), "\t", " "));
-		if (string_pos("uniform ", shader_line) != 1) then continue;
+		if (string_pos("(", shader_line) > 0) then continue;
 		var semicolon = string_pos(";", shader_line);
 		var first_percent = string_pos("%", shader_line);
 		if (semicolon <= 0 || first_percent <= semicolon) then continue;
 		var default_tail = string_delete(shader_line, 1, first_percent);
 		var second_percent = string_pos("%", default_tail);
 		if (second_percent <= 0) then continue;
-		var declaration = string_trim(string_copy(shader_line, 9, semicolon - 9));
+		var declaration = string_trim(string_copy(shader_line, 1, semicolon - 1));
+		declaration = string_replace(declaration, "uniform ", "");
+		declaration = string_replace(declaration, "static ", "");
+		var register_pos = string_pos(":", declaration);
+		if (register_pos > 0) then declaration = string_trim(string_copy(declaration, 1, register_pos - 1));
 		var declaration_parts_raw = string_split(declaration, " ");
 		var declaration_parts = [];
 		for (var part_i = 0; part_i < array_length(declaration_parts_raw); part_i++) {
 			var part = string_trim(declaration_parts_raw[part_i]);
-			if (string_length(part)) array_add(declaration_parts, part);
+			if (string_length(part) && part != "highp" && part != "mediump" && part != "lowp") {
+				array_add(declaration_parts, part);
+			};
 		};
 		if (array_length(declaration_parts) < 2) then continue;
 		var uniform_type = declaration_parts[0];
@@ -188,8 +203,16 @@ function rpe_effect_external_defaults(shader_name) {
 		var default_text = string_trim(string_copy(default_tail, 1, second_percent - 1));
 		var kind = 1;
 		var value = 0;
-		if (uniform_type == "vec2" || uniform_type == "vec4") {
-			kind = (uniform_type == "vec2" ? 2 : 4);
+		if (uniform_type == "vec2" || uniform_type == "float2") {
+			kind = 2;
+			var values = string_split(default_text, ",");
+			if (array_length(values) < kind) then continue;
+			value = array_create(kind, 0);
+			for (var component_i = 0; component_i < kind; component_i++) {
+				value[@ component_i] = real(string_trim(values[component_i]));
+			};
+		} else if (uniform_type == "vec4" || uniform_type == "float4") {
+			kind = 4;
 			var values = string_split(default_text, ",");
 			if (array_length(values) < kind) then continue;
 			value = array_create(kind, 0);
@@ -285,4 +308,218 @@ function rpe_effect_shader_asset(shader_name) {
 		case "customTint": return shd_rpe_custom_tint;
 	};
 	return -1;
+}
+
+// Phira-style GLSL ES for the Android native backend. Windows keeps the GM
+// shader assets; this source is only compiled through I_Shaders on Android.
+function rpe_effect_builtin_glsl(shader_name) {
+	switch (shader_name) {
+		case "chromatic": return @"
+precision mediump float;
+varying vec2 uv;
+uniform sampler2D screenTexture;
+uniform float sampleCount;
+uniform float power;
+void main() {
+    float count = max(2.0, min(64.0, floor(sampleCount + 0.5)));
+    vec3 sum = vec3(0.0);
+    vec3 c = vec3(0.0);
+    vec2 offset = (uv - vec2(0.5)) * vec2(1.0, -1.0);
+    for (int i = 0; i < 64; i++) {
+        if (float(i) < count) {
+            float t = 2.0 * float(i) / max(count - 1.0, 1.0);
+            vec3 slice = max(vec3(1.0 - t, 1.0 - abs(t - 1.0), t - 1.0), 0.0);
+            sum += slice;
+            c += slice * texture2D(screenTexture, uv + (t - 1.0) * power * offset).rgb;
+        }
+    }
+    float alpha = texture2D(screenTexture, uv).a;
+    gl_FragColor = vec4(c / max(sum, vec3(0.0001)), alpha);
+}
+";
+		case "circleBlur": return @"
+precision mediump float;
+varying vec2 uv;
+uniform vec2 screenSize;
+uniform sampler2D screenTexture;
+uniform float size;
+void main() {
+    float radius = clamp(size, 0.0, 12.0);
+    vec4 c = texture2D(screenTexture, uv);
+    float best = dot(c, c);
+    vec2 pixelSize = 1.0 / max(screenSize, vec2(1.0));
+    for (int x = -12; x <= 12; x++) {
+        for (int y = -12; y <= 12; y++) {
+            float dist2 = float(x * x + y * y);
+            if (dist2 <= radius * radius) {
+                vec4 candidate = texture2D(screenTexture, uv + pixelSize * vec2(float(x), float(y)));
+                float value = dot(candidate, candidate);
+                if (value > best) { best = value; c = candidate; }
+            }
+        }
+    }
+    gl_FragColor = c;
+}
+";
+		case "fisheye": return @"
+precision mediump float;
+varying vec2 uv;
+uniform vec2 screenSize;
+uniform sampler2D screenTexture;
+uniform float power;
+void main() {
+    float aspect = screenSize.x / max(screenSize.y, 1.0);
+    vec2 p = vec2(uv.x, uv.y / aspect);
+    vec2 centre = vec2(0.5, 0.5 / aspect);
+    vec2 delta = p - centre;
+    float radius = length(delta);
+    vec2 newUv = uv;
+    if (radius > 0.000001 && abs(power) > 0.000001) {
+        float strength = (6.283184 / (2.0 * length(centre))) * power;
+        float bind = strength > 0.0 ? length(centre) : (aspect < 1.0 ? centre.x : centre.y);
+        vec2 warped;
+        if (strength > 0.0) warped = centre + normalize(delta) * tan(radius * strength) * bind / tan(bind * strength);
+        else warped = centre + normalize(delta) * atan(radius * -strength * 10.0) * bind / atan(-strength * bind * 10.0);
+        newUv = vec2(warped.x, warped.y * aspect);
+    }
+    gl_FragColor = texture2D(screenTexture, newUv);
+}
+";
+		case "glitch": return @"
+precision highp float;
+varying vec2 uv;
+uniform sampler2D screenTexture;
+uniform float time;
+uniform float power;
+uniform float rate;
+uniform float speed;
+uniform float blockCount;
+uniform float colorRate;
+float truncValue(float value) { return value < 0.0 ? -floor(-value) : floor(value); }
+float randomValue(float seed) {
+    return fract(543.2543 * sin(dot(vec2(seed), vec2(3525.46, -54.3415))));
+}
+void main() {
+    float enabled = randomValue(truncValue(time * speed)) < rate ? 1.0 : 0.0;
+    vec2 fixedUv = uv;
+    fixedUv.x += (randomValue((truncValue(uv.y * blockCount) / max(blockCount, 0.001)) + time) - 0.5) * power * enabled;
+    vec4 colour = texture2D(screenTexture, fixedUv);
+    colour.r = mix(colour.r, texture2D(screenTexture, fixedUv + vec2(colorRate, 0.0)).r, enabled);
+    colour.b = mix(colour.b, texture2D(screenTexture, fixedUv - vec2(colorRate, 0.0)).b, enabled);
+    gl_FragColor = colour;
+}
+";
+		case "grayscale": return @"
+precision mediump float;
+varying vec2 uv;
+uniform sampler2D screenTexture;
+uniform float factor;
+void main() {
+    vec4 source = texture2D(screenTexture, uv);
+    float luminance = dot(vec3(0.299, 0.587, 0.114), source.rgb);
+    gl_FragColor = vec4(mix(source.rgb, vec3(luminance), factor), source.a);
+}
+";
+		case "noise": return @"
+precision highp float;
+varying vec2 uv;
+uniform sampler2D screenTexture;
+uniform float seed;
+uniform float power;
+vec2 randomValue(vec2 pos) {
+    return fract(sin(vec2(dot(pos, vec2(12.9898, 78.233)), dot(pos, vec2(-148.998, -65.233)))) * 43758.5453);
+}
+void main() {
+    vec2 newUv = uv + (randomValue(uv + vec2(seed, 0.0)) - vec2(0.5)) * power;
+    gl_FragColor = texture2D(screenTexture, newUv);
+}
+";
+		case "pixel": return @"
+precision mediump float;
+varying vec2 uv;
+uniform vec2 screenSize;
+uniform sampler2D screenTexture;
+uniform float size;
+void main() {
+    vec2 factor = screenSize / max(size, 1.0);
+    vec2 pixelUv = floor(uv * factor + vec2(0.5)) / factor;
+    gl_FragColor = texture2D(screenTexture, pixelUv);
+}
+";
+		case "radialBlur": return @"
+precision mediump float;
+varying vec2 uv;
+uniform sampler2D screenTexture;
+uniform float centerX;
+uniform float centerY;
+uniform float power;
+uniform float sampleCount;
+void main() {
+    float count = max(1.0, min(64.0, floor(sampleCount + 0.5)));
+    vec2 direction = uv - vec2(centerX, centerY);
+    vec3 c = vec3(0.0);
+    for (int i = 0; i < 64; i++) {
+        if (float(i) < count) {
+            c += texture2D(screenTexture, uv - power * direction * float(i)).rgb / count;
+        }
+    }
+    float alpha = texture2D(screenTexture, uv).a;
+    gl_FragColor = vec4(c, alpha);
+}
+";
+		case "shockwave": return @"
+precision mediump float;
+varying vec2 uv;
+uniform vec2 screenSize;
+uniform sampler2D screenTexture;
+uniform float progress;
+uniform float centerX;
+uniform float centerY;
+uniform float width;
+uniform float distortion;
+uniform float expand;
+void main() {
+    float aspect = screenSize.y / max(screenSize.x, 1.0);
+    vec2 centre = vec2(centerX, (centerY - 0.5) * aspect + 0.5);
+    vec2 coord = vec2(uv.x, (uv.y - 0.5) * aspect + 0.5);
+    float dist = distance(coord, centre);
+    vec2 sampleUv = uv;
+    float glow = 0.0;
+    if (progress > 0.0001 && dist > 0.0001 && progress - width <= dist && dist <= progress + width) {
+        float diff = dist - progress;
+        float scaleDiff = 1.0 - pow(abs(diff * expand), distortion);
+        float denom = max(progress * dist * 40.0, 0.0001);
+        coord += normalize(coord - centre) * diff * scaleDiff / denom;
+        sampleUv = vec2(coord.x, (coord.y - 0.5) / max(aspect, 0.0001) + 0.5);
+        glow = scaleDiff / denom;
+    }
+    vec4 colour = texture2D(screenTexture, sampleUv);
+    gl_FragColor = colour + colour * glow;
+}
+";
+		case "vignette": return @"
+precision mediump float;
+varying vec2 uv;
+uniform sampler2D screenTexture;
+uniform vec4 color;
+uniform float extend;
+uniform float radius;
+void main() {
+    vec2 value = uv * (1.0 - uv.yx);
+    float vig = pow(max(value.x * value.y * radius, 0.0), extend);
+    gl_FragColor = mix(color, texture2D(screenTexture, uv), vig);
+}
+";
+		case "customTint": return @"
+precision mediump float;
+varying vec2 uv;
+uniform sampler2D screenTexture;
+uniform float factor;
+void main() {
+    vec4 source = texture2D(screenTexture, uv);
+    gl_FragColor = mix(source, vec4(1.0, 0.0, 0.0, 1.0), factor);
+}
+";
+	};
+	return "";
 }

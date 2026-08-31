@@ -6,9 +6,27 @@ function unicode_zip_initialize() : unit;
 [global]
 function unicode_zip_available() : bool;
 [global]
+function unicode_zip_detect(archive_path : string) : string;
+[global]
+function unicode_zip_extract(archive_path : string, output_directory : string, overwrite : bool, clean_output : bool) : bool;
+[global]
+function unicode_zip_extract_password(archive_path : string, output_directory : string, overwrite : bool, clean_output : bool, password : string) : bool;
+[global]
+function unicode_zip_compress(source_path : string, archive_path : string, include_root : bool, overwrite : bool) : bool;
+[global]
+function unicode_zip_compress_password(source_path : string, archive_path : string, include_root : bool, overwrite : bool, password : string) : bool;
+[global]
+function unicode_zip_compress_format(source_path : string, archive_path : string, include_root : bool, overwrite : bool, password : string, format : string) : bool;
+[global]
 function unicode_zip_extract_async(archive_path : string, output_directory : string, overwrite : bool, clean_output : bool) : int32;
 [global]
+function unicode_zip_extract_async_password(archive_path : string, output_directory : string, overwrite : bool, clean_output : bool, password : string) : int32;
+[global]
 function unicode_zip_compress_async(source_path : string, archive_path : string, include_root : bool, overwrite : bool) : int32;
+[global]
+function unicode_zip_compress_async_password(source_path : string, archive_path : string, include_root : bool, overwrite : bool, password : string) : int32;
+[global]
+function unicode_zip_compress_async_format(source_path : string, archive_path : string, include_root : bool, overwrite : bool, password : string, format : string) : int32;
 [global]
 function unicode_zip_task_status(task_id : int32) : int32;
 [global]

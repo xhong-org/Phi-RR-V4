@@ -42,7 +42,7 @@ if (is_struct(game) && struct_exists(game, "folder_chart")) {
 		if (is_string(_chart_value)) then _chart_rel = _chart_value;
 	};
 };
-var _chart_path = string_length(_chart_rel) ? (InChartPath + _chart_rel) : "";
+var _chart_path = string_length(_chart_rel) ? chart_path_join(InChartPath, _chart_rel) : "";
 show_debug_message($"[oRender_1] RPE chart path: {_chart_path}");
 var _rpe_loaded = game_1.Reader(_chart_path);
 if (!_rpe_loaded) {
@@ -65,11 +65,11 @@ if ((!is_string(_bg) || !string_length(_bg))
 	_bg = global.chart_session.image_file;
 	game.folder_chart.bg = _bg;
 };
-if (is_string(_bg) && string_length(_bg)) then game.Background(InChartPath + _bg);
+if (is_string(_bg) && string_length(_bg)) then game.Background(chart_in_path(_bg));
 
 instance_create_depth(0,0,0,oBG);
 instance_create_depth(0, 0, -12001, oBG_1);
-instance_create_depth(0,0,0,oMedia , { "name" : (string_length(game.folder_chart.music) ? (InChartPath + game.folder_chart.music) : "") });
+instance_create_depth(0,0,0,oMedia , { "name" : (string_length(game.folder_chart.music) ? chart_in_path(game.folder_chart.music) : "") });
 instance_create_depth(0,0,DEPTH.BG - 1,oExtraPlay);
 // Seed BPM from the same normalized timeline used by parser and runtime.
 var _initial_bpm_timeline = game_1.Math.ensureBpmTimeline();
@@ -183,6 +183,7 @@ _step_fps_user_count = 0;
 _re_fps = 1;
 fps_more = 0;
 refresh_count = 0;
+chart_playback_teardown_reset();
 chart_exit_started = false;
 chart_exit_timer = 0;
 chart_exit_alpha = 1;

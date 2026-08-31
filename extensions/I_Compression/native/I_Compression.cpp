@@ -1,4 +1,5 @@
 #include "native/ICompressionInternal_native.h"
+#include "archive_magic.hpp"
 
 #include <Windows.h>
 
@@ -271,6 +272,98 @@ void unicode_zip_initialize() {
 bool unicode_zip_available() {
     std::error_code error;
     return std::filesystem::is_regular_file(tar_path(), error);
+}
+
+int32_t unicode_zip_extract_async(std::string_view archive_path, std::string_view output_directory, bool overwrite, bool clean_output);
+int32_t unicode_zip_compress_async(std::string_view source_path, std::string_view archive_path, bool include_root, bool overwrite);
+bool unicode_zip_task_release(int32_t task_id);
+
+std::string unicode_zip_detect(std::string_view archive_path) {
+    if (archive_path.empty()) {
+        set_last_error("Archive path must be a valid UTF-8 string.");
+        return "unknown";
+    }
+    const auto wide = utf8_to_wide(archive_path);
+    if (wide.empty()) {
+        set_last_error("Archive path must be a valid UTF-8 string.");
+        return "unknown";
+    }
+    const std::filesystem::path archive = std::filesystem::absolute(wide).lexically_normal();
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(archive, error)) {
+        set_last_error("Archive does not exist: " + wide_to_utf8(archive.wstring()));
+        return "unknown";
+    }
+    set_last_error({});
+    return detect_archive_kind_from_path(wide_to_utf8(archive.wstring()));
+}
+
+bool wait_task(int32_t task_id) {
+    if (task_id < 0) return false;
+    const auto task = find_task(task_id);
+    if (!task) return false;
+    if (task->worker.joinable()) task->worker.join();
+    const bool ok = task->status.load() == TaskSucceeded;
+    if (!ok) set_last_error(task->error);
+    else set_last_error({});
+    unicode_zip_task_release(task_id);
+    return ok;
+}
+
+bool unicode_zip_extract(std::string_view archive_path, std::string_view output_directory, bool overwrite, bool clean_output) {
+    return wait_task(unicode_zip_extract_async(archive_path, output_directory, overwrite, clean_output));
+}
+
+bool unicode_zip_extract_password(std::string_view archive_path, std::string_view output_directory,
+    bool overwrite, bool clean_output, std::string_view password) {
+    if (!password.empty()) {
+        set_last_error("Password-protected archives are not supported on Windows.");
+        return false;
+    }
+    return unicode_zip_extract(archive_path, output_directory, overwrite, clean_output);
+}
+
+bool unicode_zip_compress(std::string_view source_path, std::string_view archive_path, bool include_root, bool overwrite) {
+    return wait_task(unicode_zip_compress_async(source_path, archive_path, include_root, overwrite));
+}
+
+bool unicode_zip_compress_password(std::string_view source_path, std::string_view archive_path,
+    bool include_root, bool overwrite, std::string_view password) {
+    if (!password.empty()) {
+        set_last_error("Password-protected compression is not supported on Windows.");
+        return false;
+    }
+    return unicode_zip_compress(source_path, archive_path, include_root, overwrite);
+}
+
+bool unicode_zip_compress_format(std::string_view source_path, std::string_view archive_path,
+    bool include_root, bool overwrite, std::string_view password, std::string_view format) {
+    (void)format;
+    return unicode_zip_compress_password(source_path, archive_path, include_root, overwrite, password);
+}
+
+int32_t unicode_zip_extract_async_password(std::string_view archive_path, std::string_view output_directory,
+    bool overwrite, bool clean_output, std::string_view password) {
+    if (!password.empty()) {
+        set_last_error("Password-protected archives are not supported on Windows.");
+        return -1;
+    }
+    return unicode_zip_extract_async(archive_path, output_directory, overwrite, clean_output);
+}
+
+int32_t unicode_zip_compress_async_password(std::string_view source_path, std::string_view archive_path,
+    bool include_root, bool overwrite, std::string_view password) {
+    if (!password.empty()) {
+        set_last_error("Password-protected compression is not supported on Windows.");
+        return -1;
+    }
+    return unicode_zip_compress_async(source_path, archive_path, include_root, overwrite);
+}
+
+int32_t unicode_zip_compress_async_format(std::string_view source_path, std::string_view archive_path,
+    bool include_root, bool overwrite, std::string_view password, std::string_view format) {
+    (void)format;
+    return unicode_zip_compress_async_password(source_path, archive_path, include_root, overwrite, password);
 }
 
 int32_t unicode_zip_extract_async(std::string_view archive_path, std::string_view output_directory, bool overwrite, bool clean_output) {

@@ -44,7 +44,7 @@ if (!encoder_started) {
     total_frames = max(1, ceil((media.length / 1000000) * global.render_fps));
     global.render_chart_frames = total_frames;
 
-    var audio_path = InChartPath + game.folder_chart.music;
+    var audio_path = chart_in_path(game.folder_chart.music);
     video_renderer_configure(frame_width, frame_height, global.render_fps, global.render_crf);
     video_renderer_set_ffmpeg(global.render_ffmpeg);
     if (!video_renderer_set_audio_delay(global.render_intro_seconds)) {

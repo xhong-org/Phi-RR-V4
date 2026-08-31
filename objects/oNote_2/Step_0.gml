@@ -13,16 +13,15 @@ var axis_y = line_ref.__cos * sideDirection;
 var base_x = line_ref.x + line_ref.__cos * local_x;
 var base_y = line_ref.y - line_ref.__sin * local_x;
 var before_hold = (type == 2 && chart_sec < startSec);
-// PCR: note travel is speed * (noteFloor - lineFloor). Holds used the
-// unscaled floor delta, so speed != 1 holds sat at the wrong height.
-var speed_pos = speed * (floorPosition - line_floor);
+// Phira: note travel is note.speed * (noteFloor - lineFloor) for taps and holds.
+var speed_pos = note_speed * (floorPosition - line_floor);
 var distance_units = (type == 2 && !before_hold) ? 0 : speed_pos;
 var distance = distance_units * scene_height;
 var note_x = base_x + axis_x * distance;
 var note_y = base_y + axis_y * distance;
 image_angle = line_ref.image_angle + angleOffset;
 var pec_alpha_raw = real(line_ref._alpha_raw ?? (line_ref._alpha_value * 255));
-var line_notes_visible = pec_note_alpha_visible(pec_alpha_raw, isAbove, startSec - chart_sec);
+var line_notes_visible = pec_note_alpha_visible(pec_alpha_raw, isAbove, startSec - chart_sec, startSec);
 var behind_line = (speed_pos < -0.000001);
 image_alpha = 1;
 
@@ -32,7 +31,7 @@ if (type == 2) {
 	if (before) {
 		head_offset = max(0, hold_head_attach * image_yscale);
 	};
-	var units = before ? speedHoldFloorLength : speedFloorEnd - speed * line_floor;
+	var units = before ? speedHoldFloorLength : speedFloorEnd - note_speed * line_floor;
 	var hold_length = max(0, units * scene_height - head_offset);
 	var body_scale = hold_length / hold_body_height;
 	if (before) {
@@ -79,11 +78,16 @@ if (type == 2) {
 		canDraw = false;
 		instance_deactivate_object(self);
 	};
+	//if(line_id == 7 && floor(start_beat) == 32){
+	//	print($"Hold State: hitTime={start_beat} line_id={line_id} type={type} x={note_x} y={note_y} rot={image_angle} yscale={yscale} nowTime={chart_sec} lineFP={line_floor} noteFP={floorPosition} speed={note_speed}");
+	//};
 	exit;
 };
 
 x = note_x;
 y = note_y;
+
+
 canDraw = line_notes_visible && !behind_line && !judged && chart_sec < startSec;
 if (chart_sec >= trigger_sec && !judged) {
 	judged = true;
@@ -96,3 +100,5 @@ if (chart_sec >= trigger_sec && !judged) {
 	canDraw = false;
 	instance_deactivate_object(self);
 };
+
+

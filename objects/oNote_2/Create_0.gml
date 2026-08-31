@@ -7,15 +7,26 @@ hold_started = false;
 hit_status = TYPE.NONE;
 hold_effect_sec = -infinity;
 image_alpha = 1;
-if (!variable_instance_exists(id, "speed")) then speed = 1;
+if (!variable_instance_exists(id, "note_speed")) {
+	note_speed = (variable_instance_exists(id, "speed") ? speed : 1);
+};
+note_speed = real(note_speed);
+if (!is_finite(note_speed)) then note_speed = 1;
+// GameMaker applies built-in `speed` after Step; never use it as note velocity.
+speed = 0;
+direction = 0;
 if (!variable_instance_exists(id, "widthScale")) then widthScale = 1;
 if (!variable_instance_exists(id, "isFake")) then isFake = false;
+if (!variable_instance_exists(id, "start_beat")) then start_beat = 0;
+if (!variable_instance_exists(id, "end_beat")) then end_beat = start_beat;
+start_beat = real(start_beat);
+end_beat = real(end_beat);
 if (!variable_instance_exists(id, "localXFactor")) then localXFactor = xOffset * 0.05625;
 if (!variable_instance_exists(id, "sideDirection")) then sideDirection = isAbove ? -1 : 1;
 if (!variable_instance_exists(id, "angleOffset")) then angleOffset = isAbove ? 0 : 180;
-if (!variable_instance_exists(id, "speedFloorStart")) then speedFloorStart = speed * floorPosition;
-if (!variable_instance_exists(id, "speedFloorEnd")) then speedFloorEnd = speed * endFloorPosition;
-if (!variable_instance_exists(id, "speedHoldFloorLength")) then speedHoldFloorLength = speed * (endFloorPosition - floorPosition);
+speedFloorStart = note_speed * floorPosition;
+speedFloorEnd = note_speed * endFloorPosition;
+speedHoldFloorLength = note_speed * (endFloorPosition - floorPosition);
 if (!is_array(game_2.line_group) || line_id < 0 || line_id >= array_length(game_2.line_group)) {
 	instance_deactivate_object(self);
 	exit;

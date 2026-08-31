@@ -8,30 +8,38 @@ video_last_chart_time = -infinity;
 video_handle = -1;
 video_backend_ready = false;
 video_error_logged = false;
+video_os_paused = false;
 effect_controller = -1;
 
-var extra_path = InChartPath + "extra.json";
+var extra_path = chart_path_join(InChartPath, "extra.json");
 if (variable_global_exists("chart_session") && is_struct(global.chart_session)
 	&& is_string(global.chart_session.extra_file) && string_length(global.chart_session.extra_file)) {
 	extra_path = chart_path_join(InChartPath, global.chart_session.extra_file);
 };
 var extra_root = chart_path_dir(extra_path);
 
-if (file_exists(extra_path) && os_type == os_windows && extension_exists("FFVideos")) {
-	var video_d3d_info = os_get_info();
-	if (ds_exists(video_d3d_info, ds_type_map)
-		&& ds_map_exists(video_d3d_info, "video_d3d11_device")
-		&& ds_map_exists(video_d3d_info, "video_d3d11_context")) {
-		video_backend_ready = ffvideos_initialize(
-			video_d3d_info[? "video_d3d11_device"],
-			video_d3d_info[? "video_d3d11_context"]) == 3;
+if (chart_file_exists_any(extra_path)) {
+	if (os_type == os_windows && extension_exists("FFVideos")) {
+		var video_d3d_info = os_get_info();
+		if (ds_exists(video_d3d_info, ds_type_map)
+			&& ds_map_exists(video_d3d_info, "video_d3d11_device")
+			&& ds_map_exists(video_d3d_info, "video_d3d11_context")) {
+			video_backend_ready = ffvideos_ext_initialize(
+				video_d3d_info[? "video_d3d11_device"],
+				video_d3d_info[? "video_d3d11_context"]) == 3;
+		};
+		if (ds_exists(video_d3d_info, ds_type_map)) then ds_map_destroy(video_d3d_info);
+	} else if (os_type == os_android) {
+		video_backend_ready = ffvideos_ext_initialize(pointer_null, pointer_null) == 3;
+		if (video_backend_ready) then print("[FFVideos] Android MediaCodec backend ready");
 	};
-	if (ds_exists(video_d3d_info, ds_type_map)) then ds_map_destroy(video_d3d_info);
-	if (!video_backend_ready) then print($"[FFVideos] Initialization failed: {ffvideos_get_error(0)}");
+	if (!video_backend_ready) then print($"[FFVideos] Initialization failed: {ffvideos_ext_get_error(0)}");
 };
 
 var read_extra_text = function(path) {
-	var handle = file_text_open_read(path);
+	var native_text = chart_read_text_file(path, -1);
+	if (is_string(native_text) && string_length(native_text)) then return native_text;
+	var handle = file_text_open_read(chart_file_readable_path(path));
 	if (is_undefined(handle) || handle < 0) then return "";
 	var temp = buffer_create(65536, buffer_grow, 1);
 	while (!file_text_eof(handle)) {
@@ -145,7 +153,7 @@ if (is_struct(extra)) {
 		var relative_path = string_replace_all(source.path, "\\", "/");
 		if (string_pos("..", relative_path) > 0 || string_char_at(relative_path, 1) == "/") then continue;
 		array_add(videos, {
-			path: chart_path_join(extra_root, relative_path),
+			path: chart_file_readable_path(chart_path_join(extra_root, relative_path)),
 			startTime: extra_beat_to_second(extra_beat_value(source[$ "time"], 0)),
 			scale: extra_video_scale(source[$ "scale"] ?? "cropCenter"),
 			zIndex: (is_real(source[$ "zIndex"] ?? undefined) ? real(source[$ "zIndex"]) : undefined),
@@ -155,6 +163,10 @@ if (is_struct(extra)) {
 	});
 	};
 	array_sort(videos, function(a, b) { return sign(a.startTime - b.startTime); });
+	print($"[FFVideos] Parsed videos={array_length(videos)}, extra={extra_path}");
+	for (var video_log_i = 0; video_log_i < array_length(videos); video_log_i++) {
+		print($"[FFVideos] Video[{video_log_i}] path={videos[video_log_i].path}, exists={chart_file_exists_any(videos[video_log_i].path)}, start={videos[video_log_i].startTime}");
+	};
 	var parsed_effects = rpe_effect_parse(extra, extra_bpm_points);
 	if (array_length(parsed_effects.local) > 0 || array_length(parsed_effects.global) > 0) {
 		effect_controller = instance_create_depth(0, 0, DEPTH.DEBUG + 1, oRPEEffect, {
@@ -178,14 +190,22 @@ draw_attached_video = function(line_instance) {
 	if (video_index < 0 || video_handle < 0 || !instance_exists(line_instance)) then return;
 	var video = videos[video_index];
 	if (!is_struct(video.attach) || video.attach.line != line_instance.line_id) then return;
-	var status = ffvideos_get_status(video_handle);
+	var status = ffvideos_ext_get_status(video_handle);
 	// Render mode prepares an exact frame without entering Playing/Paused.
 	// Ended is also valid here because the decoder can retain the prepared
 	// final frame; only states without a drawable frame are rejected.
-	if (status == FFVideosStatus.Error || status == FFVideosStatus.Closed
-		|| status == FFVideosStatus.Preparing) then return;
-	var video_width = ffvideos_get_width(video_handle);
-	var video_height = ffvideos_get_height(video_handle);
+	if (status == FFVideosStatus.Preparing) {
+		ffvideos_ext_draw(video_handle, 0, 0, 0, 0, 0, 0);
+		return;
+	};
+	if (status == FFVideosStatus.Error || status == FFVideosStatus.Closed) then return;
+	var video_width = ffvideos_ext_get_width(video_handle);
+	var video_height = ffvideos_ext_get_height(video_handle);
+	if (video_width <= 0 || video_height <= 0) {
+		ffvideos_ext_draw(video_handle, 0, 0, 0, 0, 0, 0);
+		video_width = ffvideos_ext_get_width(video_handle);
+		video_height = ffvideos_ext_get_height(video_handle);
+	};
 	if (video_width <= 0 || video_height <= 0) then return;
 
 	var sx = chart_view_width / video_width;
@@ -201,7 +221,7 @@ draw_attached_video = function(line_instance) {
 	var alpha = clamp(real(video.alpha.value), 0, 1);
 	var dim = clamp(real(video.dim.value), 0, 1);
 	draw_flush();
-	ffvideos_draw(video_handle,
+	ffvideos_ext_draw(video_handle,
 		draw_x / room_width, draw_y / room_height,
 		(draw_x + draw_width) / room_width, (draw_y + draw_height) / room_height,
 		alpha, dim);

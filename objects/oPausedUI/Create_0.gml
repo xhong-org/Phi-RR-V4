@@ -373,7 +373,7 @@ function paused_ui_reset_rpe() {
                 };
         };
         with (oExtraPlay) {
-                if (video_handle >= 0) then ffvideos_close(video_handle);
+                if (video_handle >= 0) then ffvideos_ext_close(video_handle);
                 video_handle = -1;
                 video_index = -1;
                 video_completed = -1;

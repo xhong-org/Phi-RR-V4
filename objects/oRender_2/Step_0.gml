@@ -8,7 +8,8 @@ if (variable_global_exists("loading_animator_finished") && global.loading_animat
     global.loading_animator_finished = false;
 };
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active) exit;
-if(!game.paused){
+var chart_os_hold = chart_android_focus_step();
+if(!game.paused && !chart_os_hold){
 	game.Math.ctime();
 	event_user(0);
 	if (variable_global_exists("game_2") && is_struct(game_2)

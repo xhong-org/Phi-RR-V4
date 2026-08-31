@@ -1,0 +1,17 @@
+[gml_api]
+module IAndroidOpen;
+
+[global]
+function i_android_open_pick(filter : string) : bool;
+[global]
+function i_android_open_busy() : bool;
+[global]
+function i_android_open_status() : int32;
+[global]
+function i_android_open_path() : string;
+[global]
+function i_android_open_name() : string;
+[global]
+function i_android_open_error() : string;
+[global]
+function i_android_open_reset() : unit;

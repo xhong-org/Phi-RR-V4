@@ -43,7 +43,7 @@ if (chart_session_has_track()) {
                 game.folder_chart.bg = _bg;
         };
         if (is_string(_bg) && string_length(_bg)) {
-                game.Background(InChartPath + _bg);
+                game.Background(chart_in_path(_bg));
         };
 };
 game_2 = (new PEC());
@@ -55,9 +55,9 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 
 instance_create_depth(0,0,0,oBG);
 instance_create_depth(0, 0, -12001, oBG_1);
-instance_create_depth(0,0,0,oMedia , { "name" : (string_length(game.folder_chart.music) ? (InChartPath + game.folder_chart.music) : "") });
+instance_create_depth(0,0,0,oMedia , { "name" : (string_length(game.folder_chart.music) ? chart_in_path(game.folder_chart.music) : "") });
 
-var pec_path = (string_length(game.folder_chart.chart) ? (InChartPath + game.folder_chart.chart) : "");
+var pec_path = (string_length(game.folder_chart.chart) ? chart_path_join(InChartPath, game.folder_chart.chart) : "");
 if (!pec_reader_load(game_2, pec_path)) {
 	show_debug_message($"[PEC] Failed to load: {pec_path}");
 	chart_loading_animation_abort();
@@ -84,6 +84,7 @@ if (game.settings.useOldFX) {
 };
 
 cameraZoom = false;
+chart_playback_teardown_reset();
 chart_exit_started = false;
 chart_exit_timer = 0;
 chart_exit_alpha = 1;

@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"I_AndroidOpenAPI",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"I_AndroidOpenAPI",
+  "parent":{
+    "name":"I_AndroidOpen",
+    "path":"folders/Extensions/I_AndroidOpen.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

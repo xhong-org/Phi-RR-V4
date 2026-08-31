@@ -30,11 +30,11 @@ if (chart_session_has_track()) {
                 game.folder_chart.bg = _bg;
         };
         if (is_string(_bg) && string_length(_bg)) {
-                game.Background(InChartPath + _bg);
+                game.Background(chart_in_path(_bg));
         };
 };
 print(game.folder_chart , game.settings.enableDebug);
-var chart_path = (string_length(game.folder_chart.chart) ? (InChartPath + game.folder_chart.chart) : "");
+var chart_path = (string_length(game.folder_chart.chart) ? chart_path_join(InChartPath, game.folder_chart.chart) : "");
 // Start each render with an empty schedule. CreateLines populates it for this chart.
 if (variable_global_exists("render_mode") && global.render_mode) {
 	global.render_hitsounds = [];
@@ -55,7 +55,7 @@ depth = DEPTH.HEF + 1;
 if(game.settings.showBG) then instance_create_depth(0,0,0,oBG);
 instance_create_depth(0, 0, -12001, oBG_1);
 
-instance_create_depth(0,0,0,oMedia , { "name" : (string_length(game.folder_chart.music) ? (InChartPath + game.folder_chart.music) : "") });
+instance_create_depth(0,0,0,oMedia , { "name" : (string_length(game.folder_chart.music) ? chart_in_path(game.folder_chart.music) : "") });
 instance_create_depth(0,0,DEPTH.BG - 1,oExtraPlay);
 
 game.Sort();
@@ -89,6 +89,7 @@ event_user(2);
 //game_set_speed(60 , gamespeed_fps);
 fps_more = 0;
 refresh_count = 0;
+chart_playback_teardown_reset();
 chart_exit_started = false;
 chart_exit_timer = 0;
 chart_exit_alpha = 1;

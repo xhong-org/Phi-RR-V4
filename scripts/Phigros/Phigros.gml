@@ -2,10 +2,21 @@
 #macro print LogOutputFile
 #macro elif else if
 #macro func function
-#macro isExists file_exists
+#macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal 40517
-#macro VerStr "v.4.0.9b"
+#macro VerReal { "windows": 40518, "android": 40519 }
+#macro VerStr "v.4.0.9a"
+
+function ver_real() {
+	var platform = "other";
+	if (os_type == os_windows) then platform = "windows";
+	else if (os_type == os_android) then platform = "android";
+	var names = struct_get_names(VerReal);
+	for (var i = 0; i < array_length(names); i++) {
+		if (string_lower(names[i]) == platform) then return (struct_get(VerReal , names[i]))//VerReal[$ names[i]];
+	};
+	return 40500;
+}
 #macro GAME_NAME "Re: Phi-RR - " + VerStr
 #macro HYW_MODE true
 #macro BYD_COLOR_MODE true
@@ -272,45 +283,58 @@ function File_Discoverer(disc_path){
         };
         if(!bool(string_length(disc_path))) then return(return_path);
 
-        var root = string_replace_all(string(disc_path), "/", "\\");
-        if(string_length(root) && string_char_at(root, string_length(root)) != "\\") then root += "\\";
-
-        var directory_list = [ root ];
         var file_path_list = [];
-
-        while(array_length(directory_list)){
-                var n = array_length(directory_list);
-                for(var i = 0; i < n; i++){
-                        var path = directory_list[i];
-
-                        // files
-                        var file_name = file_find_first(path + "*", fa_none);
-                        while(string_length(file_name)){
-                                if(file_name != "." && file_name != ".."){
-                                        var full_file = path + file_name;
-                                        // skip directories accidentally returned without fa_directory
-                                        if(file_exists(full_file) && !directory_exists(full_file)){
-                                                array_add(file_path_list, string_replace_all(full_file, "\\", "/"));
-                                        };
-                                };
-                                file_name = file_find_next();
-                        };
-                        file_find_close();
-
-                        // directories
-                        var dir_name = file_find_first(path + "*", fa_directory);
-                        while(string_length(dir_name)){
-                                if(dir_name != "." && dir_name != ".."){
-                                        var full_dir = path + dir_name + "\\";
-                                        if(directory_exists(path + dir_name)){
-                                                array_add(directory_list, full_dir);
-                                        };
-                                };
-                                dir_name = file_find_next();
-                        };
-                        file_find_close();
+        if (os_type == os_android && android_files_available()) {
+                var listing = android_files_list(disc_path);
+                print($"[ChartSession] Native list {disc_path} err={android_files_error()} bytes={string_length(listing)}");
+                var parts = string_split(string_replace_all(listing, "\r", ""), "\n");
+                for (var list_i = 0; list_i < array_length(parts); list_i++) {
+                        var listed = string_replace_all(string_trim(parts[list_i]), "\\", "/");
+                        if (!string_length(listed)) then continue;
+                        var listed_name = string_lower(chart_path_file_name(listed));
+                        if (listed_name == "_extract_log.txt") then continue;
+                        array_add(file_path_list, listed);
                 };
-                array_delete(directory_list, 0, n);
+        } else {
+                var root = string_replace_all(string(disc_path), "/", "\\");
+                if(string_length(root) && string_char_at(root, string_length(root)) != "\\") then root += "\\";
+
+                var directory_list = [ root ];
+
+                while(array_length(directory_list)){
+                        var n = array_length(directory_list);
+                        for(var i = 0; i < n; i++){
+                                var path = directory_list[i];
+
+                                // files
+                                var file_name = file_find_first(path + "*", fa_none);
+                                while(string_length(file_name)){
+                                        if(file_name != "." && file_name != ".."){
+                                                var full_file = path + file_name;
+                                                // skip directories accidentally returned without fa_directory
+                                                if(file_exists(full_file) && !directory_exists(full_file)){
+                                                        array_add(file_path_list, string_replace_all(full_file, "\\", "/"));
+                                                };
+                                        };
+                                        file_name = file_find_next();
+                                };
+                                file_find_close();
+
+                                // directories
+                                var dir_name = file_find_first(path + "*", fa_directory);
+                                while(string_length(dir_name)){
+                                        if(dir_name != "." && dir_name != ".."){
+                                                var full_dir = path + dir_name + "\\";
+                                                if(directory_exists(path + dir_name)){
+                                                        array_add(directory_list, full_dir);
+                                                };
+                                        };
+                                        dir_name = file_find_next();
+                                };
+                                file_find_close();
+                        };
+                        array_delete(directory_list, 0, n);
+                };
         };
 
         for(var l = 0; l < array_length(file_path_list); l++){
@@ -365,6 +389,11 @@ function File_Discoverer(disc_path){
                 };
         };
 
+        print($"[ChartSession] Discover {disc_path} files={array_length(file_path_list)} chart={array_length(return_path.chart)} music={array_length(return_path.music)} image={array_length(return_path.image)} text={array_length(return_path.text)} other={array_length(return_path[$ "other"])}");
+        var preview_n = min(8, array_length(file_path_list));
+        for (var preview_i = 0; preview_i < preview_n; preview_i++) {
+                print($"[ChartSession] Discover file[{preview_i}]={file_path_list[preview_i]}");
+        };
         return(return_path);
 };
 
@@ -389,8 +418,13 @@ function TrackZ(path) {
 
 ///@desc 读取line.csy
 function load_line_csv(){
-	var path = ($"{InChartPath}line.csv");
-	if(file_exists(path)){
+	var path = chart_path_join(InChartPath, "line.csv");
+	if (variable_global_exists("chart_session") && is_struct(global.chart_session)
+		&& is_string(global.chart_session.line_file) && string_length(global.chart_session.line_file)) {
+		path = chart_path_join(InChartPath, global.chart_session.line_file);
+	};
+	if(chart_file_exists_any(path)){
+		path = chart_file_readable_path(path);
 		var csv_grid = (load_csv(path));
 		//print(csv_grid);
 		if(!ds_exists(csv_grid , ds_type_grid)) then return({
@@ -532,26 +566,26 @@ function Phigros() constructor { // 仅仅结构
 		self.runtime_note_instances = [];
 		if(lmode == 0){
 			var f = (string_length(_chart) ? _chart : ($"{working_directory}chart/Chart_IN.json"));
-			if (!file_exists(f)) {
+			if (!chart_file_exists_any(f)) {
 				show_debug_message($"[R-Chart] File not found: {f}");
 				return(false);
 			};
-			var buff = buffer_load(f);
-			if (buff < 0) then return(false);
-			var r = buffer_read(buff, buffer_string);
+			var r = chart_read_text_file(f, -1);
+			if (!string_length(r)) {
+				show_debug_message($"[R-Chart] Empty chart data: {f}");
+				return(false);
+			};
 			var parsed_chart = undefined;
 			try {
 				parsed_chart = json_parse(r);
 			} catch (parse_error) {
 				delete(parse_error);
-				buffer_delete(buff);
 				delete(r);
 				show_debug_message($"[R-Chart] Invalid JSON: {f}");
 				return(false);
 			};
 			self.chart = parsed_chart;
 			delete(r);
-			buffer_delete(buff);
 			delete(chart_source);
 		}else{
 			delete(_chart);
@@ -715,32 +749,19 @@ function Phigros() constructor { // 仅仅结构
 			return;
 		};
 		p = string_replace_all(p, "\\", "/");
-		if(!file_exists(p)){
+		if(!chart_file_exists_any(p)){
 			print($"[R-BG] Missing file: {p}" , game.settings.enableDebug);
 			return;
 		};
+		p = chart_file_readable_path(p);
+		chart_cache_legacy_cleanup();
 
 		// GM 2024+/LTS may return asset refs from sprite_add (not reals).
 		// Do NOT require is_real(...); validate with sprite_exists via asset_sprite_valid.
 		var base_spr = -1;
 		var try_paths = [p];
 		array_add(try_paths, string_replace_all(p, "/", "\\"));
-		var fname = p;
-		var slash = max(string_last_pos("/", p), string_last_pos("\\", p));
-		if (slash > 0) then fname = string_copy(p, slash + 1, string_length(p) - slash);
-		// Prefer relative path under working_directory (most reliable for sprite_add)
-		var wd_bg = working_directory + "bg_cache_" + fname;
-		if (file_exists(wd_bg)) then file_delete(wd_bg);
-		file_copy(p, wd_bg);
-		if (file_exists(wd_bg)) {
-			array_add(try_paths, wd_bg);
-			array_add(try_paths, "bg_cache_" + fname); // relative
-		};
-		// Also game_save_id cache
-		var local_bg = string_replace_all(game_save_id + "bg_cache_" + fname, "\\", "/");
-		if (file_exists(local_bg)) then file_delete(local_bg);
-		file_copy(p, local_bg);
-		if (file_exists(local_bg)) then array_add(try_paths, local_bg);
+		var cache_path = "";
 
 		for (var ti = 0; ti < array_length(try_paths); ti++) {
 			var tp = try_paths[ti];
@@ -750,7 +771,25 @@ function Phigros() constructor { // 仅仅结构
 			if (asset_sprite_valid(s1)) { base_spr = s1; print($"[R-BG] ok try[{ti}] imgnum=1 path={tp} type={typeof(s1)}" , game.settings.enableDebug); break; };
 			print($"[R-BG] sprite_add failed try[{ti}]: {tp} (s0={s0}/{typeof(s0)}, s1={s1}/{typeof(s1)})" , game.settings.enableDebug);
 		};
-
+		if (!asset_sprite_valid(base_spr)) {
+			var fname = chart_path_file_name(p);
+			cache_path = chart_gm_cache_dir() + "bg_load_" + fname;
+			if (file_exists(cache_path)) then file_delete(cache_path);
+			if (os_type == os_android && android_files_available() && android_files_exists(cache_path)) then android_files_delete(cache_path);
+			if (os_type == os_android && android_files_available() && android_files_exists(p)) then android_files_copy(p, cache_path);
+			else file_copy(p, cache_path);
+			if (file_exists(cache_path) || (os_type == os_android && android_files_available() && android_files_exists(cache_path))) {
+				var sc = sprite_add(cache_path, 0, false, false, 0, 0);
+				if (asset_sprite_valid(sc)) then base_spr = sc;
+				else {
+					sc = sprite_add(cache_path, 1, false, false, 0, 0);
+					if (asset_sprite_valid(sc)) then base_spr = sc;
+				};
+			};
+			if (file_exists(cache_path)) then file_delete(cache_path);
+			if (os_type == os_android && android_files_available() && android_files_exists(cache_path)) then android_files_delete(cache_path);
+		};
+		
 		if(!asset_sprite_valid(base_spr)){
 			print($"[R-BG] sprite_add failed all strategies: {p}" , game.settings.enableDebug);
 			return;
@@ -924,9 +963,9 @@ function Phigros() constructor { // 仅仅结构
 		// Prefer active chart session image; do not invent missing defaults.
 		var _bg_path = "";
 		if (variable_global_exists("chart_session") && is_struct(global.chart_session) && bool(global.chart_session.ready) && is_string(global.chart_session.image_file) && string_length(global.chart_session.image_file)) {
-			_bg_path = InChartPath + global.chart_session.image_file;
+			_bg_path = chart_in_path(global.chart_session.image_file);
 		} else if (is_struct(self.folder_chart) && is_string(self.folder_chart.bg) && string_length(self.folder_chart.bg)) {
-			_bg_path = InChartPath + self.folder_chart.bg;
+			_bg_path = chart_in_path(self.folder_chart.bg);
 		};
 		if (string_length(_bg_path)) {
 			self.Background(_bg_path);
@@ -962,6 +1001,8 @@ function Phigros() constructor { // 仅仅结构
 		if(instance_exists(oNote)){
 			with(oNote) instance_destroy();
 		};
+		
+		
 		
 		if(full){
 			struct_foreach(self.notes , function(name , values){
@@ -1201,15 +1242,16 @@ function rpe_read_info_offset_ms(root_path) {
 	var root = chart_path_norm(root_path);
 	if (string_length(root) && string_char_at(root, string_length(root)) != "/") then root += "/";
 	var info_path = root + "info.txt";
-	if (!file_exists(info_path)) then info_path = root + "info.yml";
-	if (!file_exists(info_path)) then info_path = root + "info.yaml";
-	if (!file_exists(info_path)) then return 0;
+	if (!chart_file_exists_any(info_path)) then info_path = root + "info.yml";
+	if (!chart_file_exists_any(info_path)) then info_path = root + "info.yaml";
+	if (!chart_file_exists_any(info_path)) then return 0;
 
-	var handle = file_text_open_read(info_path);
-	if (handle < 0) then return 0;
+	var text = chart_read_text_file(info_path, -1);
+	if (!string_length(text)) then return 0;
+	var lines = string_split(string_replace_all(text, "\r", ""), "\n");
 	var result = 0;
-	while (!file_text_eof(handle)) {
-		var line_text = string_replace_all(file_text_readln(handle), "\r", "");
+	for (var info_i = 0; info_i < array_length(lines); info_i++) {
+		var line_text = string_replace_all(lines[info_i], "\n", "");
 		if (!string_length(line_text)) then continue;
 		var first = string_char_at(line_text, 1);
 		if (first == "#" || first == "-" || first == " " || first == "\t") then continue;
@@ -1223,7 +1265,6 @@ function rpe_read_info_offset_ms(root_path) {
 		result = number(value, 0);
 		break;
 	};
-	file_text_close(handle);
 	return result;
 };
 
@@ -1438,51 +1479,20 @@ function RPE() constructor{
 	static Reader = (func(_chart){
 		var f = (string_length(_chart) ? _chart : ($"{working_directory}chart/Chart_IN.json"));
 		show_debug_message($"[R-Chart] Loading: {f}");
-		if (!file_exists(f)) {
+		if (!chart_file_exists_any(f)) {
 			show_debug_message($"[R-Chart] Missing file: {f}");
 			return false;
 		};
 
 		var r = "";
-		var buffer_read_ok = false;
 		var session = chart_session_ensure();
 		if (string(session.detected_chart_path) == chart_path_norm(f)
 			&& is_string(session.detected_chart_text) && string_length(session.detected_chart_text)) {
 			r = session.detected_chart_text;
 			session.detected_chart_path = "";
 			session.detected_chart_text = "";
-			buffer_read_ok = true;
 		} else {
-			// Keep native buffer reads on the hot path. The assignments must remain
-			// separate because YYC can treat a prior local as unset in a comma var.
-			var buff = buffer_load(f);
-			if (!is_undefined(buff)) {
-				try {
-					r = buffer_read(buff, buffer_text);
-					buffer_read_ok = is_string(r);
-				} catch (e) {
-					delete(e);
-				};
-				if (buffer_exists(buff)) then buffer_delete(buff);
-			};
-		};
-
-		// Fallback for runtimes that cannot read the local buffer handle.
-		if (!buffer_read_ok) {
-			var text_handle = file_text_open_read(f);
-			if (is_undefined(text_handle) || text_handle < 0) {
-				show_debug_message($"[R-Chart] Failed to open chart text: {f}");
-				return false;
-			};
-			var text_buffer = buffer_create(65536, buffer_grow, 1);
-			while (!file_text_eof(text_handle)) {
-				buffer_write(text_buffer, buffer_text, file_text_readln(text_handle));
-				buffer_write(text_buffer, buffer_text, "\n");
-			};
-			file_text_close(text_handle);
-			buffer_seek(text_buffer, buffer_seek_start, 0);
-			r = buffer_read(text_buffer, buffer_text);
-			buffer_delete(text_buffer);
+			r = chart_read_text_file(f, -1);
 		};
 		if (!is_string(r) || !string_length(r)) {
 			show_debug_message($"[R-Chart] Empty chart data: {f}");
@@ -1514,10 +1524,10 @@ function RPE() constructor{
 		self.chart_info.level = string(meta[$ "level"] ?? "");
 		self.chart_info.song = string(meta[$ "song"] ?? "");
 		self.chart_info.background = string(meta[$ "background"] ?? "");
-		if (string_length(self.chart_info.song) && file_exists(InChartPath + self.chart_info.song)) {
+		if (string_length(self.chart_info.song) && chart_file_exists_any(chart_path_join(InChartPath, self.chart_info.song))) {
 			game.folder_chart.music = self.chart_info.song;
 		};
-		if (string_length(self.chart_info.background) && file_exists(InChartPath + self.chart_info.background)) {
+		if (string_length(self.chart_info.background) && chart_file_exists_any(chart_path_join(InChartPath, self.chart_info.background))) {
 			game.folder_chart.bg = self.chart_info.background;
 		};
 		var meta_offset = real(meta[$ "offset"] ?? 0);
@@ -1583,9 +1593,9 @@ function RPE() constructor{
 						array_add(font_candidates, font_relative + ".ttc");
 					};
 					for (var font_candidate_i = 0; font_candidate_i < array_length(font_candidates); font_candidate_i++) {
-						var font_path = InChartPath + font_candidates[font_candidate_i];
-						if (file_exists(font_path)) {
-							font_source = font_path;
+						var font_path = chart_path_join(InChartPath, font_candidates[font_candidate_i]);
+						if (chart_file_exists_any(font_path)) {
+							font_source = chart_file_readable_path(font_path);
 							break;
 						};
 					};
@@ -1600,7 +1610,7 @@ function RPE() constructor{
 		};
 		print($"Lines Count: {line_group_size}");
 		var eff_line_count = 0;
-		if(file_exists($"{InChartPath}extra.json")){
+		if(chart_file_exists_any(chart_path_join(InChartPath, "extra.json"))){
 			//var e_buff = (buffer_load($"{InChartPath}extra.json")),
 			//	e_json = (json_parse(buffer_read(e_buff , buffer_text)));
 			//buffer_delete(e_buff);
@@ -1742,11 +1752,12 @@ function RPE() constructor{
 				} else if (string_length(hitsound_name)) {
 					var hitsound_rel = string_replace_all(hitsound_name, "\\", "/");
 					if (string_pos("..", hitsound_rel) <= 0 && string_char_at(hitsound_rel, 1) != "/") {
-						var hitsound_path = InChartPath + hitsound_rel;
-						if (file_exists(hitsound_path)) {
-							custom_hitsound_path = hitsound_path;
+						var hitsound_path = chart_path_join(InChartPath, hitsound_rel);
+						if (chart_file_exists_any(hitsound_path)) {
+							custom_hitsound_path = chart_file_readable_path(hitsound_path);
+							hitsound_path = custom_hitsound_path;
 						};
-						if (file_exists(hitsound_path) && instance_exists(oMedia)
+						if (chart_file_exists_any(chart_path_join(InChartPath, hitsound_rel)) && instance_exists(oMedia)
 							&& !(variable_global_exists("render_mode") && global.render_mode)) {
 							if (!struct_exists(game_1, "HitSounds") || !is_struct(game_1.HitSounds)) then game_1.HitSounds = {};
 							if (!struct_exists(game_1.HitSounds, hitsound_rel)) {
@@ -2482,12 +2493,20 @@ function PEC() constructor{
 	});
 };
 
-function pec_note_alpha_visible(_raw, _is_above, _sec_to_hit) {
+function pec_note_alpha_visible(_raw, _is_above, _sec_to_hit, _note_sec = undefined) {
 	if (_raw >= -0.5) then return true;
 	if (abs(_raw + 1) <= 0.5) then return false;
 	if (abs(_raw + 2) <= 0.5) then return bool(_is_above);
 	if (_raw > -1000 && _raw <= -100) {
-		return (_sec_to_hit < ((abs(_raw) - 100) / 18.75));
+		// Phira PE extension: appear (abs(alpha)-100)/10 beats before the note.
+		var appear_beats = (abs(_raw) - 100) / 10;
+		var bpm = 140;
+		if (variable_global_exists("game_2") && is_struct(game_2) && is_struct(game_2.chart)
+			&& is_array(game_2.chart.bpmList)) {
+			var sec = (is_undefined(_note_sec) ? 0 : real(_note_sec));
+			bpm = pec_bpm_at_sec(game_2.chart.bpmList, sec);
+		};
+		return (_sec_to_hit < appear_beats * 60 / max(0.0001, bpm));
 	};
 	return false;
 }
@@ -2527,6 +2546,14 @@ function pec_bpm_at_sec(timeline, sec) {
 	return timeline[pec_bpm_index_at_sec(timeline, sec)].bpm;
 }
 
+function pec_cmp_real(a, b) {
+	// GML array_sort truncates the comparator to an integer. `a - b` of 0.125
+	// becomes 0, so cv 30 and cv 30.125 would compare equal and can swap.
+	if (a < b) then return -1;
+	if (a > b) then return 1;
+	return 0;
+}
+
 function pec_floor_at_sec(speed_events, sec) {
 	if (!is_array(speed_events) || array_length(speed_events) <= 0) then return 0;
 	if (sec < speed_events[0].startSec) then return 0;
@@ -2538,7 +2565,13 @@ function pec_floor_at_sec(speed_events, sec) {
 		else high = middle - 1;
 	};
 	var event = speed_events[low];
-	return event.floor + (sec - event.startSec) * event.value;
+	var elapsed = max(0, sec - event.startSec);
+	// A cv only lasts until the next cv. Without this clamp a 70000 segment
+	// would keep integrating after cv 14 and throw later notes off the chart.
+	if (struct_exists(event, "endSec") && is_finite(event.endSec)) {
+		elapsed = min(elapsed, max(0, event.endSec - event.startSec));
+	};
+	return event.floor + elapsed * event.value;
 }
 
 function pec_easing(easing_id) {
@@ -2584,11 +2617,14 @@ function pec_finalize_property(raw_events, timeline, kind) {
 function pec_reader_load(ctx, chart_path) {
 	ctx.chart = { version: 4, offsetSeconds: 0, judgeLineList: [], notes: [], bpmList: [] };
 	ctx.line_group = [];
-	if (!file_exists(chart_path)) then return false;
-	var handle = file_text_open_read(chart_path);
-	if (is_undefined(handle) || handle < 0) then return false;
-	if (file_text_eof(handle)) { file_text_close(handle); return false; };
-	var pec_header_offset_ms = number(file_text_readln(handle), 0);
+	if (!chart_file_exists_any(chart_path)) then return false;
+	var pec_text = chart_read_text_file(chart_path, -1);
+	if (!string_length(pec_text)) then return false;
+	var pec_lines = string_split(string_replace_all(pec_text, "\r", ""), "\n");
+	if (array_length(pec_lines) <= 0) then return false;
+	var pec_line_index = 0;
+	var pec_header_offset_ms = number(pec_lines[pec_line_index], 0);
+	pec_line_index++;
 	var pec_info_offset_ms = 0;
 	if (variable_global_exists("chart_session") && is_struct(global.chart_session)) {
 		pec_info_offset_ms = real(global.chart_session.info_offset_ms ?? 0);
@@ -2596,19 +2632,30 @@ function pec_reader_load(ctx, chart_path) {
 	ctx.chart.offsetSeconds = (pec_header_offset_ms + pec_info_offset_ms) / 1000 - 0.175;
 	var pending_line = "";
 	var has_pending_line = false;
-	while (has_pending_line || !file_text_eof(handle)) {
+	var last_note = undefined;
+	while (has_pending_line || pec_line_index < array_length(pec_lines)) {
 		var source_line;
 		if (has_pending_line) {
 			source_line = pending_line;
 			has_pending_line = false;
 		} else {
-			source_line = file_text_readln(handle);
+			source_line = pec_lines[pec_line_index];
+			pec_line_index++;
 		};
 		var tokens = string_split_ext(source_line, [" ", "\t", "\r", "\n"], true);
 		if (array_length(tokens) <= 0) then continue;
 		var command = string_lower(tokens[0]);
 		if (command == "bp" && array_length(tokens) >= 3) {
 			array_add(ctx.chart.bpmList, { beat: number(tokens[1], 0), bpm: max(0.0001, number(tokens[2], 60)), second: 0 });
+			continue;
+		};
+		// Phira: "#" / "&" are first-class commands that rewrite the last note.
+		if (command == "#" && array_length(tokens) >= 2) {
+			if (is_struct(last_note)) then last_note.speed = number(tokens[1], last_note.speed);
+			continue;
+		};
+		if (command == "&" && array_length(tokens) >= 2) {
+			if (is_struct(last_note)) then last_note.xscale = number(tokens[1], last_note.xscale);
 			continue;
 		};
 		var is_note = (command == "n1" || command == "n2" || command == "n3" || command == "n4");
@@ -2625,13 +2672,26 @@ function pec_reader_load(ctx, chart_path) {
 			if (array_length(tokens) < minimum) then continue;
 			var _speed = 1;
 			var width_scale = 1;
+			var extra_i = minimum;
+			while (extra_i < array_length(tokens)) {
+				if (tokens[extra_i] == "#" && extra_i + 1 < array_length(tokens)) {
+					_speed = number(tokens[extra_i + 1], 1);
+					extra_i += 2;
+				} else if (tokens[extra_i] == "&" && extra_i + 1 < array_length(tokens)) {
+					width_scale = number(tokens[extra_i + 1], 1);
+					extra_i += 2;
+				} else extra_i++;
+			};
 			for (var modifier_i = 0; modifier_i < 2; modifier_i++) {
-				if (!has_pending_line && file_text_eof(handle)) break;
+				if (!has_pending_line && pec_line_index >= array_length(pec_lines)) break;
 				var modifier_line;
 				if (has_pending_line) {
 					modifier_line = pending_line;
 					has_pending_line = false;
-				} else modifier_line = file_text_readln(handle);
+				} else {
+					modifier_line = pec_lines[pec_line_index];
+					pec_line_index++;
+				};
 				var modifier = string_split_ext(modifier_line, [" ", "\t", "\r", "\n"], true);
 				if (array_length(modifier) < 2) {
 					pending_line = modifier_line;
@@ -2662,6 +2722,7 @@ function pec_reader_load(ctx, chart_path) {
 				speed: _speed,
 				xscale: width_scale
 			});
+			last_note = ctx.chart.notes[array_length(ctx.chart.notes) - 1];
 			continue;
 		};
 
@@ -2675,10 +2736,9 @@ function pec_reader_load(ctx, chart_path) {
 			case "cf": if (array_length(tokens) >= 5) array_add(_l.alphaEvents, { startBeat:number(tokens[2],0), endBeat:number(tokens[3],0), target:number(tokens[4],0)/255, easing:1 }); break;
 		};
 	};
-	file_text_close(handle);
 
 	if (array_length(ctx.chart.bpmList) <= 0) then array_add(ctx.chart.bpmList, { beat:0, bpm:60, second:0 });
-	array_sort(ctx.chart.bpmList, function(a,b) { return a.beat-b.beat; });
+	array_sort(ctx.chart.bpmList, function(a, b) { return pec_cmp_real(a.beat, b.beat); });
 	for (var bpm_i = 1; bpm_i < array_length(ctx.chart.bpmList); bpm_i++) {
 		var previous = ctx.chart.bpmList[bpm_i-1];
 		ctx.chart.bpmList[bpm_i].second = previous.second + (ctx.chart.bpmList[bpm_i].beat-previous.beat)*60/previous.bpm;
@@ -2691,16 +2751,41 @@ function pec_reader_load(ctx, chart_path) {
 		item.moveEvents = pec_finalize_property(item.moveEvents, ctx.chart.bpmList, "move");
 		item.alphaEvents = pec_finalize_property(item.alphaEvents, ctx.chart.bpmList, "alpha");
 		item.rotateEvents = pec_finalize_property(item.rotateEvents, ctx.chart.bpmList, "rotate");
-		array_sort(item.speedEvents, function(a,b) { return a.beat-b.beat; });
+		var speed_count = array_length(item.speedEvents);
+		for (var speed_order_i = 0; speed_order_i < speed_count; speed_order_i++) {
+			item.speedEvents[speed_order_i].order = speed_order_i;
+		};
+		array_sort(item.speedEvents, function(a, b) {
+			var beat_cmp = pec_cmp_real(a.beat, b.beat);
+			if (beat_cmp != 0) then return beat_cmp;
+			return pec_cmp_real(a.order, b.order);
+		});
+		// Phira inserts (t=0, speed=0) when the first cv is not at the origin.
+		if (array_length(item.speedEvents) > 0 && abs(item.speedEvents[0].beat) > 0.00001) {
+			var _shifted = [];
+			array_add(_shifted, { beat: 0, value: 0, order: -1 });
+			for (var _si = 0; _si < array_length(item.speedEvents); _si++) array_add(_shifted, item.speedEvents[_si]);
+			item.speedEvents = _shifted;
+			speed_count = array_length(item.speedEvents);
+		};
+		for (var speed_i = 0; speed_i < speed_count; speed_i++) {
+			item.speedEvents[speed_i].startSec = pec_beat_to_sec(ctx.chart.bpmList, item.speedEvents[speed_i].beat);
+		};
+		array_sort(item.speedEvents, function(a, b) {
+			var sec_cmp = pec_cmp_real(a.startSec, b.startSec);
+			if (sec_cmp != 0) then return sec_cmp;
+			return pec_cmp_real(a.order, b.order);
+		});
 		var floor_value = 0;
-		for (var speed_i = 0; speed_i < array_length(item.speedEvents); speed_i++) {
+		for (var speed_i = 0; speed_i < speed_count; speed_i++) {
 			var speed_item = item.speedEvents[speed_i];
-			speed_item.startSec = pec_beat_to_sec(ctx.chart.bpmList, speed_item.beat);
 			if (speed_i > 0) {
 				var previous_speed = item.speedEvents[speed_i-1];
+				previous_speed.endSec = speed_item.startSec;
 				floor_value += (speed_item.startSec-previous_speed.startSec)*previous_speed.value;
 			};
 			speed_item.floor = floor_value;
+			speed_item.endSec = infinity;
 		};
 	};
 	for (var note_i = 0; note_i < array_length(ctx.chart.notes); note_i++) {
@@ -2761,10 +2846,12 @@ function pec_create_runtime(ctx) {
 	for (var note_i = 0; note_i < array_length(ctx.chart.notes); note_i++) {
 		var note = ctx.chart.notes[note_i];
 		var note_instance = instance_create_depth(-999, -999, DEPTH.NOTE, oNote_2, {
-			type:note.type, line_id:note.line_id, startSec:note.startSec, endSec:note.endSec,
+			type:note.type, line_id:note.line_id,
+			start_beat:note.startBeat, end_beat:note.endBeat,
+			startSec:note.startSec, endSec:note.endSec,
 			floorPosition:note.floorPosition, endFloorPosition:note.endFloorPosition,
 			xOffset:note.xOffset, isAbove:note.isAbove, isFake:note.isFake,
-			speed:note.speed, widthScale:note.xscale, _hl:note.hl,
+			note_speed:note.speed, widthScale:note.xscale, _hl:note.hl,
 			localXFactor:note.localXFactor, sideDirection:note.sideDirection,
 			angleOffset:note.angleOffset, speedFloorStart:note.speedFloorStart,
 			speedFloorEnd:note.speedFloorEnd, speedHoldFloorLength:note.speedHoldFloorLength

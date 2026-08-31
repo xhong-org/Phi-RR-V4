@@ -1,3 +1,4 @@
+precision mediump float;
 varying vec2 v_vTexcoord;
 varying vec4 v_vColour;
 uniform float centerX;
@@ -9,8 +10,9 @@ void main() {
     vec2 direction = v_vTexcoord - vec2(centerX, centerY);
     vec3 colour = vec3(0.0);
     for (int i = 0; i < 64; i++) {
-        if (float(i) >= count) break;
-        colour += texture2D(gm_BaseTexture, v_vTexcoord - power * direction * float(i)).rgb / count;
+        if (float(i) < count) {
+            colour += texture2D(gm_BaseTexture, v_vTexcoord - power * direction * float(i)).rgb / count;
+        }
     }
     float alpha = texture2D(gm_BaseTexture, v_vTexcoord).a;
     gl_FragColor = vec4(colour, alpha) * v_vColour;

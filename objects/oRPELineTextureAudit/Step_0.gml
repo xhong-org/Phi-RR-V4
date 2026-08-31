@@ -57,7 +57,7 @@ for (var instance_i = 0; instance_i < line_count; instance_i++) {
         if (!string_length(texture_name) || texture_name == "line.png") then continue;
         referenced_lines++;
 
-        var file_ok = file_exists(InChartPath + texture_name);
+        var file_ok = chart_file_exists_any(InChartPath + texture_name);
         var sprite_id = -1;
         var sprite_ok = false;
         if (struct_exists(game_1, "Texture") && is_struct(game_1.Texture)

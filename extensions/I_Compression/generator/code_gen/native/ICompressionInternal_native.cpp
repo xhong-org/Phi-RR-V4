@@ -18,15 +18,178 @@ GMEXPORT double __EXT_NATIVE__unicode_zip_available()
     return static_cast<double>(__result);
 }
 
+GMEXPORT char* __EXT_NATIVE__unicode_zip_detect(char* archive_path)
+{
+    static std::string __result;
+    __result = unicode_zip_detect(archive_path);
+    return (char*)__result.c_str();
+}
+
+GMEXPORT double __EXT_NATIVE__unicode_zip_extract(char* archive_path, char* output_directory, double overwrite, double clean_output)
+{
+    auto&& __result = unicode_zip_extract(archive_path, output_directory, static_cast<bool>(overwrite), static_cast<bool>(clean_output));
+    return static_cast<double>(__result);
+}
+
+GMEXPORT double __EXT_NATIVE__unicode_zip_extract_password(char* __arg_buffer, double __arg_buffer_length)
+{
+    gm::byteio::BufferReader __br{__arg_buffer, static_cast<size_t>(__arg_buffer_length)};
+
+    // field: archive_path, type: String
+    std::string_view archive_path = gm::wire::codec::readValue<std::string_view>(__br);
+
+    // field: output_directory, type: String
+    std::string_view output_directory = gm::wire::codec::readValue<std::string_view>(__br);
+
+    // field: overwrite, type: Bool
+    bool overwrite = gm::wire::codec::readValue<bool>(__br);
+
+    // field: clean_output, type: Bool
+    bool clean_output = gm::wire::codec::readValue<bool>(__br);
+
+    // field: password, type: String
+    std::string_view password = gm::wire::codec::readValue<std::string_view>(__br);
+
+    auto&& __result = unicode_zip_extract_password(archive_path, output_directory, overwrite, clean_output, password);
+    return static_cast<double>(__result);
+}
+
+GMEXPORT double __EXT_NATIVE__unicode_zip_compress(char* source_path, char* archive_path, double include_root, double overwrite)
+{
+    auto&& __result = unicode_zip_compress(source_path, archive_path, static_cast<bool>(include_root), static_cast<bool>(overwrite));
+    return static_cast<double>(__result);
+}
+
+GMEXPORT double __EXT_NATIVE__unicode_zip_compress_password(char* __arg_buffer, double __arg_buffer_length)
+{
+    gm::byteio::BufferReader __br{__arg_buffer, static_cast<size_t>(__arg_buffer_length)};
+
+    // field: source_path, type: String
+    std::string_view source_path = gm::wire::codec::readValue<std::string_view>(__br);
+
+    // field: archive_path, type: String
+    std::string_view archive_path = gm::wire::codec::readValue<std::string_view>(__br);
+
+    // field: include_root, type: Bool
+    bool include_root = gm::wire::codec::readValue<bool>(__br);
+
+    // field: overwrite, type: Bool
+    bool overwrite = gm::wire::codec::readValue<bool>(__br);
+
+    // field: password, type: String
+    std::string_view password = gm::wire::codec::readValue<std::string_view>(__br);
+
+    auto&& __result = unicode_zip_compress_password(source_path, archive_path, include_root, overwrite, password);
+    return static_cast<double>(__result);
+}
+
+GMEXPORT double __EXT_NATIVE__unicode_zip_compress_format(char* __arg_buffer, double __arg_buffer_length)
+{
+    gm::byteio::BufferReader __br{__arg_buffer, static_cast<size_t>(__arg_buffer_length)};
+
+    // field: source_path, type: String
+    std::string_view source_path = gm::wire::codec::readValue<std::string_view>(__br);
+
+    // field: archive_path, type: String
+    std::string_view archive_path = gm::wire::codec::readValue<std::string_view>(__br);
+
+    // field: include_root, type: Bool
+    bool include_root = gm::wire::codec::readValue<bool>(__br);
+
+    // field: overwrite, type: Bool
+    bool overwrite = gm::wire::codec::readValue<bool>(__br);
+
+    // field: password, type: String
+    std::string_view password = gm::wire::codec::readValue<std::string_view>(__br);
+
+    // field: format, type: String
+    std::string_view format = gm::wire::codec::readValue<std::string_view>(__br);
+
+    auto&& __result = unicode_zip_compress_format(source_path, archive_path, include_root, overwrite, password, format);
+    return static_cast<double>(__result);
+}
+
 GMEXPORT double __EXT_NATIVE__unicode_zip_extract_async(char* archive_path, char* output_directory, double overwrite, double clean_output)
 {
     auto&& __result = unicode_zip_extract_async(archive_path, output_directory, static_cast<bool>(overwrite), static_cast<bool>(clean_output));
     return static_cast<double>(__result);
 }
 
+GMEXPORT double __EXT_NATIVE__unicode_zip_extract_async_password(char* __arg_buffer, double __arg_buffer_length)
+{
+    gm::byteio::BufferReader __br{__arg_buffer, static_cast<size_t>(__arg_buffer_length)};
+
+    // field: archive_path, type: String
+    std::string_view archive_path = gm::wire::codec::readValue<std::string_view>(__br);
+
+    // field: output_directory, type: String
+    std::string_view output_directory = gm::wire::codec::readValue<std::string_view>(__br);
+
+    // field: overwrite, type: Bool
+    bool overwrite = gm::wire::codec::readValue<bool>(__br);
+
+    // field: clean_output, type: Bool
+    bool clean_output = gm::wire::codec::readValue<bool>(__br);
+
+    // field: password, type: String
+    std::string_view password = gm::wire::codec::readValue<std::string_view>(__br);
+
+    auto&& __result = unicode_zip_extract_async_password(archive_path, output_directory, overwrite, clean_output, password);
+    return static_cast<double>(__result);
+}
+
 GMEXPORT double __EXT_NATIVE__unicode_zip_compress_async(char* source_path, char* archive_path, double include_root, double overwrite)
 {
     auto&& __result = unicode_zip_compress_async(source_path, archive_path, static_cast<bool>(include_root), static_cast<bool>(overwrite));
+    return static_cast<double>(__result);
+}
+
+GMEXPORT double __EXT_NATIVE__unicode_zip_compress_async_password(char* __arg_buffer, double __arg_buffer_length)
+{
+    gm::byteio::BufferReader __br{__arg_buffer, static_cast<size_t>(__arg_buffer_length)};
+
+    // field: source_path, type: String
+    std::string_view source_path = gm::wire::codec::readValue<std::string_view>(__br);
+
+    // field: archive_path, type: String
+    std::string_view archive_path = gm::wire::codec::readValue<std::string_view>(__br);
+
+    // field: include_root, type: Bool
+    bool include_root = gm::wire::codec::readValue<bool>(__br);
+
+    // field: overwrite, type: Bool
+    bool overwrite = gm::wire::codec::readValue<bool>(__br);
+
+    // field: password, type: String
+    std::string_view password = gm::wire::codec::readValue<std::string_view>(__br);
+
+    auto&& __result = unicode_zip_compress_async_password(source_path, archive_path, include_root, overwrite, password);
+    return static_cast<double>(__result);
+}
+
+GMEXPORT double __EXT_NATIVE__unicode_zip_compress_async_format(char* __arg_buffer, double __arg_buffer_length)
+{
+    gm::byteio::BufferReader __br{__arg_buffer, static_cast<size_t>(__arg_buffer_length)};
+
+    // field: source_path, type: String
+    std::string_view source_path = gm::wire::codec::readValue<std::string_view>(__br);
+
+    // field: archive_path, type: String
+    std::string_view archive_path = gm::wire::codec::readValue<std::string_view>(__br);
+
+    // field: include_root, type: Bool
+    bool include_root = gm::wire::codec::readValue<bool>(__br);
+
+    // field: overwrite, type: Bool
+    bool overwrite = gm::wire::codec::readValue<bool>(__br);
+
+    // field: password, type: String
+    std::string_view password = gm::wire::codec::readValue<std::string_view>(__br);
+
+    // field: format, type: String
+    std::string_view format = gm::wire::codec::readValue<std::string_view>(__br);
+
+    auto&& __result = unicode_zip_compress_async_format(source_path, archive_path, include_root, overwrite, password, format);
     return static_cast<double>(__result);
 }
 

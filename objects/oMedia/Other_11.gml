@@ -14,10 +14,11 @@ resources_released = false;
 fmod_system_select(track);
 fmod_system_init(128 , FMOD_MODE.DEFAULT);
 
+var audio_path = chart_file_readable_path(self.name);
 if(use_stream){
-	soundIndex = (fmod_system_create_stream(self.name,FMOD_MODE.ACCURATETIME));	
+	soundIndex = (fmod_system_create_stream(audio_path,FMOD_MODE.ACCURATETIME));	
 }else{
-	soundIndex = (fmod_system_create_sound(self.name,FMOD_MODE.ACCURATETIME));
+	soundIndex = (fmod_system_create_sound(audio_path,FMOD_MODE.ACCURATETIME));
 };
 
 if(soundIndex){

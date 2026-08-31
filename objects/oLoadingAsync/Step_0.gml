@@ -74,8 +74,9 @@ if (phase == 1) {
 if (phase == 10) {
         var poll_result = chart_session_zip_poll();
         if (poll_result == 0) {
+                var unzip_session = chart_session_ensure();
                 message = "Extracting package";
-                detail = source_path;
+                detail = $"{chart_path_file_name(source_path)} -> {unzip_session.extract_dir}";
                 exit;
         };
         if (poll_result < 0) {

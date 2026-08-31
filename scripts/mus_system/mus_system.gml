@@ -55,3 +55,47 @@ func m_stop(){
 	with(oMedia){ event_user(7) };
 	//event_perform_object(oMedia , ev_user7 , 0);
 };
+
+func m_seek_ms(_ms) {
+	with (oMedia) {
+		if (channel > 0) {
+			fmod_channel_set_position(channel, max(0, real(_ms)), FMOD_TIMEUNIT.MS);
+			position = max(0, real(_ms));
+		};
+	};
+};
+
+/// @desc Android: freeze the get_timer chart clock while the activity is in
+/// the background, then snap FMOD to that frozen chart time on resume.
+/// Returns true when the chart clock must not advance this step.
+func chart_android_focus_step() {
+	static os_suspended = false;
+	if (os_type != os_android) then return false;
+	if (variable_global_exists("render_mode") && global.render_mode) then return false;
+	if (variable_instance_exists(id, "chart_exit_started") && chart_exit_started) then return false;
+	if (!variable_global_exists("game") || !is_struct(game) || !is_array(game.__time)) then return false;
+	if (real(game.__time[0]) <= 0) then return false;
+
+	if (os_is_paused()) {
+		if (!os_suspended) {
+			os_suspended = true;
+			if (!game.paused) {
+				m_pause();
+				array_set(game.__time, 2, get_timer());
+			};
+		};
+		return true;
+	};
+
+	if (os_suspended) {
+		os_suspended = false;
+		if (!game.paused) {
+			array_set(game.__time, 4, get_timer());
+			game.Math.ptime();
+			game.Math.ctime();
+			m_seek_ms(real(game.__time[1]) * 1000);
+			m_resume();
+		};
+	};
+	return false;
+};

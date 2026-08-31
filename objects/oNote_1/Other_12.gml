@@ -9,8 +9,8 @@ _position_floor_delta = floorPosition - line_floor;
 _control_position_speed = speed * _position_floor_delta;
 
 if (time_before) {
-	// PCR samples controls with note speed, but moves a Hold head by floor delta.
-	_note_position_speed = _position_floor_delta;
+	// Phira: hold head and body both live in speed-scaled floor space.
+	_note_position_speed = _control_position_speed;
 } else {
 	_note_position_speed = 0;
 	isHold = true;
@@ -63,8 +63,8 @@ _debug_text_y = ((_y_h + (50 * (global_scales))) + _oy_v * posy);
 
 var length_floor = hold_length_floor;
 if (length_floor == 0) then length_floor = (endFloorPosition - floorPosition);
-// velocity already includes BPMList and signed judge-line speed integration.
-// Uniform mode applies the same vertical factor to the Hold body geometry.
+// Phira hold geometry: head/tail are speed * y_control * floor, so the body
+// length is the same scale times (tailFloor - headFloor).
 var base_length = notes_h * speed * control_y * uniform_factor;
 
 var head_offset = 0;

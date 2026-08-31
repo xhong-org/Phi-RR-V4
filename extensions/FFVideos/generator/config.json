@@ -29,6 +29,11 @@
     "windows": {
       "enabled": true,
       "outputFolder": "../"
+    },
+    "android": {
+      "enabled": true,
+      "mode": "jni",
+      "outputFolder": "../AndroidSource"
     }
   },
   "extras": {},

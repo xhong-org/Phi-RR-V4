@@ -1,0 +1,36 @@
+{
+  "$schema": "./extgen.schema.json",
+  "input": "./IAndroidOpen.gmidl",
+  "root": "./",
+  "profile": "Full",
+  "gamemaker": {
+    "wrappers": { "enabled": false },
+    "runtime": { "enabled": false },
+    "extension": {
+      "enabled": true,
+      "outputFile": "../I_AndroidOpen.yy",
+      "mode": "patch",
+      "extensionName": "I_AndroidOpen",
+      "extensionFileName": "I_AndroidOpen.ext",
+      "patchFrameworks": false
+    },
+    "injectors": { "enabled": false }
+  },
+  "targets": {
+    "sourceFolder": "native",
+    "sourceFile": "{0}_native",
+    "windows": { "enabled": false, "outputFolder": "../" },
+    "android": { "enabled": true, "mode": "java", "outputFolder": "../AndroidSource" }
+  },
+  "extras": {},
+  "build": {
+    "emitCmake": true,
+    "cmake": {
+      "cppStandard": 20,
+      "cppExtensions": false,
+      "strictWarnings": false,
+      "useThirdParty": false,
+      "emitPresets": true
+    }
+  }
+}

@@ -5,6 +5,7 @@ if (variable_global_exists("chart_surface")) then chart_surface = -1;
 if (variable_global_exists("chart_background_surface") && !is_undefined(chart_background_surface)
 	&& surface_exists(chart_background_surface)) then surface_free(chart_background_surface);
 if (variable_global_exists("chart_background_surface")) then chart_background_surface = -1;
+instance_activate_object(oNote);
 if(variable_global_exists("game") && !is_undefined(game)){
 	game.Clean(true);
 	game = undefined;

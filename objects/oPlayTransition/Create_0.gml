@@ -116,22 +116,7 @@ function play_transition_begin_exit() {
 function play_transition_finish_exit() {
 	if (!instance_exists(owner)) then return;
 	owner.chart_exit_queued = true;
-	if (owner.object_index == oRender_1 && variable_global_exists("game_1")
-		&& is_struct(game_1) && struct_exists(game_1, "HitSounds") && is_struct(game_1.HitSounds)) {
-		if (instance_exists(oExtraPlay)) then with (oExtraPlay) instance_destroy();
-		if (instance_exists(oMedia)) {
-			var _media = instance_find(oMedia, 0);
-			if (_media.track > 0) then fmod_system_select(_media.track);
-		};
-		var _hit_names = struct_get_names(game_1.HitSounds);
-		for (var _i = 0; _i < array_length(_hit_names); _i++) {
-			var _sound = game_1.HitSounds[$ _hit_names[_i]];
-			if (_sound > 0) then fmod_sound_release(_sound);
-		};
-		game_1.HitSounds = {};
-	};
-	m_clean(true);
-	chart_session_cleanup(true);
+	chart_playback_teardown_for_menu();
 	state = PLAY_TRANSITION_STATE.FINISHED;
 	if (variable_global_exists("pls_environment_run") && global.pls_environment_run) then game_end();
 	else room_goto(room_menu);

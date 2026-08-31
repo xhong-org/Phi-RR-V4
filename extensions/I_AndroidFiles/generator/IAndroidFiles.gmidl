@@ -1,0 +1,39 @@
+[gml_api]
+module IAndroidFiles;
+
+[global]
+function i_android_files_external_dir() : string;
+[global]
+function i_android_files_internal_dir() : string;
+[global]
+function i_android_files_logs_dir() : string;
+[global]
+function i_android_files_mkdir(path : string) : bool;
+[global]
+function i_android_files_exists(path : string) : bool;
+[global]
+function i_android_files_is_dir(path : string) : bool;
+[global]
+function i_android_files_list(path : string) : string;
+[global]
+function i_android_files_write_text(path : string, text : string) : bool;
+[global]
+function i_android_files_append_text(path : string, text : string) : bool;
+[global]
+function i_android_files_read_text(path : string) : string;
+[global]
+function i_android_files_copy(source_path : string, dest_path : string) : bool;
+[global]
+function i_android_files_delete(path : string) : bool;
+[global]
+function i_android_files_size(path : string) : float;
+[global]
+function i_android_files_write_base64(path : string, data : string) : bool;
+[global]
+function i_android_files_append_base64(path : string, data : string) : bool;
+[global]
+function i_android_files_read_base64(path : string) : string;
+[global]
+function i_android_files_read_base64_range(path : string, offset : float, size : float) : string;
+[global]
+function i_android_files_error() : string;

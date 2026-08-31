@@ -120,7 +120,7 @@ if (has_gif_events && is_string(image) && string_length(image)) {
 	if (!gif_cache_valid) {
 		var gif_frame_delays_raw = [];
 		var gif_frame_sprites = [];
-		var gif_last_sprite = sprite_add_gif(InChartPath + image, 0, 0, gif_frame_delays_raw, gif_frame_sprites);
+		var gif_last_sprite = sprite_add_gif(chart_file_readable_path(InChartPath + image), 0, 0, gif_frame_delays_raw, gif_frame_sprites);
 		if (array_length(gif_frame_sprites) <= 0 && sprite_exists(gif_last_sprite)) then array_add(gif_frame_sprites, gif_last_sprite);
 		var gif_frame_delays = [];
 		var gif_total_time = 0;
@@ -144,8 +144,8 @@ if (has_gif_events && is_string(image) && string_length(image)) {
 	if (is_struct(gif_data) && is_array(gif_data.frames) && array_length(gif_data.frames) > 0
 		&& sprite_exists(gif_data.frames[0])) then line_image = gif_data.frames[0];
 } else if (is_string(image) && string_length(image) && image != "line.png") {
-		var tex_path = InChartPath + image;
-        if (file_exists(tex_path)) {
+		var tex_path = chart_file_readable_path(InChartPath + image);
+        if (file_exists(tex_path) || chart_file_exists_any(InChartPath + image)) {
                 if (variable_global_exists("game_1") && is_struct(game_1)) {
                         if (!struct_exists(game_1, "Texture") || !is_struct(game_1.Texture)) then game_1.Texture = {};
                         if (!struct_exists(game_1.Texture, image) || !sprite_exists(game_1.Texture[$ image])) {
@@ -404,7 +404,21 @@ rpe_eval_events = function(layer_index, event_name, default_value) {
         return tval;
 };
 
-// Runtime uses the merged constant-speed table produced by the PCR parser chain.
+// Linear speed segment: floor += elapsed * (v0 + v(t)) / 2 (Phira RPE < 170).
+rpe_event_floor_at = function(ev, t) {
+        var elapsed = max(0, real(t) - real(ev.startTime));
+        var v0 = real(ev.value);
+        var v1 = real(ev[$ "endValue"] ?? v0);
+        var duration = real(ev.endTime) - real(ev.startTime);
+        if (!is_finite(duration) || duration <= 0) {
+                return real(ev.floorPosition) + elapsed * v0;
+        };
+        var u = min(1, elapsed / duration);
+        var vt = v0 + (v1 - v0) * u;
+        return real(ev.floorPosition) + elapsed * (v0 + vt) * 0.5;
+};
+
+// Runtime uses the merged linear-speed table produced by the PCR parser chain.
 rpe_speed_floor = function() {
         if (!is_array(rpe_speed_events) || array_length(rpe_speed_events) <= 0) then return 0;
         var t = (variable_instance_exists(id, "line_sec") ? line_sec : 0);
@@ -414,9 +428,7 @@ rpe_speed_floor = function() {
         while (idx > 0 && t < rpe_speed_events[idx].startTime) idx--;
         while (idx < n - 1 && t > rpe_speed_events[idx].endTime) idx++;
         speed_event_index = idx;
-        var ev = rpe_speed_events[idx];
-        var elapsed = max(0, t - ev.startTime);
-        return ev.floorPosition + elapsed * ev.value;
+        return rpe_event_floor_at(rpe_speed_events[idx], t);
 };
 
 // ---- extended (special) events: single channel, not multi-layer ----
@@ -736,44 +748,46 @@ for (var ssi = 0; ssi < array_length(speed_splits) - 1; ssi++) {
         });
 };
 
-var speed_samples = [];
-for (var fsi = 0; fsi < array_length(fitted_speed); fsi++) {
-        var fitted = fitted_speed[fsi];
-        var sample_start = real(fitted.start);
-        var sample_stop = real(fitted.stop);
-        if (sample_start != sample_stop) {
-                for (var nval = 0; nval <= 1; nval += 0.03125) {
-                        array_add(speed_samples, {
-                                time: lerp(fitted.startTime, fitted.endTime, nval),
-                                value: lerp(sample_start, sample_stop, nval)
-                        });
-                };
-        } else {
-                array_add(speed_samples, { time: fitted.startTime, value: sample_stop });
-        };
-};
-
+// Trapezoid of linear speed (Phira RPE < 170). 1/32 constant slices bias
+// oscillating holds whose speed crosses 0, which shows up as a wrong hold_length.
 rpe_speed_events = [];
 var speed_floor = 0;
-var sample_count = array_length(speed_samples);
-for (var spi = 0; spi < sample_count; spi++) {
-        var sample = speed_samples[spi];
-        var sample_start_sec = game_1.Math.beatToAbsSec(sample.time);
+var fitted_count = array_length(fitted_speed);
+for (var fsi = 0; fsi < fitted_count; fsi++) {
+        var fitted = fitted_speed[fsi];
+        var sample_start_sec = game_1.Math.beatToAbsSec(fitted.startTime);
         if (!is_finite(sample_start_sec)) then continue;
-        var sample_end_sec = infinity;
-        if (spi < sample_count - 1) {
-                sample_end_sec = game_1.Math.beatToAbsSec(speed_samples[spi + 1].time);
-                if (!is_finite(sample_end_sec) || sample_end_sec <= sample_start_sec) then continue;
+        var sample_end_sec = game_1.Math.beatToAbsSec(fitted.endTime);
+        if (fsi < fitted_count - 1) {
+                var next_start_sec = game_1.Math.beatToAbsSec(fitted_speed[fsi + 1].startTime);
+                if (is_finite(next_start_sec) && next_start_sec > sample_start_sec) {
+                        sample_end_sec = next_start_sec;
+                };
         };
-        var sample_value = real(sample.value) / 4.5;
+        if (!is_finite(sample_end_sec) || sample_end_sec <= sample_start_sec) then continue;
+        var v0 = real(fitted.start) / 4.5;
+        var v1 = real(fitted.stop) / 4.5;
         array_add(rpe_speed_events, {
                 startTime: sample_start_sec,
                 endTime: sample_end_sec,
-                value: sample_value,
-                endValue: sample_value,
+                value: v0,
+                endValue: v1,
                 floorPosition: speed_floor
         });
-        if (is_finite(sample_end_sec)) then speed_floor += (sample_end_sec - sample_start_sec) * sample_value;
+        speed_floor += (sample_end_sec - sample_start_sec) * (v0 + v1) * 0.5;
+};
+if (array_length(rpe_speed_events) > 0) {
+        var last_speed_ev = rpe_speed_events[array_length(rpe_speed_events) - 1];
+        var last_end_value = real(last_speed_ev.endValue);
+        if (is_finite(last_speed_ev.endTime)) {
+                array_add(rpe_speed_events, {
+                        startTime: last_speed_ev.endTime,
+                        endTime: infinity,
+                        value: last_end_value,
+                        endValue: last_end_value,
+                        floorPosition: speed_floor
+                });
+        };
 };
 speed_event_index = 0;
 
@@ -886,16 +900,10 @@ for (var ei = 0; ei < array_length(enames); ei++) {
 rpe_floor_at_sec = function(sec) {
         if (!is_array(rpe_speed_events) || array_length(rpe_speed_events) <= 0) then return 0;
         if (sec < rpe_speed_events[0].startTime) then return 0;
-        var selected_event = rpe_speed_events[0];
-        for (var i = 0; i < array_length(rpe_speed_events); i++) {
-                var ev = rpe_speed_events[i];
-                if (sec > ev.endTime) then continue;
-                if (sec < ev.startTime) then break;
-                selected_event = ev;
-                break;
-        };
-        var elapsed = max(0, sec - selected_event.startTime);
-        return selected_event.floorPosition + selected_event.value * elapsed;
+        var n = array_length(rpe_speed_events);
+        var idx = 0;
+        while (idx < n - 1 && sec > rpe_speed_events[idx].endTime) idx++;
+        return rpe_event_floor_at(rpe_speed_events[idx], sec);
 };
 
 rpe_floor_at_beat = function(beat) {

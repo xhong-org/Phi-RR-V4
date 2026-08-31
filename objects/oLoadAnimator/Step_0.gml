@@ -9,8 +9,8 @@ if (!chart_ready && variable_global_exists("loading_render_ready") && global.loa
 };
 if (!assets_loaded && _session.ready) {
     if (string_length(_session.image_file)) {
-        var _path = chart_path_join(InChartPath, _session.image_file);
-        if (file_exists(_path)) {
+        var _path = chart_file_readable_path(chart_path_join(InChartPath, _session.image_file));
+        if (file_exists(_path) || chart_file_exists_any(chart_path_join(InChartPath, _session.image_file))) {
             var _source_sprite = sprite_add(_path, 1, false, true, 0, 0);
             if (sprite_exists(_source_sprite)) {
                 //var _w = sprite_get_width(clear_sprite);

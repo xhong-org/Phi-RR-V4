@@ -5,8 +5,17 @@
 
 GMEXPORT double __EXT_NATIVE__unicode_zip_initialize();
 GMEXPORT double __EXT_NATIVE__unicode_zip_available();
+GMEXPORT char* __EXT_NATIVE__unicode_zip_detect(char* archive_path);
+GMEXPORT double __EXT_NATIVE__unicode_zip_extract(char* archive_path, char* output_directory, double overwrite, double clean_output);
+GMEXPORT double __EXT_NATIVE__unicode_zip_extract_password(char* __arg_buffer, double __arg_buffer_length);
+GMEXPORT double __EXT_NATIVE__unicode_zip_compress(char* source_path, char* archive_path, double include_root, double overwrite);
+GMEXPORT double __EXT_NATIVE__unicode_zip_compress_password(char* __arg_buffer, double __arg_buffer_length);
+GMEXPORT double __EXT_NATIVE__unicode_zip_compress_format(char* __arg_buffer, double __arg_buffer_length);
 GMEXPORT double __EXT_NATIVE__unicode_zip_extract_async(char* archive_path, char* output_directory, double overwrite, double clean_output);
+GMEXPORT double __EXT_NATIVE__unicode_zip_extract_async_password(char* __arg_buffer, double __arg_buffer_length);
 GMEXPORT double __EXT_NATIVE__unicode_zip_compress_async(char* source_path, char* archive_path, double include_root, double overwrite);
+GMEXPORT double __EXT_NATIVE__unicode_zip_compress_async_password(char* __arg_buffer, double __arg_buffer_length);
+GMEXPORT double __EXT_NATIVE__unicode_zip_compress_async_format(char* __arg_buffer, double __arg_buffer_length);
 GMEXPORT double __EXT_NATIVE__unicode_zip_task_status(double task_id);
 GMEXPORT double __EXT_NATIVE__unicode_zip_task_exit_code(double task_id);
 GMEXPORT char* __EXT_NATIVE__unicode_zip_task_error(double task_id);

@@ -145,6 +145,24 @@ function rpe_hlsl_initialize(_device, _context)
     return _return_value;
 }
 
+/**
+ * @param {Pointer} _device
+ * @param {Pointer} _context
+ * @returns {Real}
+ */
+function rpe_gles_initialize(_device, _context)
+{
+    var __args_buffer = __ext_core_get_args_buffer();
+
+    if (!is_ptr(_device)) show_error($"{_GMFUNCTION_} :: _device expected ptr", true);
+    buffer_write(__args_buffer, buffer_u64, int64(_device));
+
+    if (!is_ptr(_context)) show_error($"{_GMFUNCTION_} :: _context expected ptr", true);
+    buffer_write(__args_buffer, buffer_u64, int64(_context));
+
+    return __rpe_gles_initialize(buffer_get_address(__args_buffer), buffer_tell(__args_buffer));
+}
+
 // Skipping function rpe_hlsl_state (no wrapper is required)
 
 

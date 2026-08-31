@@ -69,20 +69,18 @@ function chart_session_cleanup(full_reset = true) {
                 extract_dir = string(session.extract_dir);
                 // Also clean default unzip target when package load failed mid-way.
                 if (!string_length(extract_dir) && session.from_zip) {
-                        extract_dir = chart_path_norm(game_save_id + "track/");
+                        extract_dir = chart_session_track_dir();
                 };
         };
 
-        if (string_length(extract_dir) && directory_exists(extract_dir)) {
-                directory_destroy(extract_dir);
+        if (string_length(extract_dir)) {
+                chart_session_remove_dir(extract_dir);
                 print($"[ChartSession] Cleaned extract dir: {extract_dir}");
         };
 
-        // Always wipe default track cache on cleanup.
-        var track_path = chart_path_norm(game_save_id + "track/");
-        if (directory_exists(track_path)) {
-                directory_destroy(track_path);
-        };
+        chart_session_remove_dir(chart_session_track_dir());
+        chart_session_remove_dir(chart_gm_cache_dir());
+        chart_cache_legacy_cleanup();
 
         if (full_reset) {
                 global.chart_session = chart_session_default();
@@ -93,6 +91,55 @@ function chart_session_cleanup(full_reset = true) {
                 session.files = undefined;
                 session.ready = false;
         };
+        return true;
+}
+
+function chart_playback_teardown_reset() {
+        global.chart_playback_torn_down = false;
+}
+
+/// Reactivate judged/culled instances so room change can destroy them.
+function chart_playback_prepare_exit() {
+        instance_activate_all();
+}
+
+function chart_playback_release_hitsounds() {
+        if (!variable_global_exists("game_1") || !is_struct(game_1)) then return;
+        if (!struct_exists(game_1, "HitSounds") || !is_struct(game_1.HitSounds)) then return;
+        if (extension_exists("FMOD") && instance_exists(oMedia)) {
+                var media = instance_find(oMedia, 0);
+                if (media.track > 0) then fmod_system_select(media.track);
+        };
+        var hit_names = struct_get_names(game_1.HitSounds);
+        for (var i = 0; i < array_length(hit_names); i++) {
+                var sound = game_1.HitSounds[$ hit_names[i]];
+                if (sound > 0 && extension_exists("FMOD")) then fmod_sound_release(sound);
+        };
+        game_1.HitSounds = {};
+}
+
+/// Stop audio, drop FX/video, and wipe extract files before returning to menu.
+function chart_playback_teardown_for_menu() {
+        if (variable_global_exists("chart_playback_torn_down") && global.chart_playback_torn_down) {
+                return true;
+        };
+        global.chart_playback_torn_down = true;
+        chart_playback_prepare_exit();
+
+        if (instance_exists(oExtraPlay)) {
+                with (oExtraPlay) instance_destroy();
+        };
+        if (instance_exists(oRPEEffect)) {
+                with (oRPEEffect) instance_destroy();
+        } else if (extension_exists("I_Shaders")) {
+                rpe_ext_shutdown();
+        };
+
+        chart_playback_release_hitsounds();
+        m_stop();
+        m_clean(true);
+        mus_system_clean();
+        chart_session_cleanup(true);
         return true;
 }
 
@@ -208,6 +255,246 @@ function chart_path_ext(path) {
         return string_lower(string_copy(p, point, string_length(p) - point + 1));
 }
 
+function chart_session_track_dir() {
+        if (os_type == os_android && android_files_available()) {
+                var external = android_files_external_dir();
+                if (!string_length(external)) then external = "/storage/emulated/0/Android/data/com.xthx.pls/files/";
+                var track = chart_path_norm(external + "track/");
+                android_files_mkdir(track);
+                return track;
+        };
+        return chart_path_norm(game_save_id + "track/");
+}
+
+function chart_path_dir_exists(path) {
+        if (directory_exists(path)) then return true;
+        if (os_type == os_android && android_files_available()) then return android_files_is_dir(path);
+        return false;
+}
+
+function chart_file_exists_any(path) {
+        if (file_exists(path)) then return true;
+        if (os_type == os_android && android_files_available()) then return android_files_exists(path);
+        return false;
+}
+
+function chart_gm_cache_dir() {
+        if (os_type == os_android && android_files_available()) {
+                var android_dir = chart_path_norm(android_files_external_dir() + "tmp/");
+                android_files_mkdir(android_dir);
+                return android_dir;
+        };
+        var dir = chart_path_norm(game_save_id + "tmp/");
+        if (!directory_exists(dir)) then directory_create(dir);
+        return dir;
+}
+
+function chart_delete_files_with_prefix(dir, prefix) {
+        dir = chart_path_norm(dir);
+        if (!string_length(dir) || !string_length(prefix)) then return;
+        if (string_char_at(dir, string_length(dir)) != "/") then dir += "/";
+        var lower_prefix = string_lower(prefix);
+        if (os_type == os_android && android_files_available()) {
+                if (!android_files_is_dir(dir)) then return;
+                var listing = android_files_list(dir);
+                var parts = string_split(string_replace_all(string(listing), "\r", ""), "\n");
+                for (var list_i = 0; list_i < array_length(parts); list_i++) {
+                        var listed = string_replace_all(string_trim(parts[list_i]), "\\", "/");
+                        if (!string_length(listed)) then continue;
+                        var name = chart_path_file_name(listed);
+                        if (string_pos(lower_prefix, string_lower(name)) != 1) then continue;
+                        android_files_delete(listed);
+                        if (file_exists(listed)) then file_delete(listed);
+                };
+                return;
+        };
+        if (!directory_exists(dir)) then return;
+        var found = file_find_first(dir + prefix + "*", 0);
+        var names = [];
+        while (string_length(found)) {
+                array_add(names, found);
+                found = file_find_next();
+        };
+        file_find_close();
+        for (var name_i = 0; name_i < array_length(names); name_i++) {
+                var full = dir + names[name_i];
+                if (!directory_exists(full) && file_exists(full)) then file_delete(full);
+        };
+}
+
+function chart_cache_legacy_cleanup() {
+        chart_delete_files_with_prefix(working_directory, "bg_cache_");
+        chart_delete_files_with_prefix(working_directory + "caches/", "bg_cache_");
+        chart_delete_files_with_prefix(game_save_id, "bg_cache_");
+        chart_delete_files_with_prefix(game_save_id + "caches/", "bg_cache_");
+        if (os_type == os_android && android_files_available()) {
+                var external = android_files_external_dir();
+                var internal = android_files_internal_dir();
+                chart_delete_files_with_prefix(external, "bg_cache_");
+                chart_delete_files_with_prefix(external + "caches/", "bg_cache_");
+                chart_delete_files_with_prefix(internal, "bg_cache_");
+                chart_delete_files_with_prefix(internal + "caches/", "bg_cache_");
+                chart_session_remove_dir(chart_path_norm(external + "track_cache/"));
+                chart_session_remove_dir(chart_path_norm(internal + "track_cache/"));
+                chart_session_remove_dir(chart_path_norm(external + "caches/"));
+                chart_session_remove_dir(chart_path_norm(internal + "caches/"));
+        };
+        if (directory_exists(working_directory + "caches/")) then directory_destroy(working_directory + "caches/");
+        if (directory_exists(game_save_id + "caches/")) then directory_destroy(game_save_id + "caches/");
+}
+
+function chart_file_readable_path(path) {
+        if (file_exists(path)) then return path;
+        if (os_type != os_android || !android_files_available()) then return path;
+        if (!android_files_exists(path)) then return path;
+        var cache_dir = chart_gm_cache_dir();
+        var ext = chart_path_ext(path);
+        var dest = cache_dir + md5_string_utf8(path) + ext;
+        if (!android_files_exists(dest) && !file_exists(dest)) {
+                if (!android_files_copy(path, dest)) {
+                        print($"[ChartSession] UTF-8 copy failed: {path} -> {dest} {android_files_error()}");
+                        return path;
+                };
+                print($"[ChartSession] UTF-8 readable copy: {path} -> {dest}");
+        };
+        return dest;
+}
+
+function chart_path_is_absolute(path) {
+        var p = chart_path_norm(path);
+        if (!string_length(p)) then return false;
+        if (string_char_at(p, 1) == "/") then return true;
+        if (string_length(p) >= 2 && string_char_at(p, 2) == ":") then return true;
+        return false;
+}
+
+/// @desc Join InChartPath + relative name, then make it GM-openable on Android.
+function chart_in_path(relative_or_full) {
+        var p = string(relative_or_full);
+        if (!string_length(p)) then return "";
+        var full = chart_path_is_absolute(p) ? chart_path_norm(p) : chart_path_join(InChartPath, p);
+        return chart_file_readable_path(full);
+}
+
+function chart_list_immediate_dirs(parent_path) {
+        var dirs = [];
+        var parent = chart_path_norm(parent_path);
+        if (!string_length(parent)) then return dirs;
+        if (string_char_at(parent, string_length(parent)) != "/") then parent += "/";
+
+        if (os_type == os_android && android_files_available()) {
+                var listing = android_files_list(parent);
+                var parts = string_split(string_replace_all(listing, "\r", ""), "\n");
+                var seen = {};
+                for (var list_i = 0; list_i < array_length(parts); list_i++) {
+                        var listed = string_replace_all(string_trim(parts[list_i]), "\\", "/");
+                        if (!string_length(listed)) then continue;
+                        var rel = chart_path_rel(parent, listed);
+                        var slash = string_pos("/", rel);
+                        if (slash <= 0) then continue;
+                        var child_name = string_copy(rel, 1, slash - 1);
+                        if (!string_length(child_name) || child_name == "." || child_name == "..") then continue;
+                        var key = string_lower(child_name);
+                        if (struct_exists(seen, key)) then continue;
+                        seen[$ key] = true;
+                        array_add(dirs, chart_path_join(parent, child_name));
+                };
+                return dirs;
+        };
+
+        var root_win = string_replace_all(parent, "/", "\\");
+        var probe = file_find_first(root_win + "*", fa_directory);
+        while (string_length(probe)) {
+                if (probe != "." && probe != "..") {
+                        var full = chart_path_join(parent, probe);
+                        if (directory_exists(parent + probe) || directory_exists(full) || chart_path_dir_exists(full)) {
+                                array_add(dirs, full);
+                        };
+                };
+                probe = file_find_next();
+        };
+        file_find_close();
+        return dirs;
+}
+
+function chart_session_unique_nested_root(track_path, discovered) {
+        var track = chart_path_norm(track_path);
+        if (string_length(track) && string_char_at(track, string_length(track)) != "/") then track += "/";
+        if (!is_struct(discovered) || !is_array(discovered.chart) || array_length(discovered.chart) <= 0) then return "";
+
+        var first_child = "";
+        var unique = true;
+        var has_root_file = false;
+        for (var i = 0; i < array_length(discovered.chart); i++) {
+                var rel = chart_path_rel(track, discovered.chart[i]);
+                var slash = string_pos("/", rel);
+                if (slash <= 0) {
+                        has_root_file = true;
+                        break;
+                };
+                var child = string_copy(rel, 1, slash - 1);
+                if (!string_length(first_child)) then first_child = child;
+                else if (string_lower(first_child) != string_lower(child)) then unique = false;
+        };
+        if (has_root_file || !unique || !string_length(first_child)) then return "";
+        return chart_path_join(track, first_child);
+}
+
+/// @desc Windows-style extract root: scan all files, then nested folder fallback.
+function chart_session_resolve_extract_root(track_path) {
+        print($"[ChartSession][Unzip][finish] scanning output={track_path} exists={chart_path_exists_any(track_path)}");
+        var discovered_root = File_Discoverer(track_path);
+        print($"[ChartSession][Unzip][finish] discovered charts={array_length(discovered_root.chart)} music={array_length(discovered_root.music)} image={array_length(discovered_root.image)} other={array_length(discovered_root.other)}");
+
+        if (array_length(discovered_root.chart) > 0) {
+                var nested_root = chart_session_unique_nested_root(track_path, discovered_root);
+                if (string_length(nested_root)) {
+                        print($"[ChartSession][Unzip][finish] nested package root={nested_root}");
+                        return nested_root;
+                };
+                return track_path;
+        };
+
+        var children = chart_list_immediate_dirs(track_path);
+        for (var child_i = 0; child_i < array_length(children); child_i++) {
+                var full = children[child_i];
+                print($"[ChartSession][Unzip][finish] child={full} dir={chart_path_dir_exists(full)}");
+                var nested = File_Discoverer(full);
+                print($"[ChartSession][Unzip][finish] nested={full} charts={array_length(nested.chart)} music={array_length(nested.music)}");
+                if (array_length(nested.chart) > 0 || array_length(nested.music) > 0) {
+                        return full;
+                };
+        };
+        return track_path;
+}
+
+function chart_pick_stem_match(list, chart_full) {
+        if (!is_array(list) || !string_length(chart_full)) then return "";
+        var chart_stem = string_lower(chart_path_file_name(chart_full));
+        var dot = string_last_pos(".", chart_stem);
+        if (dot > 0) then chart_stem = string_copy(chart_stem, 1, dot - 1);
+        if (!string_length(chart_stem)) then return "";
+        for (var i = 0; i < array_length(list); i++) {
+                var iname = string_lower(chart_path_file_name(list[i]));
+                var idot = string_last_pos(".", iname);
+                var istem = (idot > 0) ? string_copy(iname, 1, idot - 1) : iname;
+                if (istem == chart_stem && chart_file_exists_any(list[i])) then return list[i];
+        };
+        return "";
+}
+
+function chart_session_remove_dir(path) {
+        if (!string_length(path)) then return;
+        if (os_type == os_android && android_files_available()) {
+                if (android_files_is_dir(path) || android_files_exists(path)) {
+                        android_files_delete(path);
+                        print($"[ChartSession] Native cleaned: {path} err={android_files_error()}");
+                };
+                return;
+        };
+        if (directory_exists(path)) then directory_destroy(path);
+}
+
 function chart_path_file_name(path) {
         var p = chart_path_norm(path);
         var slash = max(string_last_pos("/", p), string_last_pos("\\", p));
@@ -238,8 +525,8 @@ function chart_find_sidecar(files, file_name, chart_path) {
 
 function chart_load_line_overrides(line_path, chart_path, root_dir) {
         var result = [];
-        if (!file_exists(line_path)) then return result;
-        var grid = load_csv(line_path);
+        if (!chart_file_exists_any(line_path)) then return result;
+        var grid = load_csv(chart_file_readable_path(line_path));
         if (!ds_exists(grid, ds_type_grid)) then return result;
         var rows = ds_grid_to_struct_array(grid);
         ds_grid_destroy(grid);
@@ -254,7 +541,7 @@ function chart_load_line_overrides(line_path, chart_path, root_dir) {
                 if (string_length(row_chart) && row_chart != chart_name) then continue;
                 var image_name = chart_path_norm(string(row.Image));
                 var image_full = chart_path_join(line_dir, image_name);
-                if (!file_exists(image_full)) then image_full = chart_path_join(root_dir, image_name);
+                if (!chart_file_exists_any(image_full)) then image_full = chart_path_join(root_dir, image_name);
                 var scale_cell = row[$ "Scale"];
                 var has_scale = !is_undefined(scale_cell) && string_length(string_trim(string(scale_cell)));
                 array_add(result, {
@@ -334,7 +621,7 @@ function chart_line_override_sprite(line_id) {
         if (struct_exists(game.TextureGroup, key) && sprite_exists(game.TextureGroup[$ key])) {
                 return game.TextureGroup[$ key];
         };
-        var sprite = sprite_add(chart_path_join(InChartPath, row.Image), 0, false, false, 0, 0);
+        var sprite = sprite_add(chart_file_readable_path(chart_path_join(InChartPath, row.Image)), 0, false, false, 0, 0);
         if (!sprite_exists(sprite)) then return -1;
         sprite_set_offset(sprite, sprite_get_width(sprite) / 2, sprite_get_height(sprite) / 2);
         game.TextureGroup[$ key] = sprite;
@@ -426,6 +713,12 @@ function chart_session_format_name(format_id) {
 }
 
 function chart_read_text_file(path, max_chars = 200000) {
+        if (os_type == os_android && android_files_available() && android_files_exists(path)) {
+                var native_text = android_files_read_text(path);
+                if (!is_string(native_text)) then native_text = "";
+                if (max_chars > 0 && string_length(native_text) > max_chars) then native_text = string_copy(native_text, 1, max_chars);
+                return native_text;
+        };
         if (!file_exists(path)) then return "";
         var buff = buffer_load(path);
         if (buff < 0) then return "";
@@ -447,7 +740,7 @@ function chart_cache_detected_text(path, text) {
 }
 
 function chart_detect_format(chart_path) {
-        if (!file_exists(chart_path)) then return CHART_FORMAT.UNKNOWN;
+        if (!chart_file_exists_any(chart_path)) then return CHART_FORMAT.UNKNOWN;
         var ext = chart_path_ext(chart_path);
         if (ext == ".pec") then return CHART_FORMAT.PEC;
 
@@ -511,34 +804,40 @@ function chart_detect_format(chart_path) {
         return CHART_FORMAT.UNKNOWN;
 }
 
+function chart_pick_preferred(list, preferred_name, base_dir = "") {
+        if (!string_length(preferred_name)) then return "";
+        var prefer = string_replace_all(string(preferred_name), "\\", "/");
+        while (string_length(prefer) > 0 && string_char_at(prefer, 1) == "/") {
+                prefer = string_delete(prefer, 1, 1);
+        };
+        if (!string_length(prefer)) then return "";
+
+        if (string_length(base_dir)) {
+                var preferred_full = chart_path_join(base_dir, prefer);
+                if (chart_file_exists_any(preferred_full)) then return preferred_full;
+        };
+        if (chart_file_exists_any(prefer)) then return prefer;
+
+        if (!is_array(list)) then return "";
+        var prefer_lower = string_lower(chart_path_file_name(prefer));
+        for (var i = 0; i < array_length(list); i++) {
+                var item = list[i];
+                if (string_lower(chart_path_file_name(item)) == prefer_lower) {
+                        if (chart_file_exists_any(item)) then return item;
+                };
+        };
+        return "";
+}
+
 function chart_pick_best(list, preferred_name, base_dir = "") {
         if (!is_array(list) || array_length(list) <= 0) then return "";
 
         // Prefer info.txt path only when the file really exists.
-        if (string_length(preferred_name)) {
-                var prefer = string_replace_all(string(preferred_name), "\\", "/");
-                while (string_length(prefer) > 0 && string_char_at(prefer, 1) == "/") {
-                        prefer = string_delete(prefer, 1, 1);
-                };
-
-                if (string_length(base_dir)) {
-                        var preferred_full = chart_path_join(base_dir, prefer);
-                        if (file_exists(preferred_full)) then return preferred_full;
-                };
-                if (file_exists(prefer)) then return prefer;
-
-                var prefer_lower = string_lower(chart_path_file_name(prefer));
-                for (var i = 0; i < array_length(list); i++) {
-                        var item = list[i];
-                        if (string_lower(chart_path_file_name(item)) == prefer_lower) {
-                                if (file_exists(item)) then return item;
-                        };
-                };
-                // Preferred name is incomplete / wrong: fall through to directory scan.
-        };
+        var preferred_hit = chart_pick_preferred(list, preferred_name, base_dir);
+        if (string_length(preferred_hit)) then return preferred_hit;
 
         for (var j = 0; j < array_length(list); j++) {
-                if (file_exists(list[j])) then return list[j];
+                if (chart_file_exists_any(list[j])) then return list[j];
         };
         return "";
 }
@@ -661,14 +960,11 @@ function chart_parse_info_file(info_path) {
                 "offset_ms" : 0,
                 "aspect_ratio" : 16 / 9
         };
-        if (!file_exists(info_path)) then return info;
-
-        var handle = file_text_open_read(info_path);
-        if (handle < 0) then return info;
-        while (!file_text_eof(handle)) {
-                var text_ln = file_text_readln(handle);
-                text_ln = string_replace_all(text_ln, "\r", "");
-                text_ln = string_replace_all(text_ln, "\n", "");
+        var text = chart_read_text_file(info_path, -1);
+        if (!string_length(text)) then return info;
+        var lines = string_split(string_replace_all(text, "\r", ""), "\n");
+        for (var info_i = 0; info_i < array_length(lines); info_i++) {
+                var text_ln = string_replace_all(lines[info_i], "\n", "");
                 if (!string_length(text_ln)) then continue;
 
                 // Skip YAML multi-line block markers / comments.
@@ -683,7 +979,6 @@ function chart_parse_info_file(info_path) {
                 var val = chart_info_trim_value(string_copy(text_ln, sep + 1, string_length(text_ln) - sep));
                 chart_info_apply_value(info, key, val);
         };
-        file_text_close(handle);
         return info;
 }
 
@@ -693,8 +988,8 @@ function chart_parse_info_csv(info_path) {
                 "composer" : "", "charter" : "", "illustrator" : "",
                 "offset_ms" : 0, "aspect_ratio" : 16 / 9
         };
-        if (!file_exists(info_path)) then return info;
-        var grid = load_csv(info_path);
+        if (!chart_file_exists_any(info_path)) then return info;
+        var grid = load_csv(chart_file_readable_path(info_path));
         if (!ds_exists(grid, ds_type_grid)) then return info;
 
         var width = ds_grid_width(grid);
@@ -733,7 +1028,7 @@ function chart_load_root_info(root_dir) {
         if (string_length(root) && string_char_at(root, string_length(root)) != "/") then root += "/";
 
         var txt = chart_path_join(root, "info.txt");
-        if (file_exists(txt)) {
+        if (chart_file_exists_any(txt)) {
                 return {
                         "info" : chart_parse_info_file(txt),
                         "has_info" : true,
@@ -742,7 +1037,7 @@ function chart_load_root_info(root_dir) {
         };
 
         var yml = chart_path_join(root, "info.yml");
-        if (file_exists(yml)) {
+        if (chart_file_exists_any(yml)) {
                 return {
                         "info" : chart_parse_info_file(yml),
                         "has_info" : true,
@@ -751,7 +1046,7 @@ function chart_load_root_info(root_dir) {
         };
 
         var csv = chart_path_join(root, "info.csv");
-        if (file_exists(csv)) {
+        if (chart_file_exists_any(csv)) {
                 return {
                         "info" : chart_parse_info_csv(csv),
                         "has_info" : true,
@@ -773,7 +1068,7 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
         if (string_length(root) && string_char_at(root, string_length(root)) != "/") then root += "/";
 
         chart_session_set_status("Scanning files", root);
-        if (!directory_exists(root) && !file_exists(root)) {
+        if (!chart_path_dir_exists(root) && !chart_file_exists_any(root)) {
                 return chart_session_fail("Track directory not found.");
         };
 
@@ -798,22 +1093,16 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
                 has_info ? (info_source + " + directory scan") : "directory scan only"
         );
         var chart_full = chart_pick_best(discovered.chart, info.chart, root);
-        var music_full = chart_pick_best(discovered.music, info.music, root);
-        var image_full = chart_pick_best(discovered.image, info.image, root);
-        // If info image is wrong/missing, try matching chart stem (e.g. 57649733.json -> 57649733.png)
-        if (!string_length(image_full) && string_length(chart_full) && is_array(discovered.image)) {
-                var chart_stem = string_lower(chart_path_file_name(chart_full));
-                var dot = string_last_pos(".", chart_stem);
-                if (dot > 0) then chart_stem = string_copy(chart_stem, 1, dot - 1);
-                for (var ii = 0; ii < array_length(discovered.image); ii++) {
-                        var iname = string_lower(chart_path_file_name(discovered.image[ii]));
-                        var idot = string_last_pos(".", iname);
-                        var istem = (idot > 0) ? string_copy(iname, 1, idot - 1) : iname;
-                        if (istem == chart_stem && file_exists(discovered.image[ii])) {
-                                image_full = discovered.image[ii];
-                                break;
-                        };
-                };
+        var music_full = chart_pick_preferred(discovered.music, info.music, root);
+        if (!string_length(music_full) && string_length(chart_full)) {
+                music_full = chart_pick_stem_match(discovered.music, chart_full);
+        };
+        if (!string_length(music_full)) {
+                music_full = chart_pick_best(discovered.music, "", root);
+        };
+        var image_full = chart_pick_preferred(discovered.image, info.image, root);
+        if (!string_length(image_full) && string_length(chart_full)) {
+                image_full = chart_pick_stem_match(discovered.image, chart_full);
         };
         // Still none: choose the largest image file (usually the illustration, not UI icons)
         if (!string_length(image_full) && is_array(discovered.image) && array_length(discovered.image) > 0) {
@@ -821,15 +1110,9 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
                 var best_size = -1;
                 for (var ij = 0; ij < array_length(discovered.image); ij++) {
                         var ip = discovered.image[ij];
-                        if (!file_exists(ip)) then continue;
-                        // skip tiny likely-icon names only as soft preference via size
-                        var sz = 0;
-                        // GML has no portable file_size; estimate via buffer
-                        var _b = buffer_load(ip);
-                        if (_b >= 0) {
-                                sz = buffer_get_size(_b);
-                                buffer_delete(_b);
-                        };
+                        if (!chart_file_exists_any(ip)) then continue;
+                        var sz = chart_archive_size_bytes(ip);
+                        if (sz < 0) then sz = 0;
                         if (sz > best_size) {
                                 best_size = sz;
                                 best_img = ip;
@@ -837,6 +1120,8 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
                 };
                 image_full = best_img;
         };
+
+        print($"[ChartSession] Picked info={info_source} chart={chart_full} music={music_full} image={image_full}");
 
         // Chart + music are both required. Missing either => fail, cleanup, back to menu.
         if (!string_length(chart_full) || !string_length(music_full)) {
@@ -848,6 +1133,7 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
                         if (mi > 0) then missing_text += ", ";
                         missing_text += missing[mi];
                 };
+                print($"[ChartSession] Scan leftover charts={array_length(discovered.chart)} music={array_length(discovered.music)} image={array_length(discovered.image)} text={array_length(discovered.text)}");
                 return chart_session_fail("Missing required file(s): " + missing_text);
         };
 
@@ -901,16 +1187,20 @@ function chart_session_load_zip(zip_path) {
         session.error = "";
         session.source_path = zip_path;
         session.from_zip = true;
-        session.extract_dir = chart_path_norm(game_save_id + "track/");
+        session.extract_dir = chart_session_track_dir();
 
-        if (!file_exists(zip_path)) {
+        if (!chart_file_exists_any(zip_path)) {
                 return chart_session_fail("Zip file does not exist.");
         };
 
         chart_session_set_status("Preparing extract folder", "");
-        var track_path = chart_path_norm(game_save_id + "track/");
-        if (directory_exists(track_path)) then directory_destroy(track_path);
-        directory_create(track_path);
+        var track_path = chart_session_track_dir();
+        chart_session_remove_dir(track_path);
+        if (os_type == os_android && android_files_available()) {
+                android_files_mkdir(track_path);
+        } else {
+                directory_create(track_path);
+        };
         session.extract_dir = track_path;
 
         chart_session_set_status("Unzipping", chart_path_file_name(zip_path));
@@ -919,30 +1209,7 @@ function chart_session_load_zip(zip_path) {
                 return chart_session_fail("Failed to unzip chart package.");
         };
 
-        var discovered_root = File_Discoverer(track_path);
-        var root = track_path;
-        if (array_length(discovered_root.chart) <= 0) {
-                var probe = file_find_first(track_path + "*", fa_directory);
-                var first_dir = "";
-                while (string_length(probe)) {
-                        if (probe != "." && probe != "..") {
-                                var full = chart_path_join(track_path, probe);
-                                if (directory_exists(full)) {
-                                        first_dir = full;
-                                        break;
-                                };
-                        };
-                        probe = file_find_next();
-                };
-                file_find_close();
-                if (string_length(first_dir)) {
-                        var nested = File_Discoverer(first_dir);
-                        if (array_length(nested.chart) > 0 || array_length(nested.music) > 0) {
-                                root = first_dir;
-                        };
-                };
-        };
-
+        var root = chart_session_resolve_extract_root(track_path);
         return chart_session_build_from_dir(root, zip_path, true);
 }
 
@@ -985,10 +1252,10 @@ function chart_session_begin_source(path) {
         if (ext == ".zip" || ext == ".pez") {
                 return chart_session_load_zip(path);
         };
-        if (directory_exists(path)) {
+        if (chart_path_dir_exists(path) || directory_exists(path)) {
                 return chart_session_build_from_dir(path, path, false);
         };
-        if (file_exists(path)) {
+        if (chart_file_exists_any(path)) {
                 var p = chart_path_norm(path);
                 var slash = max(string_last_pos("/", p), string_last_pos("\\", p));
                 var dir = (slash > 0) ? string_copy(p, 1, slash) : (working_directory + "chart/");

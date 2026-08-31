@@ -9,7 +9,8 @@ if (variable_global_exists("loading_animator_finished") && global.loading_animat
 };
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active) exit;
 //if(game.settings.enableFPS) then window_set_caption($"{GAME_NAME} - FPS: {fps} / {fps_real}");
-if(!game.paused){
+var chart_os_hold = chart_android_focus_step();
+if(!game.paused && !chart_os_hold){
 	//print(array_length(game.__time));	
 	game.Math.ctime();
 	//print(game.__time);

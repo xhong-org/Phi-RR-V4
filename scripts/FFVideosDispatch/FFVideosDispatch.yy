@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"FFVideosDispatch",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"FFVideosDispatch",
+  "parent":{
+    "name":"FFVideos",
+    "path":"folders/Extensions/FFVideos.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

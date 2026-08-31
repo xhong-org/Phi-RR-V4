@@ -12,7 +12,8 @@ if (variable_global_exists("loading_animator_finished") && global.loading_animat
 };
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active) exit;
 //if(game.settings.enableFPS) then window_set_caption($"{GAME_NAME} - FPS: {fps} / {fps_real}");
-if(!game.paused){
+var chart_os_hold = chart_android_focus_step();
+if(!game.paused && !chart_os_hold){
 	// The chart clock stays entirely on get_timer()'s microsecond timebase.
 	game.Math.ctime();
 	event_user(0); // BPMList compensation (RPE Other_10)
@@ -144,9 +145,10 @@ if(!game.paused){
 					continue;
 				};
 				if (_sh.spatialSafe) {
-					var _hold_head_px = (real(_sh.spatialFloor) - _sh_floor)
+					var _hold_speed = real(_sh.speed);
+					var _hold_head_px = _hold_speed * (real(_sh.spatialFloor) - _sh_floor)
 						* _notes_h + real(_sh.yOrigin) * _room_h;
-					var _hold_tail_px = _hold_head_px + real(_sh.speed)
+					var _hold_tail_px = _hold_head_px + _hold_speed
 						* (real(_sh.endSpatialFloor) - real(_sh.spatialFloor)) * _notes_h;
 					if (max(_hold_head_px, _hold_tail_px) < _hproj_min
 						|| min(_hold_head_px, _hold_tail_px) > _hproj_max) { _shi++; continue; };

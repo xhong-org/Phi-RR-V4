@@ -64,11 +64,7 @@ if (_rotate_index < _rotate_count && line_sec >= _rotate_events[_rotate_index].s
 	_rotate_value = (rotate_event.instant ? rotate_event[$ "end"] : tween_execute(line_sec, rotate_event.startSec, rotate_event.endSec, rotate_event.start, rotate_event[$ "end"], rotate_event.easing));
 };
 
-while (_speed_index + 1 < _speed_count && _speed_events[_speed_index + 1].startSec <= line_sec) _speed_index++;
-if (_speed_count > 0 && line_sec >= _speed_events[0].startSec) {
-	var speed_event = _speed_events[_speed_index];
-	floor_position = speed_event.floor + (line_sec-speed_event.startSec)*speed_event.value;
-} else floor_position = 0;
+floor_position = pec_floor_at_sec(_speed_events, line_sec);
 
 x = chart_view_left + chart_view_width * _move_x;
 y = chart_view_height * _move_y;

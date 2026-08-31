@@ -46,18 +46,7 @@ if(variable_global_exists("game_1") && !is_undefined(game_1)){
 		};
 		game_1.Gif = {};
 	};
-	if (struct_exists(game_1, "HitSounds") && is_struct(game_1.HitSounds)) {
-		if (instance_exists(oMedia)) {
-			var _media = instance_find(oMedia, 0);
-			if (_media.track > 0) then fmod_system_select(_media.track);
-		};
-		var _hit_names = struct_get_names(game_1.HitSounds);
-		for (var _hi = 0; _hi < array_length(_hit_names); _hi++) {
-			var _hit_sound = game_1.HitSounds[$ _hit_names[_hi]];
-			if (_hit_sound > 0) then fmod_sound_release(_hit_sound);
-		};
-		game_1.HitSounds = {};
-	};
+	chart_playback_release_hitsounds();
 	if (struct_exists(game_1, "Fonts") && is_struct(game_1.Fonts)) {
 		var _font_names = struct_get_names(game_1.Fonts);
 		for (var _fi = 0; _fi < array_length(_font_names); _fi++) {

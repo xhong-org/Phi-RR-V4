@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"I_AndroidFilesAPI",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"I_AndroidFilesAPI",
+  "parent":{
+    "name":"I_AndroidFiles",
+    "path":"folders/Extensions/I_AndroidFiles.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}
