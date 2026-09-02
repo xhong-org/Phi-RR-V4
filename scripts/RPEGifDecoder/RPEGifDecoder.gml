@@ -273,8 +273,8 @@ function rpe_gif_decode(file_path) {
     };
 
     try {
-        if (!is_string(file_path) || !file_exists(file_path)) then rpe_gif__fail("GIF file does not exist");
-        state.file_buffer = buffer_load(file_path);
+        if (!is_string(file_path) || !chart_file_exists_any(file_path)) then rpe_gif__fail("GIF file does not exist");
+        state.file_buffer = buffer_load(chart_file_readable_path(file_path));
         if (state.file_buffer < 0) then rpe_gif__fail("Could not load GIF file");
         state.size = buffer_get_size(state.file_buffer);
         if (state.size < 13) then rpe_gif__fail("GIF file is too small");

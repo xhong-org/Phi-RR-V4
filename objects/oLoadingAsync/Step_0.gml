@@ -7,7 +7,7 @@ if (done || failed) {
         if (keyboard_check_pressed(vk_escape) || keyboard_check_pressed(vk_enter) || mouse_check_button_pressed(mb_left)) {
                 if (failed) {
                         chart_loading_animation_abort();
-                        room_goto(room_menu);
+                        pls_return_to_entry();
                 };
         };
         exit;
@@ -55,11 +55,10 @@ if (phase == 1) {
                 message = "Load failed";
                 detail = string_length(session_fail.error) ? session_fail.error : "Unsupported or invalid chart.";
                 chart_session_cleanup(true);
-                msgbox_warning_async(detail, "Chart Loader" , [ msgbox_button("确认") ] , MSGBOX_BUTTON_ALIGN.RIGHT);
-				//msgbox_warning_async()
                 phase = 99;
                 chart_loading_animation_abort();
-                room_goto(room_menu);
+                if (!pls_is_gx_remote()) then msgbox_warning_async(detail, "Chart Loader" , [ msgbox_button("确认") ] , MSGBOX_BUTTON_ALIGN.RIGHT);
+                pls_return_to_entry(detail);
                 exit;
         };
 
@@ -85,10 +84,10 @@ if (phase == 10) {
                 message = "Load failed";
                 detail = string_length(zip_fail.error) ? zip_fail.error : "Failed to extract chart package.";
                 chart_session_cleanup(true);
-                msgbox_warning_async(detail, "Chart Loader" , [ msgbox_button("确认") ] , MSGBOX_BUTTON_ALIGN.RIGHT);
                 phase = 99;
                 chart_loading_animation_abort();
-                room_goto(room_menu);
+                if (!pls_is_gx_remote()) then msgbox_warning_async(detail, "Chart Loader" , [ msgbox_button("确认") ] , MSGBOX_BUTTON_ALIGN.RIGHT);
+                pls_return_to_entry(detail);
                 exit;
         };
 
@@ -115,7 +114,7 @@ if (phase == 2) {
                 chart_session_fail(detail, true);
                 phase = 99;
                 chart_loading_animation_abort();
-                room_goto(room_menu);
+                pls_return_to_entry(detail);
                 exit;
         };
 		chart_default_resources_load();

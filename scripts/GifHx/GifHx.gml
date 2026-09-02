@@ -247,7 +247,7 @@ function sprite_add_gif_buffer_start(_buf, _xorig, _yorig, _frameDelays, _frameS
 
 function sprite_add_gif(_path1, _xorig, _yorig, _frameDelays, _frameSprites) {
 	if (false) show_debug_message(argument[4]);
-	var _buf = buffer_load(_path1);
+	var _buf = buffer_load(chart_file_readable_path(_path1));
 	var _spr = sprite_add_gif_buffer(_buf, _xorig, _yorig, _frameDelays, _frameSprites);
 	buffer_delete(_buf);
 	return _spr;
@@ -255,7 +255,7 @@ function sprite_add_gif(_path1, _xorig, _yorig, _frameDelays, _frameSprites) {
 
 function sprite_add_gif_start(_path1, _xorig, _yorig, _frameDelays, _frameSprites) {
 	if (false) show_debug_message(argument[4]);
-	var _buf = buffer_load(_path1);
+	var _buf = buffer_load(chart_file_readable_path(_path1));
 	var _gif = sprite_add_gif_buffer_start(_buf, _xorig, _yorig, _frameDelays, _frameSprites);
 	_gif.owns_buffer = true;
 	return _gif;

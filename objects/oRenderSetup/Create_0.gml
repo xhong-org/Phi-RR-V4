@@ -17,11 +17,7 @@ ratios = ["16:9", "4:3", "1:1", "9:16"];
 ratio_widths = [16, 4, 1, 9];
 ratio_heights = [9, 3, 1, 16];
 aa_values = [2, 4, 8];
-ui_font = -1;
-if (file_exists(working_directory + "resource/saira.ttf")) {
-    font_add_enable_aa(true);
-    ui_font = font_add(working_directory + "resource/saira.ttf", 25, true, false, -infinity, infinity);
-};
+ui_font = pls_ui_font_add(25, true, false, -infinity, infinity, false);
 
 function setup_set_status(text) { status = text; };
 function setup_begin_text() {

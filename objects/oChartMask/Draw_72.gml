@@ -2,7 +2,7 @@
 if (!application_surface_is_enabled() || !surface_exists(application_surface)) then exit;
 chart_view_refresh(room_width, room_height);
 if (!chart_mask_surface_ensure()) then exit;
-draw_flush();
+pls_draw_flush();
 gpu_push_state();
 surface_set_target(surface_id);
 target_active = true;

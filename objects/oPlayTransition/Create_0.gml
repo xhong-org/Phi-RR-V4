@@ -119,9 +119,10 @@ function play_transition_finish_exit() {
 	chart_playback_teardown_for_menu();
 	state = PLAY_TRANSITION_STATE.FINISHED;
 	if (variable_global_exists("pls_environment_run") && global.pls_environment_run) then game_end();
-	else room_goto(room_menu);
+	else pls_return_to_entry();
 }
 
 play_transition_apply(0);
 if (variable_global_exists("game") && is_struct(game)) then game.paused = true;
 play_transition_deactivate_gameplay();
+if (instance_exists(oLoadAnimator)) then chart_loading_animation_finish();

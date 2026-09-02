@@ -13,11 +13,7 @@ overlay_ready = false;
 overlay_surface = -1;
 overlay_surface_width = 0;
 overlay_surface_height = 0;
-ui_font = -1;
-if (file_exists(working_directory + "resource/saira.ttf")) {
-    font_add_enable_aa(true);
-    ui_font = font_add(working_directory + "resource/saira.ttf", 28, true, false, -infinity, infinity);
-};
+ui_font = pls_ui_font_add(28, true, false, -infinity, infinity, false);
 
 if (os_type == os_windows) {
     var d3d_info = os_get_info();

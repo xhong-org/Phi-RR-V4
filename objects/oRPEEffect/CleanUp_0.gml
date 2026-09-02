@@ -7,7 +7,7 @@ if (variable_instance_exists(id, "effect_boundary_role")) {
 	exit;
 };
 shader_reset();
-if (extension_exists("I_Shaders")
+if ((extension_exists("I_Shaders") || rpe_ext_shader_gx())
 	&& variable_instance_exists(id, "external_hlsl_handles") && is_struct(external_hlsl_handles)) {
 	var external_names = struct_get_names(external_hlsl_handles);
 	for (var external_i = 0; external_i < array_length(external_names); external_i++) {

@@ -124,7 +124,7 @@ function rpe_effect_external_mapping(shader_path) {
 	relative_path = string_replace_all(relative_path, "\\", "/");
 	if (!string_length(relative_path) || string_pos("..", relative_path) > 0 || string_pos(":", relative_path) > 0) then return "";
 	var full_path = chart_extra_asset_path(relative_path);
-	if (!file_exists(full_path)) {
+	if (!chart_file_exists_any(full_path)) {
 		print($"[RPE Effect] Missing external shader: {relative_path}");
 		return "";
 	};
@@ -136,11 +136,8 @@ function rpe_effect_external_mapping(shader_path) {
 		|| string_copy(lower_path, max(1, string_length(lower_path) - 4), 5) == ".glsl"
 		|| string_copy(lower_path, max(1, string_length(lower_path) - 3), 4) == ".fsh");
 	if (is_glsl_path) then return "@glsl:" + relative_path;
-	var handle = file_text_open_read(full_path);
-	if (is_undefined(handle) || handle < 0) then return "";
-	var source = "";
-	while (!file_text_eof(handle)) source += file_text_readln(handle) + "\n";
-	file_text_close(handle);
+	var source = chart_read_text_file(full_path, -1);
+	if (!is_string(source) || !string_length(source)) then return "";
 	var probe = string_lower(relative_path + "\n" + source);
 	var compact = string_replace_all(string_replace_all(string_replace_all(string_replace_all(probe, " ", ""), "\t", ""), "\r", ""), "\n", "");
 	if ((string_pos("gl_fragcolor=mix(texture2d(screentexture,uv),vec4(1.0,0.0,0.0,1.0),factor)", compact) > 0)
@@ -153,12 +150,19 @@ function rpe_effect_external_mapping(shader_path) {
 			|| string_pos("/" + lower_name + ".", probe) > 0
 			|| string_pos("/" + string_replace_all(lower_name, "blur", "_blur") + ".", probe) > 0) return shader_name;
 	};
+	if (string_pos("gl_fragcolor", probe) > 0 || string_pos("gl_fragcoord", probe) > 0) {
+		if (rpe_ext_shader_gx() || rpe_ext_shader_android()) {
+			return "@glsl:" + relative_path;
+		};
+	};
 	if (string_pos("float4", probe) > 0 || string_pos("sv_target", probe) > 0
 		|| string_pos("samplerstate", probe) > 0 || string_pos("texture2d", probe) > 0
 		|| string_pos("tex2d(", probe) > 0 || string_pos("cbuffer ", probe) > 0) {
 		return "@hlsl:" + relative_path;
 	};
-	if (os_type == os_android) {
+	if (rpe_ext_shader_gx()) {
+		print($"[RPE Effect] Unrecognized shader; GX compiles GLSL .fs / .glsl / .fsh: {relative_path}");
+	} else if (os_type == os_android) {
 		print($"[RPE Effect] Unrecognized shader; Android needs GLSL ES, HLSL, or '// @gamemaker-effect <builtin>': {relative_path}");
 	} else {
 		print($"[RPE Effect] GLSL runtime translation is unavailable; use HLSL or add '// @gamemaker-effect <builtin>': {relative_path}");
@@ -172,8 +176,8 @@ function rpe_effect_external_defaults(shader_name) {
 	if (separator <= 0) then return result;
 	var relative_path = string_delete(shader_name, 1, separator);
 	var full_path = chart_extra_asset_path(relative_path);
-	if (!file_exists(full_path)) then return result;
-	var handle = file_text_open_read(full_path);
+	if (!chart_file_exists_any(full_path)) then return result;
+	var handle = file_text_open_read(chart_file_readable_path(full_path));
 	if (is_undefined(handle) || handle < 0) then return result;
 	while (!file_text_eof(handle)) {
 		var shader_line = string_trim(string_replace_all(file_text_readln(handle), "\t", " "));

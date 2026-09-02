@@ -26,6 +26,9 @@ draw_set_valign(fa_center);
 draw_text_transformed_colour(_chart_right - (40 * global_scales), (70 * global_scales) + _transition_score_y, ScoreSystem(), 0.75 * global_scales, 0.75 * global_scales, 0, image_blend, image_blend, image_blend, image_blend, ui_fade);
 draw_sprite_ext(spr_pause, 0, _chart_left + 50 * global_scales, 50 * global_scales + _transition_pause_y, 0.8 * global_scales, 0.8 * global_scales, 0, c_white, ui_fade);
 
-var val = (game.__time[4] / oMedia.length);
+var val = 0;
+if (instance_exists(oMedia) && is_real(oMedia.length) && oMedia.length > 0) {
+	val = clamp(game.__time[4] / oMedia.length, 0, 1);
+};
 draw_sprite_ext(spr_pixel_2, 0, _chart_left, 0, val * (_chart_width / 2), 4 * global_scales, 0, c_gray, ui_fade * _transition_bar_alpha);
 draw_sprite_ext(spr_pixel_2, 0, _chart_left + val * _chart_width - 2, 0, 1, 4 * global_scales, 0, image_blend, ui_fade * _transition_bar_alpha);

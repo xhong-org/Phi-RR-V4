@@ -1,5 +1,8 @@
 /// @description Semi-transparent cover and skewed loading layout.
-//if(!sprite_exists(clear_sprite)) then exit;
+if (pls_is_gxgames() && room != room_loading && room != room_menu) {
+    chart_loading_animation_finish();
+    exit;
+};
 
 var _now = current_time;
 var _intro_start = intro_started_at >= 0 ? intro_started_at : started_at;
@@ -22,9 +25,10 @@ if (state == LOAD_ANIM_STATE.EXITING && exit_started_at >= 0) {
 };
 
 // 绘制同比例模糊背景，黑色内遮从左向右覆盖。
-if(sprite_exists(blur_sprite)){
-	var _scal = (max( room_width / sprite_get_width(blur_sprite) , room_height / sprite_get_height(blur_sprite) ));
-	draw_sprite_ext(blur_sprite , 0 , room_width / 2 , room_height / 2 , _scal , _scal , 0 , c_white , 1);
+var _blur_draw = chart_loading_blur_draw_sprite();
+if(sprite_exists(_blur_draw)){
+	var _scal = (max( room_width / sprite_get_width(_blur_draw) , room_height / sprite_get_height(_blur_draw) ));
+	draw_sprite_ext(_blur_draw , 0 , room_width / 2 , room_height / 2 , _scal , _scal , 0 , c_white , 1);
 };
 
 draw_sprite_stretched_ext(

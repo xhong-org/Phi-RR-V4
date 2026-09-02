@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"I_HTML5API",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"I_HTML5API",
+  "parent":{
+    "name":"I_HTML5",
+    "path":"folders/Extensions/I_HTML5.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

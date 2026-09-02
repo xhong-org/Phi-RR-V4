@@ -18,19 +18,19 @@ if (variable_instance_exists(id, "effect_boundary_role")) {
 		var boundary_width = surface_get_width(application_surface);
 		var boundary_height = surface_get_height(application_surface);
 		if (!surface_exists(_boundary_state.surface)
-			|| surface_get_width(_boundary_state.surface) != boundary_width
-			|| surface_get_height(_boundary_state.surface) != boundary_height) {
+			|| abs(surface_get_width(_boundary_state.surface) - boundary_width) > 2
+			|| abs(surface_get_height(_boundary_state.surface) - boundary_height) > 2) {
 			if (surface_exists(_boundary_state.surface)) then surface_free(_boundary_state.surface);
 			_boundary_state.surface = surface_create(boundary_width, boundary_height);
 		};
 		if (surface_exists(_boundary_state.surface)) {
-			draw_flush();
+			pls_draw_flush();
 			_boundary_state.caller = surface_get_target();
 			surface_set_target(_boundary_state.surface);
 			draw_clear_alpha(c_black, 0);
 		};
 	} else if (_boundary_state.active && surface_exists(_boundary_state.surface)) {
-		draw_flush();
+		pls_draw_flush();
 		surface_reset_target();
 		if (instance_exists(effect_boundary_controller)) {
 			effect_boundary_controller.boundary_render_effects = effect_boundary_effects;

@@ -4,7 +4,7 @@ window_set_caption($"{GAME_NAME}");
 // Draw after the chart composition so the aspect mask is final.
 depth = DEPTH.HEF + 1;
 
-gml_release_mode(true);
+if (os_browser == browser_not_a_browser) then gml_release_mode(true);
 
 globalvar game , game_2 , _eff_c , combo , maxcombo , pec_bpm , fpsReal , PhiTime;
 
@@ -69,7 +69,7 @@ instance_create_depth(0,0,DEPTH.BG - 1,oExtraPlay);
 //game_2.CreateLines();
 
 _eff_c = (function(){ return(false); });
-if (game.settings.useOldFX) {
+if (game.settings.useOldFX && !pls_is_gxgames()) {
 	instance_create_depth(0, 0, 0, oEffect);
 	_eff_c = method(self, function(_x, _y, color = #ffeca0) {
 		if (!game.settings.enableHitEffect) then return;
@@ -124,3 +124,7 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 // lines: activate is deferred and would skip the next event_perform / Step.
 chart_idle_behind_loading();
 global.loading_render_ready = true;
+chart_blur_bind_game(false);
+if (pls_is_gxgames()) {
+	chart_loading_animation_finish();
+};

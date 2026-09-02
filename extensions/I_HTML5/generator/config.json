@@ -1,0 +1,36 @@
+{
+  "$schema": "./extgen.schema.json",
+  "input": "./IHTML5.gmidl",
+  "root": "./",
+  "profile": "Full",
+  "gamemaker": {
+    "wrappers": { "enabled": false },
+    "runtime": { "enabled": false },
+    "extension": {
+      "enabled": true,
+      "outputFile": "../I_HTML5.yy",
+      "mode": "patch",
+      "extensionName": "I_HTML5",
+      "extensionFileName": "I_HTML5.ext",
+      "patchFrameworks": false
+    },
+    "injectors": { "enabled": false }
+  },
+  "targets": {
+    "sourceFolder": "native",
+    "sourceFile": "{0}_native",
+    "windows": { "enabled": false, "outputFolder": "../" },
+    "android": { "enabled": false, "mode": "java", "outputFolder": "../AndroidSource" }
+  },
+  "extras": {},
+  "build": {
+    "emitCmake": true,
+    "cmake": {
+      "cppStandard": 20,
+      "cppExtensions": false,
+      "strictWarnings": false,
+      "useThirdParty": false,
+      "emitPresets": true
+    }
+  }
+}

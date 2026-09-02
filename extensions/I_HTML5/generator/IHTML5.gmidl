@@ -1,0 +1,124 @@
+[gml_api]
+module IHTML5;
+
+[global, start_fn]
+function i_html5_initialize() : unit;
+[global, finish_fn]
+function i_html5_shutdown() : unit;
+[global]
+function i_html5_available() : bool;
+
+[global]
+function i_html5_open_pick(filter : string) : bool;
+[global]
+function i_html5_open_busy() : bool;
+[global]
+function i_html5_open_status() : int32;
+[global]
+function i_html5_open_path() : string;
+[global]
+function i_html5_open_name() : string;
+[global]
+function i_html5_open_error() : string;
+[global]
+function i_html5_open_reset() : unit;
+
+[global]
+function i_html5_files_root() : string;
+[global]
+function i_html5_files_logs_dir() : string;
+[global]
+function i_html5_files_mkdir(path : string) : bool;
+[global]
+function i_html5_files_exists(path : string) : bool;
+[global]
+function i_html5_files_is_dir(path : string) : bool;
+[global]
+function i_html5_files_list(path : string) : string;
+[global]
+function i_html5_files_write_text(path : string, text : string) : bool;
+[global]
+function i_html5_files_append_text(path : string, text : string) : bool;
+[global]
+function i_html5_files_read_text(path : string) : string;
+[global]
+function i_html5_files_copy(source_path : string, dest_path : string) : bool;
+[global]
+function i_html5_files_delete(path : string) : bool;
+[global]
+function i_html5_files_size(path : string) : float;
+[global]
+function i_html5_files_write_base64(path : string, data : string) : bool;
+[global]
+function i_html5_files_append_base64(path : string, data : string) : bool;
+[global]
+function i_html5_files_read_base64(path : string) : string;
+[global]
+function i_html5_files_read_base64_range(path : string, offset : float, size : float) : string;
+[global]
+function i_html5_files_url(path : string) : string;
+[global]
+function i_html5_files_error() : string;
+
+[global]
+function i_html5_zip_available() : bool;
+[global]
+function i_html5_zip_detect(archive_path : string) : string;
+[global]
+function i_html5_zip_extract(archive_path : string, output_directory : string, overwrite : bool, clean_output : bool) : bool;
+[global]
+function i_html5_zip_extract_async(archive_path : string, output_directory : string, overwrite : bool, clean_output : bool) : int32;
+[global]
+function i_html5_zip_compress(source_path : string, archive_path : string, include_root : bool, overwrite : bool) : bool;
+[global]
+function i_html5_zip_compress_async(source_path : string, archive_path : string, include_root : bool, overwrite : bool) : int32;
+[global]
+function i_html5_zip_task_status(task_id : int32) : int32;
+[global]
+function i_html5_zip_task_exit_code(task_id : int32) : int32;
+[global]
+function i_html5_zip_task_error(task_id : int32) : string;
+[global]
+function i_html5_zip_task_cancel(task_id : int32) : bool;
+[global]
+function i_html5_zip_task_release(task_id : int32) : bool;
+[global]
+function i_html5_zip_last_error() : string;
+
+[global]
+function i_html5_msgbox_clear_buttons() : unit;
+[global]
+function i_html5_msgbox_set_button(index : int32, text : string) : bool;
+[global]
+function i_html5_msgbox_set_button_alignment(alignment : int32) : bool;
+[global]
+function i_html5_msgbox_show_sync(message : string, title : string, kind : int32) : int32;
+[global]
+function i_html5_msgbox_show_async(message : string, title : string, kind : int32) : int32;
+[global]
+function i_html5_msgbox_task_status(task_id : int32) : int32;
+[global]
+function i_html5_msgbox_task_result(task_id : int32) : int32;
+[global]
+function i_html5_msgbox_task_release(task_id : int32) : bool;
+
+[global]
+function i_html5_audio_create(path : string, use_stream : bool) : int32;
+[global]
+function i_html5_audio_play(handle : int32) : bool;
+[global]
+function i_html5_audio_pause(handle : int32) : bool;
+[global]
+function i_html5_audio_resume(handle : int32) : bool;
+[global]
+function i_html5_audio_stop(handle : int32) : bool;
+[global]
+function i_html5_audio_set_position_ms(handle : int32, ms : float) : bool;
+[global]
+function i_html5_audio_get_position_ms(handle : int32) : float;
+[global]
+function i_html5_audio_get_length_ms(handle : int32) : float;
+[global]
+function i_html5_audio_release(handle : int32) : bool;
+[global]
+function i_html5_audio_play_oneshot(path : string) : bool;

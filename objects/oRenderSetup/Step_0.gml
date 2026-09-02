@@ -1,4 +1,5 @@
 /// @description Render settings interaction.
+if (instance_exists(oFilePicker)) then exit;
 if (keyboard_check_pressed(vk_escape)) { room_goto(room_menu); exit; };
 setup_store_text();
 if ((field == 2 || field == 3) && string_length(string_trim(keyboard_string)) > 0) {
@@ -57,6 +58,16 @@ if (keyboard_check_pressed(vk_backspace)) {
     if (string_length(text_now) > 0) keyboard_string = string_delete(text_now, string_length(text_now), 1);
 };
 if (keyboard_check_pressed(ord("F")) && field == 0) {
+    if (gx_file_picker_needed()) {
+        gx_file_picker_open(method(id, function(path) {
+            path_text = path;
+            field = 0;
+            setup_begin_text();
+        }), method(id, function() {
+            setup_begin_text();
+        }));
+        exit;
+    };
     var selected = get_open_filename_ext("Chart package|*.zip;*.pez|All files|*.*", "", "", "Select chart package");
     if (string_length(selected)) { path_text = selected; setup_begin_text(); }
 };
@@ -72,6 +83,16 @@ if (mouse_check_button_pressed(mb_left)) {
     var top = max(18 * scale, room_height * 0.5 - 350 * scale);
     var row = top + 92 * scale;
     if (point_in_rectangle(mouse_x, mouse_y, left + 610 * scale, row, left + 790 * scale, row + 48 * scale)) {
+        if (gx_file_picker_needed()) {
+            gx_file_picker_open(method(id, function(path) {
+                path_text = path;
+                field = 0;
+                setup_begin_text();
+            }), method(id, function() {
+                setup_begin_text();
+            }));
+            exit;
+        };
         var selected_mouse = get_open_filename_ext("Chart package|*.zip;*.pez|All files|*.*", "", "", "Select chart package");
         if (string_length(selected_mouse)) { path_text = selected_mouse; field = 0; setup_begin_text(); };
         exit;

@@ -4,6 +4,9 @@
     "windows": {
       "packageType": "zip",
       "visualStudioSdk": "F:\\Visual Studio Community 2022\\IDE\\Common7\\Tools\\VsDevCmd.bat"
+    },
+    "operagx": {
+      "emscriptenSdk": "D:\\emsdk-6.0.8"
     }
   }
 }

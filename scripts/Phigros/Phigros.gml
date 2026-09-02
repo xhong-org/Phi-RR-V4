@@ -4,12 +4,13 @@
 #macro func function
 #macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal { "windows": 40518, "android": 40519 }
-#macro VerStr "v.4.0.9a"
+#macro VerReal { "windows": 40518, "android": 40519, "gxgames": 40523 } // 各平台版本号(独立)
+#macro VerStr "v.4.0.9"
 
 function ver_real() {
 	var platform = "other";
-	if (os_type == os_windows) then platform = "windows";
+	if (os_type == os_gxgames) then platform = "gxgames";
+	else if (os_type == os_windows) then platform = "windows";
 	else if (os_type == os_android) then platform = "android";
 	var names = struct_get_names(VerReal);
 	for (var i = 0; i < array_length(names); i++) {
@@ -45,7 +46,7 @@ function asset_font_valid(_id) {
 // 实验性内容
 //scheduler_resolution_set(800000000000);
 //gpu_set_texfilter(true);
-gml_release_mode(true);
+if (os_browser == browser_not_a_browser) then gml_release_mode(true);
 //gml_pragma("forceinline");
 
 //string_format()
@@ -243,7 +244,7 @@ function pec_note_hit_effect_xy() {
 ///@desc 分数系统
 ///@param _mode {Real} 
 function ScoreSystem(_mode = undefined){
-	if(maxcombo <= 0) then return(-NaN);
+	if (!is_real(maxcombo) || !is_finite(maxcombo) || maxcombo <= 0) then return("0000000");
 	var mode;
 	if(is_undefined(_mode)) then mode = (game.settings.enableComboScore)
 	else mode = _mode;
@@ -251,14 +252,20 @@ function ScoreSystem(_mode = undefined){
 	
 	var _s,_t;
 	var __combo = (phi_state_list);
+	var prefect = is_struct(__combo) ? real(__combo.prefect ?? 0) : 0;
+	var good = is_struct(__combo) ? real(__combo.good ?? 0) : 0;
+	var max_hit = is_struct(__combo) ? real(__combo.max_hitcombo ?? 0) : 0;
+	if (!is_finite(prefect)) then prefect = 0;
+	if (!is_finite(good)) then good = 0;
+	if (!is_finite(max_hit)) then max_hit = 0;
 	if(mode){
-		_s = ((int64(900000 * ((__combo.prefect + (__combo.good * 0.65)) / maxcombo))) + (int64(100000 * (__combo.max_hitcombo / maxcombo))));
+		_s = ((int64(900000 * ((prefect + (good * 0.65)) / maxcombo))) + (int64(100000 * (max_hit / maxcombo))));
 	}else{	
-		_s = (int64(1000000 * ((__combo.prefect + (__combo.good * 0.65)) / maxcombo)));
+		_s = (int64(1000000 * ((prefect + (good * 0.65)) / maxcombo)));
 	};
 	
 	if (is_finite(_s)) then _s = (_s | 0);
-	else _s = (1 << 31);
+	else _s = 0;
 	
 	var _l_scombo_ = (string_length(string(_s))),
 		_scmrzero = (7 - _l_scombo_ <= 0 ? 0 : 7 - _l_scombo_),
@@ -271,7 +278,7 @@ function ScoreSystem(_mode = undefined){
 };
 
 
-///@desc 文件寻找系统(仅Windows)
+///@desc 文件寻找系统(Windows / Android / HTML5)
 function File_Discoverer(disc_path){
         var return_path = {
                 "chart" : [],
@@ -284,9 +291,13 @@ function File_Discoverer(disc_path){
         if(!bool(string_length(disc_path))) then return(return_path);
 
         var file_path_list = [];
-        if (os_type == os_android && android_files_available()) {
-                var listing = android_files_list(disc_path);
-                print($"[ChartSession] Native list {disc_path} err={android_files_error()} bytes={string_length(listing)}");
+        if (pls_is_gxgames()) {
+                file_path_list = gx_fs_list_files(disc_path);
+                print($"[ChartSession] GX list {disc_path} files={array_length(file_path_list)}");
+        };
+        if (array_length(file_path_list) <= 0 && chart_use_native_files()) {
+                var listing = chart_native_list(disc_path);
+                print($"[ChartSession] Native list {disc_path} err={chart_native_error()} bytes={string_length(listing)}");
                 var parts = string_split(string_replace_all(listing, "\r", ""), "\n");
                 for (var list_i = 0; list_i < array_length(parts); list_i++) {
                         var listed = string_replace_all(string_trim(parts[list_i]), "\\", "/");
@@ -295,9 +306,12 @@ function File_Discoverer(disc_path){
                         if (listed_name == "_extract_log.txt") then continue;
                         array_add(file_path_list, listed);
                 };
-        } else {
-                var root = string_replace_all(string(disc_path), "/", "\\");
-                if(string_length(root) && string_char_at(root, string_length(root)) != "\\") then root += "\\";
+        };
+        if (array_length(file_path_list) <= 0) {
+                var gx = pls_is_gxgames();
+                var sep = gx ? "/" : "\\";
+                var root = gx ? chart_path_norm(disc_path) : string_replace_all(string(disc_path), "/", "\\");
+                if(string_length(root) && string_char_at(root, string_length(root)) != sep) then root += sep;
 
                 var directory_list = [ root ];
 
@@ -324,7 +338,7 @@ function File_Discoverer(disc_path){
                                 var dir_name = file_find_first(path + "*", fa_directory);
                                 while(string_length(dir_name)){
                                         if(dir_name != "." && dir_name != ".."){
-                                                var full_dir = path + dir_name + "\\";
+                                                var full_dir = path + dir_name + sep;
                                                 if(directory_exists(path + dir_name)){
                                                         array_add(directory_list, full_dir);
                                                 };
@@ -343,7 +357,7 @@ function File_Discoverer(disc_path){
                 var ext = (point > 0) ? string_lower(string_copy(file, point, string_length(file) - point + 1)) : "";
                 switch(ext){
                         case ".json":
-						if (string_lower(string_copy(file, max(1, string_last_pos("/", file) + 1), string_length(file))) == "extra.json") {
+						if (string_lower(chart_path_file_name(file)) == "extra.json") {
 							array_add(return_path[$ "other"], file);
 							break;
 						};
@@ -486,9 +500,7 @@ function Phigros() constructor { // 仅仅结构
 	
 	// 音符&字体
 	static notes = ({});
-	font_add_enable_aa(true);
-	static font = (font_add($"{working_directory}resource/saira.ttf" , 47 , true , false , 32 , 255));
-	if(asset_font_valid(font)) then font_enable_sdf(font , true);
+	static font = (pls_ui_font_add(47));
 	
 	static res_path = {};
 	static effc = undefined;
@@ -742,9 +754,17 @@ function Phigros() constructor { // 仅仅结构
 	///@desc 背景应用
 	static Background = (func(custom = ""){
 		var p = ((is_string(custom) && string_length(custom)) ? custom : "");
-		if(asset_sprite_valid(self.bg)) then sprite_delete(self.bg);
-		self.bg = -1;
+		var kept = chart_blur_bind_game(false);
+		if (sprite_exists(kept) && asset_sprite_valid(self.bg) && self.bg == kept) {
+			if (is_string(p) && string_length(p)) then self.bg_source_path = gx_path_clean(chart_file_readable_path(string_replace_all(p, "\\", "/")));
+			var _kw = sprite_get_width(self.bg);
+			var _kh = sprite_get_height(self.bg);
+			print($"[R-BG] Using kept loading blur size={_kw}x{_kh}" , game.settings.enableDebug);
+			return;
+		};
 		if(!is_string(p) || !string_length(p)){
+			if(asset_sprite_valid(self.bg) && self.bg != kept) then sprite_delete(self.bg);
+			if (!sprite_exists(kept)) then self.bg = -1;
 			print("[R-BG] Empty path." , game.settings.enableDebug);
 			return;
 		};
@@ -754,7 +774,26 @@ function Phigros() constructor { // 仅仅结构
 			return;
 		};
 		p = chart_file_readable_path(p);
+		p = gx_path_clean(p);
+		if (asset_sprite_valid(self.bg)
+				&& string(self[$ "bg_source_path"] ?? "") == p
+				&& bool(self[$ "bg_blurred"] ?? false)) {
+			print("[R-BG] Reusing already-blurred sprite." , game.settings.enableDebug);
+			return;
+		};
+		if(asset_sprite_valid(self.bg) && self.bg != kept) then sprite_delete(self.bg);
+		self.bg = -1;
+		self.bg_source_path = p;
+		self.bg_blurred = false;
+		self.bg_blur_pending = false;
+		self.bg_blur_tries = 0;
 		chart_cache_legacy_cleanup();
+
+		kept = chart_blur_bind_game(false);
+		if (sprite_exists(kept) && asset_sprite_valid(self.bg) && self.bg == kept) {
+			print($"[R-BG] Using loading-screen blur sprite size={sprite_get_width(self.bg)}x{sprite_get_height(self.bg)}" , game.settings.enableDebug);
+			return;
+		};
 
 		// GM 2024+/LTS may return asset refs from sprite_add (not reals).
 		// Do NOT require is_real(...); validate with sprite_exists via asset_sprite_valid.
@@ -765,20 +804,20 @@ function Phigros() constructor { // 仅仅结构
 
 		for (var ti = 0; ti < array_length(try_paths); ti++) {
 			var tp = try_paths[ti];
-			var s0 = sprite_add(tp, 0, false, false, 0, 0);
-			if (asset_sprite_valid(s0)) { base_spr = s0; print($"[R-BG] ok try[{ti}] imgnum=0 path={tp} type={typeof(s0)}" , game.settings.enableDebug); break; };
 			var s1 = sprite_add(tp, 1, false, false, 0, 0);
 			if (asset_sprite_valid(s1)) { base_spr = s1; print($"[R-BG] ok try[{ti}] imgnum=1 path={tp} type={typeof(s1)}" , game.settings.enableDebug); break; };
+			var s0 = sprite_add(tp, 0, false, false, 0, 0);
+			if (asset_sprite_valid(s0)) { base_spr = s0; print($"[R-BG] ok try[{ti}] imgnum=0 path={tp} type={typeof(s0)}" , game.settings.enableDebug); break; };
 			print($"[R-BG] sprite_add failed try[{ti}]: {tp} (s0={s0}/{typeof(s0)}, s1={s1}/{typeof(s1)})" , game.settings.enableDebug);
 		};
 		if (!asset_sprite_valid(base_spr)) {
 			var fname = chart_path_file_name(p);
 			cache_path = chart_gm_cache_dir() + "bg_load_" + fname;
 			if (file_exists(cache_path)) then file_delete(cache_path);
-			if (os_type == os_android && android_files_available() && android_files_exists(cache_path)) then android_files_delete(cache_path);
-			if (os_type == os_android && android_files_available() && android_files_exists(p)) then android_files_copy(p, cache_path);
-			else file_copy(p, cache_path);
-			if (file_exists(cache_path) || (os_type == os_android && android_files_available() && android_files_exists(cache_path))) {
+			if (chart_use_native_files() && chart_native_exists(cache_path)) then chart_native_delete(cache_path);
+			if (chart_use_native_files() && chart_native_exists(p)) then chart_native_copy(p, cache_path);
+			else if (!pls_is_html5()) then file_copy(p, cache_path);
+			if (file_exists(cache_path) || (chart_use_native_files() && chart_native_exists(cache_path))) {
 				var sc = sprite_add(cache_path, 0, false, false, 0, 0);
 				if (asset_sprite_valid(sc)) then base_spr = sc;
 				else {
@@ -787,37 +826,43 @@ function Phigros() constructor { // 仅仅结构
 				};
 			};
 			if (file_exists(cache_path)) then file_delete(cache_path);
-			if (os_type == os_android && android_files_available() && android_files_exists(cache_path)) then android_files_delete(cache_path);
+			if (chart_use_native_files() && chart_native_exists(cache_path)) then chart_native_delete(cache_path);
 		};
 		
 		if(!asset_sprite_valid(base_spr)){
 			print($"[R-BG] sprite_add failed all strategies: {p}" , game.settings.enableDebug);
 			return;
 		};
-		// Always center origin on the loaded sprite first.
-		//sprite_set_offset(base_spr, sprite_get_width(base_spr) * 0.5, sprite_get_height(base_spr) * 0.5);
 
 		if(is_struct(game.settings) && bool(game.settings.enableBlur)){
-			// kawase_blur_sprite recreates sprite; request middle-center origin there.
-			var blurred = kawase_blur_sprite(base_spr, 1, 0, 10, SPRITE_OFFSET.MIDDLE_CENTER);
+			// Same call as oLoadAnimator/Step: file path, 10 iters, middle-center.
+			var blurred = kawase_blur_sprite(p, 1, 0, 10, SPRITE_OFFSET.MIDDLE_CENTER, [0, 0]);
+			if (!asset_sprite_valid(blurred) || blurred == base_spr) {
+				blurred = kawase_blur_sprite(base_spr, 1, 0, 10, SPRITE_OFFSET.MIDDLE_CENTER, [0, 0]);
+			};
 			if(asset_sprite_valid(blurred) && blurred != base_spr){
 				sprite_delete(base_spr);
 				game.bg = blurred;
+				self.bg_blurred = true;
 			}else{
 				game.bg = base_spr;
-				print("[R-BG] Blur failed, using raw sprite." , game.settings.enableDebug);
+				if (pls_is_gxgames()) {
+					self.bg_blur_pending = true;
+					print("[R-BG] Blur failed in Create; will retry with loading-screen path call." , game.settings.enableDebug);
+				} else {
+					print("[R-BG] Blur failed, using raw sprite." , game.settings.enableDebug);
+				};
 			};
 		}else{
 			game.bg = base_spr;
 		};
 
-		// Final guarantee: whatever sprite is used (raw or blurred) is center-origin.
-		//if (asset_sprite_valid(game.bg)) {
-			//var _bw = sprite_get_width(game.bg);
-			//var _bh = sprite_get_height(game.bg);
-			//sprite_set_offset(game.bg, _bw * 0.5, _bh * 0.5);
-			//print($"[R-BG] origin=({sprite_get_xoffset(game.bg)}, {sprite_get_yoffset(game.bg)}) size={_bw}x{_bh}" , game.settings.enableDebug);
-		//};
+		if (asset_sprite_valid(game.bg)) {
+			var _bw = sprite_get_width(game.bg);
+			var _bh = sprite_get_height(game.bg);
+			sprite_set_offset(game.bg, _bw * 0.5, _bh * 0.5);
+			print($"[R-BG] origin=({sprite_get_xoffset(game.bg)}, {sprite_get_yoffset(game.bg)}) size={_bw}x{_bh}" , game.settings.enableDebug);
+		};
 		print($"[R-BG] {asset_sprite_valid(game.bg) ? "Done." : "Failed."} path={p} type={typeof(game.bg)}" , game.settings.enableDebug);
 	});
 
@@ -836,7 +881,7 @@ function Phigros() constructor { // 仅仅结构
 			ini_write_string("Resource" , "note.hold.head" , $"{working_directory}resource/hold_head.png");
 			ini_write_string("Resource" , "note.hold.body" , $"{working_directory}resource/hold_body.png");
 			ini_write_string("Resource" , "note.hold.end" , $"{working_directory}resource/hold_end.png");
-			ini_write_string("Resource" , "font.ui" , $"{working_directory}resource/saira.ttf");
+			ini_write_string("Resource" , "font.ui" , pls_bundled_font_path());
 			ini_write_string("Resource" , "effc.hit" , $"{working_directory}resource/effect.png");
 			
 			// Settings
@@ -860,7 +905,7 @@ function Phigros() constructor { // 仅仅结构
 		self.res_path[$ "note.hold.head"] = (ini_read_string("Resource" , "note.hold.head" , $"{working_directory}resource/hold_head.png"));
 		self.res_path[$ "note.hold.body"] = (ini_read_string("Resource" , "note.hold.body" , $"{working_directory}resource/hold_body.png"));
 		self.res_path[$ "note.hold.end"] = (ini_read_string("Resource" , "note.hold.end" , $"{working_directory}resource/hold_end.png"));
-		self.res_path[$ "font.ui"] = (ini_read_string("Resource" , "font.ui" , $"{working_directory}resource/saira.ttf"));
+		self.res_path[$ "font.ui"] = (ini_read_string("Resource" , "font.ui" , pls_bundled_font_path()));
 		self.res_path[$ "effc.hit"] = (ini_read_string("Resource" , "effc.hit" , $"{working_directory}resource/effect.png"));
 		
 		///
@@ -931,7 +976,7 @@ function Phigros() constructor { // 仅仅结构
 	//				break;
 					
 	//				case "font":
-	//					game.font = (font_add(self.res_path[$ name[i]] , 25 , false , false , 32, 255));
+	//					game.font = (pls_font_add(self.res_path[$ name[i]] , 25 , false , false , -infinity, infinity));
 	//				break;
 					
 	//				case "effc":
@@ -950,9 +995,7 @@ function Phigros() constructor { // 仅仅结构
 	///@desc 资源管理器
 	static Resource = (func(){
 		if(!asset_font_valid(self.font)){
-			font_add_enable_aa(true);
-			self.font = (font_add($"{working_directory}resource/saira.ttf" , 47 , true , false , 32 , 255));
-			if(asset_font_valid(self.font)) then font_enable_sdf(self.font , true);
+			self.font = (pls_ui_font_add(47));
 		};
 		self.Configs();
 		if (variable_global_exists("render_mode") && global.render_mode) {
@@ -976,10 +1019,15 @@ function Phigros() constructor { // 仅仅结构
 	
 	///@desc 清理
 	static Clean = (func(full = false){
-		if(asset_sprite_valid(self.bg)){
+		if(asset_sprite_valid(self.bg) && self.bg != chart_blur_kept()){
 			sprite_delete(self.bg);	
 		};
 		self.bg = -1;
+		self.bg_source_path = "";
+		self.bg_blurred = false;
+		self.bg_blur_pending = false;
+		self.bg_blur_tries = 0;
+		chart_blur_release();
 
 		// line.csv textures are created dynamically and are not GameMaker assets.
 		var texture_names = (struct_get_names(self.TextureGroup));
@@ -1440,6 +1488,9 @@ function rpe_play_hitsound(_default_sound, _custom_fmod_sound = -1, _custom_path
 	if (variable_global_exists("render_mode") && global.render_mode) {
 		return render_play_hitsound(_default_sound, _custom_path);
 	};
+	if (media_use_gx()) {
+		return render_play_hitsound(_default_sound, _custom_path);
+	};
 	if (_custom_fmod_sound > 0 && instance_exists(oMedia)) {
 		var _media = instance_find(oMedia, 0);
 		if (_media.track > 0) then fmod_system_select(_media.track);
@@ -1601,7 +1652,7 @@ function RPE() constructor{
 					};
 				};
 
-				var loaded_font = font_add(font_source, 47, false, false, -infinity, infinity);
+				var loaded_font = pls_font_add(font_source, 47, false, false, -infinity, infinity);
 				self.Fonts[$ font_name] = loaded_font;
 				if (loaded_font == -1) {
 					show_debug_message($"[RPEFont] Failed to load font \"{font_name}\" from \"{font_source}\"");
@@ -2144,7 +2195,7 @@ function PEC() constructor{
 	///@desc 读取器
 	static Reader = (func(_chart){
 		var f = (string_length(_chart) ? _chart : ($"{working_directory}chart/Chart_IN.json")),
-			handle = (file_text_open_read(f));
+			handle = (file_text_open_read(chart_file_readable_path(f)));
 		var cl = false;
 		
         // idk

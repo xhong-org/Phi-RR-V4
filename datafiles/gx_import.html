@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>导入谱面包</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0a0e18; color: #e8eefc; font-family: sans-serif; }
+    body { display: flex; align-items: center; justify-content: center; }
+    .box {
+      width: min(92vw, 640px); min-height: 280px; border: 2px dashed #7aa2ff; border-radius: 16px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 32px; text-align: center; background: #141b2c;
+    }
+    .box.hot { background: #1c3a66; }
+    h1 { margin: 0 0 12px; font-size: 28px; }
+    p { margin: 6px 0; color: #b7c3da; }
+    button {
+      margin-top: 18px; padding: 12px 28px; font-size: 18px; color: #fff;
+      background: #3d6cb3; border: 0; border-radius: 8px; cursor: pointer;
+    }
+    #status { margin-top: 16px; min-height: 24px; color: #9ad7ff; }
+    #status.err { color: #ff8b8b; }
+  </style>
+</head>
+<body>
+  <div class="box" id="box">
+    <h1>把谱面包拖到这里</h1>
+    <p>Opera 会把游戏画布上的拖放变成下载页，所以请在这个标签页导入。</p>
+    <p>支持 .zip / .pez</p>
+    <button id="pick" type="button">选择文件</button>
+    <div id="status"></div>
+  </div>
+  <input id="file" type="file" accept=".zip,.pez,application/zip" hidden />
+  <script>
+    (function () {
+      var box = document.getElementById("box");
+      var status = document.getElementById("status");
+      var fileInput = document.getElementById("file");
+      var IMPORT_KEY = "latest";
+
+      function setStatus(text, err) {
+        status.textContent = text || "";
+        status.className = err ? "err" : "";
+      }
+
+      function isPackage(name) {
+        name = String(name || "").toLowerCase();
+        return name.slice(-4) === ".zip" || name.slice(-4) === ".pez";
+      }
+
+      function safeName(name) {
+        var src = String(name || "chart.zip");
+        var out = src.replace(/[^\w.\-]+/g, "_");
+        if (!isPackage(out)) out += ".zip";
+        return out;
+      }
+
+      function getGameWindow() {
+        if (window.opener && window.opener !== window) return window.opener;
+        if (window.parent && window.parent !== window) return window.parent;
+        return null;
+      }
+
+      function getFS(win) {
+        if (!win) return null;
+        return win.FS || (win.Module && win.Module.FS) || (win.k && win.k.FS) || null;
+      }
+
+      function writeFS(bytes, name) {
+        var win = getGameWindow();
+        var fs = getFS(win);
+        if (!fs || typeof fs.writeFile !== "function") return false;
+        var paths = [
+          "/_savedata/charts/" + name,
+          "charts/" + name
+        ];
+        var readyPaths = [
+          "/_savedata/charts/.pls_ready",
+          "charts/.pls_ready"
+        ];
+        for (var i = 0; i < paths.length; i++) {
+          try {
+            var folder = paths[i].replace(/\/[^/]+$/, "");
+            if (folder && typeof fs.mkdirTree === "function") {
+              try { fs.mkdirTree(folder); } catch (e1) {}
+            }
+            fs.writeFile(paths[i], bytes);
+            fs.writeFile(readyPaths[i], name);
+            return true;
+          } catch (e2) {}
+        }
+        return false;
+      }
+
+      function idbPut(name, bytes) {
+        return new Promise(function (resolve, reject) {
+          var req = indexedDB.open("pls-gx-import", 1);
+          req.onupgradeneeded = function () {
+            if (!req.result.objectStoreNames.contains("files")) {
+              req.result.createObjectStore("files");
+            }
+          };
+          req.onsuccess = function () {
+            var tx = req.result.transaction("files", "readwrite");
+            tx.objectStore("files").put({ name: name, bytes: bytes }, IMPORT_KEY);
+            tx.oncomplete = function () { resolve(true); };
+            tx.onerror = reject;
+          };
+          req.onerror = reject;
+        });
+      }
+
+      function gameRunnerUrl(name) {
+        var win = getGameWindow();
+        var href = "";
+        try { if (win && win.location) href = win.location.href; } catch (e1) {}
+        if (!href) href = document.referrer || window.location.href;
+        try {
+          var u = new URL(href, window.location.href);
+          if (u.pathname.toLowerCase().indexOf("gx_import.html") >= 0) {
+            u.pathname = u.pathname.replace(/gx_import\.html/i, "runner.html");
+          }
+          u.searchParams.set("pls_chart", name);
+          u.hash = "";
+          return u.toString();
+        } catch (e2) {
+          return "runner.html?pls_chart=" + encodeURIComponent(name);
+        }
+      }
+
+      function notifyGame(name) {
+        try {
+          var ch = new BroadcastChannel("pls-gx-import");
+          ch.postMessage({ ready: 1, name: name });
+          ch.close();
+        } catch (e1) {}
+        try { localStorage.setItem("pls_gx_import_ready", name); } catch (e2) {}
+        var win = getGameWindow();
+        var next = gameRunnerUrl(name);
+        if (win && win !== window) {
+          try { win.postMessage({ plsGxImport: 1, name: name }, "*"); } catch (e3) {}
+          try { if (typeof win.i_gx_drop_unpause === "function") win.i_gx_drop_unpause(); } catch (e4) {}
+          try { win.location.href = next; } catch (e5) {}
+          try { window.close(); } catch (e6) {}
+          return;
+        }
+        window.location.href = next;
+      }
+
+      function takeFile(file) {
+        if (!file) { setStatus("没有检测到文件。", true); return; }
+        if (!isPackage(file.name)) { setStatus("请选择 .zip / .pez 谱面包。", true); return; }
+        var name = safeName(file.name);
+        setStatus("正在读取 " + name + " ...");
+        file.arrayBuffer().then(function (buf) {
+          var bytes = new Uint8Array(buf);
+          if (!bytes.length) { setStatus("文件是空的。", true); return; }
+          var wrote = writeFS(bytes, name);
+          return idbPut(name, bytes).then(function () {
+            notifyGame(name);
+            setStatus(wrote ? "已导入，正在返回游戏..." : "已保存，请切回游戏标签页。");
+            setTimeout(function () {
+              try { window.close(); } catch (e) {}
+            }, 400);
+          });
+        }).catch(function (err) {
+          setStatus((err && err.message) ? err.message : "读取失败。", true);
+        });
+      }
+
+      function prevent(ev) {
+        ev.preventDefault();
+        if (ev.dataTransfer) {
+          try { ev.dataTransfer.dropEffect = "copy"; } catch (e) {}
+        }
+      }
+
+      document.addEventListener("dragover", prevent);
+      document.addEventListener("drop", function (ev) {
+        prevent(ev);
+        takeFile(ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0]);
+      });
+      box.addEventListener("dragenter", function (ev) { prevent(ev); box.classList.add("hot"); });
+      box.addEventListener("dragleave", function () { box.classList.remove("hot"); });
+      document.getElementById("pick").addEventListener("click", function () { fileInput.click(); });
+      fileInput.addEventListener("change", function () {
+        if (fileInput.files && fileInput.files[0]) takeFile(fileInput.files[0]);
+        fileInput.value = "";
+      });
+    })();
+  </script>
+</body>
+</html>

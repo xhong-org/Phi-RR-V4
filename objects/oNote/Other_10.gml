@@ -60,6 +60,10 @@ else hitTime2 = (abs(game.settings.judgeOffset) >= 30000 ? random_range(-201, 20
 
 judgeTime = (self.time + hitTime2 * 0.001 * _beat_per_second);
 judgeRealTime = (judgeTime * _seconds_per_beat);
-if((realHitTime * 1000000) <= oMedia.length) then maxcombo ++;
+// GX audio length is often still -1/0 here (JS decode / PCM HTTP). Treat
+// unknown length as "count this note" so official score is not 0/0 = NaN.
+var _media_len = 0;
+if (instance_exists(oMedia) && is_real(oMedia.length) && is_finite(oMedia.length) && oMedia.length > 0) then _media_len = oMedia.length;
+if (_media_len <= 0 || (realHitTime * 1000000) <= _media_len) then maxcombo ++;
 
 inition = true;

@@ -1,4 +1,8 @@
 /// @description Sync FFVideos playback to the RPE chart clock.
+if (!video_backend_ready && pls_is_gxgames() && array_length(videos) > 0) {
+	video_backend_ready = gx_video_available();
+	if (video_backend_ready) then print("[GXVideo] HTMLVideo backend ready");
+};
 var chart_offset = chart_extra_offset_seconds();
 video_chart_time = game.__time[1] - chart_offset;
 if (video_chart_time < video_last_chart_time - 0.01) {
@@ -20,17 +24,19 @@ if (desired_index != video_index) {
 	video_handle = -1;
 	video_index = desired_index;
 	video_error_logged = false;
-	if (video_backend_ready && video_index >= 0) {
-		var video_path = chart_file_readable_path(videos[video_index].path);
-		var video_exists = chart_file_exists_any(video_path) || file_exists(video_path);
-		print($"[FFVideos] Open request: path={video_path}, exists={video_exists}");
-		if (video_exists) {
-			video_handle = ffvideos_ext_open(video_path);
-			print($"[FFVideos] Open result: handle={video_handle}, error={ffvideos_ext_get_error(video_handle)}");
-			if (video_handle >= 0) then ffvideos_ext_set_volume(video_handle, 0);
-		} else {
-			print($"[FFVideos] Video file missing: {video_path}");
-		};
+};
+if (video_backend_ready && video_index >= 0 && video_handle < 0 && !video_error_logged) {
+	var video_path = chart_file_readable_path(videos[video_index].path);
+	var video_exists = gx_media_source_exists(video_path) || gx_media_source_exists(videos[video_index].path);
+	print($"[FFVideos] Open request: path={video_path}, exists={video_exists}, host={gx_media_host_path_for(video_path)}");
+	if (video_exists) {
+		video_handle = ffvideos_ext_open(video_path);
+		print($"[FFVideos] Open result: handle={video_handle}, error={ffvideos_ext_get_error(video_handle)}");
+		if (video_handle >= 0) then ffvideos_ext_set_volume(video_handle, 0);
+		else video_error_logged = true;
+	} else {
+		print($"[FFVideos] Video file missing: {video_path}");
+		video_error_logged = true;
 	};
 };
 

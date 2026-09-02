@@ -8,12 +8,7 @@ done = false;
 failed = false;
 message = "Preparing...";
 detail = "";
-ui_font = -1;
-if (file_exists(working_directory + "resource/saira.ttf")) {
-        font_add_enable_aa(true);
-        ui_font = font_add(working_directory + "resource/saira.ttf", 28, true, false, -infinity, infinity);
-        if (font_exists(ui_font)) then font_enable_sdf(ui_font, true);
-};
+ui_font = pls_ui_font_add(28);
 
 var session = chart_session_ensure();
 source_path = session.source_path;

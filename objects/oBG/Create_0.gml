@@ -11,5 +11,8 @@ if (!(variable_global_exists("game") && is_struct(game) && asset_sprite_valid(ga
         exit;
 };
 
-// Keep sprite_add default origin (top-left).
-// Forcing center origin here re-breaks cover size (same as Background() sprite_set_offset).
+if (asset_sprite_valid(game.bg)) {
+        var _bw = sprite_get_width(game.bg);
+        var _bh = sprite_get_height(game.bg);
+        if (_bw > 0 && _bh > 0) then sprite_set_offset(game.bg, _bw * 0.5, _bh * 0.5);
+};

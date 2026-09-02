@@ -103,7 +103,7 @@ if (_mask_right < room_width) {
     chart_draw_background(false);
 };
 gpu_set_scissor(0, 0, room_width, room_height);
-draw_flush();
+pls_draw_flush();
 if (!video_renderer_capture()) {
     render_status = "GPU capture stopped unexpectedly";
     print($"[Renderer] GPU capture failed: {video_renderer_get_error()}");

@@ -6,6 +6,10 @@ function LogAndroidNative() {
 	return os_type == os_android;
 }
 
+function LogNativeFiles() {
+	return LogAndroidNative() || html5_files_available();
+}
+
 function LogNormalizeDir(_dir) {
 	var dir = string_replace_all(string(_dir), "\\", "/");
 	if (!string_length(dir)) then return "";
@@ -20,9 +24,9 @@ function LogStamp() {
 function LogEnsureDir(_dir) {
 	var dir = LogNormalizeDir(_dir);
 	if (!string_length(dir)) then return "";
-	if (LogAndroidNative()) {
-		if (i_android_files_mkdir(dir)) then return dir;
-		show_debug_message($"[Log] Native mkdir failed: {dir} {i_android_files_error()}");
+	if (LogNativeFiles()) {
+		if (chart_native_mkdir(dir)) then return dir;
+		show_debug_message($"[Log] Native mkdir failed: {dir} {chart_native_error()}");
 		return "";
 	};
 
@@ -59,14 +63,14 @@ function LogCandidateDirs() {
 }
 
 function LogPathExists(_path) {
-	if (LogAndroidNative()) then return i_android_files_exists(_path);
+	if (LogNativeFiles()) then return chart_native_exists(_path);
 	return file_exists(_path);
 }
 
 function LogWriteNew(_path, _text) {
-	if (LogAndroidNative()) {
-		if (i_android_files_write_text(_path, _text)) then return true;
-		show_debug_message($"[Log] Native write failed: {_path} {i_android_files_error()}");
+	if (LogNativeFiles()) {
+		if (chart_native_write_text(_path, _text)) then return true;
+		show_debug_message($"[Log] Native write failed: {_path} {chart_native_error()}");
 		return false;
 	};
 	try {
@@ -85,9 +89,9 @@ function LogWriteNew(_path, _text) {
 }
 
 function LogAppendLine(_path, _text) {
-	if (LogAndroidNative()) {
-		if (i_android_files_append_text(_path, _text)) then return true;
-		show_debug_message($"[Log] Native append failed: {_path} {i_android_files_error()}");
+	if (LogNativeFiles()) {
+		if (chart_native_append_text(_path, _text)) then return true;
+		show_debug_message($"[Log] Native append failed: {_path} {chart_native_error()}");
 		return false;
 	};
 	try {
@@ -161,6 +165,8 @@ function LogOutputFile(str, isOutputFile = true) {
 	var message = string(str);
 	show_debug_message(message);
 	if (!isOutputFile) then return;
+	// GX IDBFS appends stall more the longer the session log grows.
+	if (pls_is_gxgames()) then return;
 
 	var path = LogGetPath();
 	if (!string_length(path)) then return;

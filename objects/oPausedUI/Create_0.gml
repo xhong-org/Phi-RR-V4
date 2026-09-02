@@ -27,7 +27,7 @@ paused_ui_draw = function() {
         ? (retry_mode == 2 ? 0.6 * (1 - _countdown_progress) : 0.6)
         : (0.6 * _fade);
 
-    draw_flush();
+    pls_draw_flush();
     gpu_set_blendmode(bm_normal);
     draw_set_colour(c_white);
     draw_set_alpha(1);

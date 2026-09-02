@@ -14,7 +14,14 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 	start_height = 768;
 	room_width = global.render_width;
 	room_height = global.render_height;
+} else if (pls_is_gxgames()) {
+	room_width = pls_window_width();
+	room_height = pls_window_height();
 };
+gx_last_room_w = room_width;
+gx_last_room_h = room_height;
+gx_gui_w = -1;
+gx_gui_h = -1;
 
 // Global UI/world scale. Other objects should read this, not recompute window scale.
 globalvar global_scales;

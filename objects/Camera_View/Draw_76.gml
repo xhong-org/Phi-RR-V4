@@ -6,9 +6,9 @@ if (application_surface_is_enabled()) {
 	if (surface_exists(application_surface)) {
 		var _sw = (max(1, room_width)), _sh = (max(1, room_height));
 		if (
-			((surface_get_width(application_surface)) != _sw)
+			abs(surface_get_width(application_surface) - _sw) > 2
 		||
-			((surface_get_height(application_surface)) != _sh)
+			abs(surface_get_height(application_surface) - _sh) > 2
 		) {
 			surface_resize(application_surface, _sw, _sh);
 		};

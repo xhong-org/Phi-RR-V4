@@ -6,7 +6,9 @@
 /// @param {float} H 窗口高度
 /// @returns {array} [screen_x, screen_y] 转换后的屏幕坐标
 
-function get_window_pos_scale(X, Y, W = window_get_width(), H = window_get_height()) {
+function get_window_pos_scale(X, Y, W = -1, H = -1) {
+    if (!is_real(W) || W <= 0) then W = pls_window_width();
+    if (!is_real(H) || H <= 0) then H = pls_window_height();
     // 计算水平和垂直的缩放比例
     var scale_x = (W / 1350.0);  // 1350 = 675 * 2
     var scale_y = (H / 900.0);   // 900 = 450 * 2

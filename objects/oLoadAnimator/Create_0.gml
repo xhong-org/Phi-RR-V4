@@ -57,12 +57,7 @@ if (file_exists(_tips_path)) {
 if (array_length(tips) == 0) then array_push(tips, "Tips: Hello World");
 tip_index = irandom(array_length(tips) - 1);
 
-var _font_path = working_directory + "resource/saira.ttf";
-if (file_exists(_font_path)) {
-    font_add_enable_aa(true);
-    ui_font = font_add(_font_path, 35, false, false, -infinity, infinity);
-    //if (font_exists(ui_font)) then font_enable_sdf(ui_font, true);
-};
+ui_font = pls_ui_font_add(35, false, false, -infinity, infinity, false);
 // Cache the loading box dimensions once. Draw must only animate its scale;
 // recalculating the base width every frame can make the box drift when draw
 // state or the UI scale changes.
@@ -131,8 +126,8 @@ function sprite_parallelogram_fixed(target_spr) {
     var src_h = sprite_get_height(target_spr);
     if (src_w <= 0 || src_h <= 0) then return -1;
 
-    var box_w = 1920;
-    var box_h = 1080;
+    var box_w = pls_is_gxgames() ? 960 : 1920;
+    var box_h = pls_is_gxgames() ? 540 : 1080;
     var cover = max(box_w / src_w, box_h / src_h);
     var plate = surface_create(box_w, box_h);
     if (!surface_exists(plate)) then return -1;

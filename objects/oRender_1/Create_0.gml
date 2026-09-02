@@ -2,7 +2,7 @@
 window_set_caption($"{GAME_NAME}");
 // Draw after the chart composition so the aspect mask is final.
 depth = DEPTH.HEF + 1;
-gml_release_mode(false);
+if (os_browser == browser_not_a_browser) then gml_release_mode(false);
 globalvar game , game_1 , _eff_c , combo , maxcombo , rpe_bpm , fpsReal , PhiTime;
 bpm_count = 0;
 rpe_bpm = 140;
@@ -109,7 +109,7 @@ if (!struct_exists(game_1, "line_list") || !is_array(game_1.line_list)) {
 
 // Hit effect manager (same as oRender; required by judgeCalc -> _eff_c)
 _eff_c = (function(){ return; });
-if (game.settings.useOldFX) {
+if (game.settings.useOldFX && !pls_is_gxgames()) {
 	instance_create_depth(0, 0, 0, oEffect);
 	_eff_c = method(self, function(_x, _y, color = #ffeca0) {
 		if (!game.settings.enableHitEffect) then return;
@@ -206,3 +206,7 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 // lines: activate is deferred and would skip the next event_perform / Step.
 chart_idle_behind_loading();
 global.loading_render_ready = true;
+chart_blur_bind_game(false);
+if (pls_is_gxgames()) {
+	chart_loading_animation_finish();
+};

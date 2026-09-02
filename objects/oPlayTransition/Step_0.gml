@@ -92,12 +92,37 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 switch (state) {
 	case PLAY_TRANSITION_STATE.WAIT_MEDIA:
 		game.paused = true;
-		if (!instance_exists(oMedia)) then break;
+		if (!instance_exists(oMedia)) {
+			state = PLAY_TRANSITION_STATE.INTRO_DELAY;
+			state_started_at = _now;
+			break;
+		};
 		var _media = instance_find(oMedia, 0);
+		var _pcm_pending = variable_instance_exists(_media, "gx_pcm_id") && is_real(_media.gx_pcm_id) && _media.gx_pcm_id >= 0;
+		var _success_value = variable_instance_exists(_media, "success") ? variable_instance_get(_media, "success") : false;
+		var _waiting_pcm = _pcm_pending || is_undefined(_success_value);
+		if (pls_is_gxgames() && _waiting_pcm) {
+			if (_elapsed < 45000000) then break;
+			print("[L-Sound] GX WAIT_MEDIA PCM timeout; continuing without forcing audio success.");
+			if (is_undefined(_success_value)) then _media[$ "success"] = false;
+			_media.gx_pcm_id = -1;
+			state = PLAY_TRANSITION_STATE.INTRO_DELAY;
+			state_started_at = _now;
+			break;
+		};
 		if (!variable_instance_exists(_media, "isExists")
 			|| !variable_instance_exists(_media, "success")) then break;
-		if (!bool(variable_instance_get(_media, "isExists"))
-			|| !bool(variable_instance_get(_media, "success"))) then break;
+		if (!bool(variable_instance_get(_media, "isExists"))) {
+			state = PLAY_TRANSITION_STATE.INTRO_DELAY;
+			state_started_at = _now;
+			break;
+		};
+		if (is_undefined(variable_instance_get(_media, "success"))) then break;
+		if (!bool(variable_instance_get(_media, "success"))) {
+			state = PLAY_TRANSITION_STATE.INTRO_DELAY;
+			state_started_at = _now;
+			break;
+		};
 		state = PLAY_TRANSITION_STATE.INTRO_DELAY;
 		state_started_at = _now;
 	break;

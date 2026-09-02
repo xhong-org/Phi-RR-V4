@@ -2,7 +2,7 @@
 if (variable_global_exists("chart_surface_active") && chart_surface_active) {
 	var _old_colour = draw_get_colour();
 	var _old_alpha = draw_get_alpha();
-	draw_flush();
+	pls_draw_flush();
 	gpu_set_blendmode(bm_normal);
 	draw_set_colour(c_white);
 	draw_set_alpha(1);

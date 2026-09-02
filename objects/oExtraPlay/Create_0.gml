@@ -11,14 +11,19 @@ video_error_logged = false;
 video_os_paused = false;
 effect_controller = -1;
 
-var extra_path = chart_path_join(InChartPath, "extra.json");
-if (variable_global_exists("chart_session") && is_struct(global.chart_session)
-	&& is_string(global.chart_session.extra_file) && string_length(global.chart_session.extra_file)) {
-	extra_path = chart_path_join(InChartPath, global.chart_session.extra_file);
+var extra_path = "";
+var extra_allowed = true;
+if (variable_global_exists("chart_session") && is_struct(global.chart_session) && global.chart_session.ready) {
+	if (is_string(global.chart_session.extra_file) && string_length(global.chart_session.extra_file)) {
+		extra_path = chart_path_join(InChartPath, global.chart_session.extra_file);
+	} else {
+		extra_allowed = false;
+	};
 };
-var extra_root = chart_path_dir(extra_path);
+if (extra_allowed && !string_length(extra_path)) then extra_path = chart_path_join(InChartPath, "extra.json");
+var extra_root = string_length(extra_path) ? chart_path_dir(extra_path) : InChartPath;
 
-if (chart_file_exists_any(extra_path)) {
+if (string_length(extra_path) && chart_file_exists_any(extra_path)) {
 	if (os_type == os_windows && extension_exists("FFVideos")) {
 		var video_d3d_info = os_get_info();
 		if (ds_exists(video_d3d_info, ds_type_map)
@@ -32,11 +37,17 @@ if (chart_file_exists_any(extra_path)) {
 	} else if (os_type == os_android) {
 		video_backend_ready = ffvideos_ext_initialize(pointer_null, pointer_null) == 3;
 		if (video_backend_ready) then print("[FFVideos] Android MediaCodec backend ready");
+	} else if (pls_is_gxgames()) {
+		video_backend_ready = ffvideos_ext_initialize(pointer_null, pointer_null) == 3;
+		print($"[GXVideo] ping={video_backend_ready ? 1 : 0} error={ffvideos_ext_get_error(0)}");
+		if (video_backend_ready) then print("[GXVideo] HTMLVideo backend ready");
+		else print("[GXVideo] HTMLVideo backend waiting; Step will retry ping");
 	};
-	if (!video_backend_ready) then print($"[FFVideos] Initialization failed: {ffvideos_ext_get_error(0)}");
+	if (!video_backend_ready && !pls_is_gxgames()) then print($"[FFVideos] Initialization failed: {ffvideos_ext_get_error(0)}");
 };
 
 var read_extra_text = function(path) {
+	if (!is_string(path) || !string_length(path)) then return "";
 	var native_text = chart_read_text_file(path, -1);
 	if (is_string(native_text) && string_length(native_text)) then return native_text;
 	var handle = file_text_open_read(chart_file_readable_path(path));
@@ -47,8 +58,11 @@ var read_extra_text = function(path) {
 		buffer_write(temp, buffer_text, "\n");
 	};
 	file_text_close(handle);
-	buffer_seek(temp, buffer_seek_start, 0);
-	var text = buffer_read(temp, buffer_text);
+	var text = "";
+	if (buffer_tell(temp) > 0) {
+		buffer_seek(temp, buffer_seek_start, 0);
+		text = buffer_read(temp, buffer_text);
+	};
 	buffer_delete(temp);
 	return is_string(text) ? text : "";
 };
@@ -62,7 +76,10 @@ extra_beat_value = function(value, fallback = 0) {
 	return fallback;
 };
 
-var extra_text = read_extra_text(extra_path);
+var extra_text = "";
+if (extra_allowed && string_length(extra_path) && chart_file_exists_any(extra_path)) {
+	extra_text = read_extra_text(extra_path);
+};
 var extra = undefined;
 if (string_length(extra_text)) {
 	try { extra = json_parse(extra_text); } catch (error) { delete(error); };
@@ -165,7 +182,9 @@ if (is_struct(extra)) {
 	array_sort(videos, function(a, b) { return sign(a.startTime - b.startTime); });
 	print($"[FFVideos] Parsed videos={array_length(videos)}, extra={extra_path}");
 	for (var video_log_i = 0; video_log_i < array_length(videos); video_log_i++) {
-		print($"[FFVideos] Video[{video_log_i}] path={videos[video_log_i].path}, exists={chart_file_exists_any(videos[video_log_i].path)}, start={videos[video_log_i].startTime}");
+		var video_log_path = videos[video_log_i].path;
+		var video_log_host = gx_media_host_path_for(video_log_path);
+		print($"[FFVideos] Video[{video_log_i}] path={video_log_path}, exists={gx_media_source_exists(video_log_path)}, host={video_log_host}, start={videos[video_log_i].startTime}");
 	};
 	var parsed_effects = rpe_effect_parse(extra, extra_bpm_points);
 	if (array_length(parsed_effects.local) > 0 || array_length(parsed_effects.global) > 0) {
@@ -220,7 +239,7 @@ draw_attached_video = function(line_instance) {
 	var draw_y = line_instance.y - draw_height * 0.5;
 	var alpha = clamp(real(video.alpha.value), 0, 1);
 	var dim = clamp(real(video.dim.value), 0, 1);
-	draw_flush();
+	pls_draw_flush();
 	ffvideos_ext_draw(video_handle,
 		draw_x / room_width, draw_y / room_height,
 		(draw_x + draw_width) / room_width, (draw_y + draw_height) / room_height,

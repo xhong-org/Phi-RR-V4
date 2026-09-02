@@ -12,6 +12,10 @@ function unicode_zip_backend_android() {
         return (os_type == os_android);
 }
 
+function unicode_zip_backend_gx() {
+        return pls_is_gxgames();
+}
+
 function unicode_zip_wire_string(buf, text) {
         var value = is_string(text) ? text : string(text);
         buffer_write(buf, buffer_u32, string_byte_length(value));
@@ -32,16 +36,22 @@ function unicode_zip_wire_call(android_fn, windows_fn, pack) {
 }
 
 function unicode_zip_backend_available() {
+        if (unicode_zip_backend_gx()) then return gx_zip_available();
         if (unicode_zip_backend_android()) then return unicode_zip_android_available();
         return unicode_zip_available();
 }
 
 function unicode_zip_backend_detect(archive_path) {
+        if (unicode_zip_backend_gx()) then return gx_zip_detect(archive_path);
         if (unicode_zip_backend_android()) then return unicode_zip_android_detect(archive_path);
         return unicode_zip_detect(archive_path);
 }
 
 function unicode_zip_backend_extract(archive_path, output_directory, overwrite, clean_output, password = "") {
+        if (unicode_zip_backend_gx()) {
+                if (string_length(password)) then return false;
+                return gx_zip_extract(archive_path, output_directory, overwrite, clean_output);
+        };
         if (!string_length(password)) {
                 if (unicode_zip_backend_android()) {
                         return unicode_zip_android_extract(archive_path, output_directory, overwrite, clean_output);
@@ -59,6 +69,10 @@ function unicode_zip_backend_extract(archive_path, output_directory, overwrite, 
 }
 
 function unicode_zip_backend_compress(source_path, archive_path, include_root, overwrite, password = "", format = "zip") {
+        if (unicode_zip_backend_gx()) {
+                if (string_length(password) || (format != "zip" && format != "")) then return false;
+                return gx_zip_compress(source_path, archive_path, include_root, overwrite);
+        };
         if (!string_length(password) && (format == "zip" || format == "")) {
                 if (unicode_zip_backend_android()) {
                         return unicode_zip_android_compress(source_path, archive_path, include_root, overwrite);
@@ -77,6 +91,10 @@ function unicode_zip_backend_compress(source_path, archive_path, include_root, o
 }
 
 function unicode_zip_backend_extract_async(archive_path, output_directory, overwrite, clean_output, password = "") {
+        if (unicode_zip_backend_gx()) {
+                if (string_length(password)) then return -1;
+                return gx_zip_extract_async(archive_path, output_directory, overwrite, clean_output);
+        };
         if (!string_length(password)) {
                 if (unicode_zip_backend_android()) {
                         return unicode_zip_android_extract_async(archive_path, output_directory, overwrite, clean_output);
@@ -94,6 +112,10 @@ function unicode_zip_backend_extract_async(archive_path, output_directory, overw
 }
 
 function unicode_zip_backend_compress_async(source_path, archive_path, include_root, overwrite, password = "", format = "zip") {
+        if (unicode_zip_backend_gx()) {
+                if (string_length(password) || (format != "zip" && format != "")) then return -1;
+                return gx_zip_compress_async(source_path, archive_path, include_root, overwrite);
+        };
         if (!string_length(password) && (format == "zip" || format == "")) {
                 if (unicode_zip_backend_android()) {
                         return unicode_zip_android_compress_async(source_path, archive_path, include_root, overwrite);
@@ -112,31 +134,37 @@ function unicode_zip_backend_compress_async(source_path, archive_path, include_r
 }
 
 function unicode_zip_backend_task_status(task_id) {
+        if (unicode_zip_backend_gx()) then return gx_zip_task_status(task_id);
         if (unicode_zip_backend_android()) then return unicode_zip_android_task_status(task_id);
         return unicode_zip_task_status(task_id);
 }
 
 function unicode_zip_backend_task_exit_code(task_id) {
+        if (unicode_zip_backend_gx()) then return gx_zip_task_exit_code(task_id);
         if (unicode_zip_backend_android()) then return unicode_zip_android_task_exit_code(task_id);
         return unicode_zip_task_exit_code(task_id);
 }
 
 function unicode_zip_backend_task_error(task_id) {
+        if (unicode_zip_backend_gx()) then return gx_zip_task_error(task_id);
         if (unicode_zip_backend_android()) then return unicode_zip_android_task_error(task_id);
         return unicode_zip_task_error(task_id);
 }
 
 function unicode_zip_backend_task_cancel(task_id) {
+        if (unicode_zip_backend_gx()) then return gx_zip_task_cancel(task_id);
         if (unicode_zip_backend_android()) then return unicode_zip_android_task_cancel(task_id);
         return unicode_zip_task_cancel(task_id);
 }
 
 function unicode_zip_backend_task_release(task_id) {
+        if (unicode_zip_backend_gx()) then return gx_zip_task_release(task_id);
         if (unicode_zip_backend_android()) then return unicode_zip_android_task_release(task_id);
         return unicode_zip_task_release(task_id);
 }
 
 function unicode_zip_backend_last_error() {
+        if (unicode_zip_backend_gx()) then return gx_zip_last_error();
         if (unicode_zip_backend_android()) then return unicode_zip_android_last_error();
         return unicode_zip_last_error();
 }
@@ -154,8 +182,8 @@ function unicode_zip_task_finished(task_id) {
 }
 
 function chart_archive_size_bytes(path) {
-        if (os_type == os_android && android_files_available()) {
-                var native_size = android_files_size(path);
+        if (chart_use_native_files()) {
+                var native_size = chart_native_size(path);
                 if (native_size >= 0) then return native_size;
         };
         if (!file_exists(path)) then return -1;
@@ -168,8 +196,8 @@ function chart_archive_size_bytes(path) {
 
 function chart_path_exists_any(path) {
         if (file_exists(path) || directory_exists(path)) then return true;
-        if (os_type == os_android && android_files_available()) {
-                return android_files_exists(path) || android_files_is_dir(path);
+        if (chart_use_native_files()) {
+                return chart_native_exists(path) || chart_native_is_dir(path);
         };
         return false;
 }
@@ -188,9 +216,9 @@ function chart_session_zip_debug(tag, extra = "") {
         print($"[ChartSession][Unzip][{tag}] filename={chart_path_file_name(archive)} size={size} kind={kind}");
         print($"[ChartSession][Unzip][{tag}] output={output} output_exists={chart_path_exists_any(output)}");
         print($"[ChartSession][Unzip][{tag}] gm_exists={file_exists(archive)} native_available={unicode_zip_backend_available()} os={os_type}");
-        if (os_type == os_android && android_files_available()) {
-                print($"[ChartSession][Unzip][{tag}] native_exists={android_files_exists(archive)} native_is_dir={android_files_is_dir(output)}");
-                print($"[ChartSession][Unzip][{tag}] external={android_files_external_dir()} internal={android_files_internal_dir()}");
+        if (chart_use_native_files()) {
+                print($"[ChartSession][Unzip][{tag}] native_exists={chart_native_exists(archive)} native_is_dir={chart_native_is_dir(output)}");
+                print($"[ChartSession][Unzip][{tag}] external={chart_native_external_dir()}");
         };
         print($"[ChartSession][Unzip][{tag}] game_save_id={game_save_id} working_directory={working_directory}");
         if (string_length(last_error)) then print($"[ChartSession][Unzip][{tag}] last_error={last_error}");
@@ -205,10 +233,16 @@ function chart_session_zip_begin(zip_path) {
         session.from_zip = true;
 
         var track_path = chart_session_track_dir();
+        chart_session_remove_dir(track_path);
+        if (chart_use_native_files()) {
+                chart_native_mkdir(track_path);
+        } else {
+                directory_create(track_path);
+        };
         session.extract_dir = track_path;
         chart_session_zip_debug("begin");
 
-        if (!file_exists(zip_path) && !(os_type == os_android && android_files_available() && android_files_exists(zip_path))) {
+        if (!file_exists(zip_path) && !(chart_use_native_files() && chart_native_exists(zip_path))) {
                 print($"[ChartSession][Unzip][begin] FAIL archive missing: {zip_path}");
                 return chart_session_fail("Zip file does not exist.");
         };
@@ -231,6 +265,7 @@ function chart_session_zip_begin(zip_path) {
 }
 
 function chart_session_zip_finish(zip_path, track_path) {
+        if (pls_is_gxgames()) then gx_fs_materialize_extract(track_path);
         var root = chart_session_resolve_extract_root(track_path);
         print($"[ChartSession][Unzip][finish] using root={root}");
         return chart_session_build_from_dir(root, zip_path, true);

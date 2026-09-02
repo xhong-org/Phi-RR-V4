@@ -43,10 +43,15 @@ if (os_type == os_windows && external_extension_found) {
 	external_hlsl_ready = android_init_status == 3;
 	if (external_hlsl_ready) then print("[RPE Effect] External GLES backend initialized");
 	else print($"[RPE Effect] External GLES backend init failed: {rpe_ext_get_error()}");
+} else if (pls_is_gxgames()) {
+	var gx_init_status = rpe_ext_initialize(pointer_null, pointer_null);
+	print($"[RPE Effect] External GX status: init={gx_init_status}, state={rpe_ext_state()}");
+	external_hlsl_ready = gx_init_status == 3;
+	if (external_hlsl_ready) then print("[RPE Effect] External GX WebGL backend initialized");
+	else print($"[RPE Effect] External GX backend waiting; Step will retry ping ({rpe_ext_get_error()})");
 };
 
-var external_lists = [effects_local, effects_global];
-var external_uniforms_parse = function(source) {
+external_uniforms_parse = function(source) {
 	var result = {};
 	var source_lines = string_split(source, "\n");
 	for (var source_line_i = 0; source_line_i < array_length(source_lines); source_line_i++) {
@@ -91,71 +96,85 @@ var external_uniforms_parse = function(source) {
 	};
 	return result;
 };
-var external_pass_count = 0;
-for (var external_list_i = 0; external_list_i < array_length(external_lists); external_list_i++) {
-	var external_list = external_lists[external_list_i];
-	for (var external_i = 0; external_i < array_length(external_list); external_i++) {
-		var external_pass = external_list[external_i];
-		var external_is_hlsl = bool(external_pass[$ "externalHlsl"] ?? false);
-		var external_is_glsl = bool(external_pass[$ "externalGlsl"] ?? false);
-		if (!external_is_hlsl && !external_is_glsl) then continue;
-		external_pass_count++;
-		external_pass.externalHandle = -1;
-		external_pass.externalUniforms = {};
-		if (!external_hlsl_ready) {
-			print($"[RPE Effect] External pass skipped; backend unavailable: {external_pass.shaderName}");
-			continue;
-		};
-		var external_relative = string_delete(external_pass.shaderName, 1, 6);
-		if (struct_exists(external_hlsl_handles, external_relative)) {
-			external_pass.externalHandle = external_hlsl_handles[$ external_relative];
-			external_pass.externalUniforms = external_hlsl_uniforms[$ external_relative];
-			continue;
-		};
-		var external_full_path = chart_extra_asset_path(external_relative);
-		if (!file_exists(external_full_path)) {
-			print($"[RPE Effect] External shader file missing: {external_full_path}");
-			continue;
-		};
-		var external_file = file_text_open_read(external_full_path);
-		if (is_undefined(external_file) || external_file < 0) {
-			print($"[RPE Effect] External shader open failed: {external_full_path}");
-			continue;
-		};
-		var external_source = "";
-		while (!file_text_eof(external_file)) external_source += file_text_readln(external_file) + "\n";
-		file_text_close(external_file);
-		external_pass.externalUniforms = external_uniforms_parse(external_source);
-		if (external_is_glsl || rpe_ext_shader_android()) {
-			external_source = rpe_ext_translate(external_source, external_relative);
-			if (!string_length(external_source)) {
-				print($"[RPE Effect] Shader translate failed ({external_relative}): {rpe_ext_get_error()}");
+effect_compile_externals = function() {
+	var compile_pass_count = 0;
+	var compile_lists = [effects_local, effects_global];
+	for (var external_list_i = 0; external_list_i < array_length(compile_lists); external_list_i++) {
+		var external_list = compile_lists[external_list_i];
+		for (var external_i = 0; external_i < array_length(external_list); external_i++) {
+			var external_pass = external_list[external_i];
+			var external_is_hlsl = bool(external_pass[$ "externalHlsl"] ?? false);
+			var external_is_glsl = bool(external_pass[$ "externalGlsl"] ?? false);
+			if (!external_is_hlsl && !external_is_glsl) then continue;
+			compile_pass_count++;
+			if (real(external_pass[$ "externalHandle"] ?? -1) > 0) then continue;
+			external_pass.externalHandle = -1;
+			external_pass.externalUniforms = {};
+			if (!external_hlsl_ready) {
+				print($"[RPE Effect] External pass skipped; backend unavailable: {external_pass.shaderName}");
 				continue;
 			};
-			var translated_uniforms = external_uniforms_parse(external_source);
-			var translated_names = struct_get_names(translated_uniforms);
-			for (var translated_i = 0; translated_i < array_length(translated_names); translated_i++) {
-				var translated_name = translated_names[translated_i];
-				external_pass.externalUniforms[$ translated_name] = translated_uniforms[$ translated_name];
+			var external_relative = string_delete(external_pass.shaderName, 1, 6);
+			if (struct_exists(external_hlsl_handles, external_relative)) {
+				external_pass.externalHandle = external_hlsl_handles[$ external_relative];
+				external_pass.externalUniforms = external_hlsl_uniforms[$ external_relative];
+				continue;
 			};
-			if (rpe_ext_shader_android()) {
-				print($"[RPE Effect] {(external_is_hlsl ? "HLSL->GLSL ES" : "GLSL ES")} ready: {external_relative} -> {string_length(external_source)} chars");
-			} else {
-				print($"[RPE Effect] GLSL translated: {external_relative} -> {string_length(external_source)} HLSL chars");
+			var external_full_path = chart_extra_asset_path(external_relative);
+			if (!chart_file_exists_any(external_full_path)) {
+				print($"[RPE Effect] External shader file missing: {external_full_path}");
+				continue;
 			};
+			var external_source = chart_read_text_file(external_full_path, -1);
+			if (!is_string(external_source) || !string_length(external_source)) {
+				var external_file = file_text_open_read(chart_file_readable_path(external_full_path));
+				if (is_undefined(external_file) || external_file < 0) {
+					print($"[RPE Effect] External shader open failed: {external_full_path}");
+					continue;
+				};
+				external_source = "";
+				while (!file_text_eof(external_file)) external_source += file_text_readln(external_file) + "\n";
+				file_text_close(external_file);
+			};
+			if (!is_string(external_source) || !string_length(external_source)) {
+				print($"[RPE Effect] External shader empty: {external_full_path}");
+				continue;
+			};
+			external_pass.externalUniforms = external_uniforms_parse(external_source);
+			if (external_is_glsl || rpe_ext_shader_android()) {
+				external_source = rpe_ext_translate(external_source, external_relative);
+				if (!string_length(external_source)) {
+					print($"[RPE Effect] Shader translate failed ({external_relative}): {rpe_ext_get_error()}");
+					continue;
+				};
+				var translated_uniforms = external_uniforms_parse(external_source);
+				var translated_names = struct_get_names(translated_uniforms);
+				for (var translated_i = 0; translated_i < array_length(translated_names); translated_i++) {
+					var translated_name = translated_names[translated_i];
+					external_pass.externalUniforms[$ translated_name] = translated_uniforms[$ translated_name];
+				};
+				if (rpe_ext_shader_gx()) {
+					print($"[RPE Effect] GLSL queued for WebGL: {external_relative}");
+				} else if (rpe_ext_shader_android()) {
+					print($"[RPE Effect] {(external_is_hlsl ? "HLSL->GLSL ES" : "GLSL ES")} ready: {external_relative} -> {string_length(external_source)} chars");
+				} else {
+					print($"[RPE Effect] GLSL translated: {external_relative} -> {string_length(external_source)} HLSL chars");
+				};
+			};
+			var external_handle = rpe_ext_compile(external_source, external_relative);
+			if (external_handle <= 0) {
+				print($"[RPE Effect] Shader compile failed ({external_relative}): {rpe_ext_get_error()}");
+				continue;
+			};
+			external_hlsl_handles[$ external_relative] = external_handle;
+			external_hlsl_uniforms[$ external_relative] = external_pass.externalUniforms;
+			external_pass.externalHandle = external_handle;
+			print($"[RPE Effect] {(rpe_ext_shader_gx() ? "GX GLSL" : (rpe_ext_shader_android() ? "GLSL ES" : "HLSL"))} compiled: {external_relative}, handle={external_handle}");
 		};
-		var external_handle = rpe_ext_compile(external_source, external_relative);
-		if (external_handle <= 0) {
-			print($"[RPE Effect] Shader compile failed ({external_relative}): {rpe_ext_get_error()}");
-			continue;
-		};
-		external_hlsl_handles[$ external_relative] = external_handle;
-		external_hlsl_uniforms[$ external_relative] = external_pass.externalUniforms;
-		external_pass.externalHandle = external_handle;
-		print($"[RPE Effect] {(rpe_ext_shader_android() ? "GLSL ES" : "HLSL")} compiled: {external_relative}, handle={external_handle}");
 	};
+	print($"[RPE Effect] External pass summary: passes={compile_pass_count}, compiled={array_length(struct_get_names(external_hlsl_handles))}");
 };
-print($"[RPE Effect] External pass summary: passes={external_pass_count}, compiled={array_length(struct_get_names(external_hlsl_handles))}");
+effect_compile_externals();
 
 effect_uniforms = {};
 var uniform_names = ["time", "screenSize", "sampleCount", "power", "size", "rate", "speed", "blockCount", "colorRate", "factor", "seed", "centerX", "centerY", "progress", "width", "distortion", "expand", "color", "extend", "radius"];
@@ -199,11 +218,11 @@ effect_surfaces_ensure = function() {
 	if (!surface_exists(application_surface)) then return false;
 	var width = surface_get_width(application_surface);
 	var height = surface_get_height(application_surface);
-	if (!surface_exists(fx_ping) || surface_get_width(fx_ping) != width || surface_get_height(fx_ping) != height) {
+	if (!surface_exists(fx_ping) || abs(surface_get_width(fx_ping) - width) > 2 || abs(surface_get_height(fx_ping) - height) > 2) {
 		if (surface_exists(fx_ping)) then surface_free(fx_ping);
 		fx_ping = surface_create(width, height);
 	};
-	if (!surface_exists(fx_pong) || surface_get_width(fx_pong) != width || surface_get_height(fx_pong) != height) {
+	if (!surface_exists(fx_pong) || abs(surface_get_width(fx_pong) - width) > 2 || abs(surface_get_height(fx_pong) - height) > 2) {
 		if (surface_exists(fx_pong)) then surface_free(fx_pong);
 		fx_pong = surface_create(width, height);
 	};
@@ -246,7 +265,7 @@ effect_render = function(effect_list, input_override = -1) {
 	gpu_push_state();
 	gpu_set_blendmode_ext(bm_one, bm_zero);
 	// Finish the caller's batch before changing the render target.
-	draw_flush();
+	pls_draw_flush();
 	if (surface_exists(effect_caller_target)) then surface_reset_target();
 	surface_set_target(fx_ping);
 	draw_clear_alpha(c_black, 0);
@@ -262,7 +281,10 @@ effect_render = function(effect_list, input_override = -1) {
 		effect_height = clamp(ceil(chart_view_height), 0, surface_get_height(input_surface));
 	};
 	draw_surface_part(input_surface, effect_left, 0, effect_width, effect_height, effect_left, 0);
-	draw_flush();
+	pls_draw_flush();
+	if (rpe_ext_shader_gx()) {
+		try { draw_flush(); } catch (gx_flush_error) { delete(gx_flush_error); };
+	};
 	restore_caller_target();
 
 	var source_surface = fx_ping;
@@ -281,7 +303,7 @@ effect_render = function(effect_list, input_override = -1) {
 		if (is_external || external_handle > 0) {
 			if (external_handle <= 0) then continue;
 			var external_draw_key = $"{pass.shaderName}@{pass.startTime}";
-			draw_flush();
+			pls_draw_flush();
 			var external_uniform_total = 0;
 			var external_uniform_success = 0;
 			if (struct_exists(external_uniforms, "time")) {
@@ -316,20 +338,21 @@ effect_render = function(effect_list, input_override = -1) {
 					};
 				};
 			};
-			draw_flush();
+			pls_draw_flush();
 			if (surface_exists(effect_caller_target)) then surface_reset_target();
 			var external_begin_status = 0;
 			var external_uvs;
-			if (os_type == os_android) {
+			if (os_type == os_android || rpe_ext_shader_gx()) {
 				// Read the source framebuffer directly. Sampling a GM surface
-				// texture while it is still an FBO attachment returns black on Mali.
+				// texture while it is still an FBO attachment returns black on
+				// Mali, and GX WebGL needs the same copyTex capture.
 				surface_set_target(source_surface);
-				draw_flush();
+				pls_draw_flush();
 				external_begin_status = rpe_ext_begin(external_handle);
 				surface_reset_target();
 				surface_set_target(target_surface);
 				draw_clear_alpha(c_black, 0);
-				draw_flush();
+				pls_draw_flush();
 				var external_target_width = max(surface_get_width(target_surface), 1);
 				var external_target_height = max(surface_get_height(target_surface), 1);
 				external_uvs = [
@@ -342,7 +365,7 @@ effect_render = function(effect_list, input_override = -1) {
 				surface_set_target(target_surface);
 				draw_clear_alpha(c_black, 0);
 				draw_surface_part(source_surface, effect_left, 0, effect_width, effect_height, effect_left, 0);
-				draw_flush();
+				pls_draw_flush();
 				external_begin_status = rpe_ext_begin(external_handle);
 				external_uvs = texture_get_uvs(surface_get_texture(source_surface));
 			};
@@ -369,7 +392,7 @@ effect_render = function(effect_list, input_override = -1) {
 		};
 		var pass_shader = rpe_effect_shader_asset(pass.shaderName);
 		if (pass_shader == -1 || !shader_is_compiled(pass_shader)) then continue;
-		draw_flush();
+		pls_draw_flush();
 		if (surface_exists(effect_caller_target)) then surface_reset_target();
 		surface_set_target(target_surface);
 		draw_clear_alpha(c_black, 0);
@@ -390,7 +413,7 @@ effect_render = function(effect_list, input_override = -1) {
 		};
 		draw_surface_part(source_surface, effect_left, 0, effect_width, effect_height, effect_left, 0);
 		// Submit while the intended shader and target are still active.
-		draw_flush();
+		pls_draw_flush();
 		shader_reset();
 			restore_caller_target();
 		var swap_surface = source_surface;
@@ -401,7 +424,7 @@ effect_render = function(effect_list, input_override = -1) {
 	// the parent target would clear every layer outside that range.
 	if (surface_exists(input_override)) then gpu_set_blendmode(bm_normal);
 	draw_surface_part(source_surface, effect_left, 0, effect_width, effect_height, effect_left, 0);
-	draw_flush();
+	pls_draw_flush();
 	shader_reset();
 	gpu_pop_state();
 	draw_set_colour(previous_colour);

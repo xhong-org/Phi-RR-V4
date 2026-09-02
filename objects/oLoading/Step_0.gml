@@ -3,7 +3,7 @@ if (done || failed) {
         if (keyboard_check_pressed(vk_escape) || keyboard_check_pressed(vk_enter) || mouse_check_button_pressed(mb_left)) {
                 if (failed) {
                         chart_loading_animation_abort();
-                        room_goto(room_menu);
+                        pls_return_to_entry();
                 };
         };
         exit;
@@ -45,11 +45,10 @@ if (phase == 1) {
                 // chart_session_fail already cleans extract files/session memory.
                 // Ensure cleanup even if older fail path didn't.
                 chart_session_cleanup(true);
-                msgbox_warning_async(detail, "Chart Loader");
                 phase = 99;
-                // Return to menu after failure.
                 chart_loading_animation_abort();
-                room_goto(room_menu);
+                if (!pls_is_gx_remote()) then msgbox_warning_async(detail, "Chart Loader");
+                pls_return_to_entry(detail);
                 exit;
         };
 
@@ -73,7 +72,7 @@ if (phase == 2) {
                 chart_session_fail(detail, true);
                 phase = 99;
                 chart_loading_animation_abort();
-                room_goto(room_menu);
+                pls_return_to_entry(detail);
                 exit;
         };
 		chart_default_resources_load();

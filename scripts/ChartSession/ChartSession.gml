@@ -129,6 +129,7 @@ function chart_playback_teardown_for_menu() {
         if (instance_exists(oExtraPlay)) {
                 with (oExtraPlay) instance_destroy();
         };
+        if (pls_is_gxgames()) then gx_video_shutdown();
         if (instance_exists(oRPEEffect)) {
                 with (oRPEEffect) instance_destroy();
         } else if (extension_exists("I_Shaders")) {
@@ -185,9 +186,80 @@ function chart_idle_behind_loading() {
         instance_deactivate_object(oEffectNew);
 }
 
-function chart_loading_animation_abort() {
+function chart_blur_kept() {
+        if (!variable_global_exists("chart_kept_blur")) then return -1;
+        return sprite_exists(global.chart_kept_blur) ? global.chart_kept_blur : -1;
+}
+
+function chart_blur_keep(spr) {
+        if (!sprite_exists(spr)) then return -1;
+        var prev = chart_blur_kept();
+        if (prev != -1 && prev != spr) {
+                try { sprite_delete(prev); } catch (del_error) { delete(del_error); };
+        };
+        global.chart_kept_blur = spr;
+        return spr;
+}
+
+function chart_blur_keep_from_animator() {
+        if (!instance_exists(oLoadAnimator)) then return chart_blur_kept();
+        var spr = -1;
+        with (oLoadAnimator) {
+                if (sprite_exists(blur_sprite)) then spr = blur_sprite;
+        };
+        if (sprite_exists(spr)) then return chart_blur_keep(spr);
+        return chart_blur_kept();
+}
+
+/// Share the loading-screen blur with gameplay. Do not steal oLoadAnimator.blur_sprite
+/// while the overlay is still drawing it.
+function chart_blur_bind_game(_force = false) {
+        var kept = chart_blur_keep_from_animator();
+        if (!sprite_exists(kept)) then return -1;
+        if (!variable_global_exists("game") || !is_struct(game)) then return kept;
+        var allow = _force || pls_is_gxgames();
+        if (!allow && is_struct(game.settings)) then allow = bool(game.settings.enableBlur);
+        if (!allow) then return kept;
+        if (asset_sprite_valid(game.bg) && game.bg != kept) {
+                try { sprite_delete(game.bg); } catch (del_error) { delete(del_error); };
+        };
+        game.bg = kept;
+        game.bg_blurred = true;
+        game.bg_blur_pending = false;
+        var _bw = sprite_get_width(kept);
+        var _bh = sprite_get_height(kept);
+        if (_bw > 0 && _bh > 0) then sprite_set_offset(kept, _bw * 0.5, _bh * 0.5);
+        return kept;
+}
+
+function chart_loading_blur_draw_sprite() {
         if (instance_exists(oLoadAnimator)) {
-                with (oLoadAnimator) instance_destroy();
+                with (oLoadAnimator) {
+                        if (sprite_exists(blur_sprite)) then return blur_sprite;
+                };
+        };
+        var kept = chart_blur_kept();
+        if (sprite_exists(kept)) then return kept;
+        if (variable_global_exists("game") && is_struct(game) && asset_sprite_valid(game.bg)) then return game.bg;
+        return -1;
+}
+
+function chart_blur_release() {
+        var spr = chart_blur_kept();
+        if (spr != -1) {
+                try { sprite_delete(spr); } catch (del_error) { delete(del_error); };
+        };
+        global.chart_kept_blur = -1;
+}
+
+function chart_loading_animation_abort() {
+        chart_blur_release();
+        if (instance_exists(oLoadAnimator)) {
+                with (oLoadAnimator) {
+                        visible = false;
+                        persistent = false;
+                        instance_destroy();
+                };
         };
         if (variable_global_exists("loading_animation_active")) {
                 global.loading_animation_active = false;
@@ -201,6 +273,28 @@ function chart_loading_animation_abort() {
         if (variable_global_exists("load_animator_instance")) {
                 global.load_animator_instance = noone;
         };
+}
+
+function chart_loading_take_blur_sprite() {
+        // Ownership stays with the animator until finish(). Gameplay shares the same sprite.
+        return chart_blur_keep_from_animator();
+}
+
+function chart_loading_animation_finish() {
+        chart_blur_bind_game(false);
+        if (instance_exists(oLoadAnimator)) {
+                with (oLoadAnimator) {
+                        if (sprite_exists(blur_sprite) && blur_sprite == chart_blur_kept()) then blur_sprite = -1;
+                        visible = false;
+                        persistent = false;
+                        instance_destroy();
+                };
+        };
+        global.loading_animation_active = false;
+        global.loading_animation_load_start = false;
+        global.loading_animator_finished = true;
+        global.loading_render_ready = true;
+        global.load_animator_instance = noone;
 }
 
 function chart_session_fail(message, cleanup = true) {
@@ -221,7 +315,13 @@ function chart_session_fail(message, cleanup = true) {
         session.illustrator = "";
         session.play_room = -1;
         print($"[ChartSession][Error] {message}");
-        if (cleanup) then chart_session_cleanup(true);
+        if (cleanup) {
+                chart_session_cleanup(true);
+                var kept = chart_session_ensure();
+                kept.error = message;
+                kept.status = "Failed";
+                kept.detail = message;
+        };
         return false;
 }
 
@@ -255,34 +355,66 @@ function chart_path_ext(path) {
         return string_lower(string_copy(p, point, string_length(p) - point + 1));
 }
 
+function chart_gx_local_root() {
+        return "/tmp/pls/";
+}
+
+function chart_gx_sandbox_root() {
+        var base = gx_path_clean(string(game_save_id));
+        if (!string_length(base)) then base = "/_savedata";
+        if (string_char_at(base, string_length(base)) != "/") then base += "/";
+        return base;
+}
+
 function chart_session_track_dir() {
-        if (os_type == os_android && android_files_available()) {
-                var external = android_files_external_dir();
-                if (!string_length(external)) then external = "/storage/emulated/0/Android/data/com.xthx.pls/files/";
+        if (chart_use_native_files()) {
+                var external = chart_native_external_dir();
+                if (!string_length(external) && os_type == os_android) then external = "/storage/emulated/0/Android/data/com.xthx.pls/files/";
                 var track = chart_path_norm(external + "track/");
-                android_files_mkdir(track);
+                chart_native_mkdir(track);
                 return track;
         };
-        return chart_path_norm(game_save_id + "track/");
+        if (pls_is_gxgames()) {
+                var gx_track = chart_path_join(chart_gx_sandbox_root(), "track");
+                if (string_length(gx_track) && string_char_at(gx_track, string_length(gx_track)) != "/") then gx_track += "/";
+                if (!directory_exists(gx_track)) then directory_create(gx_track);
+                return gx_track;
+        };
+        var track = chart_path_join(game_save_id, "track");
+        while (string_pos("//", track) > 0) {
+                track = string_replace_all(track, "//", "/");
+        };
+        if (string_length(track) && string_char_at(track, string_length(track)) != "/") then track += "/";
+        return track;
 }
 
 function chart_path_dir_exists(path) {
         if (directory_exists(path)) then return true;
-        if (os_type == os_android && android_files_available()) then return android_files_is_dir(path);
+        if (chart_use_native_files()) then return chart_native_is_dir(path);
         return false;
 }
 
 function chart_file_exists_any(path) {
         if (file_exists(path)) then return true;
-        if (os_type == os_android && android_files_available()) then return android_files_exists(path);
+        if (chart_use_native_files()) then return chart_native_exists(path);
+        if (pls_is_gxgames() && is_string(path) && string_length(path)) {
+                var n = gx_file_ui_cmd("pls-f:fopen\t" + gx_path_clean(path));
+                if (is_real(n) && n > 0) then return true;
+        };
         return false;
 }
 
 function chart_gm_cache_dir() {
-        if (os_type == os_android && android_files_available()) {
-                var android_dir = chart_path_norm(android_files_external_dir() + "tmp/");
-                android_files_mkdir(android_dir);
+        if (chart_use_native_files()) {
+                var android_dir = chart_path_norm(chart_native_external_dir() + "tmp/");
+                chart_native_mkdir(android_dir);
                 return android_dir;
+        };
+        if (pls_is_gxgames()) {
+                var gx_tmp = chart_path_join(chart_gx_local_root(), "tmp");
+                if (string_length(gx_tmp) && string_char_at(gx_tmp, string_length(gx_tmp)) != "/") then gx_tmp += "/";
+                if (!directory_exists(gx_tmp)) then directory_create(gx_tmp);
+                return gx_tmp;
         };
         var dir = chart_path_norm(game_save_id + "tmp/");
         if (!directory_exists(dir)) then directory_create(dir);
@@ -294,16 +426,16 @@ function chart_delete_files_with_prefix(dir, prefix) {
         if (!string_length(dir) || !string_length(prefix)) then return;
         if (string_char_at(dir, string_length(dir)) != "/") then dir += "/";
         var lower_prefix = string_lower(prefix);
-        if (os_type == os_android && android_files_available()) {
-                if (!android_files_is_dir(dir)) then return;
-                var listing = android_files_list(dir);
+        if (chart_use_native_files()) {
+                if (!chart_native_is_dir(dir)) then return;
+                var listing = chart_native_list(dir);
                 var parts = string_split(string_replace_all(string(listing), "\r", ""), "\n");
                 for (var list_i = 0; list_i < array_length(parts); list_i++) {
                         var listed = string_replace_all(string_trim(parts[list_i]), "\\", "/");
                         if (!string_length(listed)) then continue;
                         var name = chart_path_file_name(listed);
                         if (string_pos(lower_prefix, string_lower(name)) != 1) then continue;
-                        android_files_delete(listed);
+                        chart_native_delete(listed);
                         if (file_exists(listed)) then file_delete(listed);
                 };
                 return;
@@ -363,6 +495,9 @@ function chart_file_readable_path(path) {
 function chart_path_is_absolute(path) {
         var p = chart_path_norm(path);
         if (!string_length(p)) then return false;
+        if (string_pos("blob:", p) == 1) then return true;
+        if (string_pos("http://", p) == 1) then return true;
+        if (string_pos("https://", p) == 1) then return true;
         if (string_char_at(p, 1) == "/") then return true;
         if (string_length(p) >= 2 && string_char_at(p, 2) == ":") then return true;
         return false;
@@ -382,8 +517,8 @@ function chart_list_immediate_dirs(parent_path) {
         if (!string_length(parent)) then return dirs;
         if (string_char_at(parent, string_length(parent)) != "/") then parent += "/";
 
-        if (os_type == os_android && android_files_available()) {
-                var listing = android_files_list(parent);
+        if (chart_use_native_files()) {
+                var listing = chart_native_list(parent);
                 var parts = string_split(string_replace_all(listing, "\r", ""), "\n");
                 var seen = {};
                 for (var list_i = 0; list_i < array_length(parts); list_i++) {
@@ -402,8 +537,8 @@ function chart_list_immediate_dirs(parent_path) {
                 return dirs;
         };
 
-        var root_win = string_replace_all(parent, "/", "\\");
-        var probe = file_find_first(root_win + "*", fa_directory);
+        var list_root = pls_is_gxgames() ? parent : string_replace_all(parent, "/", "\\");
+        var probe = file_find_first(list_root + "*", fa_directory);
         while (string_length(probe)) {
                 if (probe != "." && probe != "..") {
                         var full = chart_path_join(parent, probe);
@@ -483,15 +618,63 @@ function chart_pick_stem_match(list, chart_full) {
         return "";
 }
 
+function chart_session_wipe_files(dir) {
+        dir = chart_path_norm(dir);
+        if (!string_length(dir)) then return;
+        var gx = pls_is_gxgames();
+        var sep = gx ? "/" : "\\";
+        var root = gx ? dir : string_replace_all(dir, "/", "\\");
+        if (string_length(root) && string_char_at(root, string_length(root)) != sep) then root += sep;
+        var dirs = [root];
+        var files = [];
+        while (array_length(dirs) > 0) {
+                var n = array_length(dirs);
+                for (var i = 0; i < n; i++) {
+                        var path = dirs[i];
+                        var file_name = file_find_first(path + "*", fa_none);
+                        while (string_length(file_name)) {
+                                if (file_name != "." && file_name != "..") {
+                                        var full_file = path + file_name;
+                                        if (file_exists(full_file) && !directory_exists(full_file)) {
+                                                array_push(files, string_replace_all(full_file, "\\", "/"));
+                                        };
+                                };
+                                file_name = file_find_next();
+                        };
+                        file_find_close();
+                        var dir_name = file_find_first(path + "*", fa_directory);
+                        while (string_length(dir_name)) {
+                                if (dir_name != "." && dir_name != "..") {
+                                        if (directory_exists(path + dir_name)) {
+                                                array_push(dirs, path + dir_name + sep);
+                                        };
+                                };
+                                dir_name = file_find_next();
+                        };
+                        file_find_close();
+                };
+                array_delete(dirs, 0, n);
+        };
+        for (var f = 0; f < array_length(files); f++) {
+                if (file_exists(files[f])) then file_delete(files[f]);
+        };
+}
+
 function chart_session_remove_dir(path) {
         if (!string_length(path)) then return;
-        if (os_type == os_android && android_files_available()) {
-                if (android_files_is_dir(path) || android_files_exists(path)) {
-                        android_files_delete(path);
-                        print($"[ChartSession] Native cleaned: {path} err={android_files_error()}");
+        path = chart_path_norm(path);
+        if (pls_is_gxgames()) then gx_fs_wipe(path);
+        if (chart_use_native_files()) {
+                if (chart_native_is_dir(path) || chart_native_exists(path)) {
+                        chart_native_delete(path);
+                        print($"[ChartSession] Native cleaned: {path} err={chart_native_error()}");
                 };
                 return;
         };
+        var extra_left = chart_path_join(path, "extra.json");
+        if (file_exists(extra_left)) then file_delete(extra_left);
+        chart_session_wipe_files(path);
+        if (file_exists(extra_left)) then file_delete(extra_left);
         if (directory_exists(path)) then directory_destroy(path);
 }
 
@@ -713,22 +896,48 @@ function chart_session_format_name(format_id) {
 }
 
 function chart_read_text_file(path, max_chars = 200000) {
-        if (os_type == os_android && android_files_available() && android_files_exists(path)) {
-                var native_text = android_files_read_text(path);
+        if (!is_string(path) || !string_length(path)) then return "";
+        if (chart_use_native_files() && chart_native_exists(path)) {
+                var native_text = chart_native_read_text(path);
                 if (!is_string(native_text)) then native_text = "";
                 if (max_chars > 0 && string_length(native_text) > max_chars) then native_text = string_copy(native_text, 1, max_chars);
                 return native_text;
         };
-        if (!file_exists(path)) then return "";
-        var buff = buffer_load(path);
-        if (buff < 0) then return "";
-        var text = buffer_read(buff, buffer_text);
-        if (!is_string(text)) {
-                buffer_seek(buff, buffer_seek_start, 0);
-                text = buffer_read(buff, buffer_string);
+        if (!file_exists(path)) {
+                if (pls_is_gxgames()) then return gx_fs_read_js_text(path, max_chars);
+                return "";
+        };
+        var buff = -1;
+        try { buff = buffer_load(path); } catch (load_error) { delete(load_error); buff = -1; };
+        if (!is_real(buff) || buff < 0 || !buffer_exists(buff)) {
+                if (pls_is_gxgames()) then return gx_fs_read_js_text(path, max_chars);
+                return "";
+        };
+        var size = buffer_get_size(buff);
+        if (size <= 0) {
+                buffer_delete(buff);
+                if (pls_is_gxgames()) then return gx_fs_read_js_text(path, max_chars);
+                return "";
+        };
+        var take = size;
+        if (max_chars > 0) then take = min(size, max_chars * 4);
+        var text = "";
+        try {
+                var src = buffer_create(take + 1, buffer_fixed, 1);
+                buffer_copy(buff, 0, take, src, 0);
+                buffer_poke(src, take, buffer_u8, 0);
+                buffer_seek(src, buffer_seek_start, 0);
+                text = buffer_read(src, buffer_string);
+                buffer_delete(src);
+        } catch (read_error) {
+                delete(read_error);
+                text = "";
         };
         buffer_delete(buff);
-        if (!is_string(text)) then return "";
+        if (!is_string(text) || !string_length(text)) {
+                if (pls_is_gxgames()) then return gx_fs_read_js_text(path, max_chars);
+                return "";
+        };
         if (max_chars > 0 && string_length(text) > max_chars) then text = string_copy(text, 1, max_chars);
         return text;
 }
@@ -745,33 +954,25 @@ function chart_detect_format(chart_path) {
         if (ext == ".pec") then return CHART_FORMAT.PEC;
 
         if (ext == ".json" || ext == ".txt") {
-                // Official charts can be much larger than 120 KB; structural
-                // format validation needs the complete JSON document.
-                var text = chart_read_text_file(chart_path, -1);
+                var text = "";
+                if (pls_is_gxgames()) then text = gx_fs_chart_head(chart_path);
+                if (!string_length(text)) then text = chart_read_text_file(chart_path, 16000);
+                if (pls_is_gxgames() && (string_pos("\"RPEVersion\"", text) <= 0) && (string_pos("\"BPMList\"", text) <= 0)) {
+                        var js_head = gx_fs_chart_head(chart_path);
+                        if (string_length(js_head) > string_length(text)) then text = js_head;
+                };
                 if (!string_length(text)) then return CHART_FORMAT.UNKNOWN;
 
-                if (string_pos("\"RPEVersion\"", text) > 0) {
-                        chart_cache_detected_text(chart_path, text);
+                if (string_pos("\"RPEVersion\"", text) > 0
+                        || (string_pos("\"META\"", text) > 0 && string_pos("\"BPMList\"", text) > 0)) {
                         return CHART_FORMAT.RPE;
                 };
 
 				if (string_pos("\"formatVersion\"", text) > 0 && string_pos("\"judgeLineList\"", text) > 0) {
-					try {
-						var official_probe = json_parse(text);
-						if (is_struct(official_probe) && is_real(official_probe[$ "formatVersion"])
-							&& real(official_probe.formatVersion) == floor(real(official_probe.formatVersion))
-							&& real(official_probe.formatVersion) >= 1
-							&& real(official_probe.formatVersion) <= 3
-							&& is_array(official_probe[$ "judgeLineList"])) {
-							return CHART_FORMAT.OFFICIAL;
-						};
-					} catch (official_probe_error) {
-						delete(official_probe_error);
-					};
+					return CHART_FORMAT.OFFICIAL;
 				};
 
                 if (string_pos("\"META\"", text) > 0 && string_pos("eventLayers", text) > 0) {
-                        chart_cache_detected_text(chart_path, text);
                         return CHART_FORMAT.RPE;
                 };
 
@@ -784,7 +985,6 @@ function chart_detect_format(chart_path) {
                         var parsed = json_parse(text);
                         if (is_struct(parsed)) {
                                 if (struct_exists(parsed, "META") && is_struct(parsed.META) && struct_exists(parsed.META, "RPEVersion")) {
-                                        chart_cache_detected_text(chart_path, text);
                                         return CHART_FORMAT.RPE;
                                 };
 						if (struct_exists(parsed, "formatVersion") && is_real(parsed.formatVersion)
@@ -1139,8 +1339,25 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
 
         chart_session_set_status("Detecting format", chart_path_file_name(chart_full));
         var format_id = chart_detect_format(chart_full);
+        if (format_id == CHART_FORMAT.UNKNOWN && is_array(discovered.chart)) {
+                for (var chart_try_i = 0; chart_try_i < array_length(discovered.chart); chart_try_i++) {
+                        var chart_try = discovered.chart[chart_try_i];
+                        var chart_try_name = string_lower(chart_path_file_name(chart_try));
+                        if (chart_try_name == "extra.json") then continue;
+                        if (chart_try == chart_full) then continue;
+                        var try_id = chart_detect_format(chart_try);
+                        if (try_id != CHART_FORMAT.UNKNOWN) {
+                                chart_full = chart_try;
+                                format_id = try_id;
+                                break;
+                        };
+                };
+        };
         if (format_id == CHART_FORMAT.UNKNOWN) {
-                return chart_session_fail("Unsupported chart format.");
+                var fail_head = pls_is_gxgames() ? gx_fs_chart_head(chart_full) : chart_read_text_file(chart_full, 80);
+                fail_head = string_copy(string_replace_all(string_replace_all(string(fail_head), "\n", " "), "\r", ""), 1, 80);
+                var fail_n = pls_is_gxgames() ? gx_file_ui_cmd("pls-f:head\t" + chart_full) : -1;
+                return chart_session_fail("Unsupported chart format: " + chart_path_file_name(chart_full) + " head=" + fail_head + " headcmd=" + string(fail_n));
         };
 
         session.format = format_id;
@@ -1196,17 +1413,25 @@ function chart_session_load_zip(zip_path) {
         chart_session_set_status("Preparing extract folder", "");
         var track_path = chart_session_track_dir();
         chart_session_remove_dir(track_path);
-        if (os_type == os_android && android_files_available()) {
-                android_files_mkdir(track_path);
+        if (chart_use_native_files()) {
+                chart_native_mkdir(track_path);
         } else {
                 directory_create(track_path);
         };
         session.extract_dir = track_path;
 
         chart_session_set_status("Unzipping", chart_path_file_name(zip_path));
-        var unzip_count = zip_unzip(zip_path, track_path);
-        if (!unzip_count) {
-                return chart_session_fail("Failed to unzip chart package.");
+        if (pls_is_gxgames()) {
+                if (!gx_zip_extract(zip_path, track_path, true, false)) {
+                        var gx_err = unicode_zip_backend_last_error();
+                        if (!string_length(gx_err)) then gx_err = "Failed to unzip chart package.";
+                        return chart_session_fail(gx_err);
+                };
+        } else {
+                var unzip_count = zip_unzip(zip_path, track_path);
+                if (!unzip_count) {
+                        return chart_session_fail("Failed to unzip chart package.");
+                };
         };
 
         var root = chart_session_resolve_extract_root(track_path);

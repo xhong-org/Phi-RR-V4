@@ -26,15 +26,52 @@ function draw_chart_mask(_room_w , _room_h){
 	return;
 };
 
+function chart_background_retry_blur() {
+	if (!pls_is_gxgames()) then return;
+	if (!variable_global_exists("game") || !is_struct(game)) then return;
+	if (!bool(game[$ "bg_blur_pending"] ?? false)) then return;
+	var tries = real(game[$ "bg_blur_tries"] ?? 0);
+	if (tries >= 8) {
+		game.bg_blur_pending = false;
+		print("[R-BG] GX deferred path blur gave up.");
+		return;
+	};
+	game.bg_blur_tries = tries + 1;
+	var p = string(game[$ "bg_source_path"] ?? "");
+	if (!string_length(p)) {
+		game.bg_blur_pending = false;
+		return;
+	};
+	// Same call as oLoadAnimator: file path, 10 iterations (GX caps at 4).
+	var blurred = kawase_blur_sprite(p, 1, 0, 10, SPRITE_OFFSET.MIDDLE_CENTER, [0, 0]);
+	if (!asset_sprite_valid(blurred)) then return;
+	if (asset_sprite_valid(game.bg) && game.bg != blurred) then sprite_delete(game.bg);
+	game.bg = blurred;
+	var _bw = sprite_get_width(game.bg);
+	var _bh = sprite_get_height(game.bg);
+	if (_bw > 0 && _bh > 0) then sprite_set_offset(game.bg, _bw * 0.5, _bh * 0.5);
+	game.bg_blur_pending = false;
+	game.bg_blurred = true;
+	print($"[R-BG] GX deferred path blur ok size={_bw}x{_bh}");
+}
+
 function chart_draw_background(_dim = true) {
+	if (pls_is_gxgames()) {
+		chart_blur_bind_game(true);
+		chart_background_retry_blur();
+	} else if (variable_global_exists("game") && is_struct(game) && !asset_sprite_valid(game.bg)) {
+		chart_blur_bind_game(false);
+	};
 	if (!(variable_global_exists("game") && is_struct(game) && is_struct(game.settings) && game.settings.showBG)) then return;
 	if (!asset_sprite_valid(game.bg)) then return;
 	// Effects and video extensions may leave a non-standard blend mode active.
 	// The background dim must use ordinary source-alpha blending.
 	var _old_colour = draw_get_colour();
 	var _old_alpha = draw_get_alpha();
-	draw_flush();
+	var _old_filter = gpu_get_texfilter();
+	pls_draw_flush();
 	gpu_set_blendmode(bm_normal);
+	gpu_set_texfilter(true);
 	draw_set_alpha(1);
 	draw_set_colour(c_white);
 	BYD_COLOR_FUNC;
@@ -42,14 +79,26 @@ function chart_draw_background(_dim = true) {
 	var _bw = sprite_get_width(game.bg);
 	var _bh = sprite_get_height(game.bg);
 	if (_bw <= 0 || _bh <= 0) {
+		gpu_set_texfilter(_old_filter);
 		draw_set_alpha(_old_alpha);
 		draw_set_colour(_old_colour);
 		gpu_set_blendmode(bm_normal);
 		return;
 	};
-	var _sx = room_width / _bw;
-	var _sy = room_height / _bh;
-	var _sc = max(_sx, _sy);
+	var _area_w = room_width;
+	var _area_h = room_height;
+	var _area_x = 0;
+	if (variable_global_exists("chart_view_width") && is_real(chart_view_width) && chart_view_width > 0) then _area_w = chart_view_width;
+	if (variable_global_exists("chart_view_height") && is_real(chart_view_height) && chart_view_height > 0) then _area_h = chart_view_height;
+	if (variable_global_exists("chart_view_left") && is_real(chart_view_left)) then _area_x = chart_view_left;
+	// Cover the full room so letterbox sides match the play-area crop, but
+	// keep the image center on the valid play area. Stretched draw ignores
+	// sprite origin, which GX/runtime sprite_add sprites may not honor.
+	var _sc = max(room_width / _bw, room_height / _bh);
+	var _dw = _bw * _sc;
+	var _dh = _bh * _sc;
+	var _cx = _area_x + _area_w * 0.5;
+	var _cy = _area_h * 0.5;
 	var _transition_alpha = 1;
 	if (instance_exists(oPlayTransition)) {
 		var _transition = instance_find(oPlayTransition, 0);
@@ -57,7 +106,8 @@ function chart_draw_background(_dim = true) {
 			_transition_alpha = _transition.owner.play_transition_bg_alpha;
 		};
 	};
-	draw_sprite_ext(game.bg, 0, room_width * 0.5, room_height * 0.5, _sc, _sc, 0, image_blend, 1);
+	draw_sprite_stretched_ext(game.bg, 0, _cx - _dw * 0.5, _cy - _dh * 0.5, _dw, _dh, image_blend, 1);
+	gpu_set_texfilter(_old_filter);
 	// Dim only the valid chart viewport, never the full room. The final
 	// application-surface background pass skips this so the chart surface's
 	// single dim pass is not compounded.
@@ -120,13 +170,13 @@ function chart_surface_end() {
 		chart_surface_active = false;
 		return false;
 	};
-	draw_flush();
+	pls_draw_flush();
 	surface_reset_target();
 	gpu_set_blendmode(bm_normal);
 	draw_set_colour(c_white);
 	draw_set_alpha(1);
 	draw_surface_part(chart_surface, chart_view_left, 0, chart_view_width, chart_view_height, chart_view_left, 0);
-	draw_flush();
+	pls_draw_flush();
 	chart_surface_active = false;
 	return true;
 }
@@ -134,7 +184,7 @@ function chart_surface_end() {
 function chart_clip_begin() {
 	globalvar chart_clip_ready, chart_clip_context, chart_clip_state;
 	if (!chart_clip_init()) then return false;
-	draw_flush();
+	pls_draw_flush();
 	var _rect = new ID3D11Rect();
 	_rect.left = floor(chart_view_left);
 	_rect.top = 0;
@@ -148,7 +198,7 @@ function chart_clip_begin() {
 function chart_clip_end() {
 	globalvar chart_clip_ready, chart_clip_context, chart_clip_original_state;
 	if (!chart_clip_ready) then return false;
-	draw_flush();
+	pls_draw_flush();
 	id3d11_device_context_rs_set_state(chart_clip_context, chart_clip_original_state);
 	return true;
 }

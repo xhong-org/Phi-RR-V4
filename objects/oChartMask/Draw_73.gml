@@ -1,11 +1,11 @@
 /// @description Composite effective chart viewport.
 if (!target_active || !surface_exists(surface_id)) then exit;
-draw_flush();
+pls_draw_flush();
 if (instance_exists(oPausedUI)) {
     var _pause_ui = instance_find(oPausedUI, 0);
     if (variable_instance_exists(_pause_ui, "paused_ui_draw")) then _pause_ui.paused_ui_draw();
 };
-draw_flush();
+pls_draw_flush();
 surface_reset_target();
 target_active = false;
 chart_surface_active = false;
@@ -25,5 +25,5 @@ var _copy_left = floor(chart_view_left);
 var _copy_width = max(1, ceil(chart_view_right) - _copy_left);
 draw_surface_part(surface_id, _copy_left, 0, _copy_width, chart_view_height, _copy_left, 0);
 gpu_set_blendmode(bm_normal);
-draw_flush();
+pls_draw_flush();
 gpu_pop_state();

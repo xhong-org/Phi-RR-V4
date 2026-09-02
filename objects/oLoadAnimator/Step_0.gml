@@ -10,7 +10,8 @@ if (!chart_ready && variable_global_exists("loading_render_ready") && global.loa
 if (!assets_loaded && _session.ready) {
     if (string_length(_session.image_file)) {
         var _path = chart_file_readable_path(chart_path_join(InChartPath, _session.image_file));
-        if (file_exists(_path) || chart_file_exists_any(chart_path_join(InChartPath, _session.image_file))) {
+        if (file_exists(_path) || string_pos("blob:", _path) == 1 || string_pos("data:", _path) == 1
+                || chart_file_exists_any(chart_path_join(InChartPath, _session.image_file))) {
             var _source_sprite = sprite_add(_path, 1, false, true, 0, 0);
             if (sprite_exists(_source_sprite)) {
                 //var _w = sprite_get_width(clear_sprite);
@@ -20,6 +21,7 @@ if (!assets_loaded && _session.ready) {
 				// The source is only needed while building the clipped sprite.
 				if (sprite_exists(_source_sprite)) then sprite_delete(_source_sprite);
                 blur_sprite = kawase_blur_sprite(_path, 1, 0, 10, SPRITE_OFFSET.MIDDLE_CENTER, [0, 0]);
+                if (sprite_exists(blur_sprite)) then chart_blur_keep(blur_sprite);
             };
         };
     };
@@ -64,6 +66,11 @@ if (loading_rect_phase != 0) {
     };
 };
 
+if (pls_is_gxgames() && room != room_loading && room != room_menu) {
+    chart_loading_animation_finish();
+    exit;
+};
+
 if (chart_ready && state == LOAD_ANIM_STATE.HOLDING) {
     if (ready_at < 0) then ready_at = current_time;
     if (current_time - ready_at >= ready_hold_duration) {
@@ -74,9 +81,7 @@ if (chart_ready && state == LOAD_ANIM_STATE.HOLDING) {
 if (state == LOAD_ANIM_STATE.EXITING && current_time - exit_started_at >= exit_duration) {
     if (exit_finished_at < 0) then exit_finished_at = exit_started_at + exit_duration;
     if (current_time - exit_finished_at >= exit_wait_duration) {
-        var _room = target_room;
-        global.loading_animator_finished = true;
-        global.loading_animation_active = false;
-        instance_destroy();
+        chart_loading_animation_finish();
+        exit;
     };
 };

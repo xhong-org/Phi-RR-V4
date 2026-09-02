@@ -28,12 +28,7 @@ btn_sample = {
         "x" : 0, "y" : 0, "w" : 1, "h" : 1
 };
 
-ui_font = -1;
-if (file_exists(working_directory + "resource/saira.ttf")) {
-        font_add_enable_aa(true);
-        ui_font = font_add(working_directory + "resource/saira.ttf", 28, true, false, -infinity, infinity);
-        if (font_exists(ui_font)) then font_enable_sdf(ui_font, true);
-};
+ui_font = pls_ui_font_add(28);
 
 if (extension_exists("I_AndroidOpen")) then i_android_open_reset();
 event_user(0);

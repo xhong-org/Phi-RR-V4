@@ -38,8 +38,12 @@ function msgbox_invoke_callback(callback, task_id, result) {
 }
 
 function msgbox_configure_buttons(buttons, alignment = MSGBOX_BUTTON_ALIGN.LEFT) {
-	MsgBox_ClearButtons();
-	MsgBox_SetButtonAlignment(alignment);
+	if (pls_is_gxgames()) {
+		// GX.games uses show_message / show_message_async; no native button bar.
+	} else {
+		MsgBox_ClearButtons();
+		MsgBox_SetButtonAlignment(alignment);
+	};
 	var callbacks = [undefined, undefined, undefined, undefined];
 	if (!is_array(buttons)) then return callbacks;
 	var count = min(4, array_length(buttons));
@@ -48,7 +52,7 @@ function msgbox_configure_buttons(buttons, alignment = MSGBOX_BUTTON_ALIGN.LEFT)
 		var button = buttons[i];
 		var text = is_struct(button) ? string(button.text ?? "") : string(button);
 		if (!string_length(text)) then continue;
-		MsgBox_SetButton(output_index + 1, text);
+		if (!pls_is_gxgames()) then MsgBox_SetButton(output_index + 1, text);
 		if (is_struct(button)) then callbacks[output_index] = button.callback ?? undefined;
 		output_index++;
 	};
@@ -57,7 +61,12 @@ function msgbox_configure_buttons(buttons, alignment = MSGBOX_BUTTON_ALIGN.LEFT)
 
 function msgbox_show_sync(_message, _title, _kind = MSGBOX_KIND.INFO, _buttons = [], _alignment = MSGBOX_BUTTON_ALIGN.LEFT) {
 	var callbacks = msgbox_configure_buttons(_buttons, _alignment);
-	var result = MsgBox_ShowSync(string(_message), string(_title), _kind);
+	var result = 1;
+	if (pls_is_gxgames()) {
+		show_message(string(_title) + "\n\n" + string(_message));
+	} else {
+		result = MsgBox_ShowSync(string(_message), string(_title), _kind);
+	};
 	if (result >= 1 && result <= 4) then msgbox_invoke_callback(callbacks[result - 1], 0, result);
 	return result;
 }
@@ -72,6 +81,10 @@ function msgbox_poll_async(task_id) {
 	if (!variable_global_exists("msgbox_tasks") || !is_struct(global.msgbox_tasks)) then return;
 	var key = string(task_id);
 	if (!struct_exists(global.msgbox_tasks, key)) then return;
+	if (pls_is_gxgames()) {
+		struct_remove(global.msgbox_tasks, key);
+		return;
+	};
 	var status = MsgBox_TaskStatus(task_id);
 	if (status == MSGBOX_TASK_STATUS.UNKNOWN) {
 		struct_remove(global.msgbox_tasks, key);
@@ -91,6 +104,11 @@ function msgbox_poll_async(task_id) {
 
 function msgbox_show_async(_message, _title, _kind = MSGBOX_KIND.INFO, _buttons = [], _alignment = MSGBOX_BUTTON_ALIGN.LEFT) {
 	var callbacks = msgbox_configure_buttons(_buttons, _alignment);
+	if (pls_is_gxgames()) {
+		show_message_async(string(_title) + "\n\n" + string(_message));
+		if (array_length(callbacks) > 0) then msgbox_invoke_callback(callbacks[0], 1, 1);
+		return 1;
+	};
 	var task_id = MsgBox_ShowAsync(string(_message), string(_title), _kind);
 	if (task_id <= 0) then return task_id;
 	if (!variable_global_exists("msgbox_tasks") || !is_struct(global.msgbox_tasks)) then global.msgbox_tasks = {};

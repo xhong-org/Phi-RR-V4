@@ -1,5 +1,10 @@
-/// @description Release FMOD resources when the room or game ends.
+/// @description Release audio resources when the room or game ends.
 if(!resources_released){
+	if (media_use_gx()) {
+		gx_media_release(id);
+		resources_released = true;
+		exit;
+	};
 	if(channel > 0){
 		fmod_channel_control_stop(channel);
 		channel = -1;

@@ -46,17 +46,19 @@ if (picking) then exit;
 if (!mouse_check_button_pressed(mb_left)) then exit;
 
 if (hover_open) {
+        var pick_started = false;
         if (!extension_exists("I_AndroidOpen")) {
                 last_error = "I_AndroidOpen is not available in this build.";
-                status_text = "Open failed.";
-                detail_text = last_error;
-        } else if (i_android_open_pick("application/zip")) {
+        } else {
+                pick_started = i_android_open_pick("application/zip");
+                if (!pick_started) then last_error = i_android_open_error();
+        };
+        if (pick_started) {
                 picking = true;
                 last_error = "";
                 status_text = "Waiting for system file picker...";
                 detail_text = "Select a .zip or .pez chart package.";
         } else {
-                last_error = i_android_open_error();
                 if (!string_length(last_error)) then last_error = "Failed to open the system picker.";
                 status_text = "Open failed.";
                 detail_text = last_error;

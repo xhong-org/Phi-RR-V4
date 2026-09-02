@@ -9,12 +9,28 @@ if(start){
 };
 
 track = -1;
-track = (fmod_system_create());
+gx_audio_asset = -1;
+gx_audio_inst = -1;
+gx_audio_kind = "";
+gx_js_handle = 0;
+gx_js_url = "";
+gx_buffer_sound = -1;
+gx_pcm_buffer = -1;
+gx_pcm_id = -1;
 resources_released = false;
+
+var audio_path = chart_file_readable_path(self.name);
+if (media_use_gx()) {
+	self[$ "success"] = undefined;
+	if (gx_media_load_from_path(id, audio_path)) then exit;
+	self[$ "success"] = false;
+	exit;
+};
+
+track = (fmod_system_create());
 fmod_system_select(track);
 fmod_system_init(128 , FMOD_MODE.DEFAULT);
 
-var audio_path = chart_file_readable_path(self.name);
 if(use_stream){
 	soundIndex = (fmod_system_create_stream(audio_path,FMOD_MODE.ACCURATETIME));	
 }else{

@@ -1,6 +1,7 @@
 /// @description Release runtime artwork and font.
 if (sprite_exists(clear_sprite)) then sprite_delete(clear_sprite);
-if (sprite_exists(blur_sprite)) then sprite_delete(blur_sprite);
+if (sprite_exists(blur_sprite) && blur_sprite != chart_blur_kept()) then sprite_delete(blur_sprite);
+blur_sprite = -1;
 if (sprite_exists(panel_sprite)) then sprite_delete(panel_sprite);
 if (font_exists(ui_font)) then font_delete(ui_font);
 if (variable_global_exists("loading_animation_active")
