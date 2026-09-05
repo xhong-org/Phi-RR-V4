@@ -41,6 +41,14 @@ function asset_font_valid(_id) {
 	return font_exists(_id);
 }
 
+/// @desc YYC-safe buffer validity: accepts numeric ids and modern buffer refs
+function asset_buffer_valid(_id) {
+	if (is_undefined(_id)) then return false;
+	if (is_string(_id)) then return false;
+	if (is_real(_id) && _id < 0) then return false;
+	return buffer_exists(_id);
+}
+
 
 
 // 实验性内容

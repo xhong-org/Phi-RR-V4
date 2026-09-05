@@ -895,49 +895,135 @@ function chart_session_format_name(format_id) {
         return "unknown";
 }
 
+function chart_text_strip_bom(text) {
+        if (!is_string(text) || !string_length(text)) then return "";
+        if (string_char_at(text, 1) == chr(0xFEFF)) then return string_delete(text, 1, 1);
+        return text;
+}
+
+function chart_buffer_utf16_to_text(buff, start, nbytes, big_endian) {
+        if (!asset_buffer_valid(buff) || nbytes < 2) then return "";
+        var size = buffer_get_size(buff);
+        if (start < 0 || start >= size) then return "";
+        var end_pos = min(start + nbytes, size);
+        var text = "";
+        var i = start;
+        while (i + 1 < end_pos) {
+                var b0 = buffer_peek(buff, i, buffer_u8);
+                var b1 = buffer_peek(buff, i + 1, buffer_u8);
+                var code = big_endian ? ((b0 << 8) | b1) : (b0 | (b1 << 8));
+                i += 2;
+                if (code == 0) then break;
+                if (code >= 0xD800 && code <= 0xDBFF && i + 1 < end_pos) {
+                        var s0 = buffer_peek(buff, i, buffer_u8);
+                        var s1 = buffer_peek(buff, i + 1, buffer_u8);
+                        var low = big_endian ? ((s0 << 8) | s1) : (s0 | (s1 << 8));
+                        if (low >= 0xDC00 && low <= 0xDFFF) {
+                                i += 2;
+                                code = 0x10000 + (((code - 0xD800) << 10) | (low - 0xDC00));
+                        };
+                };
+                text += chr(code);
+        };
+        return text;
+}
+
+function chart_buffer_slice_to_text(buff, start, nbytes) {
+        if (!asset_buffer_valid(buff) || nbytes <= 0) then return "";
+        var src = buffer_create(nbytes + 1, buffer_fixed, 1);
+        if (!asset_buffer_valid(src)) then return "";
+        buffer_copy(buff, start, nbytes, src, 0);
+        buffer_poke(src, nbytes, buffer_u8, 0);
+        buffer_seek(src, buffer_seek_start, 0);
+        var text = "";
+        try {
+                text = buffer_read(src, buffer_text);
+        } catch (text_error) {
+                delete(text_error);
+                text = "";
+        };
+        if (!is_string(text) || !string_length(text)) {
+                try {
+                        buffer_seek(src, buffer_seek_start, 0);
+                        text = buffer_read(src, buffer_string);
+                } catch (string_error) {
+                        delete(string_error);
+                        text = "";
+                };
+        };
+        buffer_delete(src);
+        return is_string(text) ? text : "";
+}
+
+/// Legacy Windows path used before GX buffer/JS readers.
+function chart_read_text_via_file(path, max_chars) {
+        var handle = -1;
+        try { handle = file_text_open_read(path); } catch (open_error) { delete(open_error); return ""; };
+        if (is_undefined(handle) || (is_real(handle) && handle < 0)) then return "";
+        var text = "";
+        try {
+                while (!file_text_eof(handle)) {
+                        text += file_text_readln(handle);
+                        if (!file_text_eof(handle)) then text += "\n";
+                        if (max_chars > 0 && string_length(text) >= max_chars) then break;
+                };
+        } catch (read_error) {
+                delete(read_error);
+        };
+        file_text_close(handle);
+        if (!is_string(text)) then return "";
+        if (max_chars > 0 && string_length(text) > max_chars) then text = string_copy(text, 1, max_chars);
+        return chart_text_strip_bom(text);
+}
+
 function chart_read_text_file(path, max_chars = 200000) {
         if (!is_string(path) || !string_length(path)) then return "";
         if (chart_use_native_files() && chart_native_exists(path)) {
                 var native_text = chart_native_read_text(path);
                 if (!is_string(native_text)) then native_text = "";
                 if (max_chars > 0 && string_length(native_text) > max_chars) then native_text = string_copy(native_text, 1, max_chars);
-                return native_text;
+                return chart_text_strip_bom(native_text);
         };
         if (!file_exists(path)) {
                 if (pls_is_gxgames()) then return gx_fs_read_js_text(path, max_chars);
                 return "";
         };
+
+        var text = "";
         var buff = -1;
         try { buff = buffer_load(path); } catch (load_error) { delete(load_error); buff = -1; };
-        if (!is_real(buff) || buff < 0 || !buffer_exists(buff)) {
-                if (pls_is_gxgames()) then return gx_fs_read_js_text(path, max_chars);
-                return "";
-        };
-        var size = buffer_get_size(buff);
-        if (size <= 0) {
+        if (asset_buffer_valid(buff)) {
+                var size = buffer_get_size(buff);
+                if (size > 0) {
+                        var start = 0;
+                        var take = size;
+                        if (max_chars > 0) then take = min(size, max_chars * 4);
+                        var b0 = buffer_peek(buff, 0, buffer_u8);
+                        var b1 = (size > 1) ? buffer_peek(buff, 1, buffer_u8) : 0;
+                        var b2 = (size > 2) ? buffer_peek(buff, 2, buffer_u8) : 0;
+                        if (size >= 3 && b0 == 0xEF && b1 == 0xBB && b2 == 0xBF) {
+                                start = 3;
+                                take = min(take, size - 3);
+                                text = chart_buffer_slice_to_text(buff, start, take);
+                        } else if (size >= 2 && b0 == 0xFF && b1 == 0xFE) {
+                                start = 2;
+                                take = min(take, size - 2);
+                                text = chart_buffer_utf16_to_text(buff, start, take, false);
+                        } else if (size >= 2 && b0 == 0xFE && b1 == 0xFF) {
+                                start = 2;
+                                take = min(take, size - 2);
+                                text = chart_buffer_utf16_to_text(buff, start, take, true);
+                        } else {
+                                take = min(take, size);
+                                text = chart_buffer_slice_to_text(buff, 0, take);
+                        };
+                };
                 buffer_delete(buff);
-                if (pls_is_gxgames()) then return gx_fs_read_js_text(path, max_chars);
-                return "";
         };
-        var take = size;
-        if (max_chars > 0) then take = min(size, max_chars * 4);
-        var text = "";
-        try {
-                var src = buffer_create(take + 1, buffer_fixed, 1);
-                buffer_copy(buff, 0, take, src, 0);
-                buffer_poke(src, take, buffer_u8, 0);
-                buffer_seek(src, buffer_seek_start, 0);
-                text = buffer_read(src, buffer_string);
-                buffer_delete(src);
-        } catch (read_error) {
-                delete(read_error);
-                text = "";
-        };
-        buffer_delete(buff);
-        if (!is_string(text) || !string_length(text)) {
-                if (pls_is_gxgames()) then return gx_fs_read_js_text(path, max_chars);
-                return "";
-        };
+
+        text = chart_text_strip_bom(is_string(text) ? text : "");
+        if (!string_length(text)) then text = chart_read_text_via_file(path, max_chars);
+        if (!string_length(text) && pls_is_gxgames()) then return gx_fs_read_js_text(path, max_chars);
         if (max_chars > 0 && string_length(text) > max_chars) then text = string_copy(text, 1, max_chars);
         return text;
 }
