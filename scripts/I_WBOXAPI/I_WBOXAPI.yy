@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"I_WBOXAPI",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"I_WBOXAPI",
+  "parent":{
+    "name":"I_WBOX",
+    "path":"folders/Extensions/I_WBOX.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

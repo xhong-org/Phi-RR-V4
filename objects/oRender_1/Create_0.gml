@@ -91,6 +91,7 @@ for (var _spatial_i = 0; _spatial_i < _spatial_group_count; _spatial_i++) {
 		if (a.spatialFloor > b.spatialFloor) then return 1;
 		return 0;
 	});
+	_spatial_groups[_spatial_i].remain = array_length(_spatial_groups[_spatial_i].notes);
 };
 var _hold_groups = game_1._note_spatial_hold_groups;
 var _hold_group_count = array_length(_hold_groups);

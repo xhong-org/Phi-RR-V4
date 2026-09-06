@@ -229,12 +229,35 @@ function judgeCalc(oHTime , nHTime , bpm , xx , yy , _type , isFHitEf = true, in
 	return(status);
 };
 
+/// @desc True when oRender_1 Draw Begin will resolve parent transforms
+/// (native workers). Step End can skip the same GML walk in that case.
+function rpe_note_mark_activated(_rec) {
+	if (!is_struct(_rec) || bool(_rec.activated)) then return;
+	_rec.activated = true;
+	var _group = _rec[$ "group"];
+	if (is_struct(_group) && is_real(_group.remain)) then _group.remain = max(0, _group.remain - 1);
+};
+
+function rpe_line_worker_pending() {
+	if (!variable_global_exists("game") || !is_struct(game)) then return false;
+	if (!bool(game.settings.enableRPEMulticore ?? true)) then return false;
+	if (os_type != os_windows || !extension_exists("I_Parallel")) then return false;
+	if (!variable_global_exists("game_1") || !is_struct(game_1) || !is_array(game_1.line_list)) then return false;
+	var _n = array_length(game_1.line_list);
+	var _min = max(1, floor(real(game.settings.rpeWorkerMinLines ?? 32)));
+	return _n >= _min;
+};
+
 /// @desc Recalculate the on-line hit-effect position for an RPE note.
 /// Official notes refresh geometry then project local X with the line's
 /// current transform immediately before spawning the effect.
 function rpe_note_hit_effect_xy() {
 	if (instance_exists(_line_ref)) {
-		with (_line_ref) event_perform(ev_step, ev_step_end);
+		with (_line_ref) {
+			rpe_world_query = true;
+			event_perform(ev_step, ev_step_end);
+			rpe_world_query = false;
+		};
 		event_user(_step_user_count);
 	};
 	return [_x_h, _y_h];
@@ -538,7 +561,7 @@ function Phigros() constructor { // 仅仅结构
 		"enableDisplayLineID" : false,			// 是否显示线ID(已弃用)(default:false)
 		"comboString" : "COMBO",				// combo text(default:"COMBO")
 		"enableVsync" : true,					// 是否启用垂直同步(default:true)
-		"aa_level" : 0,							// aa_level等级(default:0)
+		"aa_level" : 8,							// aa_level等级(default:0)
 		"useOldFX" : false,						// 是否使用旧版打击特效(default:false)
 		"enableComboScore" : true,				// 是否启用打击分(default:true)
 		"judgeOffset" : 0,						// 自动打击偏移延迟(default:0)
@@ -1355,7 +1378,7 @@ function rpe_sync_note_activation(_now_sec = undefined) {
 			instance_activate_object(_note.id);
 			var _key = string(_note.id);
 			if (is_struct(_records) && struct_exists(_records, _key)) {
-				_records[$ _key].activated = true;
+				rpe_note_mark_activated(_records[$ _key]);
 			};
 		};
 		game_1._note_activation_index = array_length(_notes);
@@ -1374,7 +1397,7 @@ function rpe_sync_note_activation(_now_sec = undefined) {
 		instance_activate_object(_item.id);
 		var _item_key = string(_item.id);
 		if (is_struct(_records) && struct_exists(_records, _item_key)) {
-			_records[$ _item_key].activated = true;
+			rpe_note_mark_activated(_records[$ _item_key]);
 		};
 		_index++;
 	};
@@ -1384,7 +1407,7 @@ function rpe_sync_note_activation(_now_sec = undefined) {
 		instance_activate_object(_late.id);
 		var _late_key = string(_late.id);
 		if (is_struct(_records) && struct_exists(_records, _late_key)) {
-			_records[$ _late_key].activated = true;
+			rpe_note_mark_activated(_records[$ _late_key]);
 		};
 	};
 	game_1._note_activation_index = _index;
@@ -1921,7 +1944,7 @@ function RPE() constructor{
 				if (_activation_note.alwaysActive) {
 					var _activation_key = string(_activation_note.id);
 					if (struct_exists(self._note_activation_records, _activation_key)) {
-						self._note_activation_records[$ _activation_key].activated = true;
+						rpe_note_mark_activated(self._note_activation_records[$ _activation_key]);
 					};
 				} else {
 					instance_deactivate_object(_activation_note.id);

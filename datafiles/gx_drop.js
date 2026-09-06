@@ -15,13 +15,13 @@
  */
 (function (global) {
     "use strict";
-    if (global.__plsGxDropLoaded26) {
-        global.__plsGxDropVer = 26;
+    if (global.__plsGxDropLoaded28) {
+        global.__plsGxDropVer = 28;
         try { if (typeof global.i_gx_drop_boot === "function") global.i_gx_drop_boot(); } catch (e0) {}
         return;
     }
-    global.__plsGxDropLoaded26 = 1;
-    global.__plsGxDropVer = 26;
+    global.__plsGxDropLoaded28 = 1;
+    global.__plsGxDropVer = 28;
 
     var STATUS_IDLE = 0;
     var STATUS_HOVER = 1;
@@ -48,6 +48,11 @@
     var readFileBytes = null;
     var lastReadChunk = "";
     var lastHeadText = "";
+    var MSG_UNKNOWN = 0, MSG_RUNNING = 1, MSG_DONE = 2;
+    var msgButtons = ["", "", "", ""];
+    var msgAlign = 1;
+    var msgTasks = Object.create(null);
+    var nextMsg = 1;
     var extractedFiles = {};
     var extractedList = [];
     var importedZipBytes = null;
@@ -695,6 +700,22 @@
         return isFinite(n) ? n : 0;
     }
 
+    function rpcUnescape(s) {
+        s = toStr(s);
+        var out = "";
+        for (var i = 0; i < s.length; i++) {
+            if (s.charAt(i) === "\\" && i + 1 < s.length) {
+                var n = s.charAt(i + 1);
+                if (n === "t") { out += "\t"; i++; continue; }
+                if (n === "n") { out += "\n"; i++; continue; }
+                if (n === "r") { out += "\r"; i++; continue; }
+                if (n === "\\") { out += "\\"; i++; continue; }
+            }
+            out += s.charAt(i);
+        }
+        return out;
+    }
+
     function isPackageName(name) {
         var lower = toStr(name).toLowerCase();
         return lower.slice(-4) === ".zip" || lower.slice(-4) === ".pez";
@@ -1147,6 +1168,65 @@
         }
     }
 
+    function ensureMsgOverlay() {
+        var id = "pls-gx-msgbox-root";
+        var el = document.getElementById(id);
+        if (el) return el;
+        el = document.createElement("div");
+        el.id = id;
+        el.style.cssText = "position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);z-index:2147483646;font-family:sans-serif;";
+        (document.body || document.documentElement).appendChild(el);
+        return el;
+    }
+
+    function showGxDialog(title, message, kind, done) {
+        if (typeof document === "undefined") {
+            if (done) done(1);
+            return;
+        }
+        var root = ensureMsgOverlay();
+        root.innerHTML = "";
+        var box = document.createElement("div");
+        box.style.cssText = "min-width:280px;max-width:480px;background:#1c2230;color:#fff;border:1px solid #6a7388;border-radius:8px;padding:18px 20px;";
+        var h = document.createElement("div");
+        h.textContent = title || "Message";
+        h.style.cssText = "font-size:18px;margin-bottom:10px;color:" + (kind === 3 ? "#ff6b6b" : kind === 2 ? "#ffd166" : "#9ad1ff") + ";";
+        var p = document.createElement("div");
+        p.textContent = message || "";
+        p.style.cssText = "font-size:14px;line-height:1.4;white-space:pre-wrap;margin-bottom:16px;";
+        var row = document.createElement("div");
+        row.style.cssText = "display:flex;gap:8px;" + (msgAlign === 2 ? "justify-content:center;" : msgAlign === 3 ? "justify-content:flex-end;" : "justify-content:flex-start;");
+        var labels = [];
+        for (var i = 0; i < 4; i++) if (msgButtons[i]) labels.push({ index: i + 1, text: msgButtons[i] });
+        if (!labels.length) labels.push({ index: 1, text: "OK" });
+        labels.forEach(function (btn) {
+            var b = document.createElement("button");
+            b.textContent = btn.text;
+            b.style.cssText = "background:#3b82f6;color:#fff;border:0;border-radius:4px;padding:8px 14px;cursor:pointer;";
+            b.onclick = function () {
+                root.style.display = "none";
+                if (done) done(btn.index);
+            };
+            row.appendChild(b);
+        });
+        box.appendChild(h);
+        box.appendChild(p);
+        box.appendChild(row);
+        root.appendChild(box);
+        root.style.display = "flex";
+    }
+
+    function showGxMsgAsync(message, title, kind) {
+        var id = nextMsg++;
+        msgTasks[id] = { status: MSG_RUNNING, result: 0 };
+        showGxDialog(toStr(title), toStr(message), toNum(kind) | 0, function (result) {
+            if (!msgTasks[id]) return;
+            msgTasks[id].status = MSG_DONE;
+            msgTasks[id].result = result;
+        });
+        return id;
+    }
+
     function fileUiRpcNum(raw) {
         var s = toStr(raw);
         if (s.indexOf("pls-f:") !== 0) return null;
@@ -1166,6 +1246,35 @@
                 case "fread": return makeReadChunk(num(1), num(2));
                 case "head": return makeHeadText(parts[1] || "");
                 case "mode": return isRemoteMode() ? 1 : 0;
+                case "msgping": return 1;
+                case "msgclear":
+                    msgButtons = ["", "", "", ""];
+                    return 1;
+                case "msgbtn": {
+                    var bi = (num(1) | 0) - 1;
+                    if (bi < 0 || bi > 3) return 0;
+                    msgButtons[bi] = rpcUnescape(parts[2] || "");
+                    return 1;
+                }
+                case "msgalign":
+                    msgAlign = num(1) | 0;
+                    return 1;
+                case "alert":
+                    return showGxMsgAsync(rpcUnescape(parts[1] || ""), rpcUnescape(parts[2] || ""), num(3));
+                case "msgstatus": {
+                    var st = msgTasks[num(1) | 0];
+                    return st ? st.status : MSG_UNKNOWN;
+                }
+                case "msgresult": {
+                    var rs = msgTasks[num(1) | 0];
+                    return rs ? rs.result : 0;
+                }
+                case "msgrelease": {
+                    var rid = num(1) | 0;
+                    if (!msgTasks[rid]) return 0;
+                    delete msgTasks[rid];
+                    return 1;
+                }
                 default: return 0;
             }
         } catch (e) {
@@ -1477,7 +1586,13 @@
             "i_gx_drop_poll_import", "i_gx_drop_unpause", "i_gx_drop_status",
             "i_gx_drop_hover", "i_gx_drop_filename", "i_gx_drop_error",
             "i_gx_drop_size", "i_gx_drop_chunk", "i_gx_drop_import", "i_gx_drop_reset",
-            "i_gx_import_url", "i_gx_query_get"
+            "i_gx_import_url", "i_gx_query_get",
+            "i_gx_msgbox_clear_buttons", "i_gx_msgbox_set_button", "i_gx_msgbox_set_button_alignment",
+            "i_gx_msgbox_show_async", "i_gx_msgbox_task_status", "i_gx_msgbox_task_result",
+            "i_gx_msgbox_task_release",
+            "i_html5_msgbox_clear_buttons", "i_html5_msgbox_set_button", "i_html5_msgbox_set_button_alignment",
+            "i_html5_msgbox_show_async", "i_html5_msgbox_task_status", "i_html5_msgbox_task_result",
+            "i_html5_msgbox_task_release"
         ];
         for (var i = 0; i < names.length; i++) {
             if (typeof global[names[i]] === "function") exportGx(names[i], global[names[i]]);
@@ -1737,6 +1852,44 @@
         } catch (err) {}
         return 0;
     };
+    global.i_gx_msgbox_clear_buttons = function () {
+        msgButtons = ["", "", "", ""];
+        return 1;
+    };
+    global.i_gx_msgbox_set_button = function (index, text) {
+        var i = (toNum(index) | 0) - 1;
+        if (i < 0 || i > 3) return 0;
+        msgButtons[i] = toStr(text);
+        return 1;
+    };
+    global.i_gx_msgbox_set_button_alignment = function (alignment) {
+        msgAlign = toNum(alignment) | 0;
+        return 1;
+    };
+    global.i_gx_msgbox_show_async = function (message, title, kind) {
+        return showGxMsgAsync(message, title, kind);
+    };
+    global.i_gx_msgbox_task_status = function (taskId) {
+        var task = msgTasks[toNum(taskId) | 0];
+        return task ? task.status : MSG_UNKNOWN;
+    };
+    global.i_gx_msgbox_task_result = function (taskId) {
+        var task = msgTasks[toNum(taskId) | 0];
+        return task ? task.result : 0;
+    };
+    global.i_gx_msgbox_task_release = function (taskId) {
+        var id = toNum(taskId) | 0;
+        if (!msgTasks[id]) return 0;
+        delete msgTasks[id];
+        return 1;
+    };
+    global.i_html5_msgbox_clear_buttons = global.i_gx_msgbox_clear_buttons;
+    global.i_html5_msgbox_set_button = global.i_gx_msgbox_set_button;
+    global.i_html5_msgbox_set_button_alignment = global.i_gx_msgbox_set_button_alignment;
+    global.i_html5_msgbox_show_async = global.i_gx_msgbox_show_async;
+    global.i_html5_msgbox_task_status = global.i_gx_msgbox_task_status;
+    global.i_html5_msgbox_task_result = global.i_gx_msgbox_task_result;
+    global.i_html5_msgbox_task_release = global.i_gx_msgbox_task_release;
     global.i_gx_drop_reset = function () {
         state.status = STATUS_IDLE;
         state.hover = 0;

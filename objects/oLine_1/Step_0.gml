@@ -87,13 +87,11 @@ var sum_r = 0;
 if (_event_layer_count > 0) {
         for (var i = 0; i < _event_layer_count; i++) {
                 if (!is_struct(_events[i])) then continue;
-                // RPE layers may omit unused channels. Keep the layer valid
-                // and let the evaluator use its default instead of indexing a
-                // missing struct key during the first frame.
-                if (struct_exists(_events[i], "moveXEvents")) then sum_x += rpe_eval_events(i, "moveXEvents", 0);
-                if (struct_exists(_events[i], "moveYEvents")) then sum_y += rpe_eval_events(i, "moveYEvents", 0);
-                if (struct_exists(_events[i], "alphaEvents")) then sum_a += rpe_eval_events(i, "alphaEvents", 0);
-                if (struct_exists(_events[i], "rotateEvents")) then sum_r += rpe_eval_events(i, "rotateEvents", 0);
+                // Create materializes the four editor channels on every layer.
+                sum_x += rpe_eval_events(i, "moveXEvents", 0);
+                sum_y += rpe_eval_events(i, "moveYEvents", 0);
+                sum_a += rpe_eval_events(i, "alphaEvents", 0);
+                sum_r += rpe_eval_events(i, "rotateEvents", 0);
         };
 };
 var speed_floor = rpe_speed_floor();
@@ -116,10 +114,10 @@ if (!rpe_events_test_logged && line_id == 0
 };
 
 // ---- extended special events ----
-__scale_x = rpe_eval_ext_events("scaleXEvents", 1);
-__scale_y = rpe_eval_ext_events("scaleYEvents", 1);
-__incline = rpe_eval_ext_events("inclineEvents", 0);
-__incline_sin = dsin(__incline);
+__scale_x = has_scale_x_events ? rpe_eval_ext_events("scaleXEvents", 1) : 1;
+__scale_y = has_scale_y_events ? rpe_eval_ext_events("scaleYEvents", 1) : 1;
+__incline = has_incline_events ? rpe_eval_ext_events("inclineEvents", 0) : 0;
+__incline_sin = has_incline_events ? dsin(__incline) : 0;
 if (has_color_events) {
         __color = rpe_eval_color_events(c_white);
 } else {
@@ -137,22 +135,16 @@ if (has_gif_events && is_struct(gif_data) && real(gif_data.total) > 0) {
 	var _gif_events = extEvents[$ "gifEvents"];
 	var _gif_event_count = (is_array(_gif_events) ? array_length(_gif_events) : 0);
 	if (_gif_event_count > 0) {
-		var _gif_last_end_time = 0;
-		var _gif_last_end_value = 0;
-		var _gif_has_previous = false;
-		for (var _gi = 0; _gi < _gif_event_count; _gi++) {
+		var _gi = clamp(gif_event_index, 0, _gif_event_count - 1);
+		while (_gi > 0 && line_time < _gif_events[_gi].startTime) _gi--;
+		while (_gi < _gif_event_count && is_struct(_gif_events[_gi]) && _gif_events[_gi].endTime < line_time) _gi++;
+		gif_event_index = _gi;
+		if (_gi < _gif_event_count && line_time >= _gif_events[_gi].startTime && line_time <= _gif_events[_gi].endTime) {
 			var _gev = _gif_events[_gi];
-			if (!is_struct(_gev)) then continue;
-			if (line_time < _gev.startTime) then break;
-			if (line_time <= _gev.endTime) {
-				__gif_progress = lerp(real(_gev.start), real(_gev[$ "end"]), rpe_event_progress(_gev, _gev.startTime, _gev.endTime));
-				_gif_has_previous = false;
-				break;
-			};
-			_gif_last_end_time = _gev.endTime;
-			_gif_last_end_value = real(_gev[$ "end"]);
-			_gif_has_previous = true;
+			__gif_progress = lerp(real(_gev.start), real(_gev[$ "end"]), rpe_event_progress(_gev, _gev.startTime, _gev.endTime));
+		} else if (_gi > 0) {
+			var _prev = _gif_events[_gi - 1];
+			__gif_progress = frac(real(_prev[$ "end"]) + (line_time - _prev.endTime) / _gif_duration);
 		};
-		if (_gif_has_previous) then __gif_progress = frac(_gif_last_end_value + (line_time - _gif_last_end_time) / _gif_duration);
 	};
 };

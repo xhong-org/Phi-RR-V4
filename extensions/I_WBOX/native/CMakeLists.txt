@@ -1,0 +1,19 @@
+cmake_minimum_required(VERSION 3.18)
+project(I_WBOX LANGUAGES CXX)
+
+add_library(I_WBOX SHARED I_WBOX.cpp)
+target_compile_features(I_WBOX PRIVATE cxx_std_20)
+target_compile_definitions(I_WBOX PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_link_libraries(I_WBOX PRIVATE user32 gdi32 comctl32)
+set_target_properties(I_WBOX PROPERTIES
+    OUTPUT_NAME "I_WBOX"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.."
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_SOURCE_DIR}/.."
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_SOURCE_DIR}/.."
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.."
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../out"
+)
+if(MSVC)
+    target_compile_options(I_WBOX PRIVATE /W4 /permissive- /utf-8)
+    set_property(TARGET I_WBOX PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
+endif()

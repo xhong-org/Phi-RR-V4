@@ -27,17 +27,9 @@ if (isBad) {
 };
 
 // far cull by floor distance / max visual (cheap)
-if (_preload_seconds > 0) {
-	var sec_to_hit = start_sec - _now_seconds;
-	if (sec_to_hit > _preload_seconds) {
-		var line_floor_pre = real(_line_ref.__value[0]);
-		// PCR-style: not visible if line has not entered max visual window yet for distant notes
-		if (line_floor_pre + _max_visible_floor_distance < floorPosition
-			&& line_floor_pre < maximum_visual_position - _max_visible_floor_distance) {
-			canDraw = false;
-			exit;
-		};
-	};
+if (rpe_note_too_far()) {
+	canDraw = false;
+	exit;
 };
 
 // visibleTime is handled in rpe_note_apply_visibility() during position update

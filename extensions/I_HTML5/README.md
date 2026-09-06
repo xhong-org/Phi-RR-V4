@@ -7,7 +7,7 @@ GX.games is not the HTML5 JavaScript runner, so `I_HTML5.js` is not shipped. Com
 - ZIP extract: built-in `zip_unzip`
 - Files: GameMaker sandbox (`working_directory` / `game_save_id`)
 - Audio: `audio_create_stream` (FMOD is Windows/Android only)
-- Dialogs: `show_message` / `show_message_async` (async dialogs block on GX.games)
+- Dialogs: `msgbox_*` → GX overlay via `i_gx_drop_import` (`pls-f:alert` / `pls-f:msg*`); Android uses `show_message_async`
 - Chart picker: Windows-style `get_open_filename` on GX.games
 
 Native DLLs (`I_Compression`, `FMOD`, `MsgBox`, `I_Shaders`, `I_Pulse`, `I_Parallel`, `FFVideos`) stay Windows/Android.

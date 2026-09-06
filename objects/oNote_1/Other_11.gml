@@ -2,6 +2,7 @@
 if (_is_hold || !inition) then exit;
 var _line = _line_ref;
 if (!instance_exists(_line)) { canDraw = false; exit; };
+if (rpe_note_too_far()) { canDraw = false; exit; };
 
 var line_floor = real(_line.__value[0]);
 _position_floor_delta = floorPosition - line_floor;
@@ -11,7 +12,7 @@ _control_position_speed = _note_position_speed;
 	var notes_w = chart_view_width * 0.05625;
 	var notes_h = chart_view_height * 0.6;
 var posx = (xOffset / 75.375) * notes_w;
-if (variable_instance_exists(_line, "__incline_sin")) {
+if (_line.__incline_sin != 0) {
 	var incline_y = _note_position_speed + (2 * yOffset / 900 * speed);
 	posx *= 1 - real(_line.__incline_sin) * incline_y * 1.25;
 };

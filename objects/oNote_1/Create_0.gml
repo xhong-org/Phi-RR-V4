@@ -85,6 +85,14 @@ _preload_seconds = (variable_global_exists("game") && is_struct(game)
 _max_visible_floor_distance = 12;
 _last_global_scales = -1;
 _now_seconds = 0;
+rpe_note_too_far = function() {
+	if (_preload_seconds <= 0) then return false;
+	if (start_sec - _now_seconds <= _preload_seconds) then return false;
+	if (!instance_exists(_line_ref)) then return true;
+	var line_floor_pre = real(_line_ref.__value[0]);
+	return (line_floor_pre + _max_visible_floor_distance < floorPosition
+		&& line_floor_pre < maximum_visual_position - _max_visible_floor_distance);
+};
 _now_beat = 0;
 _line_time = 0;
 
@@ -160,12 +168,13 @@ if (variable_global_exists("game_1") && is_struct(game_1)
 			var _spatial_group;
 			if (!struct_exists(game_1._note_spatial_group_map, _group_key)) {
 				_spatial_group = { line:_line_ref, speed:speed, above:isAbove,
-					spatialSafe:_spatial_record.spatialSafe, notes:[] };
+					spatialSafe:_spatial_record.spatialSafe, notes:[], remain:0 };
 				game_1._note_spatial_group_map[$ _group_key] = _spatial_group;
 				array_add(game_1._note_spatial_groups, _spatial_group);
 			} else {
 				_spatial_group = game_1._note_spatial_group_map[$ _group_key];
 			};
+			_spatial_record.group = _spatial_group;
 			array_add(_spatial_group.notes, _spatial_record);
 		};
 	};

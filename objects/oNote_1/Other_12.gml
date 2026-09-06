@@ -2,6 +2,7 @@
 if (!_is_hold || !inition) then exit;
 var _line = _line_ref;
 if (!instance_exists(_line)) { canDraw = false; exit; };
+if (rpe_note_too_far()) { canDraw = false; exit; };
 
 var line_floor = real(_line.__value[0]);
 var time_before = (_now_seconds < start_sec);
