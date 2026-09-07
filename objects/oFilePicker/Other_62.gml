@@ -117,7 +117,7 @@ if (fetch_json || job == "fetch") {
                 exit;
         };
         last_error = "";
-        status_text = "Imported " + chart_path_file_name(download_path) + " (" + saved.kind + ")";
+        status_text = langf("picker.imported", chart_path_file_name(download_path), saved.kind);
         gx_fp_finish_ok(is_string(saved.dest) && string_length(saved.dest) ? saved.dest : download_path);
         exit;
 };
@@ -145,5 +145,5 @@ if (!gx_file_picker_looks_like_zip(dest)) {
 };
 
 last_error = "";
-status_text = "Downloaded " + chart_path_file_name(dest);
+status_text = langf("picker.downloaded", chart_path_file_name(dest));
 gx_fp_finish_ok(dest);

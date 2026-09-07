@@ -7,13 +7,13 @@ if (health_id >= 0 && req == health_id) {
         health_id = -1;
         if (status < 0) {
                 api_online = false;
-                detail_text = "请先运行 node tools/gx-fs-api/server.js";
+                detail_text = lang("gx.runServer");
                 exit;
         };
         var body = string(async_load[? "result"] ?? "");
         api_online = (string_pos("\"ok\":true", body) > 0) || (string_pos("\"ok\": true", body) > 0);
-        detail_text = api_online ? ("已连接 " + gx_fs_api_base()) : "本地 API 无响应";
-        if (api_online && !busy) then status_text = "单击选择文件，或用 API 浏览本机。";
+        detail_text = api_online ? langf("gx.connected", gx_fs_api_base()) : lang("gx.apiNoResponse");
+        if (api_online && !busy) then status_text = lang("gx.statusClickOrApi");
         exit;
 };
 
@@ -26,8 +26,8 @@ if (status > 0) then exit;
 query_http_id = -1;
 if (status < 0) {
         busy = false;
-        last_error = "URL 下载失败。";
-        status_text = "上传失败。";
+        last_error = lang("gx.urlFailed");
+        status_text = lang("gx.uploadFailed");
         exit;
 };
 
@@ -37,8 +37,8 @@ if (ds_map_exists(async_load, "result") && is_string(async_load[? "result"]) && 
 };
 if (!file_exists(dest)) {
         busy = false;
-        last_error = "下载完成但文件不存在。";
-        status_text = "上传失败。";
+        last_error = lang("gx.downloadMissing");
+        status_text = lang("gx.uploadFailed");
         exit;
 };
 

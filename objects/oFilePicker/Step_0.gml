@@ -12,9 +12,9 @@ if (!armed && !mouse_check_button(mb_left)) then armed = true;
 
 if (downloading) {
         if (download_total > 0) {
-                status_text = "Downloading " + string(download_got) + " / " + string(download_total) + " bytes";
+                status_text = langf("picker.downloadProgress", string(download_got), string(download_total));
         } else if (download_got > 0) {
-                status_text = "Downloading " + string(download_got) + " bytes";
+                status_text = langf("picker.downloadBytes", string(download_got));
         };
 };
 
@@ -33,7 +33,7 @@ if (keyboard_check_pressed(vk_escape)) {
                 download_id = -1;
                 api_job = "";
                 api_fetch_json = false;
-                last_error = "Download cancelled.";
+                last_error = lang("picker.downloadCancelled");
                 status_text = last_error;
         } else {
                 gx_fp_finish_cancel();
@@ -76,7 +76,7 @@ if (downloading) {
         if (hover_cancel) {
                 downloading = false;
                 download_id = -1;
-                last_error = "Download cancelled.";
+                last_error = lang("picker.downloadCancelled");
                 status_text = last_error;
         };
         exit;

@@ -5,22 +5,22 @@ setup_store_text();
 if ((field == 2 || field == 3) && string_length(string_trim(keyboard_string)) > 0) {
     var numeric_probe = real(string_trim(keyboard_string));
     if (is_nan(numeric_probe) || numeric_probe == infinity || numeric_probe == -infinity) {
-        setup_set_status("FPS and quality must be numeric.");
+        setup_set_status(lang("render.fpsNumeric"));
     };
 };
 if (field == 4 && string_length(string_trim(keyboard_string)) > 0) {
     var aspect_probe = string_trim(keyboard_string);
     var aspect_separator = string_pos(":", aspect_probe);
-    if (aspect_separator <= 1 || aspect_separator >= string_length(aspect_probe)) setup_set_status("Aspect ratio must use width:height.");
+    if (aspect_separator <= 1 || aspect_separator >= string_length(aspect_probe)) setup_set_status(lang("render.aspectFormat"));
 };
 var control_down = keyboard_check(vk_control) || keyboard_check(vk_lcontrol) || keyboard_check(vk_rcontrol);
 if (control_down && keyboard_check_pressed(ord("C"))) {
     try {
         clipboard_set_text(string(keyboard_string));
-        setup_set_status("Copied.");
+        setup_set_status(lang("render.copied"));
     } catch (clipboard_copy_error) {
         delete(clipboard_copy_error);
-        setup_set_status("Clipboard copy is unavailable.");
+        setup_set_status(lang("render.copyUnavailable"));
     };
     exit;
 };
@@ -29,17 +29,17 @@ if (control_down && keyboard_check_pressed(ord("V"))) {
         var pasted_text = clipboard_get_text();
         if (is_string(pasted_text)) keyboard_string += pasted_text;
         setup_store_text();
-        setup_set_status("Pasted.");
+        setup_set_status(lang("render.pasted"));
     } catch (clipboard_paste_error) {
         delete(clipboard_paste_error);
-        setup_set_status("Clipboard paste is unavailable.");
+        setup_set_status(lang("render.pasteUnavailable"));
     };
     exit;
 };
 if (keyboard_check_pressed(vk_delete)) {
     keyboard_string = "";
     setup_store_text();
-    setup_set_status("Input cleared.");
+    setup_set_status(lang("render.cleared"));
     exit;
 };
 if (keyboard_check_pressed(vk_enter)) {

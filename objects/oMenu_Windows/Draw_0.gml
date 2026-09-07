@@ -22,7 +22,7 @@ draw_set_valign(fa_middle);
 draw_set_colour(c_white);
 draw_text_transformed(cx, room_height * 0.18, GAME_NAME, title_scale, title_scale, 0);
 draw_set_colour(c_ltgray);
-draw_text_transformed(cx, room_height * 0.26, "Custom Chart Loader", subtitle_scale, subtitle_scale, 0);
+draw_text_transformed(cx, room_height * 0.26, lang("menu.subtitle"), subtitle_scale, subtitle_scale, 0);
 
 var buttons = [btn_open, btn_sample, btn_render];
 var hovers = [hover_open, hover_sample, hover_render];
@@ -36,6 +36,10 @@ for (var i = 0; i < array_length(buttons); i++) {
         draw_text_transformed(b.x + b.w * 0.5, b.y + b.h * 0.5, b.label, btn_text_scale, btn_text_scale, 0);
 };
 
+settings_menu_button_draw(hover_settings, s);
+
+draw_set_halign(fa_center);
+draw_set_valign(fa_middle);
 draw_set_colour(c_silver);
 draw_text_transformed(cx, room_height * 0.78, status_text, body_scale, body_scale, 0);
 draw_set_colour(c_gray);
@@ -46,4 +50,4 @@ if (string_length(last_error)) {
 };
 
 draw_set_colour(c_dkgray);
-draw_text_transformed(cx, room_height - max(18, 30 * s), "O: Open package    S: Sample chart    X: X X XXX", small_scale, small_scale, 0);
+draw_text_transformed(cx, room_height - max(18, 30 * s), lang("menu.hintKeys"), small_scale, small_scale, 0);

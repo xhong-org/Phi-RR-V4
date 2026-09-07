@@ -183,6 +183,24 @@ struct DialogState {
     bool modal = false;
 };
 
+void enable_and_focus_owner(HWND owner) {
+    if (!owner || !IsWindow(owner)) return;
+    EnableWindow(owner, TRUE);
+    if (IsIconic(owner)) ShowWindow(owner, SW_RESTORE);
+    HWND foreground = GetForegroundWindow();
+    DWORD foreground_tid = foreground ? GetWindowThreadProcessId(foreground, nullptr) : 0;
+    DWORD our_tid = GetCurrentThreadId();
+    BOOL attached = FALSE;
+    if (foreground && foreground != owner && foreground_tid != 0 && foreground_tid != our_tid) {
+        attached = AttachThreadInput(foreground_tid, our_tid, TRUE);
+    }
+    BringWindowToTop(owner);
+    SetForegroundWindow(owner);
+    SetActiveWindow(owner);
+    SetFocus(owner);
+    if (attached) AttachThreadInput(foreground_tid, our_tid, FALSE);
+}
+
 void copy_dialog_text(const DialogState& state) {
     std::wstring clip = state.title + L"\r\n\r\n" + state.message;
     if (!OpenClipboard(nullptr)) return;
@@ -218,12 +236,17 @@ LRESULT CALLBACK dialog_proc(HWND window, UINT message, WPARAM wparam, LPARAM lp
         if (state && id >= 100 && id < 100 + kMaxButtons) {
             state->result = id - 99;
             if (state->task) state->task->result.store(state->result);
+            // Re-enable the GameMaker owner before destroy. If it is still
+            // disabled, Windows cannot activate it and the runner goes to the
+            // background or minimizes.
+            if (state->owner) enable_and_focus_owner(state->owner);
             DestroyWindow(window);
             return 0;
         }
         break;
     }
     case WM_CLOSE:
+        if (state && state->owner) enable_and_focus_owner(state->owner);
         DestroyWindow(window);
         return 0;
     case WM_DESTROY:
@@ -233,7 +256,7 @@ LRESULT CALLBACK dialog_proc(HWND window, UINT message, WPARAM wparam, LPARAM lp
                 DeleteObject(state->font);
                 state->font = nullptr;
             }
-            if (state->modal && state->owner) EnableWindow(state->owner, TRUE);
+            if (state->owner) enable_and_focus_owner(state->owner);
         }
         return 0;
     case WM_CTLCOLORSTATIC:
@@ -395,6 +418,7 @@ int show_dialog(std::wstring message, std::wstring title, int kind, std::vector<
             DispatchMessageW(&msg);
         }
     }
+    if (owner) enable_and_focus_owner(owner);
     return task ? task->result.load() : state.result;
 }
 

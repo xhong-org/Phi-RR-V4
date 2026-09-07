@@ -51,13 +51,13 @@ draw_set_halign(fa_left);
 draw_set_valign(fa_top);
 draw_set_colour(c_white);
 draw_text_transformed(panel_left + 42 * scale, panel_top + 34 * scale,
-    "VIDEO RENDER", 1.1 * text_scale_x, 1.1 * text_scale_y, 0);
+    lang("video.title"), 1.1 * text_scale_x, 1.1 * text_scale_y, 0);
 draw_set_colour(make_colour_rgb(139, 151, 178));
 draw_text_transformed(panel_left + 42 * scale, panel_top + 88 * scale,
     render_status, 0.55 * text_scale_x, 0.55 * text_scale_y, 0);
 
 var source_name = filename_name(global.render_source);
-if (!string_length(source_name) || source_name == "__sample__") source_name = "Bundled sample chart";
+if (!string_length(source_name) || source_name == "__sample__") source_name = lang("video.sample");
 draw_set_colour(make_colour_rgb(211, 218, 234));
 draw_text_transformed(panel_left + 42 * scale, panel_top + 126 * scale,
     source_name, 0.45 * text_scale_x, 0.45 * text_scale_y, 0);
@@ -81,12 +81,12 @@ draw_text_transformed(bar_left, bar_top + 38 * scale,
 draw_set_halign(fa_right);
 draw_set_colour(make_colour_rgb(139, 151, 178));
 draw_text_transformed(panel_left + panel_width - 42 * scale, bar_top + 40 * scale,
-    $"Frame {output_frame} / {output_total_frames}", 0.45 * text_scale_x, 0.45 * text_scale_y, 0);
+    langf("video.frame", output_frame, output_total_frames), 0.45 * text_scale_x, 0.45 * text_scale_y, 0);
 draw_set_halign(fa_left);
 draw_text_transformed(bar_left, panel_top + 258 * scale,
-    $"Elapsed  {string_format(elapsed, 0, 1)}s", 0.45 * text_scale_x, 0.45 * text_scale_y, 0);
+    langf("video.elapsed", string_format(elapsed, 0, 1)), 0.45 * text_scale_x, 0.45 * text_scale_y, 0);
 draw_set_halign(fa_right);
-var eta_text = progress < 1 ? $"Remaining  {string_format(eta, 0, 1)}s" : "Finalizing";
+var eta_text = progress < 1 ? langf("video.remaining", string_format(eta, 0, 1)) : lang("video.finalizing");
 draw_text_transformed(panel_left + panel_width - 42 * scale, panel_top + 258 * scale,
     eta_text, 0.45 * text_scale_x, 0.45 * text_scale_y, 0);
 surface_reset_target();

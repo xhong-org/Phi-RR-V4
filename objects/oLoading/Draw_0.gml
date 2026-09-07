@@ -10,7 +10,7 @@ var cy = room_height * 0.5;
 draw_set_halign(fa_center);
 draw_set_valign(fa_middle);
 draw_set_colour(c_white);
-draw_text_transformed(cx, room_height * 0.28, "Loading Chart", 0.9 * s, 0.9 * s, 0);
+draw_text_transformed(cx, room_height * 0.28, lang("loading.title"), 0.9 * s, 0.9 * s, 0);
 
 draw_set_colour(failed ? c_red : c_aqua);
 draw_text_transformed(cx, room_height * 0.42, message, 0.55 * s, 0.55 * s, 0);
@@ -20,14 +20,14 @@ draw_text_transformed(cx, room_height * 0.52, detail, 0.4 * s, 0.4 * s, 0);
 
 var session = chart_session_ensure();
 draw_set_colour(c_gray);
-draw_text_transformed(cx, room_height * 0.62, "Status: " + string(session.status), 0.35 * s, 0.35 * s, 0);
+draw_text_transformed(cx, room_height * 0.62, langf("loading.statusPrefix", string(session.status)), 0.35 * s, 0.35 * s, 0);
 if (string_length(session.detail)) {
         draw_text_transformed(cx, room_height * 0.68, string(session.detail), 0.32 * s, 0.32 * s, 0);
 };
 
 if (failed) {
         draw_set_colour(c_silver);
-         draw_text_transformed(cx, room_height * 0.82, "Returning to menu...", 0.35 * s, 0.35 * s, 0);
+         draw_text_transformed(cx, room_height * 0.82, lang("loading.returning"), 0.35 * s, 0.35 * s, 0);
 } else {
         var p = clamp(phase / 3, 0, 1);
         var bx1 = room_width * 0.25;

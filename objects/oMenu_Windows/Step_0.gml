@@ -5,19 +5,30 @@ if (layout_w != room_width || layout_h != room_height || layout_scale != scale_n
         event_user(0);
 };
 
+if (settings_gui_blocking()) {
+        hover_open = false;
+        hover_sample = false;
+        hover_render = false;
+        hover_settings = false;
+        exit;
+};
+
 var mx = mouse_x;
 var my = mouse_y;
 
 hover_open = (mx >= btn_open.x && mx <= btn_open.x + btn_open.w && my >= btn_open.y && my <= btn_open.y + btn_open.h);
 hover_sample = (mx >= btn_sample.x && mx <= btn_sample.x + btn_sample.w && my >= btn_sample.y && my <= btn_sample.y + btn_sample.h);
 hover_render = (mx >= btn_render.x && mx <= btn_render.x + btn_render.w && my >= btn_render.y && my <= btn_render.y + btn_render.h);
+hover_settings = settings_menu_button_hit(mx, my);
 
 if (mouse_check_button_pressed(mb_left)) {
-        if (hover_open) {
-                var path = get_open_filename("Chart package|*.zip;*.pez|All files|*.*", "");
+        if (hover_settings) {
+                settings_gui_open();
+        } else if (hover_open) {
+                var path = get_open_filename(lang("menu.filterChart"), "");
                 if (!string_length(path)) {
-                        last_error = "No file selected.";
-                        status_text = "Cancelled.";
+                        last_error = lang("menu.noFile");
+                        status_text = lang("menu.cancelled");
                         detail_text = last_error;
                 } else {
                         pending_path = path;
@@ -43,7 +54,7 @@ if (mouse_check_button_pressed(mb_left)) {
 };
 
 if (keyboard_check_pressed(ord("O"))) {
-        var path2 = get_open_filename("Chart package|*.zip;*.pez|All files|*.*", "");
+        var path2 = get_open_filename(lang("menu.filterChart"), "");
         if (string_length(path2)) {
                 var session_o = chart_session_ensure();
                 session_o.source_path = path2;

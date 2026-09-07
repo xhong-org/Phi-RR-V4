@@ -38,7 +38,7 @@ if(!game.paused && !chart_os_hold){
 			if (is_struct(_activation_records)) {
 				var _time_note_key = string(_time_note_id);
 				if (struct_exists(_activation_records, _time_note_key)) {
-					rpe_note_mark_activated(_activation_records[$ _time_note_key]);
+					_activation_records[$ _time_note_key].activated = true;
 				};
 			};
 			_note_index++;
@@ -53,7 +53,6 @@ if(!game.paused && !chart_os_hold){
 			var _spatial_group_count = array_length(_spatial_groups);
 			for (var _sgi = 0; _sgi < _spatial_group_count; _sgi++) {
 				var _sg = _spatial_groups[_sgi];
-				if (real(_sg.remain ?? 0) <= 0) then continue;
 				var _sg_line = _sg.line;
 				if (!instance_exists(_sg_line)) then continue;
 				var _sg_speed = real(_sg.speed);
@@ -98,7 +97,7 @@ if(!game.paused && !chart_os_hold){
 					if (is_finite(_sn.visibleTime) && _sn.visibleTime < 999999
 						&& _sn_to_hit_real > _sn.visibleTime) then continue;
 					instance_activate_object(_sn.id);
-					rpe_note_mark_activated(_sn);
+					_sn.activated = true;
 				};
 			};
 		};
@@ -109,7 +108,6 @@ if(!game.paused && !chart_os_hold){
 			var _hold_group_count = array_length(_hold_groups);
 			for (var _hgi = 0; _hgi < _hold_group_count; _hgi++) {
 				var _hg = _hold_groups[_hgi];
-				if (real(_hg.count) <= 0) then continue;
 				var _sh_line = _hg.line;
 				if (!instance_exists(_sh_line)) then continue;
 				var _sh_reversed = (_hg.above ? -1 : 1);

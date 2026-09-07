@@ -11,8 +11,8 @@ if (picking && extension_exists("I_AndroidOpen")) {
                 var path = i_android_open_path();
                 i_android_open_reset();
                 if (!string_length(path)) {
-                        last_error = "No file selected.";
-                        status_text = "Cancelled.";
+                        last_error = lang("menu.noFile");
+                        status_text = lang("menu.cancelled");
                         detail_text = last_error;
                 } else {
                         pending_path = path;
@@ -28,27 +28,37 @@ if (picking && extension_exists("I_AndroidOpen")) {
         } else if (pick_status == ANDROID_OPEN_STATUS.CANCELLED || pick_status == ANDROID_OPEN_STATUS.ERROR) {
                 picking = false;
                 last_error = i_android_open_error();
-                if (!string_length(last_error)) then last_error = "No file selected.";
-                status_text = (pick_status == ANDROID_OPEN_STATUS.CANCELLED) ? "Cancelled." : "Open failed.";
+                if (!string_length(last_error)) then last_error = lang("menu.noFile");
+                status_text = (pick_status == ANDROID_OPEN_STATUS.CANCELLED) ? lang("menu.cancelled") : lang("menu.openFailed");
                 detail_text = last_error;
                 i_android_open_reset();
         } else {
-                status_text = "Waiting for system file picker...";
+                status_text = lang("android.waitingPicker");
         };
+};
+
+if (settings_gui_blocking()) {
+        hover_open = false;
+        hover_sample = false;
+        hover_settings = false;
+        exit;
 };
 
 var mx = mouse_x;
 var my = mouse_y;
 hover_open = (mx >= btn_open.x && mx <= btn_open.x + btn_open.w && my >= btn_open.y && my <= btn_open.y + btn_open.h);
 hover_sample = (mx >= btn_sample.x && mx <= btn_sample.x + btn_sample.w && my >= btn_sample.y && my <= btn_sample.y + btn_sample.h);
+hover_settings = settings_menu_button_hit(mx, my);
 
 if (picking) then exit;
 if (!mouse_check_button_pressed(mb_left)) then exit;
 
-if (hover_open) {
+if (hover_settings) {
+        settings_gui_open();
+} else if (hover_open) {
         var pick_started = false;
         if (!extension_exists("I_AndroidOpen")) {
-                last_error = "I_AndroidOpen is not available in this build.";
+                last_error = lang("android.pickerUnavailable");
         } else {
                 pick_started = i_android_open_pick("application/zip");
                 if (!pick_started) then last_error = i_android_open_error();
@@ -56,11 +66,11 @@ if (hover_open) {
         if (pick_started) {
                 picking = true;
                 last_error = "";
-                status_text = "Waiting for system file picker...";
-                detail_text = "Select a .zip or .pez chart package.";
+                status_text = lang("android.waitingPicker");
+                detail_text = lang("android.pickDetail");
         } else {
-                if (!string_length(last_error)) then last_error = "Failed to open the system picker.";
-                status_text = "Open failed.";
+                if (!string_length(last_error)) then last_error = lang("android.pickerFailed");
+                status_text = lang("menu.openFailed");
                 detail_text = last_error;
         };
 } else if (hover_sample) {

@@ -235,6 +235,7 @@ function pls_gx_menu_layout() {
         layout_w = rw;
         layout_h = rh;
         layout_scale = s;
+        settings_menu_button_layout();
 }
 
 function gx_file_ui_drop_open() {
@@ -807,7 +808,7 @@ function gx_file_picker_roots() {
         if (string_length(save_dir)) {
                 array_push(roots, { name: "Save Data", path: save_dir });
         };
-        array_push(roots, { name: "Game Files", path: chart_path_norm(working_directory) });
+        array_push(roots, { name: lang("picker.gameFiles", "Game Files"), path: chart_path_norm(working_directory) });
         var sample = chart_path_norm(working_directory + "chart/");
         if (directory_exists(sample)) {
                 array_push(roots, { name: "Sample", path: sample });
@@ -1102,17 +1103,17 @@ function gx_fp_layout() {
         var nav_y = drives_bottom + 10 * s;
         var nav_h = 36 * s;
         var nav_w = (inner_w - gap * 2) / 3;
-        btn_up = { label: "Up", x: inner_x, y: nav_y, w: nav_w, h: nav_h };
-        btn_back = { label: "Back", x: btn_up.x + btn_up.w + gap, y: nav_y, w: nav_w, h: nav_h };
-        btn_fwd = { label: "Fwd", x: btn_back.x + btn_back.w + gap, y: nav_y, w: nav_w, h: nav_h };
+        btn_up = { label: lang("picker.up"), x: inner_x, y: nav_y, w: nav_w, h: nav_h };
+        btn_back = { label: lang("picker.back"), x: btn_up.x + btn_up.w + gap, y: nav_y, w: nav_w, h: nav_h };
+        btn_fwd = { label: lang("picker.fwd"), x: btn_back.x + btn_back.w + gap, y: nav_y, w: nav_w, h: nav_h };
         path_y = nav_y + nav_h + 8 * s;
         path_h = 24 * s;
         path_x = inner_x;
         path_w = inner_w;
         var footer_y = panel_y + panel_h - pad - 40 * s;
-        btn_cancel = { label: "Cancel", x: inner_x + inner_w - 120 * s, y: footer_y, w: 120 * s, h: 40 * s };
-        btn_open = { label: "Open", x: btn_cancel.x - 8 * s - 120 * s, y: footer_y, w: 120 * s, h: 40 * s };
-        btn_folder = { label: "Use Folder", x: btn_open.x - 8 * s - 150 * s, y: footer_y, w: 150 * s, h: 40 * s };
+        btn_cancel = { label: lang("picker.cancel"), x: inner_x + inner_w - 120 * s, y: footer_y, w: 120 * s, h: 40 * s };
+        btn_open = { label: lang("picker.open"), x: btn_cancel.x - 8 * s - 120 * s, y: footer_y, w: 120 * s, h: 40 * s };
+        btn_folder = { label: lang("picker.useFolder"), x: btn_open.x - 8 * s - 150 * s, y: footer_y, w: 150 * s, h: 40 * s };
         status_h = 22 * s;
         status_y = footer_y - 10 * s - status_h;
         list_x = inner_x;
@@ -1125,7 +1126,7 @@ function gx_fp_layout() {
 
 function gx_fp_refresh_list() {
         if (variable_instance_exists(id, "api_mode") && api_mode) {
-                status_text = "Listing " + current_dir;
+                status_text = langf("picker.listing", current_dir);
                 api_list_id = gx_fs_request_list(current_dir);
                 return;
         };
@@ -1217,7 +1218,7 @@ function gx_fp_confirm_local(path) {
                 api_unpack_files = [];
                 api_unpack_index = 0;
                 last_error = "";
-                status_text = "Unpacking package on Node API...";
+                status_text = lang("picker.unpacking");
                 download_id = gx_fs_request_unpack(target);
                 if (download_id < 0) {
                         downloading = false;
@@ -1291,7 +1292,7 @@ function gx_fp_start_download(url) {
         download_got = 0;
         download_total = 0;
         last_error = "";
-        status_text = "Downloading...";
+        status_text = lang("picker.downloading");
         download_id = http_get_file(remote, dest);
         if (download_id < 0) {
                 downloading = false;
@@ -1318,7 +1319,7 @@ function gx_fp_submit_field() {
                 } else if (string_pos("\\", text) > 0 || string_pos("/", text) > 0 || string_pos(":", text) > 0) {
                         gx_fp_set_directory(text);
                 } else {
-                        status_text = "Searching...";
+                        status_text = lang("picker.searching");
                         api_list_id = gx_fs_request_search(current_dir, text);
                 };
                 return;
@@ -1332,7 +1333,7 @@ function gx_fp_paste_clipboard() {
                 if (is_string(pasted) && string_length(pasted)) {
                         url_text += pasted;
                         if (focus_url) then keyboard_string = url_text;
-                        status_text = "Pasted.";
+                        status_text = lang("picker.pasted");
                         last_error = "";
                 };
         } catch (paste_error) {

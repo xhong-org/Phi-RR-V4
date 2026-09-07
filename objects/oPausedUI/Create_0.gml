@@ -337,14 +337,6 @@ function paused_ui_reset_rpe() {
                                 if (is_struct(record)) then record.activated = false;
                         };
                 };
-                if (is_array(game_1._note_spatial_groups)) {
-                        for (var spatial_reset_i = 0; spatial_reset_i < array_length(game_1._note_spatial_groups); spatial_reset_i++) {
-                                var spatial_group = game_1._note_spatial_groups[spatial_reset_i];
-                                if (is_struct(spatial_group) && is_array(spatial_group.notes)) {
-                                        spatial_group.remain = array_length(spatial_group.notes);
-                                };
-                        };
-                };
                 // Hold spatial queries remove activated entries by swapping them
                 // out of the active prefix. Rebuild that prefix for a retry.
                 if (is_array(game_1._note_spatial_hold_groups)) {
@@ -372,7 +364,7 @@ function paused_ui_reset_rpe() {
                                         var activation_key = string(activation_note.id);
                                         if (is_struct(game_1._note_activation_records)
                                                 && struct_exists(game_1._note_activation_records, activation_key)) {
-                                                rpe_note_mark_activated(game_1._note_activation_records[$ activation_key]);
+                                                game_1._note_activation_records[$ activation_key].activated = true;
                                         };
                                 } else {
                                         instance_deactivate_object(activation_note.id);

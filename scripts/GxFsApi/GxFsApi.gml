@@ -364,7 +364,7 @@ function gx_fp_blob_next() {
                 download_id = -1;
                 api_job = "";
                 last_error = "";
-                status_text = "Imported " + string(array_length(api_unpack_files)) + " files";
+                status_text = langf("picker.importedFiles", string(array_length(api_unpack_files)));
                 gx_media_store_host_files(api_unpack_files);
                 gx_media_persist_host_files(download_path);
                 gx_fp_finish_ok(download_path);
@@ -372,7 +372,7 @@ function gx_fp_blob_next() {
         };
         var item = api_unpack_files[api_unpack_index];
         var rel = string(item[$ "rel"] ?? "");
-        status_text = "Copying " + string(api_unpack_index + 1) + "/" + string(array_length(api_unpack_files)) + ": " + chart_path_file_name(rel);
+        status_text = langf("picker.copying", string(api_unpack_index + 1), string(array_length(api_unpack_files)), chart_path_file_name(rel));
         api_job = "blob";
         downloading = true;
         download_id = gx_fs_request_blob(string(item[$ "path"] ?? ""));
@@ -397,12 +397,12 @@ function gx_fp_apply_listing(parsed) {
         scroll = 0;
         if (parsed.ok) {
                 last_error = "";
-                status_text = string(array_length(items)) + " items";
+                status_text = langf("picker.itemsCount", string(array_length(items)));
                 restore_pending = false;
                 gx_fp_cache_save();
         } else {
                 last_error = parsed.error;
-                if (!string_length(last_error)) then last_error = "List failed.";
+                if (!string_length(last_error)) then last_error = lang("picker.listFailed");
                 status_text = last_error;
                 if (restore_pending) {
                         restore_pending = false;
@@ -424,7 +424,7 @@ function gx_fs_picker_open(on_ok = undefined, on_cancel = undefined) {
         var inst = gx_file_picker_open(on_ok, on_cancel);
         inst.api_mode = true;
         inst.focus_url = false;
-        inst.status_text = "Connecting to Node filesystem API...";
+        inst.status_text = lang("picker.connecting");
         inst.last_error = "";
         with (inst) {
                 api_list_id = -1;

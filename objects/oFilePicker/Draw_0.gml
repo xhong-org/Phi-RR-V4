@@ -54,7 +54,7 @@ if (array_length(items) <= 0) {
         draw_set_halign(fa_center);
         draw_set_valign(fa_middle);
         draw_set_colour(c_gray);
-        draw_text_ext_transformed(list_x + list_w * 0.5, list_y + list_h * 0.5, "No packages in this folder.\nOpen a drive and choose a .zip / .pez, or Use Folder.", 22, list_w - 24 * s, body_scale, body_scale, 0);
+        draw_text_ext_transformed(list_x + list_w * 0.5, list_y + list_h * 0.5, lang("picker.empty"), 22, list_w - 24 * s, body_scale, body_scale, 0);
 } else {
         var last = min(array_length(items), scroll + visible_rows);
         for (var i = scroll; i < last; i++) {
@@ -67,7 +67,7 @@ if (array_length(items) <= 0) {
                 draw_set_halign(fa_left);
                 draw_set_valign(fa_middle);
                 draw_set_colour(item.is_dir ? make_colour_rgb(180, 210, 255) : c_white);
-                var label = (item.is_dir ? "[DIR] " : "") + item.name;
+                var label = (item.is_dir ? lang("picker.dirPrefix") : "") + item.name;
                 while (string_width(label) * body_scale > list_w - 20 * s && string_length(label) > 4) {
                         label = string_copy(label, 1, string_length(label) - 1);
                 };

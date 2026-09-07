@@ -1,4 +1,5 @@
 /// @description Route command-line archive tests without changing normal startup.
+lang_init();
 global.pls_archive_test = false;
 global.pls_archive_test_path = "";
 global.pls_exit_test = false;

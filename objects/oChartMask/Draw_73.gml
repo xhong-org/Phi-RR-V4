@@ -21,9 +21,12 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 gpu_set_blendmode_ext(bm_one, bm_zero);
 draw_set_colour(c_white);
 draw_set_alpha(1);
-var _copy_left = floor(chart_view_left);
-var _copy_width = max(1, ceil(chart_view_right) - _copy_left);
-draw_surface_part(surface_id, _copy_left, 0, _copy_width, chart_view_height, _copy_left, 0);
+var _copy_left = chart_mask_enabled() ? floor(chart_view_left) : 0;
+var _copy_width = chart_mask_enabled()
+	? max(1, ceil(chart_view_right) - _copy_left)
+	: max(1, surface_get_width(surface_id));
+var _copy_height = chart_mask_enabled() ? chart_view_height : max(1, surface_get_height(surface_id));
+draw_surface_part(surface_id, _copy_left, 0, _copy_width, _copy_height, _copy_left, 0);
 gpu_set_blendmode(bm_normal);
 pls_draw_flush();
 gpu_pop_state();

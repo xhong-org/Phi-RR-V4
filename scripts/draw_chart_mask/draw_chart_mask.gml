@@ -1,15 +1,34 @@
 /// @description Shared chart viewport and Phira-style aspect mask helpers.
 /// @param {real} room_w
 /// @param {real} room_h
+function chart_mask_enabled() {
+	var s = undefined;
+	if (variable_global_exists("game") && is_struct(game) && is_struct(game.settings)) {
+		s = game.settings;
+	} else if (variable_global_exists("pls_settings") && is_struct(global.pls_settings)) {
+		s = global.pls_settings;
+	} else {
+		s = settings_store();
+	};
+	return is_struct(s) && bool(s.enableSurface ?? false);
+}
+
 function chart_view_refresh(_room_w, _room_h) {
 	globalvar chart_view_left, chart_view_width, chart_view_height, chart_view_right;
 	globalvar chart_aspect_ratio;
+	chart_view_height = max(1, _room_h);
+	if (!chart_mask_enabled()) {
+		// Unmasked play area is the full room: same HUD layout, larger w.
+		chart_view_width = max(1, round(_room_w));
+		chart_view_left = 0;
+		chart_view_right = chart_view_left + chart_view_width;
+		return;
+	};
 	var _aspect = chart_aspect_ratio;
 	if (!is_real(_aspect) || !is_finite(_aspect) || _aspect <= 0) {
 		_aspect = 16 / 9;
 		chart_aspect_ratio = _aspect;
 	};
-	chart_view_height = max(1, _room_h);
 	chart_view_width = min(max(1, _room_w), chart_view_height * _aspect);
 	// Pixel-align the effective viewport so composition, clipping and the
 	// aspect mask share the same edge. Fractional coordinates leave a dark
@@ -183,6 +202,7 @@ function chart_surface_end() {
 
 function chart_clip_begin() {
 	globalvar chart_clip_ready, chart_clip_context, chart_clip_state;
+	if (!chart_mask_enabled()) then return false;
 	if (!chart_clip_init()) then return false;
 	pls_draw_flush();
 	var _rect = new ID3D11Rect();

@@ -41,12 +41,6 @@ if (!is_finite(anchor_x)) then anchor_x = 0.5;
 if (!is_finite(anchor_y)) then anchor_y = 0.5;
 has_paint_events = (image == "line.png" && is_struct(extEvents) && struct_exists(extEvents, "paintEvents"));
 has_gif_events = (image != "line.png" && is_struct(extEvents) && struct_exists(extEvents, "gifEvents"));
-has_scale_x_events = false;
-has_scale_y_events = false;
-has_incline_events = false;
-gif_event_index = 0;
-rpe_world_query = false;
-rpe_world_applied = false;
 paint_surface = -1;
 paint_has_content = false;
 paint_last_valid = false;
@@ -318,15 +312,20 @@ rpe_prep_event_array = function(arr, is_speed) {
 
 // Evaluate one event channel at line_time (CCLEExecute-like cursor)
 rpe_eval_events = function(layer_index, event_name, default_value) {
-        var arr = events[layer_index][$ event_name];
-        if (!is_array(arr)) then return default_value;
-        var n = array_length(arr);
-        if (n <= 0) then return default_value;
+         if (!is_struct(events[layer_index])) then return default_value;
+         if (!struct_exists(events[layer_index], event_name)) then return default_value;
+         var arr = events[layer_index][$ event_name];
+        if (!is_array(arr) || array_length(arr) <= 0) then return default_value;
 
-        var cmap = events_count[layer_index];
-        var hmap = events_hold[layer_index];
-        var rmap = events_recall[layer_index];
-        var idx = clamp(real(cmap[$ event_name] ?? 0), 0, n);
+        if (!is_struct(events_count[layer_index])) then events_count[layer_index] = {};
+        if (!is_struct(events_hold[layer_index])) then events_hold[layer_index] = {};
+        if (!is_struct(events_recall[layer_index])) then events_recall[layer_index] = {};
+        if (!struct_exists(events_count[layer_index], event_name)) then events_count[layer_index][$ event_name] = 0;
+        if (!struct_exists(events_hold[layer_index], event_name)) then events_hold[layer_index][$ event_name] = default_value;
+        if (!struct_exists(events_recall[layer_index], event_name)) then events_recall[layer_index][$ event_name] = default_value;
+
+        var n = array_length(arr);
+        var idx = clamp(events_count[layer_index][$ event_name], 0, n);
 
         if (idx >= n) {
                 if (line_time >= arr[n - 1].endTime) then return arr[n - 1][$ "end"];
@@ -338,13 +337,13 @@ rpe_eval_events = function(layer_index, event_name, default_value) {
         };
 
         while ((idx < n) && (arr[idx].endTime <= line_time)) {
-                hmap[$ event_name] = arr[idx][$ "end"];
+                events_hold[layer_index][$ event_name] = arr[idx][$ "end"];
                 idx++;
         };
-        cmap[$ event_name] = idx;
+        events_count[layer_index][$ event_name] = idx;
 
         if (idx >= n) {
-                return hmap[$ event_name];
+                return events_hold[layer_index][$ event_name];
         };
 
         var ev = arr[idx];
@@ -362,8 +361,8 @@ rpe_eval_events = function(layer_index, event_name, default_value) {
 
         var ease = real(ev.easingType ?? 1);
         if (!is_real(ease) || ease <= 1 || ease >= 32) then ease = 1;
-        var e0 = real(ev.easingLeft ?? 0);
-        var e1 = real(ev.easingRight ?? 1);
+        var e0 = clamp(real(ev.easingLeft ?? 0), 0, 1);
+        var e1 = clamp(real(ev.easingRight ?? 1), 0, 1);
         if (e0 == e1) {
                 e0 = 0;
                 e1 = 1;
@@ -398,9 +397,9 @@ rpe_eval_events = function(layer_index, event_name, default_value) {
         };
 
         if (!is_finite(tval)) {
-                tval = rmap[$ event_name];
+                tval = events_recall[layer_index][$ event_name];
         } else {
-                rmap[$ event_name] = tval;
+                events_recall[layer_index][$ event_name] = tval;
         };
         return tval;
 };
@@ -470,12 +469,17 @@ rpe_event_progress = function(ev, st, et) {
 };
 
 rpe_eval_ext_events = function(event_name, default_value) {
+         if (!is_struct(extEvents)) then return default_value;
+         if (!struct_exists(extEvents, event_name)) then return default_value;
          var arr = extEvents[$ event_name];
-        if (!is_array(arr)) then return default_value;
-        var n = array_length(arr);
-        if (n <= 0) then return default_value;
+        if (!is_array(arr) || array_length(arr) <= 0) then return default_value;
 
-        var idx = clamp(real(ext_count[$ event_name] ?? 0), 0, n);
+        if (!struct_exists(ext_count, event_name)) then ext_count[$ event_name] = 0;
+        if (!struct_exists(ext_hold, event_name)) then ext_hold[$ event_name] = default_value;
+        if (!struct_exists(ext_recall, event_name)) then ext_recall[$ event_name] = default_value;
+
+        var n = array_length(arr);
+        var idx = clamp(ext_count[$ event_name], 0, n);
 
         if (idx >= n) {
                 if (line_time >= arr[n - 1].endTime) then return arr[n - 1][$ "end"];
@@ -794,9 +798,6 @@ ext_recall = {};
 has_text_events = false;
 has_color_events = false;
 has_scale_events = false;
-has_scale_x_events = false;
-has_scale_y_events = false;
-has_incline_events = false;
 
 // Special prep for extended channels (PCR rpec_parser semantics)
 var enames = struct_get_names(extEvents);
@@ -885,19 +886,10 @@ for (var ei = 0; ei < array_length(enames); ei++) {
         };
 
         // numeric channels: scaleX/scaleY/paint (and any other)
+        if (en == "scaleXEvents" || en == "scaleYEvents") then has_scale_events = true;
         extEvents[$ en] = rpe_prep_event_array(raw_arr, false);
         var narr = extEvents[$ en];
-        var narr_n = (is_array(narr) ? array_length(narr) : 0);
-        if (en == "scaleXEvents") {
-                has_scale_x_events = (narr_n > 0);
-                if (has_scale_x_events) then has_scale_events = true;
-        } else if (en == "scaleYEvents") {
-                has_scale_y_events = (narr_n > 0);
-                if (has_scale_y_events) then has_scale_events = true;
-        } else if (en == "inclineEvents") {
-                has_incline_events = (narr_n > 0);
-        };
-        if (narr_n > 0) {
+        if (is_array(narr) && array_length(narr) > 0) {
                 ext_count[$ en] = 0;
                 ext_hold[$ en] = real(narr[0].start ?? 0);
                 ext_recall[$ en] = real(narr[0].start ?? 0);

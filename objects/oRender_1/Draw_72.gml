@@ -99,7 +99,7 @@ if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") &&
 				var result_ui_slot = bindUI[$ result_child.attach_ui_key];
 				if (is_array(result_ui_slot) && array_length(result_ui_slot) >= 7) {
 					result_ui_slot[@ 0] = result_child.x - (worker_view_left + worker_half_width);
-					result_ui_slot[@ 1] = result_child.y - worker_half_height;
+					result_ui_slot[@ 1] = result_child.y - room_height * 0.5;
 					result_ui_slot[@ 2] = result_child.image_blend;
 					result_ui_slot[@ 3] = clamp(real(result_child.__raw_a) / 255, 0, 1);
 					result_ui_slot[@ 4] = result_child.image_angle;
@@ -135,50 +135,15 @@ if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") &&
 };
 
 if (!worker_resolved) {
-	var fallback_needed = false;
-	for (var applied_i = 0; applied_i < line_count; applied_i++) {
-		var applied_line = game_1.line_list[applied_i];
-		if (instance_exists(applied_line) && !bool(applied_line.rpe_world_applied ?? false)) {
-			fallback_needed = true;
-			break;
-		};
-	};
-	if (fallback_needed) {
 	for (var line_index = 0; line_index < line_count; line_index++) {
 		var child = game_1.line_list[line_index];
 		if (!instance_exists(child)) then continue;
-		if (bool(child.rpe_world_applied ?? false)) then continue;
 
 	var world_x = child.__raw_x;
 	var world_y = child.__raw_y;
 	var world_r = child.__raw_r;
-	var have_parent = false;
-	var parent_world_x = 0;
-	var parent_world_y = 0;
-	var parent_world_r = 0;
-	var cached_chain = child._father_chain;
-	if (is_array(cached_chain) && array_length(cached_chain) > 0) {
-		for (var chain_index = array_length(cached_chain) - 1; chain_index >= 0; chain_index--) {
-			var ancestor = cached_chain[chain_index];
-			if (!instance_exists(ancestor) || !variable_instance_exists(ancestor, "__raw_x")) {
-				have_parent = false;
-				break;
-			};
-			if (!have_parent) {
-				parent_world_x = ancestor.__raw_x;
-				parent_world_y = ancestor.__raw_y;
-				parent_world_r = ancestor.__raw_r;
-				have_parent = true;
-			} else {
-				var parent_cos = dcos(parent_world_r);
-				var parent_sin = dsin(parent_world_r);
-				parent_world_x += ancestor.__raw_x * parent_cos + ancestor.__raw_y * parent_sin;
-				parent_world_y += ancestor.__raw_y * parent_cos - ancestor.__raw_x * parent_sin;
-				parent_world_r = ancestor.__raw_r + (ancestor.rotFatherLine ? parent_world_r : 0);
-			};
-		};
-	} else {
 	var parent_id = child.isFather;
+
 	if (is_real(parent_id) && parent_id >= 0 && parent_id < line_count && parent_id != line_index) {
 		var chain = [];
 		var current_id = parent_id;
@@ -193,6 +158,10 @@ if (!worker_resolved) {
 			guard++;
 		};
 
+		var parent_world_x = 0;
+		var parent_world_y = 0;
+		var parent_world_r = 0;
+		var have_parent = false;
 		for (var chain_index = array_length(chain) - 1; chain_index >= 0; chain_index--) {
 			var ancestor = game_1.line_list[chain[chain_index]];
 			if (!instance_exists(ancestor)) {
@@ -214,8 +183,6 @@ if (!worker_resolved) {
 				parent_world_r = ancestor.__raw_r + (ancestor.rotFatherLine ? parent_world_r : 0);
 			};
 		};
-	};
-	};
 
 		if (have_parent) {
 			var child_parent_cos = dcos(parent_world_r);
@@ -224,6 +191,7 @@ if (!worker_resolved) {
 			world_y = parent_world_y + child.__raw_y * child_parent_cos - child.__raw_x * child_parent_sin;
 			world_r = child.__raw_r + (child.rotFatherLine ? parent_world_r : 0);
 		};
+	};
 
 	child.x = world_x * worker_scale_x + worker_view_left + worker_half_width;
 	child.y = -world_y * worker_scale_y + worker_half_height;
@@ -238,7 +206,7 @@ if (!worker_resolved) {
 		var ui_slot = bindUI[$ child.attach_ui_key];
 		if (is_array(ui_slot) && array_length(ui_slot) >= 7) {
 			ui_slot[@ 0] = child.x - (worker_view_left + worker_half_width);
-			ui_slot[@ 1] = child.y - worker_half_height;
+			ui_slot[@ 1] = child.y - room_height * 0.5;
 			ui_slot[@ 2] = child.image_blend;
 			ui_slot[@ 3] = clamp(real(child.__raw_a) / 255, 0, 1);
 			ui_slot[@ 4] = child.image_angle;
@@ -246,7 +214,6 @@ if (!worker_resolved) {
 			ui_slot[@ 6] = child.__scale_y;
 			if (is_struct(bindUI_attached)) then bindUI_attached[$ child.attach_ui_key] = true;
 		};
-	};
 	};
 	};
 	var fallback_total_us = get_timer() - line_resolve_start;
@@ -269,11 +236,6 @@ if (!worker_resolved) {
 var line_game_paused = variable_global_exists("game") && is_struct(game) && game.paused;
 if (!line_game_paused || line_layout_changed) {
 	with (oNote_1) {
-		if (!inition || !instance_exists(_line_ref)) then continue;
-		if (rpe_note_too_far()) {
-			canDraw = false;
-			continue;
-		};
-		event_user(_step_user_count);
+		if (inition && instance_exists(_line_ref)) then event_user(_step_user_count);
 	};
 };

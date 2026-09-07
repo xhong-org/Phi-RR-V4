@@ -48,3 +48,4 @@ drop_h = pick_h;
 layout_w = rw;
 layout_h = rh;
 layout_scale = s;
+settings_menu_button_layout();

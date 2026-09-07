@@ -104,10 +104,10 @@ draw_text_transformed_color(_ux(_ui_cx - 180 + _exit_x), _uy(_ui_cy - 65), _leve
 // 绘制Charter 和 Illustrator
 draw_set_halign(fa_left);
 // Charter
-draw_text_transformed_color(_ux(_ui_cx - 500 + _exit_x), _uy(_ui_cy + 10), "Chart", _us(0.3), _us(0.3), 0, c_white, c_white, c_white, c_white, 1);
+draw_text_transformed_color(_ux(_ui_cx - 500 + _exit_x), _uy(_ui_cy + 10), lang("loadAnim.chart"), _us(0.3), _us(0.3), 0, c_white, c_white, c_white, c_white, 1);
 draw_text_transformed_color(_ux(_ui_cx - 500 + _exit_x), _uy(_ui_cy + 30), string(_info.charter), _us(0.4), _us(0.4), 0, c_white, c_white, c_white, c_white, 1);
 // Illustrator
-draw_text_transformed_color(_ux(_ui_cx - 510 + _exit_x), _uy(_ui_cy + 60), "Illustration", _us(0.3), _us(0.3), 0, c_white, c_white, c_white, c_white, 1);
+draw_text_transformed_color(_ux(_ui_cx - 510 + _exit_x), _uy(_ui_cy + 60), lang("loadAnim.illustration"), _us(0.3), _us(0.3), 0, c_white, c_white, c_white, c_white, 1);
 draw_text_transformed_color(_ux(_ui_cx - 510 + _exit_x), _uy(_ui_cy + 80), string(_info.illustrator), _us(0.4), _us(0.4), 0, c_white, c_white, c_white, c_white, 1);
 
 
@@ -129,7 +129,7 @@ if (sprite_exists(clear_sprite)) {
 };
 
 // The loading label loops independently of the cover animation.
-var _loading_text = "Loading...";
+var _loading_text = lang("loadAnim.loading");
 var _loading_scale = _us(0.5);
 var _loading_x = _ux(_design_w - 105 + _exit_x);
 var _loading_y = _uy(_design_h - 40);
@@ -247,7 +247,7 @@ draw_set_halign(fa_left);
 draw_set_valign(fa_middle);
 draw_set_colour(c_white);
 draw_text_transformed(_panel_left + 40 * _sx, _panel_top + 30 * _sy, string(_info.name), 0.75 * _scale, 0.75 * _scale, 0);
-draw_text_transformed(_panel_left + 36 * _sx, _panel_top + 57 * _sy, "Chart", 0.42 * _scale, 0.42 * _scale, 0);
+draw_text_transformed(_panel_left + 36 * _sx, _panel_top + 57 * _sy, lang("loadAnim.chart"), 0.42 * _scale, 0.42 * _scale, 0);
 draw_text_transformed(_panel_left + 36 * _sx, _panel_top + 78 * _sy, string(_info.format_name), 0.55 * _scale, 0.55 * _scale, 0);
 
 var _diff_left = 265 * _sx + _x;
@@ -270,9 +270,9 @@ draw_text_transformed(_diff_left + _diff_w * 0.5, _diff_top + 68 * _sy, string(_
 
 draw_set_halign(fa_left);
 draw_set_colour(c_white);
-draw_text_transformed(105 * _sx + _x, 250 * _sy, "Chart", 0.5 * _scale, 0.5 * _scale, 0);
+draw_text_transformed(105 * _sx + _x, 250 * _sy, lang("loadAnim.chart"), 0.5 * _scale, 0.5 * _scale, 0);
 draw_text_transformed(105 * _sx + _x, 270 * _sy, string(_info.name), 0.65 * _scale, 0.65 * _scale, 0);
-draw_text_transformed(90 * _sx + _x, 300 * _sy, "Illustration", 0.5 * _scale, 0.5 * _scale, 0);
+draw_text_transformed(90 * _sx + _x, 300 * _sy, lang("loadAnim.illustration"), 0.5 * _scale, 0.5 * _scale, 0);
 draw_text_transformed(90 * _sx + _x, 320 * _sy, "Phigros", 0.65 * _scale, 0.65 * _scale, 0);
 
 // The clear image uses a 45-degree parallelogram and stays above the illustration label.
@@ -297,7 +297,7 @@ if (_tip_alpha > 0) {
     draw_text_transformed(30 * _sx + _x, room_height - 30 * _sy, tips[tip_index], 0.75 * _scale, 0.75 * _scale, 0);
 
     var _dots = floor(_now / 260) mod 4;
-    var _loading = "Loading";
+    var _loading = lang("common.loading");
     for (var _i = 0; _i < _dots; _i++) _loading += ".";
     draw_set_halign(fa_right);
     draw_text_transformed(room_width - 30 * _sx + _x, room_height - 30 * _sy, _loading, 0.65 * _scale, 0.65 * _scale, 0);

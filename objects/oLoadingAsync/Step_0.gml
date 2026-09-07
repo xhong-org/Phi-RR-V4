@@ -15,13 +15,13 @@ if (done || failed) {
 
 phase_timer++;
 if (phase == 0 && phase_timer < 2) {
-        message = "Queued chart package";
+        message = lang("loading.queued");
         detail = source_path;
         exit;
 };
 
 if (phase == 0) {
-        message = "Resolving source";
+        message = lang("loading.resolving");
         detail = source_path;
         phase = 1;
         phase_timer = 0;
@@ -31,11 +31,11 @@ if (phase == 0) {
 if (phase == 1) {
         var ok = false;
         if (source_path == "__sample__") {
-                message = "Loading sample chart";
+                message = lang("loading.sample");
                 detail = working_directory + "chart/";
                 ok = chart_session_load_sample();
         } else if (chart_path_ext(source_path) == ".zip" || chart_path_ext(source_path) == ".pez") {
-                message = "Starting Unicode archive extraction";
+                message = lang("loading.unicodeExtract");
                 detail = source_path;
                 ok = chart_session_zip_begin(source_path);
                 if (ok) {
@@ -44,7 +44,7 @@ if (phase == 1) {
                         exit;
                 };
         } else {
-                message = "Scanning source";
+                message = lang("loading.scanning");
                 detail = source_path;
                 ok = chart_session_begin_source(source_path);
         };
@@ -52,18 +52,18 @@ if (phase == 1) {
         if (!ok) {
                 failed = true;
                 var session_fail = chart_session_ensure();
-                message = "Load failed";
-                detail = string_length(session_fail.error) ? session_fail.error : "Unsupported or invalid chart.";
+                message = lang("loading.failed");
+                detail = string_length(session_fail.error) ? session_fail.error : lang("loading.unsupportedChart");
                 chart_session_cleanup(true);
                 phase = 99;
                 chart_loading_animation_abort();
-                if (!pls_is_gx_remote()) then msgbox_warning_async(detail, "Chart Loader" , [ msgbox_button("确认") ] , MSGBOX_BUTTON_ALIGN.RIGHT);
+                if (!pls_is_gx_remote()) then msgbox_warning_async(detail, lang("loading.loaderTitle") , [ msgbox_button(lang("common.confirm")) ] , MSGBOX_BUTTON_ALIGN.RIGHT);
                 pls_return_to_entry(detail);
                 exit;
         };
 
         var session = chart_session_ensure();
-        message = "Format detected: " + session.format_name;
+        message = langf("loading.formatDetected", session.format_name);
         detail = session.name + " / " + session.level;
         phase = 2;
         phase_timer = 0;
@@ -74,19 +74,19 @@ if (phase == 10) {
         var poll_result = chart_session_zip_poll();
         if (poll_result == 0) {
                 var unzip_session = chart_session_ensure();
-                message = "Extracting package";
+                message = lang("loading.extractingPackage");
                 detail = $"{chart_path_file_name(source_path)} -> {unzip_session.extract_dir}";
                 exit;
         };
         if (poll_result < 0) {
                 failed = true;
                 var zip_fail = chart_session_ensure();
-                message = "Load failed";
-                detail = string_length(zip_fail.error) ? zip_fail.error : "Failed to extract chart package.";
+                message = lang("loading.failed");
+                detail = string_length(zip_fail.error) ? zip_fail.error : lang("loading.extractFailed");
                 chart_session_cleanup(true);
                 phase = 99;
                 chart_loading_animation_abort();
-                if (!pls_is_gx_remote()) then msgbox_warning_async(detail, "Chart Loader" , [ msgbox_button("确认") ] , MSGBOX_BUTTON_ALIGN.RIGHT);
+                if (!pls_is_gx_remote()) then msgbox_warning_async(detail, lang("loading.loaderTitle") , [ msgbox_button(lang("common.confirm")) ] , MSGBOX_BUTTON_ALIGN.RIGHT);
                 pls_return_to_entry(detail);
                 exit;
         };
@@ -95,7 +95,7 @@ if (phase == 10) {
         if (!instance_exists(oRPELineTextureAudit)) {
                 instance_create_depth(0, 0, 0, oRPELineTextureAudit);
         };
-        message = "Format detected: " + zip_session.format_name;
+        message = langf("loading.formatDetected", zip_session.format_name);
         detail = zip_session.name + " / " + zip_session.level;
         phase = 2;
         phase_timer = 0;
@@ -105,11 +105,11 @@ if (phase == 10) {
 if (phase == 2) {
         var session2 = chart_session_ensure();
         chart_session_bind_paths();
-        message = "Preparing play room";
+        message = lang("loading.preparingRoom");
         detail = session2.format_name + " -> " + string(session2.play_room);
         if (session2.play_room < 0) {
                 failed = true;
-                message = "Unsupported format";
+                message = lang("loading.unsupportedFormat");
                 detail = session2.format_name;
                 chart_session_fail(detail, true);
                 phase = 99;
@@ -125,12 +125,12 @@ if (phase == 2) {
 
 if (phase == 3) {
 		if (!chart_default_resources_ready()) {
-			message = "Loading default chart resources";
-			detail = "Hit sounds " + string_format(chart_default_resources_progress() * 100, 0, 0) + "%";
+			message = lang("loading.defaultResources");
+			detail = langf("loading.hitSounds", string_format(chart_default_resources_progress() * 100, 0, 0));
 			exit;
 		};
         var session3 = chart_session_ensure();
-        message = "Entering play room";
+        message = lang("loading.entering");
         detail = session3.name;
         done = true;
         if (instance_exists(oLoadAnimator)) {

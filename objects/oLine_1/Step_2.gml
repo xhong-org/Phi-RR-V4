@@ -14,8 +14,6 @@ if (variable_global_exists("game") && is_struct(game) && game.paused
 var out_x = __raw_x;
 var out_y = __raw_y;
 var out_r = __raw_r;
-var skip_world = !rpe_world_query && !rpe_force_event_init && rpe_line_worker_pending();
-rpe_world_applied = !skip_world;
 
 if (!is_array(_father_chain)) then _father_chain = [];
 if (array_length(_father_chain) == 0 && is_real(isFather) && isFather >= 0
@@ -33,7 +31,6 @@ if (array_length(_father_chain) == 0 && is_real(isFather) && isFather >= 0
     };
 };
 
-if (!skip_world) {
 if (is_array(_father_chain) && array_length(_father_chain) > 0) {
                 var chain = _father_chain;
                 var parent_world_x = 0;
@@ -80,18 +77,13 @@ var chart_view_w = chart_view_width;
 x = out_x * (chart_view_w / 1350) + chart_view_left + chart_view_w * 0.5;
 y = -out_y * (chart_view_h / 900) + chart_view_h * 0.5;
 image_angle = -out_r;
+image_blend = __color;
 
 __x = x;
 __y = y;
 __r = image_angle;
 __cos = dcos(image_angle);
 __sin = dsin(image_angle);
-} else {
-var chart_view_h = chart_view_height;
-var chart_view_w = chart_view_width;
-};
-
-image_blend = __color;
 // attachUI: push line transform into oRender_1.bindUI (PCR-aligned), hide line draw
 // PCR stores center-relative offset: posx = x - scene_width_half, posy = y - scene_height_half
 // HUD final pos = default_layout_pos + offset (NOT hard absolute line xy)
@@ -99,8 +91,8 @@ image_blend = __color;
 // drawable value. Multi-layer RPE charts commonly sum to 510/1020/1530.
 var ui_alpha = clamp(__raw_a / 255, 0, 1);
 _alpha_decimal = __raw_a;
-if (is_attach_ui && is_string(attach_ui_key) && string_length(attach_ui_key) > 0) {
-        if (!skip_world && instance_exists(oRender_1) && variable_instance_exists(oRender_1, "bindUI")) {
+if (is_attach_ui && is_string(attach_ui_key) && string_length(attach_ui_key) > 0
+        && instance_exists(oRender_1) && variable_instance_exists(oRender_1, "bindUI")) {
 		var ui_off_x = x - (chart_view_left + chart_view_w * 0.5);
 		var ui_off_y = y - (chart_view_h * 0.5);
         with (oRender_1) {
@@ -120,7 +112,6 @@ if (is_attach_ui && is_string(attach_ui_key) && string_length(attach_ui_key) > 0
                         slot[@ 6] = other.__scale_y;
                         if (is_struct(bindUI_attached)) then bindUI_attached[$ other.attach_ui_key] = true;
                 };
-        };
         };
         // PCR: attached line is not drawn (enabled=false)
         image_alpha = 0;

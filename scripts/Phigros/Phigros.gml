@@ -229,35 +229,12 @@ function judgeCalc(oHTime , nHTime , bpm , xx , yy , _type , isFHitEf = true, in
 	return(status);
 };
 
-/// @desc True when oRender_1 Draw Begin will resolve parent transforms
-/// (native workers). Step End can skip the same GML walk in that case.
-function rpe_note_mark_activated(_rec) {
-	if (!is_struct(_rec) || bool(_rec.activated)) then return;
-	_rec.activated = true;
-	var _group = _rec[$ "group"];
-	if (is_struct(_group) && is_real(_group.remain)) then _group.remain = max(0, _group.remain - 1);
-};
-
-function rpe_line_worker_pending() {
-	if (!variable_global_exists("game") || !is_struct(game)) then return false;
-	if (!bool(game.settings.enableRPEMulticore ?? true)) then return false;
-	if (os_type != os_windows || !extension_exists("I_Parallel")) then return false;
-	if (!variable_global_exists("game_1") || !is_struct(game_1) || !is_array(game_1.line_list)) then return false;
-	var _n = array_length(game_1.line_list);
-	var _min = max(1, floor(real(game.settings.rpeWorkerMinLines ?? 32)));
-	return _n >= _min;
-};
-
 /// @desc Recalculate the on-line hit-effect position for an RPE note.
 /// Official notes refresh geometry then project local X with the line's
 /// current transform immediately before spawning the effect.
 function rpe_note_hit_effect_xy() {
 	if (instance_exists(_line_ref)) {
-		with (_line_ref) {
-			rpe_world_query = true;
-			event_perform(ev_step, ev_step_end);
-			rpe_world_query = false;
-		};
+		with (_line_ref) event_perform(ev_step, ev_step_end);
 		event_user(_step_user_count);
 	};
 	return [_x_h, _y_h];
@@ -550,7 +527,7 @@ function Phigros() constructor { // 仅仅结构
 		"enableFPS" : true,						// 是否显示FPS(default:true)
 		"enableQuikyStart" : true,				// 是否启用快速启动(已弃用)(default:true)
 		"enableCanvasZoom" : false,				// 是否启用摄像头缩放(已弃用)(default:false)
-		"enableSurface" : false,				// 是否启用遮罩(已弃用)(default:false)
+		"enableSurface" : false,				// 是否启用遮罩(default:false)
 		"enableNoteHightLight" : true,			// 是否启用音符多押高亮(default:true)
 		"enableChartGUI" : true,				// 是否启用UI(default:true)
 		"enableLineJudge" : true,				// 是否启用FC/AP指示器(default:true)
@@ -963,6 +940,7 @@ function Phigros() constructor { // 仅仅结构
 		self.settings[$ "notePreloadSeconds"] = (clamp(self.settings[$ "notePreloadSeconds"] , 0 , 60));
 		self.settings[$ "rpeWorkerMinLines"] = clamp(floor(self.settings[$ "rpeWorkerMinLines"]), 1, 1024);
 		self.settings[$ "rpeWorkerProfileFrames"] = clamp(floor(self.settings[$ "rpeWorkerProfileFrames"]), 60, 36000);
+		ini_write_string("Settings", "language", lang_current_id());
 		ini_close();
 		print($"str2: {game.settings.comboString}");
 		print("[R-Configs] Done." , self.settings.enableDebug);
@@ -1378,7 +1356,7 @@ function rpe_sync_note_activation(_now_sec = undefined) {
 			instance_activate_object(_note.id);
 			var _key = string(_note.id);
 			if (is_struct(_records) && struct_exists(_records, _key)) {
-				rpe_note_mark_activated(_records[$ _key]);
+				_records[$ _key].activated = true;
 			};
 		};
 		game_1._note_activation_index = array_length(_notes);
@@ -1397,7 +1375,7 @@ function rpe_sync_note_activation(_now_sec = undefined) {
 		instance_activate_object(_item.id);
 		var _item_key = string(_item.id);
 		if (is_struct(_records) && struct_exists(_records, _item_key)) {
-			rpe_note_mark_activated(_records[$ _item_key]);
+			_records[$ _item_key].activated = true;
 		};
 		_index++;
 	};
@@ -1407,7 +1385,7 @@ function rpe_sync_note_activation(_now_sec = undefined) {
 		instance_activate_object(_late.id);
 		var _late_key = string(_late.id);
 		if (is_struct(_records) && struct_exists(_records, _late_key)) {
-			rpe_note_mark_activated(_records[$ _late_key]);
+			_records[$ _late_key].activated = true;
 		};
 	};
 	game_1._note_activation_index = _index;
@@ -1944,7 +1922,7 @@ function RPE() constructor{
 				if (_activation_note.alwaysActive) {
 					var _activation_key = string(_activation_note.id);
 					if (struct_exists(self._note_activation_records, _activation_key)) {
-						rpe_note_mark_activated(self._note_activation_records[$ _activation_key]);
+						self._note_activation_records[$ _activation_key].activated = true;
 					};
 				} else {
 					instance_deactivate_object(_activation_note.id);
