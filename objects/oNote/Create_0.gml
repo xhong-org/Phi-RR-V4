@@ -1,6 +1,7 @@
 /// @description Cache immutable values before entering the note hot path.
 depth = DEPTH.NOTE;
 inition = false;
+if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then visible = false;
 
 _is_hold = (self.type == 3);
 _step_user_count = (_is_hold ? 2 : 1);

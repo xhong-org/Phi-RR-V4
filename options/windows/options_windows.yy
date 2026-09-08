@@ -24,7 +24,7 @@
   "option_windows_resize_window":true,
   "option_windows_save_location":0,
   "option_windows_scale":1,
-  "option_windows_sleep_margin":10,
+  "option_windows_sleep_margin":1,
   "option_windows_splash_screen":"${base_options_dir}/windows/splash/splash.png",
   "option_windows_start_fullscreen":false,
   "option_windows_steam_use_alternative_launcher":false,
@@ -32,7 +32,7 @@
   "option_windows_use_raw_mouse":false,
   "option_windows_use_splash":false,
   "option_windows_version":"4.0.4.0",
-  "option_windows_vsync":false,
+  "option_windows_vsync":true,
   "resourceType":"GMWindowsOptions",
   "resourceVersion":"2.0",
 }

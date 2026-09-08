@@ -2,6 +2,7 @@
 depth = DEPTH.NOTE;
 inition = false;
 canDraw = false;
+if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then visible = false;
 
 // defaults from CreateLines
 if (!variable_instance_exists(id, "type")) then type = 1;
@@ -255,7 +256,7 @@ hitTime2 = 0;
 event_user(0);
 if (!bool(game.settings.noteUniformScale ?? false)) then image_yscale = (global_scales / 6);
 image_blend = note_tint;
-if (audio_exists(custom_sound)) then sound = custom_sound;
+if (audio_exists(custom_sound) && custom_sound != snd_note_tap && custom_sound != snd_note_drag && custom_sound != snd_note_flick) then sound = custom_sound;
 lateHitTime = 0.25;
 judgeBeat = start_beat;
 judgeTime = start_sec;

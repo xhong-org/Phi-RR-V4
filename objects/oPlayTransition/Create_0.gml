@@ -49,20 +49,9 @@ function play_transition_activate_chart_instances() {
     if (owner.object_index == oRender_1) {
         rpe_sync_note_activation();
     } else if (owner.object_index == oRender_2) {
-        if (variable_global_exists("game_2") && is_struct(game_2)
-			&& !(bool(game_2._note_activation_enabled ?? false))
-			&& is_array(game_2.runtime_note_instances)) {
-            for (var _pni = 0; _pni < array_length(game_2.runtime_note_instances); _pni++) {
-                instance_activate_object(game_2.runtime_note_instances[_pni]);
-            };
-        };
+        pec_sync_note_activation();
     } else if (owner.object_index == oRender) {
-        if (variable_global_exists("game") && is_struct(game)
-			&& is_array(game.runtime_note_instances)) {
-            for (var _oni = 0; _oni < array_length(game.runtime_note_instances); _oni++) {
-                instance_activate_object(game.runtime_note_instances[_oni]);
-            };
-        };
+        official_sync_note_activation();
     };
     chart_instances_activation_requested = true;
 }

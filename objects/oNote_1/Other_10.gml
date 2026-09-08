@@ -6,16 +6,16 @@ switch (type) {
 	case 1:
 		depth = DEPTH.NOTE + 1;
 		sprite_index = note_tap;
-		sound = snd_note_tap;
+		sound = skin_note_sound("tap", snd_note_tap);
 		break;
 	case 2:
 		depth = DEPTH.NOTE + 2;
 		sprite_index = note_drag;
-		sound = snd_note_drag;
+		sound = skin_note_sound("drag", snd_note_drag);
 		break;
 	case 3:
 		depth = DEPTH.NOTE + 3;
-		sound = snd_note_tap;
+		sound = skin_note_sound("tap", snd_note_tap);
 		sprite_index = note_hold_head;
 		_hx0 = 0; _hy0 = 0;
 		_hx1 = 0; _hy1 = 0;
@@ -32,12 +32,12 @@ switch (type) {
 	case 4:
 		depth = DEPTH.NOTE;
 		sprite_index = note_flick;
-		sound = snd_note_flick;
+		sound = skin_note_sound("flick", snd_note_flick);
 		break;
 	default:
 		depth = DEPTH.NOTE + 1;
 		sprite_index = note_tap;
-		sound = snd_note_tap;
+		sound = skin_note_sound("tap", snd_note_tap);
 		break;
 };
 
@@ -75,6 +75,14 @@ if (_is_hold) {
 hl = 0;
 if (variable_global_exists("BYD_COLOR_MODE") && BYD_COLOR_MODE && type != 3) then hl = 2;
 if (variable_instance_exists(id, "_hl") && is_real(_hl)) then hl = _hl;
+if (_is_hold) {
+	var _skin_hold = skin_hold_parts(hl);
+	if (is_struct(_skin_hold)) {
+		if (sprite_exists(_skin_hold.body)) then _hold_body_height = max(1, sprite_get_height(_skin_hold.body));
+		if (sprite_exists(_skin_hold.tail)) then _hold_tail_height = max(1, sprite_get_height(_skin_hold.tail));
+		if (sprite_exists(_skin_hold.head)) then _hold_head_attach = max(1, sprite_get_yoffset(_skin_hold.head));
+	};
+};
 
 // auto-judge offset (same as Official)
 if (variable_global_exists("game") && is_struct(game) && game.settings.TEST1) {

@@ -53,11 +53,12 @@ if (phase == 1) {
                 failed = true;
                 var session_fail = chart_session_ensure();
                 message = lang("loading.failed");
+                var fail_detail = string_length(session_fail.error) ? session_fail.error : "Unsupported or invalid chart.";
                 detail = string_length(session_fail.error) ? session_fail.error : lang("loading.unsupportedChart");
                 chart_session_cleanup(true);
                 phase = 99;
                 chart_loading_animation_abort();
-                if (!pls_is_gx_remote()) then msgbox_warning_async(detail, lang("loading.loaderTitle") , [ msgbox_button(lang("common.confirm")) ] , MSGBOX_BUTTON_ALIGN.RIGHT);
+                if (!pls_is_gx_remote()) then msgbox_warning_async(fail_detail, "Chart Loader" , [ msgbox_button("OK") ] , MSGBOX_BUTTON_ALIGN.RIGHT);
                 pls_return_to_entry(detail);
                 exit;
         };
@@ -82,11 +83,12 @@ if (phase == 10) {
                 failed = true;
                 var zip_fail = chart_session_ensure();
                 message = lang("loading.failed");
+                var zip_detail = string_length(zip_fail.error) ? zip_fail.error : "Failed to extract chart package.";
                 detail = string_length(zip_fail.error) ? zip_fail.error : lang("loading.extractFailed");
                 chart_session_cleanup(true);
                 phase = 99;
                 chart_loading_animation_abort();
-                if (!pls_is_gx_remote()) then msgbox_warning_async(detail, lang("loading.loaderTitle") , [ msgbox_button(lang("common.confirm")) ] , MSGBOX_BUTTON_ALIGN.RIGHT);
+                if (!pls_is_gx_remote()) then msgbox_warning_async(zip_detail, "Chart Loader" , [ msgbox_button("OK") ] , MSGBOX_BUTTON_ALIGN.RIGHT);
                 pls_return_to_entry(detail);
                 exit;
         };

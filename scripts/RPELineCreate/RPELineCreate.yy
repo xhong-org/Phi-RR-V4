@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"RPELineCreate",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"RPELineCreate",
+  "parent":{
+    "name":"RPE",
+    "path":"folders/Objects/Main/Loader/Format/RPE.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

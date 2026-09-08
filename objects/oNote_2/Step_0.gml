@@ -27,8 +27,13 @@ image_alpha = 1;
 
 if (type == 2) {
 	var before = before_hold;
+	var _skin_hold = skin_active() ? skin_hold_parts(hl) : undefined;
+	if (is_struct(_skin_hold)) {
+		if (sprite_exists(_skin_hold.body)) then hold_body_height = max(1, sprite_get_height(_skin_hold.body));
+		if (sprite_exists(_skin_hold.head)) then hold_head_attach = max(1, sprite_get_yoffset(_skin_hold.head));
+	};
 	var head_offset = 0;
-	if (before) {
+	if (before && !(is_struct(_skin_hold) && bool(_skin_hold.compact))) {
 		head_offset = max(0, hold_head_attach * image_yscale);
 	};
 	var units = before ? speedHoldFloorLength : speedFloorEnd - note_speed * line_floor;
@@ -52,7 +57,7 @@ if (type == 2) {
 			hit_status = judgeCalc(startSec, hold_sample_sec, 0, _hold_xy[0], _hold_xy[1], judge_type, true, false, true);
 			if (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) {
 				hold_effect_sec = chart_sec;
-				render_play_hitsound(sound);
+				skin_play_note_hitsound();
 			};
 		};
 	};
@@ -95,7 +100,7 @@ if (chart_sec >= trigger_sec && !judged) {
 		var note_sample_sec = (!use_acc_judgment && chart_sec > late_deadline_sec) ? chart_sec : judge_sec;
 		var _hit_xy = pec_note_hit_effect_xy();
 		hit_status = judgeCalc(startSec, note_sample_sec, 0, _hit_xy[0], _hit_xy[1], judge_type, true, true, true);
-		if (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) then render_play_hitsound(sound);
+		if (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) then skin_play_note_hitsound();
 	};
 	canDraw = false;
 	instance_deactivate_object(self);

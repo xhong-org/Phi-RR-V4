@@ -76,8 +76,23 @@
       "hintNormal": "Maps to Phigros().settings",
       "hintDeveloper": "Developer options are settings whose comments contain deprecated markers",
       "language": "Language",
+      "skin": "Skin",
+      "hintSkin": "Add a resource pack, then select it. It applies when you enter a chart.",
       "developerWarning": "You have entered developer settings. Changing these options may prevent the simulator from starting. If it cannot start, delete resource/config.ini. On other platforms, tap Clear data to reset.",
       "cleared": "Data cleared and defaults restored."
+    },
+    "skin": {
+      "default": "Default",
+      "add": "Add skin",
+      "delete": "Delete",
+      "filter": "Skin package|*.zip|All files|*.*",
+      "importFailed": "Failed to import skin.",
+      "parseFailed": "Failed to parse skin.",
+      "previewFailed": "Failed to preview skin.",
+      "cantDeleteDefault": "The default skin cannot be deleted.",
+      "missingFile": "Missing file: {0}",
+      "invalidInfo": "Invalid info.yml",
+      "errorTitle": "Skin"
     },
     "fields": {
       "enableBlur": "Enable background blur",

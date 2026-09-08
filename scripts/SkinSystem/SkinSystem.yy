@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"SkinSystem",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"SkinSystem",
+  "parent":{
+    "name":"Tools",
+    "path":"folders/Other/Tools.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

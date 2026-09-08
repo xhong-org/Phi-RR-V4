@@ -33,4 +33,7 @@ __value = [0, 0];
 
 event_user(1);
 
+chart_force_event_init = false;
+if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then visible = false;
+
 print($"[{self.line_id}] BPM: {_events.bpm}");

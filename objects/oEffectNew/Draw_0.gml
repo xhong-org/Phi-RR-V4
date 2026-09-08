@@ -2,15 +2,30 @@
 if(!isDraw) then exit;
 
 var realT = (game.__time[1]);
+var pack = skin_active() ? skin_runtime() : undefined;
+var skin_on = is_struct(pack);
+var hide_particles = skin_on && bool(pack.info.hideParticles);
 
 // Keep the original draw order while removing expired entries in place.
 for(var i = 0 ; i < array_length(effect_events) ; i ++){
 	var effect_event = (effect_events[i]),
 		age = (realT - effect_event.time);
+	var max_age = 1;
+	if (skin_on) then max_age = max(hide_particles ? 0.05 : 1, real(pack.info.hitFxDuration));
 
-	if(age > 1){
+	if(age > max_age){
 		array_delete(effect_events , i , 1);
 		i --;
+		continue;
+	};
+
+	if (skin_on) {
+		var fx_col = skin_hitfx_color(pack, effect_event.col);
+		skin_draw_hitfx(pack, effect_event.x, effect_event.y, age, fx_col, skin_hitfx_game_scale(pack));
+		if (!hide_particles) {
+			skin_draw_preview_particles(effect_event.x, effect_event.y, age, fx_col, global_scales,
+				effect_event.rot, effect_event.scales, effect_event.rx, effect_event.ry);
+		};
 		continue;
 	};
 

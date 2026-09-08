@@ -1,4 +1,8 @@
 /// @description Draw RPE judge line (supports extended scale/color/text)
+if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then exit;
+if (instance_exists(oRender_1)
+	&& variable_instance_exists(oRender_1, "_chart_lines_thaw_pending")
+	&& oRender_1._chart_lines_thaw_pending) then exit;
 var s = (variable_global_exists("global_scales") ? global_scales : 1.0);
 if (!is_real(s) || s <= 0) then s = 1.0;
 var _room_w = room_width;

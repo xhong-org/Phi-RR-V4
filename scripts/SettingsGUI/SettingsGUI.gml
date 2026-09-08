@@ -211,25 +211,298 @@ function settings_clear_data() {
 }
 
 function settings_list(_deprecated) {
-	var cat = settings_catalog();
-	var store = settings_store();
-	var out = [];
-	var seen = {};
-	for (var i = 0; i < array_length(cat); i++) {
-		var item = cat[i];
-		seen[$ item.key] = true;
-		if (settings_comment_is_deprecated(item.comment) == bool(_deprecated)) {
-			array_push(out, item);
+	static lists = undefined;
+	if (!is_array(lists)) {
+		lists = [[], []];
+		var cat = settings_catalog();
+		var seen = {};
+		for (var i = 0; i < array_length(cat); i++) {
+			var item = cat[i];
+			seen[$ item.key] = true;
+			array_push(lists[settings_comment_is_deprecated(item.comment) ? 1 : 0], item);
 		};
-	};
-	if (!_deprecated) {
+		var store = settings_store();
 		var names = struct_get_names(store);
 		for (var n = 0; n < array_length(names); n++) {
 			if (struct_exists(seen, names[n])) then continue;
-			array_push(out, { key:names[n], comment:names[n] });
+			if (names[n] == "language" || names[n] == "skinId") then continue;
+			array_push(lists[0], { key:names[n], comment:names[n] });
 		};
 	};
-	return out;
+	return lists[_deprecated ? 1 : 0];
+}
+
+function settings_field_label(_key, _comment) {
+	lang_ensure();
+	if (!is_struct(global.pls_lang.field_labels)) then global.pls_lang.field_labels = {};
+	if (struct_exists(global.pls_lang.field_labels, _key)) then return global.pls_lang.field_labels[$ _key];
+	var label = lang("fields." + string(_key), settings_comment_label(_comment));
+	if (!string_length(label)) then label = string(_key);
+	global.pls_lang.field_labels[$ _key] = label;
+	return label;
+}
+
+function menu_draw_button(_btn, _hot, _text_scale) {
+	if (!is_struct(_btn)) then return;
+	draw_set_colour(_hot ? make_colour_rgb(70, 110, 180) : make_colour_rgb(40, 48, 64));
+	draw_rectangle(_btn.x, _btn.y, _btn.x + _btn.w, _btn.y + _btn.h, false);
+	draw_set_colour(c_white);
+	draw_rectangle(_btn.x, _btn.y, _btn.x + _btn.w, _btn.y + _btn.h, true);
+	draw_text_transformed(_btn.x + _btn.w * 0.5, _btn.y + _btn.h * 0.5, _btn.label, _text_scale, _text_scale, 0);
+}
+
+function settings_skin_preview_surface(_w, _h) {
+	_w = max(1, floor(_w));
+	_h = max(1, floor(_h));
+	if (!variable_instance_exists(id, "skin_preview_surf") || !surface_exists(skin_preview_surf)
+		|| surface_get_width(skin_preview_surf) != _w || surface_get_height(skin_preview_surf) != _h) {
+		if (variable_instance_exists(id, "skin_preview_surf") && surface_exists(skin_preview_surf)) {
+			surface_free(skin_preview_surf);
+		};
+		skin_preview_surf = surface_create(_w, _h);
+	};
+	return skin_preview_surf;
+}
+
+function settings_skin_preview_surface_free() {
+	if (variable_instance_exists(id, "skin_preview_surf") && surface_exists(skin_preview_surf)) {
+		surface_free(skin_preview_surf);
+		skin_preview_surf = -1;
+	};
+}
+
+function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill_on) {
+	var items = skin_menu_items();
+	var selected = skin_selected_id();
+	var vis = max(1, floor(skin_list_h / row_h));
+	var last = min(array_length(items), scroll + vis);
+	draw_set_colour(make_colour_rgb(18, 24, 38));
+	draw_rectangle(list_x, list_y, list_x + skin_list_w, list_y + skin_list_h, false);
+	draw_set_colour(make_colour_rgb(70, 80, 96));
+	draw_rectangle(list_x, list_y, list_x + skin_list_w, list_y + skin_list_h, true);
+	for (var i = scroll; i < last; i++) {
+		var item = items[i];
+		if (!is_struct(item)) then continue;
+		var row_y = list_y + (i - scroll) * row_h;
+		var on = (string(item.skin_id ?? "") == selected);
+		if (on) {
+			draw_set_colour(make_colour_rgb(70, 110, 180));
+			draw_rectangle(list_x + 2, row_y, list_x + skin_list_w - 2, row_y + row_h, false);
+		} else if ((i - scroll) mod 2 == 1) {
+			draw_set_colour(make_colour_rgb(20, 26, 40));
+			draw_rectangle(list_x + 2, row_y, list_x + skin_list_w - 2, row_y + row_h, false);
+		};
+		draw_set_halign(fa_left);
+		draw_set_valign(fa_middle);
+		draw_set_colour(c_white);
+		draw_text_transformed(list_x + 10 * _s, row_y + row_h * 0.38, string(item.name ?? ""), _body, _body, 0);
+		draw_set_colour(make_colour_rgb(150, 160, 180));
+		draw_text_transformed(list_x + 10 * _s, row_y + row_h * 0.72, string(item.author ?? ""), _small, _small, 0);
+	};
+	draw_set_halign(fa_center);
+	draw_set_valign(fa_middle);
+	draw_set_colour(hover_skin_add ? _fill_hot : _fill_idle);
+	draw_rectangle(skin_add.x, skin_add.y, skin_add.x + skin_add.w, skin_add.y + skin_add.h, false);
+	draw_set_colour(c_white);
+	draw_rectangle(skin_add.x, skin_add.y, skin_add.x + skin_add.w, skin_add.y + skin_add.h, true);
+	draw_text_transformed(skin_add.x + skin_add.w * 0.5, skin_add.y + skin_add.h * 0.5, lang("skin.add", "Add skin"), _body, _body, 0);
+
+	var pack = skin_preview_runtime();
+	if (is_struct(pack)) then skin_pack_gpu_ensure(pack, true);
+	var title = lang("skin.default", "Default");
+	var author = "";
+	var desc = "";
+	for (var n = 0; n < array_length(items); n++) {
+		if (string(items[n].skin_id ?? "") == selected) {
+			title = string(items[n].name ?? title);
+			author = string(items[n].author ?? "");
+			desc = string(items[n].description ?? "");
+			break;
+		};
+	};
+
+	var inset = 2;
+	var clip_w = max(1, floor(skin_preview_w - inset * 2));
+	var clip_h = max(1, floor(list_h - inset * 2));
+	var surf = settings_skin_preview_surface(clip_w, clip_h);
+	var used_surf = surface_exists(surf);
+	if (used_surf) {
+		surface_set_target(surf);
+		draw_clear_alpha(make_colour_rgb(18, 24, 38), 1);
+	} else {
+		draw_set_colour(make_colour_rgb(18, 24, 38));
+		draw_rectangle(skin_preview_x, list_y, skin_preview_x + skin_preview_w, list_y + list_h, false);
+	};
+	var ox = used_surf ? 0 : (skin_preview_x + inset);
+	var oy = used_surf ? 0 : (list_y + inset);
+
+	draw_set_halign(fa_left);
+	draw_set_valign(fa_top);
+	draw_set_colour(c_white);
+	draw_text_transformed(ox + 12 * _s, oy + 10 * _s, title, _body + 0.06 * _s, _body + 0.06 * _s, 0);
+	draw_set_colour(make_colour_rgb(150, 160, 180));
+	if (string_length(author)) then draw_text_transformed(ox + 12 * _s, oy + 36 * _s, author, _small, _small, 0);
+	var desc_w = max(40, clip_w - 24 * _s);
+	var desc_sep = max(24, ceil(string_height("A") * 1.5));
+	var desc_h = 0;
+	if (string_length(desc)) {
+		desc_h = string_height_ext(desc, desc_sep, desc_w) * _small;
+		draw_text_ext_transformed(ox + 12 * _s, oy + 54 * _s, desc, desc_sep, desc_w, _small, _small, 0);
+	};
+
+	var inner_pad = 10 * _s;
+	var inner_w = max(40, clip_w - inner_pad * 2);
+	var title_h = 34 * _s;
+	if (string_length(author)) then title_h = 50 * _s;
+	if (string_length(desc)) then title_h = max(title_h, 54 * _s + desc_h + 10 * _s);
+	var delete_h = (selected != SKIN_DEFAULT_ID) ? 48 * _s : 8 * _s;
+	var fx_min = 96 * _s;
+	var note_want = 180 * _s;
+	var note_box = min(note_want, inner_w / 4 * 0.9, max(48 * _s, clip_h - title_h - fx_min - delete_h));
+	var gap = inner_w / 4;
+	var cx = ox + inner_pad + gap * 0.5;
+	var note_disp_h = function(_spr, _box) {
+		if (!sprite_exists(_spr)) then return 0;
+		var nw = sprite_get_width(_spr);
+		var nh = sprite_get_height(_spr);
+		var k = real(_box) / max(1, max(nw, nh));
+		var bh = sprite_get_bbox_bottom(_spr) - sprite_get_bbox_top(_spr) + 1;
+		if (bh < 1) then bh = nh;
+		return bh * k;
+	};
+	var note_row_h = 1;
+	if (is_struct(pack) && is_real(pack.preview_row_ratio) && pack.preview_row_ratio > 0) {
+		note_row_h = pack.preview_row_ratio * note_box;
+	} else if (is_struct(pack)) {
+		note_row_h = max(note_disp_h(pack.click, note_box), max(note_disp_h(pack.click_mh, note_box),
+			max(note_disp_h(pack.drag, note_box), max(note_disp_h(pack.drag_mh, note_box),
+			max(note_disp_h(pack.flick, note_box), max(note_disp_h(pack.flick_mh, note_box),
+			max(note_disp_h(pack.hold_head, note_box), note_disp_h(pack.hold_head_mh, note_box))))))));
+	} else {
+		note_row_h = max(note_disp_h(note_tap, note_box), max(note_disp_h(note_drag, note_box),
+			max(note_disp_h(note_flick, note_box), note_disp_h(note_hold_head, note_box))));
+	};
+	if (note_row_h < 1) then note_row_h = max(8 * _s, note_box * 0.2);
+	var hold_head_spr = note_hold_head;
+	var hold_tail_spr = note_hold_end;
+	if (is_struct(pack) && sprite_exists(pack.hold_head)) then hold_head_spr = pack.hold_head;
+	if (is_struct(pack) && sprite_exists(pack.hold_tail)) then hold_tail_spr = pack.hold_tail;
+	var hk = real(note_box) / max(1, max(sprite_get_width(hold_head_spr), sprite_get_height(hold_head_spr)));
+	var hold_attach = sprite_get_yoffset(hold_head_spr) * 1.35 * hk * 0.25;
+	var tail_off = sprite_get_yoffset(hold_tail_spr);
+	var tail_hgt = sprite_get_height(hold_tail_spr);
+	var hold_tail_up = (tail_off > tail_hgt * 0.1) ? (tail_off * hk) : 0;
+	var hold_want = min(16 * _s, max(8 * _s, note_row_h * 0.35));
+	var hold_up = hold_attach + hold_want + hold_tail_up;
+	var preview_y = oy + title_h + max(note_row_h * 0.5, hold_up) + 2 * _s;
+	var note_row = note_row_h + 4 * _s;
+	var hold_body_px = hold_want;
+	var draw_one = function(_spr, _x, _y, _k, _frame) {
+		if (!sprite_exists(_spr)) then return;
+		var k = real(_k);
+		var frame = clamp(real(_frame), 0, max(0, sprite_get_number(_spr) - 1));
+		var content_cy = (sprite_get_bbox_top(_spr) + sprite_get_bbox_bottom(_spr)) * 0.5;
+		var dy = (sprite_get_yoffset(_spr) - content_cy) * k;
+		draw_sprite_ext(_spr, frame, _x, _y + dy, k, k, 0, c_white, 1);
+	};
+	var fit_k = function(_spr, _box) {
+		if (!sprite_exists(_spr)) then return 1;
+		return real(_box) / max(1, max(sprite_get_width(_spr), sprite_get_height(_spr)));
+	};
+	var draw_hold_preview = function(_hx, _hy, _head, _body, _tail, _k, _body_scale, _frame) {
+		if (!sprite_exists(_head)) then _head = note_hold_head;
+		if (!sprite_exists(_body)) then _body = note_hold_body;
+		if (!sprite_exists(_tail)) then _tail = note_hold_end;
+		draw_hold(_hx, _hy, _k, _k, _body_scale, 0, _frame, c_white, 1, true, true, 0, 0.25, _head, _body, _tail);
+	};
+	if (is_struct(pack)) {
+		var k_click = fit_k(sprite_exists(pack.click_mh) ? pack.click_mh : pack.click, note_box);
+		var k_drag = fit_k(sprite_exists(pack.drag_mh) ? pack.drag_mh : pack.drag, note_box);
+		var k_flick = fit_k(sprite_exists(pack.flick_mh) ? pack.flick_mh : pack.flick, note_box);
+		var k_hold = fit_k(sprite_exists(pack.hold_head_mh) ? pack.hold_head_mh : pack.hold_head, note_box);
+		var hold_body_ref = sprite_exists(pack.hold_body_mh) ? pack.hold_body_mh : pack.hold_body;
+		var body_scale = real(hold_body_px) / max(1, sprite_get_height(hold_body_ref));
+		draw_one(pack.click, cx, preview_y, k_click, 0);
+		draw_one(pack.click_mh, cx, preview_y + note_row, k_click, 0);
+		draw_one(pack.drag, cx + gap, preview_y, k_drag, 0);
+		draw_one(pack.drag_mh, cx + gap, preview_y + note_row, k_drag, 0);
+		draw_one(pack.flick, cx + gap * 2, preview_y, k_flick, 0);
+		draw_one(pack.flick_mh, cx + gap * 2, preview_y + note_row, k_flick, 0);
+		draw_hold_preview(cx + gap * 3, preview_y, pack.hold_head, pack.hold_body, pack.hold_tail, k_hold, body_scale, 0);
+		draw_hold_preview(cx + gap * 3, preview_y + note_row, pack.hold_head_mh, pack.hold_body_mh, pack.hold_tail_mh, k_hold, body_scale, 0);
+	} else {
+		var k_tap = fit_k(note_tap, note_box);
+		var k_drag_d = fit_k(note_drag, note_box);
+		var k_flick_d = fit_k(note_flick, note_box);
+		var k_hold_d = fit_k(note_hold_head, note_box);
+		var body_scale_d = real(hold_body_px) / max(1, sprite_get_height(note_hold_body));
+		draw_one(note_tap, cx, preview_y, k_tap, 0);
+		draw_one(note_tap, cx, preview_y + note_row, k_tap, 1);
+		draw_one(note_drag, cx + gap, preview_y, k_drag_d, 0);
+		draw_one(note_drag, cx + gap, preview_y + note_row, k_drag_d, 1);
+		draw_one(note_flick, cx + gap * 2, preview_y, k_flick_d, 0);
+		draw_one(note_flick, cx + gap * 2, preview_y + note_row, k_flick_d, 1);
+		draw_hold_preview(cx + gap * 3, preview_y, note_hold_head, note_hold_body, note_hold_end, k_hold_d, body_scale_d, 0);
+		draw_hold_preview(cx + gap * 3, preview_y + note_row, note_hold_head, note_hold_body, note_hold_end, k_hold_d, body_scale_d, 1);
+	};
+
+	var cycle = skin_preview_cycle();
+	var kind_i = cycle.kind;
+	var demo_box = note_box;
+	var demo_x = ox + clip_w * 0.5;
+	var demo_y = oy + clip_h * 0.75;
+	var demo_spr = note_tap;
+	var demo_frame = 0;
+	if (is_struct(pack)) {
+		if (kind_i == 1) then demo_spr = pack.drag;
+		else if (kind_i == 2) then demo_spr = pack.flick;
+		else demo_spr = pack.click;
+	} else {
+		if (kind_i == 1) then demo_spr = note_drag;
+		else if (kind_i == 2) then demo_spr = note_flick;
+		else demo_spr = note_tap;
+	};
+	if (cycle.showing) then draw_one(demo_spr, demo_x, demo_y, fit_k(demo_spr, demo_box), demo_frame);
+	var fx_age = cycle.fx_age;
+	if (fx_age >= 0) {
+		var fx_col = #ffeca0;
+		if (is_struct(pack)) then fx_col = skin_hitfx_color(pack, #ffeca0);
+		var hide_particles = is_struct(pack) && bool(pack.info.hideParticles);
+		var note_disp_w = skin_preview_note_disp_w(demo_spr, demo_box);
+		var part_gs = note_disp_w / 280;
+		skin_draw_preview_hitfx(is_struct(pack) ? pack : undefined, demo_x, demo_y, fx_age, fx_col, note_disp_w);
+		if (!hide_particles) {
+			skin_draw_preview_particles(demo_x, demo_y, fx_age, fx_col, part_gs, skin_fx_rot, skin_fx_scales, skin_fx_rx, skin_fx_ry);
+		};
+	};
+
+	if (selected != SKIN_DEFAULT_ID) {
+		draw_set_halign(fa_center);
+		draw_set_valign(fa_middle);
+		var del_x = (used_surf ? 0 : (skin_preview_x + inset)) + (skin_delete.x - skin_preview_x - inset);
+		var del_y = (used_surf ? 0 : (list_y + inset)) + (skin_delete.y - list_y - inset);
+		draw_set_colour(hover_skin_delete ? make_colour_rgb(140, 60, 60) : make_colour_rgb(96, 48, 48));
+		draw_rectangle(del_x, del_y, del_x + skin_delete.w, del_y + skin_delete.h, false);
+		draw_set_colour(c_white);
+		draw_rectangle(del_x, del_y, del_x + skin_delete.w, del_y + skin_delete.h, true);
+		draw_text_transformed(del_x + skin_delete.w * 0.5, del_y + skin_delete.h * 0.5, lang("skin.delete", "Delete"), _body, _body, 0);
+	};
+
+	if (used_surf) {
+		surface_reset_target();
+		draw_surface(surf, skin_preview_x + inset, list_y + inset);
+	};
+	draw_set_colour(make_colour_rgb(70, 80, 96));
+	draw_rectangle(skin_preview_x, list_y, skin_preview_x + skin_preview_w, list_y + list_h, true);
+}
+
+function settings_gui_draw_tab(_box, _hot, _on, _label, _scale, _fill_on, _fill_idle) {
+	if (!is_struct(_box)) then return;
+	draw_set_colour(_on ? _fill_on : (_hot ? make_colour_rgb(52, 64, 88) : _fill_idle));
+	draw_rectangle(_box.x, _box.y, _box.x + _box.w, _box.y + _box.h, false);
+	draw_set_colour(c_white);
+	draw_rectangle(_box.x, _box.y, _box.x + _box.w, _box.y + _box.h, true);
+	draw_text_transformed(_box.x + _box.w * 0.5, _box.y + _box.h * 0.5, _label, _scale, _scale, 0);
 }
 
 function settings_gui_blocking() {
@@ -242,20 +515,25 @@ function settings_gui_open() {
 }
 
 function settings_gui_close() {
-	if (instance_exists(oSettings)) then with (oSettings) instance_destroy();
+	skin_import_cancel();
+	skin_preview_unload();
+	if (instance_exists(oSettings)) then with (oSettings) {
+		settings_skin_preview_surface_free();
+		instance_destroy();
+	};
 }
 
 function settings_developer_warning_text() {
-	return lang("settings.developerWarning");
+	return "You have entered developer settings. Changing these options may prevent the simulator from starting. If it cannot start, delete resource/config.ini. On other platforms, tap Clear data to reset.";
 }
 
 function settings_warn_developer() {
 	var msg = settings_developer_warning_text();
-	var buttons = [msgbox_button(lang("common.confirm"))];
+	var buttons = [msgbox_button("OK")];
 	if (i_wbox_native_ready()) {
-		msgbox_warning_sync(msg, lang("common.warning"), buttons, MSGBOX_BUTTON_ALIGN.RIGHT);
+		msgbox_warning_sync(msg, "Warning", buttons, MSGBOX_BUTTON_ALIGN.RIGHT);
 	} else {
-		msgbox_warning_async(msg, lang("common.warning"), buttons, MSGBOX_BUTTON_ALIGN.RIGHT);
+		msgbox_warning_async(msg, "Warning", buttons, MSGBOX_BUTTON_ALIGN.RIGHT);
 	};
 }
 
@@ -357,10 +635,11 @@ function settings_gui_layout() {
 	var pad = 18 * s;
 	tab_h = 46 * s;
 	tab_y = panel_y + 58 * s;
-	tab_w = (panel_w - pad * 4) / 3;
+	tab_w = (panel_w - pad * 5) / 4;
 	tab_normal = { x:panel_x + pad, y:tab_y, w:tab_w, h:tab_h };
 	tab_dev = { x:panel_x + pad * 2 + tab_w, y:tab_y, w:tab_w, h:tab_h };
 	tab_lang = { x:panel_x + pad * 3 + tab_w * 2, y:tab_y, w:tab_w, h:tab_h };
+	tab_skin = { x:panel_x + pad * 4 + tab_w * 3, y:tab_y, w:tab_w, h:tab_h };
 	close_w = 90 * s;
 	close_h = 36 * s;
 	close_x = panel_x + panel_w - pad - close_w;
@@ -379,6 +658,13 @@ function settings_gui_layout() {
 	show_clear = (os_type != os_windows);
 	layout_w = rw;
 	layout_h = rh;
+	skin_list_w = min(300 * s, list_w * 0.38);
+	skin_add_h = 44 * s;
+	skin_list_h = max(80 * s, list_h - skin_add_h - 8 * s);
+	skin_add = { x:list_x, y:list_y + skin_list_h + 8 * s, w:skin_list_w, h:skin_add_h };
+	skin_preview_x = list_x + skin_list_w + 14 * s;
+	skin_preview_w = list_w - skin_list_w - 14 * s;
+	skin_delete = { x:skin_preview_x + skin_preview_w - 140 * s, y:list_y + list_h - 40 * s, w:140 * s, h:40 * s };
 }
 
 function settings_gui_rows() {
@@ -404,9 +690,32 @@ function settings_gui_init() {
 	hover_tab_normal = false;
 	hover_tab_dev = false;
 	hover_tab_lang = false;
+	hover_tab_skin = false;
 	hover_clear = false;
+	hover_skin_add = false;
+	hover_skin_delete = false;
+	skin_picking = false;
+	skin_import_path = "";
+	skin_zip_task = -1;
+	skin_zip_dest = "";
+	skin_zip_folder = "";
+	skin_zip_copy = "";
+	skin_fx_cycle_t0 = -1;
+	skin_fx_last_hit = -1;
+	skin_hitsounds_ensure_default();
+	skin_fx_rot = [];
+	skin_fx_scales = [];
+	skin_fx_rx = 280;
+	skin_fx_ry = 280;
+	skin_hits = [];
 	row_hits = [];
 	lang_hits = [];
+	hits_tab = -1;
+	hits_scroll = -1;
+	hits_visible = -1;
+	hits_w = -1;
+	hits_h = -1;
+	hits_s = -1;
 	ui_font = pls_ui_font_add(24);
 	settings_store();
 	settings_gui_layout();
@@ -418,11 +727,40 @@ function settings_gui_step() {
 		settings_gui_layout();
 	};
 	if (!armed && !mouse_check_button(mb_left)) then armed = true;
+	if (instance_exists(oFilePicker)) then exit;
+	skin_import_poll();
+	if (is_string(skin_import_path ?? "") && string_length(skin_import_path)) {
+		var queued_zip = skin_import_path;
+		skin_import_path = "";
+		skin_log($"settings step import {queued_zip}");
+		skin_import_zip(queued_zip);
+		exit;
+	};
+	if (bool(skin_picking ?? false) && os_type == os_android && extension_exists("I_AndroidOpen")) {
+		var pick_status = i_android_open_status();
+		if (pick_status == ANDROID_OPEN_STATUS.OK) {
+			skin_picking = false;
+			var path = i_android_open_path();
+			i_android_open_reset();
+			if (string_length(path)) then skin_import_queue(path);
+			exit;
+		} else if (pick_status == ANDROID_OPEN_STATUS.CANCELLED || pick_status == ANDROID_OPEN_STATUS.ERROR) {
+			skin_picking = false;
+			i_android_open_reset();
+			if (pick_status == ANDROID_OPEN_STATUS.ERROR) then skin_error(lang("menu.openFailed", "Open failed."));
+			exit;
+		};
+		exit;
+	};
 
 	var rows = settings_gui_rows();
 	var lang_rows = lang_packs();
-	var list_count = (tab == 2) ? array_length(lang_rows) : array_length(rows);
-	var max_scroll = max(0, list_count - visible_rows);
+	var skin_rows = skin_menu_items();
+	var list_count = array_length(rows);
+	if (tab == 2) then list_count = array_length(lang_rows);
+	else if (tab == 3) then list_count = array_length(skin_rows);
+	var skin_visible = max(1, floor(skin_list_h / row_h));
+	var max_scroll = max(0, list_count - ((tab == 3) ? skin_visible : visible_rows));
 	scroll = clamp(scroll, 0, max_scroll);
 
 	if (is_string(editing_key) && string_length(editing_key)) {
@@ -442,12 +780,17 @@ function settings_gui_step() {
 	hover_tab_normal = settings_gui_hit(tab_normal, mx, my);
 	hover_tab_dev = settings_gui_hit(tab_dev, mx, my);
 	hover_tab_lang = settings_gui_hit(tab_lang, mx, my);
+	hover_tab_skin = settings_gui_hit(tab_skin, mx, my);
+	hover_skin_add = (tab == 3) && settings_gui_hit(skin_add, mx, my);
+	hover_skin_delete = (tab == 3) && (skin_selected_id() != SKIN_DEFAULT_ID) && settings_gui_hit(skin_delete, mx, my);
 	hover_clear = show_clear && point_in_rectangle(mx, my, clear_x, clear_y, clear_x + clear_w, clear_y + clear_h);
 
 	if (mouse_wheel_up()) then scroll = max(0, scroll - 1);
 	if (mouse_wheel_down()) then scroll = min(max_scroll, scroll + 1);
 
-	var in_list = point_in_rectangle(mx, my, list_x, list_y, list_x + list_w, list_y + list_h);
+	var in_list = (tab == 3)
+		? point_in_rectangle(mx, my, list_x, list_y, list_x + skin_list_w, list_y + skin_list_h)
+		: point_in_rectangle(mx, my, list_x, list_y, list_x + list_w, list_y + list_h);
 	if (mouse_check_button_pressed(mb_left) && in_list) {
 		dragging = true;
 		drag_moved = false;
@@ -463,42 +806,63 @@ function settings_gui_step() {
 	};
 	if (!mouse_check_button(mb_left)) then dragging = false;
 
-	row_hits = [];
-	lang_hits = [];
-	if (tab == 2) {
-		var lang_last = min(array_length(lang_rows), scroll + visible_rows);
-		for (var li = scroll; li < lang_last; li++) {
-			var pack = lang_rows[li];
-			if (!is_struct(pack)) then continue;
-			var lang_row_y = list_y + (li - scroll) * row_h;
-			array_push(lang_hits, {
-				locale: string(pack.id ?? ""),
-				y: lang_row_y,
-				box: { x:list_x, y:lang_row_y, w:list_w, h:row_h }
-			});
-		};
-	} else {
-		var last = min(array_length(rows), scroll + visible_rows);
-		for (var i = scroll; i < last; i++) {
-			var item = rows[i];
-			var row_y = list_y + (i - scroll) * row_h;
-			var ctrl_w = min(220 * layout_s, list_w * 0.38);
-			var ctrl_x = list_x + list_w - ctrl_w - 8 * layout_s;
-			var ctrl_h = min(36 * layout_s, row_h - 10 * layout_s);
-			var ctrl_y = row_y + (row_h - ctrl_h) * 0.5;
-			var kind = settings_kind(item.key);
-			var hit = { key:item.key, kind:kind, row:i, y:row_y, minus:undefined, plus:undefined, toggle:undefined, field:undefined };
-			if (kind == "bool") {
-				hit.toggle = { x:ctrl_x, y:ctrl_y, w:ctrl_w, h:ctrl_h };
-			} else if (kind == "number") {
-				var btn_w = 40 * layout_s;
-				hit.minus = { x:ctrl_x, y:ctrl_y, w:btn_w, h:ctrl_h };
-				hit.plus = { x:ctrl_x + ctrl_w - btn_w, y:ctrl_y, w:btn_w, h:ctrl_h };
-				hit.field = { x:ctrl_x + btn_w + 4 * layout_s, y:ctrl_y, w:ctrl_w - btn_w * 2 - 8 * layout_s, h:ctrl_h };
-			} else {
-				hit.field = { x:ctrl_x, y:ctrl_y, w:ctrl_w, h:ctrl_h };
+	if (hits_tab != tab || hits_scroll != scroll || hits_visible != visible_rows
+		|| hits_w != layout_w || hits_h != layout_h || hits_s != layout_s) {
+		hits_tab = tab;
+		hits_scroll = scroll;
+		hits_visible = visible_rows;
+		hits_w = layout_w;
+		hits_h = layout_h;
+		hits_s = layout_s;
+		row_hits = [];
+		lang_hits = [];
+		skin_hits = [];
+		if (tab == 3) {
+			var skin_last = min(array_length(skin_rows), scroll + skin_visible);
+			for (var si = scroll; si < skin_last; si++) {
+				var skin_item = skin_rows[si];
+				if (!is_struct(skin_item)) then continue;
+				var skin_row_y = list_y + (si - scroll) * row_h;
+				array_push(skin_hits, {
+					skin_id: string(skin_item.skin_id ?? ""),
+					box: { x:list_x, y:skin_row_y, w:skin_list_w, h:row_h }
+				});
 			};
-			array_push(row_hits, hit);
+		} else if (tab == 2) {
+			var lang_last = min(array_length(lang_rows), scroll + visible_rows);
+			for (var li = scroll; li < lang_last; li++) {
+				var pack = lang_rows[li];
+				if (!is_struct(pack)) then continue;
+				var lang_row_y = list_y + (li - scroll) * row_h;
+				array_push(lang_hits, {
+					locale: string(pack.id ?? ""),
+					y: lang_row_y,
+					box: { x:list_x, y:lang_row_y, w:list_w, h:row_h }
+				});
+			};
+		} else {
+			var last = min(array_length(rows), scroll + visible_rows);
+			for (var i = scroll; i < last; i++) {
+				var item = rows[i];
+				var row_y = list_y + (i - scroll) * row_h;
+				var ctrl_w = min(220 * layout_s, list_w * 0.38);
+				var ctrl_x = list_x + list_w - ctrl_w - 8 * layout_s;
+				var ctrl_h = min(36 * layout_s, row_h - 10 * layout_s);
+				var ctrl_y = row_y + (row_h - ctrl_h) * 0.5;
+				var kind = settings_kind(item.key);
+				var hit = { key:item.key, kind:kind, row:i, y:row_y, minus:undefined, plus:undefined, toggle:undefined, field:undefined };
+				if (kind == "bool") {
+					hit.toggle = { x:ctrl_x, y:ctrl_y, w:ctrl_w, h:ctrl_h };
+				} else if (kind == "number") {
+					var btn_w = 40 * layout_s;
+					hit.minus = { x:ctrl_x, y:ctrl_y, w:btn_w, h:ctrl_h };
+					hit.plus = { x:ctrl_x + ctrl_w - btn_w, y:ctrl_y, w:btn_w, h:ctrl_h };
+					hit.field = { x:ctrl_x + btn_w + 4 * layout_s, y:ctrl_y, w:ctrl_w - btn_w * 2 - 8 * layout_s, h:ctrl_h };
+				} else {
+					hit.field = { x:ctrl_x, y:ctrl_y, w:ctrl_w, h:ctrl_h };
+				};
+				array_push(row_hits, hit);
+			};
 		};
 	};
 
@@ -529,12 +893,37 @@ function settings_gui_step() {
 		scroll = 0;
 		exit;
 	};
+	if (hover_tab_skin && tab != 3) {
+		settings_gui_commit_edit();
+		tab = 3;
+		scroll = 0;
+		skin_preview_set(skin_selected_id());
+		exit;
+	};
+	if (tab == 3) {
+		if (hover_skin_add) {
+			skin_log("add button clicked");
+			skin_pick_file();
+			exit;
+		};
+		if (hover_skin_delete) {
+			skin_delete_id(skin_selected_id());
+			exit;
+		};
+		for (var sk = 0; sk < array_length(skin_hits); sk++) {
+			var skin_hit = skin_hits[sk];
+			if (!settings_gui_hit(skin_hit.box, mx, my)) then continue;
+			if (skin_preview_set(skin_hit.skin_id)) then skin_set_selected(skin_hit.skin_id);
+			exit;
+		};
+		exit;
+	};
 	if (hover_clear) {
 		settings_gui_commit_edit();
 		settings_clear_data();
 		scroll = 0;
 		if (!pls_is_gx_remote()) {
-			msgbox_info_async(lang("settings.cleared"), lang("common.settings"), [msgbox_button(lang("common.confirm"))], MSGBOX_BUTTON_ALIGN.RIGHT);
+			msgbox_info_async("Data cleared and defaults restored.", "Settings", [msgbox_button("OK")], MSGBOX_BUTTON_ALIGN.RIGHT);
 		};
 		exit;
 	};
@@ -621,22 +1010,14 @@ function settings_gui_draw() {
 	draw_rectangle(close_x, close_y, close_x + close_w, close_y + close_h, true);
 	draw_text_transformed(close_x + close_w * 0.5, close_y + close_h * 0.5, lang("settings.close"), small_scale + 0.08 * s, small_scale + 0.08 * s, 0);
 
-	var tabs = [
-		[tab_normal, hover_tab_normal, tab == 0, lang("settings.normal")],
-		[tab_dev, hover_tab_dev, tab == 1, lang("settings.developer")],
-		[tab_lang, hover_tab_lang, tab == 2, lang("settings.language")]
-	];
-	for (var t = 0; t < 3; t++) {
-		var box = tabs[t][0];
-		var hot = tabs[t][1];
-		var on = tabs[t][2];
-		draw_set_colour(on ? fill_hot : (hot ? make_colour_rgb(52, 64, 88) : fill_tab));
-		draw_rectangle(box.x, box.y, box.x + box.w, box.y + box.h, false);
-		draw_set_colour(c_white);
-		draw_rectangle(box.x, box.y, box.x + box.w, box.y + box.h, true);
-		draw_text_transformed(box.x + box.w * 0.5, box.y + box.h * 0.5, tabs[t][3], tab_scale, tab_scale, 0);
-	};
+	settings_gui_draw_tab(tab_normal, hover_tab_normal, tab == 0, lang("settings.normal"), tab_scale, fill_hot, fill_tab);
+	settings_gui_draw_tab(tab_dev, hover_tab_dev, tab == 1, lang("settings.developer"), tab_scale, fill_hot, fill_tab);
+	settings_gui_draw_tab(tab_lang, hover_tab_lang, tab == 2, lang("settings.language"), tab_scale, fill_hot, fill_tab);
+	settings_gui_draw_tab(tab_skin, hover_tab_skin, tab == 3, lang("settings.skin", "Skin"), tab_scale, fill_hot, fill_tab);
 
+	if (tab == 3) {
+		settings_gui_draw_skins(s, body_scale, small_scale, fill_idle, fill_hot, fill_on);
+	} else {
 	draw_set_colour(make_colour_rgb(22, 29, 45));
 	draw_rectangle(list_x, list_y, list_x + list_w, list_y + list_h, false);
 	draw_set_colour(make_colour_rgb(70, 80, 96));
@@ -676,8 +1057,7 @@ function settings_gui_draw() {
 			draw_set_colour(make_colour_rgb(20, 26, 40));
 			draw_rectangle(list_x + 2, row_y, list_x + list_w - 2, row_y + row_h, false);
 		};
-		var label = lang($"fields.{item.key}", settings_comment_label(item.comment));
-		if (!string_length(label)) then label = item.key;
+		var label = settings_field_label(item.key, item.comment);
 		draw_set_halign(fa_left);
 		draw_set_valign(fa_middle);
 		draw_set_colour(c_white);
@@ -731,6 +1111,7 @@ function settings_gui_draw() {
 		};
 	};
 	};
+	};
 
 	if (show_clear) {
 		draw_set_colour(hover_clear ? make_colour_rgb(140, 60, 60) : make_colour_rgb(96, 48, 48));
@@ -745,6 +1126,7 @@ function settings_gui_draw() {
 	var hint = lang("settings.hintNormal");
 	if (tab == 1) then hint = lang("settings.hintDeveloper");
 	else if (tab == 2) then hint = lang_current_label();
+	else if (tab == 3) then hint = lang("settings.hintSkin", "Add a resource pack, then select it. It applies when you enter a chart.");
 	draw_text_transformed(panel_x + panel_w - 18 * s, panel_y + panel_h - 26 * s, hint, small_scale, small_scale, 0);
 
 	draw_set_font(old_font);

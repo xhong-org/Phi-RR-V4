@@ -28,12 +28,19 @@ function lang_lookup(_root, _key) {
 
 function lang(_key, _fallback = undefined) {
 	lang_ensure();
+	if (!is_string(_key) || !string_length(_key)) {
+		if (is_string(_fallback)) then return _fallback;
+		return "";
+	};
+	if (!is_struct(global.pls_lang.lookup)) then global.pls_lang.lookup = {};
+	if (struct_exists(global.pls_lang.lookup, _key)) then return global.pls_lang.lookup[$ _key];
 	var v = lang_lookup(global.pls_lang.objects, _key);
-	if (is_string(v) && string_length(v)) then return v;
-	v = lang_lookup(global.pls_lang.fallback, _key);
-	if (is_string(v) && string_length(v)) then return v;
-	if (is_string(_fallback)) then return _fallback;
-	return string(_key ?? "");
+	if (!(is_string(v) && string_length(v))) then v = lang_lookup(global.pls_lang.fallback, _key);
+	if (!(is_string(v) && string_length(v))) {
+		v = is_string(_fallback) ? _fallback : _key;
+	};
+	global.pls_lang.lookup[$ _key] = v;
+	return v;
 }
 
 function langf(_key) {
@@ -46,7 +53,13 @@ function langf(_key) {
 
 function lang_pack_label(_pack) {
 	if (!is_struct(_pack)) then return "";
-	return $"{string(_pack.name ?? "")}(v{string(_pack.version ?? "")})";
+	if (struct_exists(_pack, "label_cached")) {
+		var cached = _pack[$ "label_cached"];
+		if (is_string(cached) && string_length(cached)) then return cached;
+	};
+	var label = $"{string(_pack[$ "name"] ?? "")}(v{string(_pack[$ "version"] ?? "")})";
+	_pack[$ "label_cached"] = label;
+	return label;
 }
 
 function lang_current_id() {
@@ -167,6 +180,8 @@ function lang_apply(_id) {
 		global.pls_lang.id = LANG_DEFAULT;
 		global.pls_lang.objects = global.pls_lang.fallback;
 	};
+	global.pls_lang.lookup = {};
+	global.pls_lang.field_labels = {};
 }
 
 function lang_refresh_ui() {
@@ -229,7 +244,9 @@ function lang_init() {
 		id: LANG_DEFAULT,
 		packs: [],
 		objects: {},
-		fallback: {}
+		fallback: {},
+		lookup: {},
+		field_labels: {}
 	};
 	var files = [];
 	lang_collect_json(lang_dir(), files);
@@ -258,4 +275,126 @@ function lang_init() {
 function lang_ensure() {
 	if (!variable_global_exists("pls_lang") || !is_struct(global.pls_lang)) then lang_init();
 	return global.pls_lang;
+}
+
+function lang_flatten_keys(_root, _prefix, _out) {
+	if (!is_struct(_root) || !is_array(_out)) then return;
+	var names = struct_get_names(_root);
+	for (var n = 0; n < array_length(names); n++) {
+		var field = names[n];
+		var key = string_length(_prefix) ? $"{_prefix}.{field}" : field;
+		var val = _root[$ field];
+		if (is_struct(val)) then lang_flatten_keys(val, key, _out);
+		else array_push(_out, key);
+	};
+}
+
+function lang_required_keys() {
+	static keys = undefined;
+	if (is_array(keys)) then return keys;
+	keys = [
+		"common.ok", "common.on", "common.off", "common.close", "common.confirm", "common.warning",
+		"common.settings", "common.cancel", "common.open", "common.menu", "common.loading",
+		"menu.subtitle", "menu.openPackage", "menu.loadSample", "menu.renderPlaceholder",
+		"menu.statusSelect", "menu.detailSupported", "menu.hintKeys", "menu.hintTap",
+		"menu.noFile", "menu.cancelled", "menu.openFailed", "menu.filterChart",
+		"android.waitingPicker", "android.pickDetail", "android.pickerUnavailable", "android.pickerFailed",
+		"gx.clickPick", "gx.browseApi", "gx.apiOffline", "gx.statusClick", "gx.statusClickOrApi",
+		"gx.statusClickApiOff", "gx.statusConnecting", "gx.detailRemote", "gx.detailApi",
+		"gx.hintRemote", "gx.hintApi", "gx.openedBrowse", "gx.notConnected", "gx.statusApiOffStillClick",
+		"gx.statusPopup", "gx.statusReading", "gx.readFailed", "gx.uploadFailed", "gx.importing",
+		"gx.writeFailed", "gx.notZip", "gx.fileProtocol", "gx.fileProtocolStatus", "gx.downloadingUrl",
+		"gx.notFound", "gx.apiNoResponse", "gx.runServer", "gx.connected", "gx.urlFailed", "gx.downloadMissing",
+		"settings.title", "settings.close", "settings.normal", "settings.developer", "settings.clearData",
+		"settings.hintNormal", "settings.hintDeveloper", "settings.language", "settings.skin", "settings.hintSkin",
+		"settings.developerWarning", "settings.cleared",
+		"skin.default", "skin.add", "skin.delete", "skin.filter", "skin.importFailed", "skin.parseFailed",
+		"skin.previewFailed", "skin.cantDeleteDefault", "skin.missingFile", "skin.invalidInfo", "skin.errorTitle",
+		"fields.enableBlur", "fields.enableFPS", "fields.enableQuikyStart", "fields.enableCanvasZoom",
+		"fields.enableSurface", "fields.enableNoteHightLight", "fields.enableChartGUI", "fields.enableLineJudge",
+		"fields.showBG", "fields.enableHitEffect", "fields.refreshFPSCount", "fields.enableDebug",
+		"fields.enableDisplayLineID", "fields.comboString", "fields.enableVsync", "fields.aa_level",
+		"fields.useOldFX", "fields.enableComboScore", "fields.judgeOffset", "fields.enableAccJudgment",
+		"fields.preventWindowMoveFreeze", "fields.enableRPEMulticore", "fields.rpeWorkerMinLines",
+		"fields.rpeWorkerProfileFrames", "fields.noteUniformScale", "fields.notePreloadSeconds", "fields.TEST1",
+		"loading.title", "loading.preparing", "loading.noSource", "loading.backToMenu", "loading.queued",
+		"loading.resolving", "loading.sample", "loading.extracting", "loading.scanning", "loading.failed",
+		"loading.unsupportedChart", "loading.formatDetected", "loading.preparingRoom", "loading.unsupportedFormat",
+		"loading.defaultResources", "loading.hitSounds", "loading.entering", "loading.returning",
+		"loading.statusPrefix", "loading.extractingPackage", "loading.unicodeExtract", "loading.extractFailed",
+		"loading.loaderTitle",
+		"picker.statusBrowse", "picker.up", "picker.back", "picker.fwd", "picker.cancel", "picker.open",
+		"picker.useFolder", "picker.empty", "picker.dirPrefix", "picker.listing", "picker.unpacking",
+		"picker.downloading", "picker.searching", "picker.pasted", "picker.listFailed", "picker.connecting",
+		"picker.importedFiles", "picker.copying", "picker.itemsCount", "picker.downloadCancelled",
+		"picker.imported", "picker.downloaded", "picker.downloadProgress", "picker.downloadBytes", "picker.gameFiles",
+		"render.title", "render.hint", "render.chartPath", "render.videoOutput", "render.fps", "render.quality",
+		"render.aspect", "render.browse", "render.saveAs", "render.resolution", "render.aa", "render.presetRatio",
+		"render.start", "render.fpsNumeric", "render.aspectFormat", "render.copied", "render.copyUnavailable",
+		"render.pasted", "render.pasteUnavailable", "render.cleared", "render.chartRequired", "render.fpsRange",
+		"render.qualityRange", "render.aspectPositive", "render.outputMissing", "render.chartMissing",
+		"video.title", "video.sample", "video.frame", "video.elapsed", "video.remaining", "video.finalizing",
+		"loadAnim.chart", "loadAnim.illustration", "loadAnim.loading", "loadAnim.tipsFallback"
+	];
+	return keys;
+}
+
+function lang_pack_has_key(_pack, _key) {
+	if (!is_struct(_pack)) then return false;
+	var val = lang_lookup(_pack.objects, _key);
+	return is_string(val) && string_length(val) > 0;
+}
+
+function lang_validate() {
+	lang_ensure();
+	var packs = global.pls_lang.packs;
+	if (!is_array(packs) || array_length(packs) <= 0) {
+		return "No language packs were found in the language folder.\nThe program will now close.";
+	};
+	var required = lang_required_keys();
+	var missing = [];
+	for (var k = 0; k < array_length(required); k++) {
+		var key = required[k];
+		var present = false;
+		for (var p = 0; p < array_length(packs); p++) {
+			if (lang_pack_has_key(packs[p], key)) { present = true; break; };
+		};
+		if (!present) then array_push(missing, key);
+	};
+	if (array_length(missing) <= 0) then return "";
+	var shown = min(12, array_length(missing));
+	var list = "";
+	for (var m = 0; m < shown; m++) {
+		if (m > 0) then list += ", ";
+		list += missing[m];
+	};
+	if (array_length(missing) > shown) then list += ", ...";
+	return "All language packs are missing required key(s): " + list + ".\nThe program will now close.";
+}
+
+function lang_fatal_quit() {
+	game_end();
+}
+
+function lang_fatal(_message) {
+	global.pls_lang_fatal = true;
+	var title = "Language Error";
+	var text = string(_message ?? "Language pack error.\nThe program will now close.");
+	if (i_wbox_native_ready()) {
+		msgbox_error_sync(text, title, [msgbox_button("OK")], MSGBOX_BUTTON_ALIGN.RIGHT);
+		lang_fatal_quit();
+		return;
+	};
+	if (pls_is_gxgames() && msgbox_gx_ready()) {
+		msgbox_error_async(text, title, [msgbox_button("OK", lang_fatal_quit)], MSGBOX_BUTTON_ALIGN.RIGHT);
+		return;
+	};
+	show_message_async(title + "\n\n" + text);
+}
+
+function lang_boot_guard() {
+	var err = lang_validate();
+	if (!string_length(err)) then return true;
+	lang_fatal(err);
+	return false;
 }

@@ -16,7 +16,7 @@ if(now_hit_time >= self.time - lateHitTime && now_hit_time <= self.time + lateHi
 		hit_x = (line_x + local_x * _line_ref.__cos),
 		hit_y = (_line_ref.y - local_x * _line_ref.__sin);
 	hit_status = (judgeCalc(self.time, now_hit_time, self.bpm, hit_x, hit_y, self.type));
-	render_play_hitsound(sound);
+	skin_play_note_hitsound();
 	isJudge = true;
 };
 
@@ -28,7 +28,7 @@ if(now_time >= now_hit_time){
 			hit_x = (line_x + local_x * _line_ref.__cos),
 			hit_y = (_line_ref.y - local_x * _line_ref.__sin);
 		hit_status = (judgeCalc(self.time, now_hit_time, self.bpm, hit_x, hit_y, self.type));
-		if(hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) then render_play_hitsound(sound);
+		if(hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) then skin_play_note_hitsound();
 		isJudge = true;
 	}else if(hit_status == TYPE.BAD && self.type == 1){
 		if(!isBad){

@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"PECLineCreate",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"PECLineCreate",
+  "parent":{
+    "name":"PEC",
+    "path":"folders/Objects/Main/Loader/Format/PEC.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

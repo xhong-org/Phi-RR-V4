@@ -14,7 +14,7 @@ if (now_time >= now_hit && !isMiss && notJudge && hit_status == TYPE.NONE) {
 			judgeCalc(start_sec, now_hit, 0, _hold_xy[0], _hold_xy[1], type, true, true, true);
 		} else {
 			_bak_time = _now_seconds;
-			rpe_play_hitsound(sound, custom_fmod_sound, custom_hitsound_path);
+			skin_play_note_hitsound();
 		};
 	};
 	notJudge = false;

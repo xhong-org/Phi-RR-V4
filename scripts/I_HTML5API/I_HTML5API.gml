@@ -305,13 +305,54 @@ function pls_bundled_font_path() {
         return working_directory + "resource/saira.ttf";
 }
 
+function pls_ui_font_cache() {
+        if (!variable_global_exists("pls_ui_fonts") || !is_struct(global.pls_ui_fonts)) {
+                global.pls_ui_fonts = {};
+        };
+        return global.pls_ui_fonts;
+}
+
+function pls_ui_font_key(size, bold, italic, enable_sdf) {
+        return $"{size}|{bold ? 1 : 0}|{italic ? 1 : 0}|{enable_sdf ? 1 : 0}";
+}
+
 function pls_ui_font_add(size, bold = true, italic = false, first = -infinity, last = infinity, enable_sdf = true) {
+        var cache = pls_ui_font_cache();
+        var key = pls_ui_font_key(size, bold, italic, enable_sdf);
+        if (struct_exists(cache, key)) {
+                var existing = cache[$ key];
+                if (font_exists(existing)) then return existing;
+        };
         var path = pls_bundled_font_path();
         if (!file_exists(path)) then return -1;
         font_add_enable_aa(true);
         var font_id = pls_font_add(path, size, bold, italic, first, last);
-        if (enable_sdf && font_exists(font_id)) then pls_font_enable_sdf(font_id, true);
+        if (!font_exists(font_id)) then return font_id;
+        if (enable_sdf) then pls_font_enable_sdf(font_id, true);
+        cache[$ key] = font_id;
         return font_id;
+}
+
+function pls_ui_font_is_shared(font_id) {
+        if (!font_exists(font_id)) then return false;
+        var cache = pls_ui_font_cache();
+        var names = struct_get_names(cache);
+        for (var i = 0; i < array_length(names); i++) {
+                if (cache[$ names[i]] == font_id) then return true;
+        };
+        return false;
+}
+
+function pls_ui_font_delete(font_id) {
+        if (pls_ui_font_is_shared(font_id)) then return false;
+        if (font_exists(font_id)) then font_delete(font_id);
+        return true;
+}
+
+function pls_ui_font_release_instance() {
+        if (!variable_instance_exists(id, "ui_font")) then return;
+        pls_ui_font_delete(ui_font);
+        ui_font = -1;
 }
 
 function html5_files_available() {

@@ -12,29 +12,14 @@ if (!variable_instance_exists(id, "start_height") || !is_real(start_height) || s
 var _render_sizing = variable_global_exists("render_mode") && global.render_mode;
 var _sw = _render_sizing ? global.render_width : pls_window_width();
 var _sh = _render_sizing ? global.render_height : pls_window_height();
-if (pls_is_gxgames()) {
-        // Opera's canvas size jitters by 1-2px; ignore that or surfaces churn
-        // every frame and playback gets slower the longer it runs.
-        if (!variable_instance_exists(id, "gx_last_room_w")) then gx_last_room_w = room_width;
-        if (!variable_instance_exists(id, "gx_last_room_h")) then gx_last_room_h = room_height;
-        if (abs(_sw - gx_last_room_w) > 4 || abs(_sh - gx_last_room_h) > 4) {
-                gx_last_room_w = _sw;
-                gx_last_room_h = _sh;
-                if (room_width != _sw) {
-                        room_width = _sw;
-                        alarm[0] = 1;
-                };
-                if (room_height != _sh) {
-                        room_height = _sh;
-                        alarm[0] = 1;
-                };
-        };
-        if (!variable_instance_exists(id, "gx_gui_w") || gx_gui_w != room_width || gx_gui_h != room_height) {
-                display_set_gui_size(max(1, room_width), max(1, room_height));
-                gx_gui_w = room_width;
-                gx_gui_h = room_height;
-        };
-} else {
+// Window/canvas size jitters by 1-2px on Windows (DWM) and GX. Ignore that or
+// room + application_surface resize every frame and working set creeps up.
+var _jitter = pls_is_gxgames() ? 4 : 2;
+if (!variable_instance_exists(id, "size_last_w")) then size_last_w = room_width;
+if (!variable_instance_exists(id, "size_last_h")) then size_last_h = room_height;
+if (abs(_sw - size_last_w) > _jitter || abs(_sh - size_last_h) > _jitter) {
+        size_last_w = _sw;
+        size_last_h = _sh;
         if (room_width != _sw) {
                 room_width = _sw;
                 alarm[0] = 1;
@@ -42,6 +27,15 @@ if (pls_is_gxgames()) {
         if (room_height != _sh) {
                 room_height = _sh;
                 alarm[0] = 1;
+        };
+};
+if (pls_is_gxgames()) {
+        gx_last_room_w = size_last_w;
+        gx_last_room_h = size_last_h;
+        if (!variable_instance_exists(id, "gx_gui_w") || gx_gui_w != room_width || gx_gui_h != room_height) {
+                display_set_gui_size(max(1, room_width), max(1, room_height));
+                gx_gui_w = room_width;
+                gx_gui_h = room_height;
         };
 };
 

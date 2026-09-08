@@ -15,9 +15,13 @@
 /// @param {Real} head_attach_scale Fraction of the head origin used for attachment.
 function draw_hold(x, y, scalex, scaley, hold_body_scale, angle = 0, subimg = 0,
 		colour = c_white, alpha = 1, draw_head = true, attach_head = draw_head,
-		tail_trim = 0, head_attach_scale = 0.25) {
-	static _head_attach = max(0, sprite_get_yoffset(note_hold_head));
-	static _body_height = max(1, sprite_get_height(note_hold_body));
+		tail_trim = 0, head_attach_scale = 0.25, head_spr = -1, body_spr = -1, end_spr = -1) {
+	if (!sprite_exists(head_spr)) then head_spr = note_hold_head;
+	if (!sprite_exists(body_spr)) then body_spr = note_hold_body;
+	if (!sprite_exists(end_spr)) then end_spr = note_hold_end;
+	var _head_attach = max(0, sprite_get_yoffset(head_spr));
+	var _body_height = max(1, sprite_get_height(body_spr));
+	var _frame = sprite_exists(head_spr) ? clamp(real(subimg), 0, max(0, sprite_get_number(head_spr) - 1)) : 0;
 
 	var _xscale = real(scalex);
 	var _yscale = abs(real(scaley));
@@ -33,8 +37,6 @@ function draw_hold(x, y, scalex, scaley, hold_body_scale, angle = 0, subimg = 0,
 		_head_distance = (_head_attach * 1.35) * _yscale * max(0, real(head_attach_scale));
 	};
 
-	// The body scale is calculated from the complete sprite height. Keeping the
-	// same origin convention for every frame is required by the highlight frame.
 	var _body_origin_distance = _head_distance;
 	var _tail_origin_distance = _head_distance + (_body_length) - max(0, real(tail_trim));
 
@@ -43,12 +45,12 @@ function draw_hold(x, y, scalex, scaley, hold_body_scale, angle = 0, subimg = 0,
 	var _tail_x = x + _axis_x * _tail_origin_distance;
 	var _tail_y = y + _axis_y * _tail_origin_distance;
 
-	draw_sprite_ext(note_hold_body, subimg, _body_x, _body_y,
+	draw_sprite_ext(body_spr, _frame, _body_x, _body_y,
 		_xscale, _body_scale, angle, colour, _alpha);
-	draw_sprite_ext(note_hold_end, subimg, _tail_x, _tail_y,
+	draw_sprite_ext(end_spr, _frame, _tail_x, _tail_y,
 		_xscale, _yscale, angle, colour, _alpha);
 	if (draw_head) {
-		draw_sprite_ext(note_hold_head, subimg, x, y,
+		draw_sprite_ext(head_spr, _frame, x, y,
 			_xscale, _yscale, angle, colour, _alpha);
 	};
 }

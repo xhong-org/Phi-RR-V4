@@ -1,6 +1,7 @@
 /// @description Evaluate normalized PEC events and speed floor.
-if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then exit;
-if (game.paused) then exit;
+if (variable_global_exists("loading_animation_active") && global.loading_animation_active
+	&& !chart_force_event_init) then exit;
+if (game.paused && !chart_force_event_init) then exit;
 line_sec = game.__time[1] - game_2.chart.offsetSeconds;
 var current_scale = (variable_global_exists("global_scales") ? global_scales : 1);
 if (current_scale != _last_scale || room_height != _last_room_height

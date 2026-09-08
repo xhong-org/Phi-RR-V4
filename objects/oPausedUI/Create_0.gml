@@ -181,6 +181,7 @@ function paused_ui_reset_score() {
 
 function paused_ui_reset_official() {
         if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return;
+        instance_activate_object(oLine);
         instance_activate_object(oNote);
         with (oLine) {
                 _counts = [0, 0, 0, 0];
@@ -208,10 +209,12 @@ function paused_ui_reset_official() {
                         yscale = hold_time_length * room_height * 0.6 / max(1, _hold_body_height) * speed;
                 };
         };
+        official_notes_refreeze_after_retry();
 }
 
 function paused_ui_reset_pec() {
         if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return;
+        instance_activate_object(oLine_2);
         instance_activate_object(oNote_2);
         with (oLine_2) {
                 _move_index = 0; _alpha_index = 0; _rotate_index = 0; _speed_index = 0;
@@ -241,6 +244,7 @@ function paused_ui_reset_pec() {
         };
         owner.bpm_count = 0;
         owner.pec_bpm_last_sec = -infinity;
+        pec_notes_refreeze_after_retry();
 }
 
 function paused_ui_reset_rpe() {

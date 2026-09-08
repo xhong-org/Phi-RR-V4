@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"I_MemAPI",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"I_MemAPI",
+  "parent":{
+    "name":"I_Mem",
+    "path":"folders/Extensions/I_Mem.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

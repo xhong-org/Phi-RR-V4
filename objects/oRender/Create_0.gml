@@ -59,12 +59,25 @@ instance_create_depth(0,0,0,oMedia , { "name" : (string_length(game.folder_chart
 instance_create_depth(0,0,DEPTH.BG - 1,oExtraPlay);
 
 game.Sort();
-game.CreateLines();
+skin_gameplay_ensure();
+chart_load_flags_reset();
+var _official_render_mode = variable_global_exists("render_mode") && global.render_mode;
+if (_official_render_mode) {
+	game.CreateLines();
+} else {
+	official_lines_begin();
+	if (official_lines_pump()) {
+		official_lines_finish();
+		_chart_lines_frozen = true;
+	} else {
+		_chart_lines_building = true;
+	};
+};
 
 draw_set_font(game.font);
 font_scales = clamp(0.6 * ((room_width / 2) / (string_width(game.folder_chart.name) * 0.6 + 40)) , 0.2 , 0.55);
 
-if (game.settings.useOldFX && !pls_is_gxgames()) {
+if (game.settings.useOldFX && !pls_is_gxgames() && !skin_active()) {
 	instance_create_depth(0 , 0 , 0 , oEffect);
 	_eff_c = (method(self , function(_x , _y  , color = #ffeca0){
 		if(!game.settings.enableHitEffect) then return;
@@ -110,13 +123,13 @@ if (!instance_exists(oPausedUI)) then instance_create_depth(0, 0, -1000000, oPau
 if (variable_global_exists("render_mode") && global.render_mode) {
 	instance_create_depth(0, 0, -9999999, oVideoRenderer);
 };
-// Hide chart objects behind the loading overlay. Do not deactivate judge
-// lines: activate is deferred and would skip the next event_perform / Step.
 chart_idle_behind_loading();
-global.loading_render_ready = true;
-chart_blur_bind_game(false);
-if (pls_is_gxgames()) {
-	chart_loading_animation_finish();
+if (!_chart_lines_building) {
+	global.loading_render_ready = true;
+	chart_blur_bind_game(false);
+	if (pls_is_gxgames()) {
+		chart_loading_animation_finish();
+	};
 };
 
 //print(load_line_csv());

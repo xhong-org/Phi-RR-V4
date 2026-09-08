@@ -1,5 +1,8 @@
 /// @description Draw without allocating a temporary scale array.
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then exit;
+if (instance_exists(oRender)
+	&& variable_instance_exists(oRender, "_chart_lines_thaw_pending")
+	&& oRender._chart_lines_thaw_pending) then exit;
 if(image_alpha <= 0) then exit;
 
 var draw_scale_x,

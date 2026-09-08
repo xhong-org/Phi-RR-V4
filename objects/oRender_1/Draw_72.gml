@@ -1,4 +1,7 @@
 /// @description Resolve recursive RPE parent transforms before drawing.
+skin_runtime_gpu_ensure();
+skin_tex_diag_frame();
+if (chart_load_draw_suppressed()) then exit;
 if (!variable_global_exists("game_1") || !is_struct(game_1) || !is_array(game_1.line_list)) then exit;
 
 var line_count = array_length(game_1.line_list);

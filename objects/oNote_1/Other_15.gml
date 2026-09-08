@@ -16,7 +16,7 @@ if ((type == 2 || type == 4) && !isJudge && now_time >= start_sec && now_hit >= 
 	if (is_real_note) {
 		var _hit_xy = rpe_note_hit_effect_xy();
 		hit_status = judgeCalc(start_sec, now_hit, 0, _hit_xy[0], _hit_xy[1], type, true, true, true, has_hit_tint ? hit_tint : undefined);
-		rpe_play_hitsound(sound, custom_fmod_sound, custom_hitsound_path);
+		skin_play_note_hitsound();
 	};
 	isJudge = true;
 	judgeRealTime = _now_seconds;
@@ -30,7 +30,7 @@ if (now_time >= now_hit) {
 		if (is_real_note) {
 			var _tap_xy = rpe_note_hit_effect_xy();
 			hit_status = judgeCalc(start_sec, now_hit, 0, _tap_xy[0], _tap_xy[1], type, true, true, true, has_hit_tint ? hit_tint : undefined);
-			if (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) then rpe_play_hitsound(sound, custom_fmod_sound, custom_hitsound_path);
+			if (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) then skin_play_note_hitsound();
 		};
 		isJudge = true;
 		judgeRealTime = _now_seconds;

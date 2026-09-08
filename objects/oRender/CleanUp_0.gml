@@ -12,5 +12,7 @@ if(variable_global_exists("game") && !is_undefined(game)){
 };
 if(variable_global_exists("_eff_c")) then _eff_c = (function(){ return(false); });
 mus_system_clean();
+skin_gameplay_unload();
 chart_default_resources_unload();
 LogUninit();
+process_mem_trim_later();

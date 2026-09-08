@@ -1,5 +1,6 @@
 /// @description Route command-line archive tests without changing normal startup.
 lang_init();
+if (!lang_boot_guard()) then exit;
 global.pls_archive_test = false;
 global.pls_archive_test_path = "";
 global.pls_exit_test = false;
@@ -22,6 +23,8 @@ global.render_ffmpeg = "ffmpeg.exe";
 global.render_hitsounds = [];
 global.default_notes_texture_loaded = false;
 global.default_hitsounds_load_requested = false;
+global.skin_on = false;
+global.skin_gpu_done = true;
 
 var param_count = parameter_count();
 var environment_archive_source = environment_get_variable("PLS_ARCHIVE_SOURCE");
@@ -141,5 +144,6 @@ if (global.render_mode) {
         print($"[ArchiveRun] Source: {environment_archive_source}");
         room_goto(room_loading);
 } else {
+        display_ui_apply();
         room_goto(room_menu);
 };

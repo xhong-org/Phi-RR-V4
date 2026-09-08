@@ -4,6 +4,11 @@ if(inition) then exit;
 realHitTime = (self.time * _seconds_per_beat);
 hold_time_length = (self.holdTime * _seconds_per_beat);
 _hold_body_height = (sprite_get_height(note_hold_body));
+var _skin_hl = (variable_instance_exists(id, "_hl") && is_real(_hl)) ? _hl : 0;
+var _skin_hold = skin_hold_parts(_skin_hl);
+if (is_struct(_skin_hold) && sprite_exists(_skin_hold.body)) {
+	_hold_body_height = max(1, sprite_get_height(_skin_hold.body));
+};
 max_visible_position = (game.Math.maxVisiblePos(self.yOffset) + 0.01);
 maximum_visual_length = (self._is_hold && holdFloorLength > 0
 	? game.Math.maxVisiblePos(self.yOffset + holdFloorLength) + 0.01
@@ -12,14 +17,14 @@ maximum_visual_length = (self._is_hold && holdFloorLength > 0
 switch(self.type){
 	case 1:
 		sprite_index = note_tap;
-		sound = snd_note_tap;
+		sound = skin_note_sound("tap", snd_note_tap);
 	break;
 	case 2:
 		sprite_index = note_drag;
-		sound = snd_note_drag;
+		sound = skin_note_sound("drag", snd_note_drag);
 	break;
 	case 3:
-		sound = snd_note_tap;
+		sound = skin_note_sound("tap", snd_note_tap);
 		depth ++;
 		sprite_index = note_hold_head;
 		_hx0 = 0;
@@ -37,7 +42,7 @@ switch(self.type){
 	break;
 	case 4:
 		sprite_index = note_flick;
-		sound = snd_note_flick;
+		sound = skin_note_sound("flick", snd_note_flick);
 	break;
 };
 

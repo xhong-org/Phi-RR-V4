@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"ChartRuntimeLoad",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"ChartRuntimeLoad",
+  "parent":{
+    "name":"Format",
+    "path":"folders/Objects/Main/Loader/Format.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

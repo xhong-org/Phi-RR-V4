@@ -67,8 +67,15 @@ if (length_floor == 0) then length_floor = (endFloorPosition - floorPosition);
 // length is the same scale times (tailFloor - headFloor).
 var base_length = notes_h * speed * control_y * uniform_factor;
 
+var _skin_hold = skin_active() ? skin_hold_parts(hl) : undefined;
+var _use_compact = compactHold || (is_struct(_skin_hold) && bool(_skin_hold.compact));
+if (is_struct(_skin_hold)) {
+	if (sprite_exists(_skin_hold.body)) then _hold_body_height = max(1, sprite_get_height(_skin_hold.body));
+	if (sprite_exists(_skin_hold.tail)) then _hold_tail_height = max(1, sprite_get_height(_skin_hold.tail));
+	if (sprite_exists(_skin_hold.head)) then _hold_head_attach = max(1, sprite_get_yoffset(_skin_hold.head));
+};
 var head_offset = 0;
-if (_is_out && (!compactHold)) {
+if (_is_out && (!_use_compact)) {
 	head_offset = _hold_head_attach * image_yscale;
 };
 
@@ -83,7 +90,7 @@ if (!variable_instance_exists(id, "_hold_tail_height") || _hold_tail_height <= 0
 };
 yscale = hold_px / max(1, _hold_body_height);
 
-var tail_trim = (compactHold ? image_yscale * (_hold_tail_height * 0.5) : 0);
+var tail_trim = (_use_compact ? image_yscale * (_hold_tail_height * 0.5) : 0);
 var tail_offset = max(head_offset, head_offset + hold_px - tail_trim);
 var body_ox = _ox_v;
 var body_oy = _oy_v;

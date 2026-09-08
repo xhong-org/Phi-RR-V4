@@ -1,12 +1,5 @@
 /// @description 
-if (variable_global_exists("loading_animator_finished") && global.loading_animator_finished) {
-    if (!instance_exists(oChartMask)) then instance_create_depth(0, 0, -12000, oChartMask);
-    instance_activate_object(oRPEEffect);
-    instance_activate_object(oEffect);
-    instance_activate_object(oEffectNew);
-    if (!instance_exists(oPlayTransition)) then instance_create_depth(0, 0, -999999, oPlayTransition, { owner:id });
-    global.loading_animator_finished = false;
-};
+if (chart_load_step(oLine_2, pec_lines_pump, pec_lines_finish, pec_lines_force_init, pec_sync_note_activation)) then exit;
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active) exit;
 var chart_os_hold = chart_android_focus_step();
 if(!game.paused && !chart_os_hold){
@@ -19,7 +12,7 @@ if(!game.paused && !chart_os_hold){
 		var _pec_count = array_length(_pec_notes);
 		var _pec_index = clamp(real(game_2._note_activation_index ?? 0), 0, _pec_count);
 		while (_pec_index < _pec_count && _pec_notes[_pec_index].activateSec <= _pec_now) {
-			instance_activate_object(_pec_notes[_pec_index].id);
+			chart_note_activate(_pec_notes[_pec_index].id);
 			_pec_index++;
 		};
 		game_2._note_activation_index = _pec_index;

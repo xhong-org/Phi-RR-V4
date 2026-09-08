@@ -1,19 +1,21 @@
 /// @description 
-if (variable_global_exists("loading_animator_finished") && global.loading_animator_finished) {
-    if (!instance_exists(oChartMask)) then instance_create_depth(0, 0, -12000, oChartMask);
-    instance_activate_object(oRPEEffect);
-    instance_activate_object(oEffect);
-    instance_activate_object(oEffectNew);
-    if (!instance_exists(oPlayTransition)) then instance_create_depth(0, 0, -999999, oPlayTransition, { owner:id });
-    global.loading_animator_finished = false;
-};
+if (chart_load_step(oLine, official_lines_pump, official_lines_finish, official_lines_force_init, official_sync_note_activation)) then exit;
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active) exit;
 //if(game.settings.enableFPS) then window_set_caption($"{GAME_NAME} - FPS: {fps} / {fps_real}");
 var chart_os_hold = chart_android_focus_step();
 if(!game.paused && !chart_os_hold){
-	//print(array_length(game.__time));	
 	game.Math.ctime();
-	//print(game.__time);
+	if (is_struct(game) && bool(game._note_activation_enabled ?? false) && is_array(game._notes)) {
+		var _off_now = game.__time[1];
+		var _off_notes = game._notes;
+		var _off_count = array_length(_off_notes);
+		var _off_index = clamp(real(game._note_activation_index ?? 0), 0, _off_count);
+		while (_off_index < _off_count && _off_notes[_off_index].activateSec <= _off_now) {
+			chart_note_activate(_off_notes[_off_index].id);
+			_off_index++;
+		};
+		game._note_activation_index = _off_index;
+	};
 }elif(game.paused && game.__time[0] > 0){
 		
 };

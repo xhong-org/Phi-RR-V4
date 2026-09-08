@@ -19,7 +19,15 @@ var base_y = line_y - local_x * rotation_sin;
 
 var hold_floor_length = (variable_instance_exists(id, "holdFloorLength") ? holdFloorLength : hold_time_length);
 var is_out = (!isHold && max_visible_position > line_floor);
-var head_offset = (is_out ? max(0, sprite_get_yoffset(note_hold_head)) * image_yscale : 0);
+var _skin_hold = skin_active() ? skin_hold_parts(hl) : undefined;
+var _head_spr = note_hold_head;
+var _compact = false;
+if (is_struct(_skin_hold)) {
+	if (sprite_exists(_skin_hold.head)) then _head_spr = _skin_hold.head;
+	if (sprite_exists(_skin_hold.body)) then _hold_body_height = max(1, sprite_get_height(_skin_hold.body));
+	_compact = bool(_skin_hold.compact);
+};
+var head_offset = (is_out && !_compact ? max(0, sprite_get_yoffset(_head_spr)) * image_yscale : 0);
 var hold_units = hold_floor_length + (is_out ? 0 : yOffset - line_floor);
 var hold_length = max(0, hold_units * scale_y - head_offset);
 yscale = hold_length / max(1, _hold_body_height);

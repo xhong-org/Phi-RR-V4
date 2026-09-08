@@ -15,12 +15,12 @@ var _design_h = 768;
 var _ui_scale = min(room_width / _design_w, room_height / _design_h);
 var _ui_origin_x = (room_width - _design_w * _ui_scale) * 0.5;
 var _ui_origin_y = (room_height - _design_h * _ui_scale) * 0.5;
-var _exit_x = 0;
 var _exit_pixel_x = 0;
 if (state == LOAD_ANIM_STATE.EXITING && exit_started_at >= 0) {
     var _exit_t = clamp((_now - exit_started_at) / exit_duration, 0, 1);
     var _exit_ease = Easings.InExpo(_exit_t);
-    _exit_x = _design_w * _exit_ease;
+    // Slide by the full room width so ultrawide leftover UI cannot sit in
+    // the side letterbox after a 1366-wide design-space move.
     _exit_pixel_x = room_width * _exit_ease;
 };
 
@@ -44,14 +44,17 @@ draw_sprite_stretched_ext(
 
 // UI is revealed only inside the covered region and follows the same easing.
 gpu_push_state();
-gpu_set_scissor(0, 0, clamp(_cover_right + room_width, 0, room_width), room_height);
+var _cover_x = _cover_right + _exit_pixel_x;
+var _scissor_x = clamp(_cover_x, 0, room_width);
+var _scissor_w = clamp(_cover_x + room_width, 0, room_width) - _scissor_x;
+gpu_set_scissor(_scissor_x, 0, max(0, _scissor_w), room_height);
 draw_set_alpha(_ui_alpha);
 
 var _ui_cx = _design_w * 0.5;
 var _ui_cy = _design_h * 0.5;
 // GML anonymous functions do not capture local variables. Keep the current
 // transform in globals so these small coordinate helpers remain valid.
-global.load_ui_origin_x = _ui_origin_x;
+global.load_ui_origin_x = _ui_origin_x + _exit_pixel_x;
 global.load_ui_origin_y = _ui_origin_y;
 global.load_ui_scale = _ui_scale;
 var _ux = function(_value) { return global.load_ui_origin_x + _value * global.load_ui_scale; };
@@ -59,8 +62,8 @@ var _uy = function(_value) { return global.load_ui_origin_y + _value * global.lo
 var _us = function(_value) { return _value * global.load_ui_scale; };
 
 // name 和 level 的 两平行四边形
-draw_parallelogram_fill(_ux(_ui_cx - 600 + _exit_x), _uy(_ui_cy - 40), _us(485), _us(120), c_black);
-draw_parallelogram_fill(_ux(_ui_cx - 250 + _exit_x), _uy(_ui_cy - 40), _us(120), _us(120), c_white);
+draw_parallelogram_fill(_ux(_ui_cx - 600), _uy(_ui_cy - 40), _us(485), _us(120), c_black);
+draw_parallelogram_fill(_ux(_ui_cx - 250), _uy(_ui_cy - 40), _us(120), _us(120), c_white);
 
 draw_set_font(ui_font);
 draw_set_halign(fa_left);
@@ -92,27 +95,27 @@ var _fit_scale = function(_text, _base_scale, _max_width) {
 };
 var _name_scale = _fit_scale(string(_info.name), 1, 270);
 var _composer_scale = _fit_scale(string(_info.composer), 0.35, 270);
-draw_text_transformed_color(_ux(_ui_cx - 540 + _exit_x), _uy(_ui_cy - 110), string(_info.name), _us(_name_scale), _us(_name_scale), 0, c_white, c_white, c_white, c_white, 1);
-draw_text_transformed_color(_ux(_ui_cx - 540 + _exit_x), _uy(_ui_cy - 70), string(_info.composer), _us(_composer_scale), _us(_composer_scale), 0, c_white, c_white, c_white, c_white, 1);
+draw_text_transformed_color(_ux(_ui_cx - 540), _uy(_ui_cy - 110), string(_info.name), _us(_name_scale), _us(_name_scale), 0, c_white, c_white, c_white, c_white, 1);
+draw_text_transformed_color(_ux(_ui_cx - 540), _uy(_ui_cy - 70), string(_info.composer), _us(_composer_scale), _us(_composer_scale), 0, c_white, c_white, c_white, c_white, 1);
 // 绘制等级 , 等级是可自定义的 , 可为数字也可为字母 , 比如 AT Lv.17 , 那么level num为17 , 而剩下来的"AT"为level name(按空格分割 , 忽略"Lv."). 假如level的字符串没有空格，比如就写一个0 , 那么level name为空 , level num为0 ; 如果是纯字母的 , 那么level name依旧为空字符串 , level num为这个字母(单词)
 draw_set_halign(fa_center);
 var _level_num_scale = _fit_scale(_level_num, 1.1, 75);
 var _level_name_scale = _fit_scale(_level_name, 0.5, 75);
-draw_text_transformed_color(_ux(_ui_cx - 170 + _exit_x), _uy(_ui_cy - 100), _level_num, _us(_level_num_scale), _us(_level_num_scale), 0, c_black, c_black, c_black, c_black, 1);
-draw_text_transformed_color(_ux(_ui_cx - 180 + _exit_x), _uy(_ui_cy - 65), _level_name, _us(_level_name_scale), _us(_level_name_scale), 0, c_black, c_black, c_black, c_black, 1);
+draw_text_transformed_color(_ux(_ui_cx - 170), _uy(_ui_cy - 100), _level_num, _us(_level_num_scale), _us(_level_num_scale), 0, c_black, c_black, c_black, c_black, 1);
+draw_text_transformed_color(_ux(_ui_cx - 180), _uy(_ui_cy - 65), _level_name, _us(_level_name_scale), _us(_level_name_scale), 0, c_black, c_black, c_black, c_black, 1);
 
 // 绘制Charter 和 Illustrator
 draw_set_halign(fa_left);
 // Charter
-draw_text_transformed_color(_ux(_ui_cx - 500 + _exit_x), _uy(_ui_cy + 10), lang("loadAnim.chart"), _us(0.3), _us(0.3), 0, c_white, c_white, c_white, c_white, 1);
-draw_text_transformed_color(_ux(_ui_cx - 500 + _exit_x), _uy(_ui_cy + 30), string(_info.charter), _us(0.4), _us(0.4), 0, c_white, c_white, c_white, c_white, 1);
+draw_text_transformed_color(_ux(_ui_cx - 500), _uy(_ui_cy + 10), lang("loadAnim.chart"), _us(0.3), _us(0.3), 0, c_white, c_white, c_white, c_white, 1);
+draw_text_transformed_color(_ux(_ui_cx - 500), _uy(_ui_cy + 30), string(_info.charter), _us(0.4), _us(0.4), 0, c_white, c_white, c_white, c_white, 1);
 // Illustrator
-draw_text_transformed_color(_ux(_ui_cx - 510 + _exit_x), _uy(_ui_cy + 60), lang("loadAnim.illustration"), _us(0.3), _us(0.3), 0, c_white, c_white, c_white, c_white, 1);
-draw_text_transformed_color(_ux(_ui_cx - 510 + _exit_x), _uy(_ui_cy + 80), string(_info.illustrator), _us(0.4), _us(0.4), 0, c_white, c_white, c_white, c_white, 1);
+draw_text_transformed_color(_ux(_ui_cx - 510), _uy(_ui_cy + 60), lang("loadAnim.illustration"), _us(0.3), _us(0.3), 0, c_white, c_white, c_white, c_white, 1);
+draw_text_transformed_color(_ux(_ui_cx - 510), _uy(_ui_cy + 80), string(_info.illustrator), _us(0.4), _us(0.4), 0, c_white, c_white, c_white, c_white, 1);
 
 
 // tips
-draw_text_transformed_color(_ux(55 + _exit_x), _uy(_design_h - 40), tips[tip_index], _us(0.5), _us(0.5), 0, c_white, c_white, c_white, c_white, 1);
+draw_text_transformed_color(_ux(55), _uy(_design_h - 40), tips[tip_index], _us(0.5), _us(0.5), 0, c_white, c_white, c_white, c_white, 1);
 
 // Preview size is window/2 by window/2. Origin is the sprite center, so
 // the name-aligned point is the draw position. One scale avoids squash.
@@ -124,14 +127,14 @@ if (sprite_exists(clear_sprite)) {
     var _art_w = (_win_w * 0.5) * (room_width / _win_w);
     var _art_h = (_win_h * 0.5) * (room_height / _win_h);
     var _art_scale = min(_art_w / _spr_w, _art_h / _spr_h);
-    draw_sprite_ext(clear_sprite, 0, _ux(_ui_cx + 250 + _exit_x), _uy(_ui_cy - 55),
+    draw_sprite_ext(clear_sprite, 0, _ux(_ui_cx + 250), _uy(_ui_cy - 55),
         _art_scale, _art_scale, 0, c_white, 1);
 };
 
 // The loading label loops independently of the cover animation.
 var _loading_text = lang("loadAnim.loading");
 var _loading_scale = _us(0.5);
-var _loading_x = _ux(_design_w - 105 + _exit_x);
+var _loading_x = _ux(_design_w - 105);
 var _loading_y = _uy(_design_h - 40);
 var _loading_rect_width = _us(loading_rect_width_design + 20);
 var _loading_rect_height = _us(loading_rect_height_design - 20);
@@ -159,7 +162,7 @@ if (_loading_rect_width_scaled > 0) {
         _loading_rect_width_scaled, _loading_rect_height);
     draw_text_transformed_color(_loading_x, _loading_y, _loading_text,
         _loading_scale, _loading_scale, 0, c_black, c_black, c_black, c_black, 1);
-    gpu_set_scissor(0, 0, room_width, room_height);
+    gpu_set_scissor(_scissor_x, 0, max(0, _scissor_w), room_height);
 };
 draw_set_alpha(1);
 gpu_pop_state();

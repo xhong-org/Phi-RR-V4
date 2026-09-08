@@ -4,7 +4,7 @@
 #macro func function
 #macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal { "windows": 40518, "android": 40519, "gxgames": 40523 } // 各平台版本号(独立)
+#macro VerReal { "windows": 40520, "android": 40521, "gxgames": 40526 } // 各平台版本号(独立)
 #macro VerStr "v.4.0.9"
 
 function ver_real() {
@@ -1073,7 +1073,7 @@ function Phigros() constructor { // 仅仅结构
 			});	
 			self.notes = {};
 			if(!is_undefined(self.font) && font_exists(self.font)){
-				font_delete(self.font);
+				pls_ui_font_delete(self.font);
 			};
 			self.font = undefined;
 			if(sprite_exists(self.effc)){
@@ -1233,61 +1233,11 @@ function Phigros() constructor { // 仅仅结构
 	};
 	
 	
-	///@desc 创建判定线
+	///@desc 创建判定线（同步路径：录像模式。交互加载走 official_lines_begin/pump/finish）
 	static CreateLines = (func(){
-		// Release textures and instance references left by a previous chart load.
-		var old_texture_names = (struct_get_names(self.TextureGroup));
-		for(var texture_i = 0 ; texture_i < array_length(old_texture_names) ; texture_i ++){
-			if(old_texture_names[texture_i] == "default") then continue;
-			var old_texture = (self.TextureGroup[$ old_texture_names[texture_i]]);
-			if(sprite_exists(old_texture)) then sprite_delete(old_texture);
-		};
-		self.TextureGroup = { "default" : line_2 };
-		self.line_list = [];
-		for(var i = 0 , img , scales = 1; i < array_length(self.chart.judgeLineList) ; i ++){
-			var line_override = chart_line_override(i);
-			img = chart_line_override_sprite(i);
-			if (!sprite_exists(img)) then img = line_2;
-			scales = is_struct(line_override) ? real(line_override.Scale ?? 1) : 1;
-			var l = (instance_create_depth(room_width / 2 , room_height / 2 , 0 , oLine , {
-				events : self.chart.judgeLineList[i] ,
-				line_id : i ,
-				image_id : img,
-				Scales : (scales)
-			}));
-			array_add(self.line_list , l);
-			array_add(self.runtime_line_instances, l);
-		};
-		//print($"cl: {array_length(game.__time)}");
-		// print($"cl: {
-		print("[C-Lines] Done." , game.settings.enableDebug);
-		for(var i = 0 ; i < array_length(self._notes) ; i ++){
-			var na = (self._notes[i]);
-			var note_instance = instance_create_depth( -999 , -999 , 0 , oNote , {
-				"type" : na.type,
-				"isAbove" : na.isAbove,
-				"time" : na.time,
-				"holdTime" : (na.holdTime),
-				"holdFloorLength" : (na[$ "holdFloorLength"] ?? 0),
-				"xOffset" : (na.xOffset),
-				"yOffset" : (na.yOffset),
-				"line_id" : (na[$ "id"]),
-				"bpm" : (na.bpm),
-				"speed" : (na[$ "speed"]),
-				"_hl" : (na[$ "hl"])
-			});
-			array_add(self.runtime_note_instances, note_instance);
-			if (variable_global_exists("render_mode") && global.render_mode && instance_exists(note_instance)) {
-				var note_hitsound_time = (note_instance.type == 2 || note_instance.type == 4)
-					? note_instance.realHitTime : note_instance.judgeRealTime;
-				note_instance.render_hitsound_scheduled = render_schedule_hitsound(
-					note_instance.sound, note_hitsound_time);
-			};
-		};
-		// Note instances now own the scalar values they need. Drop the temporary
-		// flattened array instead of retaining a second copy for the whole song.
-		self._notes = [];
-		print("[C-Notes] Done." , game.settings.enableDebug);
+		official_lines_begin();
+		while (!official_lines_pump(0)) {};
+		official_lines_finish();
 	});
 	
 	
@@ -1353,7 +1303,7 @@ function rpe_sync_note_activation(_now_sec = undefined) {
 		for (var _i = 0; _i < array_length(_notes); _i++) {
 			var _note = _notes[_i];
 			if (!is_struct(_note)) then continue;
-			instance_activate_object(_note.id);
+			chart_note_activate(_note.id);
 			var _key = string(_note.id);
 			if (is_struct(_records) && struct_exists(_records, _key)) {
 				_records[$ _key].activated = true;
@@ -1372,7 +1322,7 @@ function rpe_sync_note_activation(_now_sec = undefined) {
 		};
 		var _always = bool(_item.alwaysActive ?? false);
 		if (!_always && real(_item.activateSec ?? infinity) > _now_sec) then break;
-		instance_activate_object(_item.id);
+		chart_note_activate(_item.id);
 		var _item_key = string(_item.id);
 		if (is_struct(_records) && struct_exists(_records, _item_key)) {
 			_records[$ _item_key].activated = true;
@@ -1382,7 +1332,7 @@ function rpe_sync_note_activation(_now_sec = undefined) {
 	for (var _rest = _index; _rest < _count; _rest++) {
 		var _late = _notes[_rest];
 		if (!is_struct(_late) || !bool(_late.alwaysActive ?? false)) then continue;
-		instance_activate_object(_late.id);
+		chart_note_activate(_late.id);
 		var _late_key = string(_late.id);
 		if (is_struct(_records) && struct_exists(_records, _late_key)) {
 			_records[$ _late_key].activated = true;
@@ -1611,424 +1561,11 @@ function RPE() constructor{
 		return true;
 	});
 	
-	///@desc RPE创建判定线
+	///@desc RPE创建判定线（同步路径：录像模式。交互加载走 rpe_lines_begin/pump/finish）
 	static CreateLines = (func(){
-		// 文本
-		var judge_lines = game_1.chart[$ "judgeLineList"] ?? [];
-		if (!is_array(judge_lines)) then judge_lines = [];
-		var line_group_size = array_length(judge_lines);
-		// These are runtime-owned containers. Reset them for every chart, because
-		// constructor statics can survive a room/chart transition.
-		self.fatherLineList = [];
-		self.line_list = array_create(line_group_size, noone);
-		self.runtime_line_instances = [];
-		self.runtime_note_instances = [];
-		self._notes = [];
-		self.Fonts = {};
-		font_add_enable_aa(true);
-		for (var font_line_i = 0; font_line_i < line_group_size; font_line_i++) {
-			var font_line = judge_lines[font_line_i];
-			if (!is_struct(font_line)) then continue;
-			var font_extended = font_line[$ "extended"];
-			if (!is_struct(font_extended)) then continue;
-			var font_events = font_extended[$ "textEvents"];
-			if (!is_array(font_events)) then continue;
-			for (var font_event_i = 0; font_event_i < array_length(font_events); font_event_i++) {
-				var font_event = font_events[font_event_i];
-				if (!is_struct(font_event)) then continue;
-				var font_name = string(font_event[$ "font"] ?? "cmdysj");
-				if (!string_length(font_name) || string_lower(font_name) == "cmdysj"
-					|| struct_exists(self.Fonts, font_name)) then continue;
-
-				var font_source = font_name;
-				var font_relative = string_replace_all(font_name, "\\", "/");
-				if (string_pos("..", font_relative) <= 0 && string_char_at(font_relative, 1) != "/"
-					&& string_pos(":", font_relative) <= 0) {
-					var font_candidates = [font_relative];
-					var font_lower = string_lower(font_relative);
-					if (string_pos(".ttf", font_lower) <= 0 && string_pos(".otf", font_lower) <= 0
-						&& string_pos(".ttc", font_lower) <= 0) {
-						array_add(font_candidates, font_relative + ".ttf");
-						array_add(font_candidates, font_relative + ".otf");
-						array_add(font_candidates, font_relative + ".ttc");
-					};
-					for (var font_candidate_i = 0; font_candidate_i < array_length(font_candidates); font_candidate_i++) {
-						var font_path = chart_path_join(InChartPath, font_candidates[font_candidate_i]);
-						if (chart_file_exists_any(font_path)) {
-							font_source = chart_file_readable_path(font_path);
-							break;
-						};
-					};
-				};
-
-				var loaded_font = pls_font_add(font_source, 47, false, false, -infinity, infinity);
-				self.Fonts[$ font_name] = loaded_font;
-				if (loaded_font == -1) {
-					show_debug_message($"[RPEFont] Failed to load font \"{font_name}\" from \"{font_source}\"");
-				};
-			};
-		};
-		print($"Lines Count: {line_group_size}");
-		var eff_line_count = 0;
-		if(chart_file_exists_any(chart_path_join(InChartPath, "extra.json"))){
-			//var e_buff = (buffer_load($"{InChartPath}extra.json")),
-			//	e_json = (json_parse(buffer_read(e_buff , buffer_text)));
-			//buffer_delete(e_buff);
-					
-			//eff_line_count = (array_length(e_json.effects));
-			//delete(e_json);
-			//eff_line_count = 16;
-		};
-		print(eff_line_count);
-		
-		// Preserve chart indices even when a line has no usable event layers.
-		var _note_preload = real(game.settings.notePreloadSeconds ?? 15);
-		var _chart_offset_sec = real(game_1.chart_info.offset ?? 0) / 1000;
-		for(var i = 0 ; i < line_group_size - eff_line_count ; i ++){	
-			var //,
-				events = [];// = l_s[$ "eventLayers"];
-			
-			// (line)
-			var l_s = judge_lines[i];//,
-			if (!is_struct(l_s)) then continue;
-			global._id = i;
-			if(struct_exists(l_s , "eventLayers")){
-				events = l_s[$ "eventLayers"];
-				if(!is_array(events)) then events = [];
-			};
-			
-			var _isFather = (l_s[$ "father"] ?? -1);
-			if (!is_real(_isFather)) then _isFather = -1; 
-			print($"Line[{i}]FatherID->{_isFather >= 0 ? _isFather : "undefined"}" , game.settings.enableDebug);
-				//enableFatherLine = ()
-			var line_override = chart_line_override(i);
-			var line_image = is_struct(line_override) ? line_override.Image : (l_s[$ "Texture"] ?? "line.png");
-			var l = (instance_create_depth(room_width / 2 , room_height / 2 , 0 , oLine_1 , {
-				"line_id" : i, // 线ID
-				"bindUI" : (is_undefined(l_s[$ "attachUI"]) ? 0 : l_s[$ "attachUI"]), // UI判定
-				"image" : line_image, // 线纹理（line.csv 优先）
-				"line_csv_scale" : (is_struct(line_override) ? real(line_override.Scale ?? 1) : 1),
-				"anchor" : (l_s[$ "anchor"] ?? [0.5, 0.5]), // 线锚点
-				"isFather" : (_isFather), // 是否为父线
-				"isGif" : (l_s[$ "isGif"] ?? false), // 是否为Gif
-				"isCover" : ((l_s[$ "isCover"] ?? true)), // 是否启用遮罩
-				"sizeControl" : (l_s[$ "sizeControl"] ?? []), // notes
-				"alphaControl" : (l_s[$ "alphaControl"] ?? []), // notes
-				"posControl" : (l_s[$ "posControl"] ?? []), // notes
-				"yControl" : (l_s[$ "yControl"] ?? []), // notes
-				"rotFatherLine" : (l_s[$ "rotateWithFather"] ?? false), // 反正跟旋转有关
-				"events" : (events), // 事件层
-				"extEvents" : (l_s[$ "extended"] ?? {}), // 特殊事件(only 1)
-				"zOrder" : (l_s[$ "zOrder"] ?? 0), // line layer order(depth)
-				"zIndex" : (l_s[$ "zIndex"] ?? undefined), // absolute RPE render layer
-				"bpmfactor" : (l_s[$ "bpmfactor"] ?? 1) // 文本
-			}));
-			self.line_list[i] = l;
-			array_add(self.runtime_line_instances, l);
-			// Initialize the event-layer cursors and raw transform immediately.
-			// Waiting for the next Step leaves newly-created lines at Create defaults
-			// while loading, pausing, and audit code already consumes their state.
-			if (instance_exists(l)) {
-				with (l) {
-					rpe_force_event_init = true;
-					event_perform(ev_step, ev_step_normal);
-					rpe_force_event_init = false;
-				};
-			};
-			
-			var line_notes = l_s[$ "notes"] ?? [];
-			if (!is_array(line_notes)) then line_notes = [];
-			for(var n = 0 ; n < array_length(line_notes) ; n ++){
-				var n_s = line_notes[n];
-				if (!is_struct(n_s)) then continue;
-				var isFake = bool(n_s[$ "isFake"] ?? false);
-				if (!isFake) then maxcombo++;
-
-				// RPE note type: 1 tap, 2 hold, 3 flick, 4 drag  -> Official: 1 tap, 2 drag, 3 hold, 4 flick
-				var rpe_type = real(n_s[$ "type"] ?? 1);
-				var off_type = rpe_type;
-				if (rpe_type == 2) then off_type = 3;
-				else if (rpe_type == 3) then off_type = 4;
-				else if (rpe_type == 4) then off_type = 2;
-
-				var st_beat = game_1.Math.arrToBeat(n_s[$ "startTime"]);
-				var et_beat = game_1.Math.arrToBeat(n_s[$ "endTime"]);
-				var st_abs = game_1.Math.beatToAbsSec(st_beat);
-				var et_abs = game_1.Math.beatToAbsSec(et_beat);
-				// floorPosition at note time from this line's speed integral (PCR)
-				var note_floor = 0;
-				var end_floor = 0;
-				if (instance_exists(l) && variable_instance_exists(l, "rpe_floor_at_sec")) {
-					// PCR: note.floorPosition is precomputed from the same speedEvents as line floor.
-					// Runtime: note_pos = speed * (note.floor - line.floor)
-					// Both must use the SAME second clock (chart seconds / bpmfactor).
-					// Do not bake META.offset here; runtime line_sec already subtracts chart offset.
-					// Note times are in line-local chart seconds.
-					note_floor = l.rpe_floor_at_sec(st_abs);
-					if (off_type == 3) then end_floor = l.rpe_floor_at_sec(et_abs);
-				};
-				var note_start_sec = st_abs;
-				var note_end_sec = et_abs;
-
-				var n_alpha = real(n_s[$ "alpha"] ?? 255);
-				var n_size = real(n_s[$ "size"] ?? 1);
-				var n_speed = real(n_s[$ "speed"] ?? 1);
-				var n_yoff = real(n_s[$ "yOffset"] ?? 0);
-				var n_vis = real(n_s[$ "visibleTime"] ?? 999999);
-				var n_above_raw = struct_exists(n_s, "above") ? n_s[$ "above"]
-					: (struct_exists(n_s, "isAbove") ? n_s[$ "isAbove"] : 1);
-				var n_above = is_bool(n_above_raw) ? n_above_raw : (number(n_above_raw, 1) == 1);
-				var note_tint = c_white;
-				var note_tint_data = n_s[$ "tint"];
-				if (!is_array(note_tint_data) || array_length(note_tint_data) < 3) then note_tint_data = n_s[$ "color"];
-				if (is_array(note_tint_data) && array_length(note_tint_data) >= 3) {
-					note_tint = make_color_rgb(
-						clamp(real(note_tint_data[0]), 0, 255),
-						clamp(real(note_tint_data[1]), 0, 255),
-						clamp(real(note_tint_data[2]), 0, 255)
-					);
-				};
-				var has_hit_tint = false;
-				var hit_tint = c_white;
-				var hit_tint_data = n_s[$ "tintHitEffects"];
-				if (is_array(hit_tint_data) && array_length(hit_tint_data) >= 3) {
-					has_hit_tint = true;
-					hit_tint = make_color_rgb(
-						clamp(real(hit_tint_data[0]), 0, 255),
-						clamp(real(hit_tint_data[1]), 0, 255),
-						clamp(real(hit_tint_data[2]), 0, 255)
-					);
-				};
-				var custom_sound = -1;
-				var custom_fmod_sound = -1;
-				var custom_hitsound_path = "";
-				var hitsound_name = string(n_s[$ "hitsound"] ?? "");
-				if (hitsound_name == "tap.mp3") {
-					custom_sound = snd_note_tap;
-				} else if (hitsound_name == "drag.mp3") {
-					custom_sound = snd_note_drag;
-				} else if (hitsound_name == "flick.mp3") {
-					custom_sound = snd_note_flick;
-				} else if (string_length(hitsound_name)) {
-					var hitsound_rel = string_replace_all(hitsound_name, "\\", "/");
-					if (string_pos("..", hitsound_rel) <= 0 && string_char_at(hitsound_rel, 1) != "/") {
-						var hitsound_path = chart_path_join(InChartPath, hitsound_rel);
-						if (chart_file_exists_any(hitsound_path)) {
-							custom_hitsound_path = chart_file_readable_path(hitsound_path);
-							hitsound_path = custom_hitsound_path;
-						};
-						if (chart_file_exists_any(chart_path_join(InChartPath, hitsound_rel)) && instance_exists(oMedia)
-							&& !(variable_global_exists("render_mode") && global.render_mode)) {
-							if (!struct_exists(game_1, "HitSounds") || !is_struct(game_1.HitSounds)) then game_1.HitSounds = {};
-							if (!struct_exists(game_1.HitSounds, hitsound_rel)) {
-								var _media = instance_find(oMedia, 0);
-								if (_media.track > 0) then fmod_system_select(_media.track);
-								var loaded_hitsound = fmod_system_create_sound(hitsound_path, FMOD_MODE.DEFAULT);
-								if (loaded_hitsound > 0) then game_1.HitSounds[$ hitsound_rel] = loaded_hitsound;
-							};
-							if (struct_exists(game_1.HitSounds, hitsound_rel)) then custom_fmod_sound = game_1.HitSounds[$ hitsound_rel];
-						};
-					};
-				};
-
-				var note_instance = instance_create_depth(-999 , -999 , DEPTH.NOTE , oNote_1 , {
-					"type" : off_type,
-					"rpe_type" : rpe_type,
-					"isAbove" : n_above,
-					"alpha" : (n_alpha / 255),
-					"start_beat" : st_beat,
-					"end_beat" : et_beat,
-					"start_sec" : note_start_sec,
-					"end_sec" : note_end_sec,
-					"hold_beat" : max(0, et_beat - st_beat),
-					"xOffset" : real(n_s[$ "positionX"] ?? 0),
-					"yOffset" : n_yoff,
-					"yorigin" : (n_yoff / 900),
-					"floorPosition" : note_floor,
-					"endFloorPosition" : end_floor,
-					"holdFloorLength" : (end_floor - note_floor),
-					"size" : n_size,
-					"speed" : n_speed,
-					"visibleTime" : n_vis,
-					"isFake" : isFake,
-					"note_tint" : note_tint,
-					"has_hit_tint" : has_hit_tint,
-					"hit_tint" : hit_tint,
-					"custom_sound" : custom_sound,
-					"custom_fmod_sound" : custom_fmod_sound,
-					"custom_hitsound_path" : custom_hitsound_path,
-					"line_id" : i
-				});
-				var note_factor = real(l.bpmfactor);
-				if (!is_real(note_factor) || note_factor <= 0) then note_factor = 1;
-				var note_hit_sec = _chart_offset_sec + note_factor * note_start_sec;
-				var note_end_hit_sec = _chart_offset_sec + note_factor * note_end_sec;
-				if (variable_global_exists("render_mode") && global.render_mode && !isFake
-					&& instance_exists(note_instance)) {
-					var note_hitsound_time = note_hit_sec;
-					if (off_type != 2 && off_type != 4) {
-						note_hitsound_time += note_factor * note_instance.hitTime2 * 0.001;
-					};
-					note_instance.render_hitsound_scheduled = render_schedule_hitsound(
-						note_instance.sound, note_hitsound_time, custom_hitsound_path, isFake);
-				};
-				var note_lead = _note_preload;
-				if (is_finite(n_vis) && n_vis >= 0 && n_vis < 999999) then note_lead = min(note_lead, note_factor * n_vis);
-				array_add(self._notes, {
-					id: note_instance,
-					startSec: note_start_sec,
-					endSec: note_end_sec,
-					activateSec: note_hit_sec - note_lead,
-					hitSec: note_hit_sec,
-					alwaysActive: (n_speed == 0 || (off_type == 3 && note_hit_sec <= 0 && note_end_hit_sec > 0))
-				});
-				array_add(self.runtime_note_instances, note_instance);
-			};
-		};
-		// PCR multi-highlight groups every note with the same unscaled RPE down time.
-		array_sort(self._notes, function(a, b) {
-			if (a.startSec < b.startSec) then return -1;
-			if (a.startSec > b.startSec) then return 1;
-			return 0;
-		});
-		var _group_start = 0;
-		while (_group_start < array_length(self._notes)) {
-			var _group_end = _group_start + 1;
-			var _group_time = self._notes[_group_start].startSec;
-			while (_group_end < array_length(self._notes)
-				&& self._notes[_group_end].startSec == _group_time) _group_end++;
-			if (_group_end - _group_start > 1) {
-				for (var _hi = _group_start; _hi < _group_end; _hi++) {
-					var _highlight_note = self._notes[_hi].id;
-					if (instance_exists(_highlight_note)) then _highlight_note.hl = 1;
-				};
-			};
-			_group_start = _group_end;
-		};
-		// Only notes inside the configured local-time preload window remain active.
-		array_sort(self._notes, function(a, b) {
-			if (a.activateSec < b.activateSec) then return -1;
-			if (a.activateSec > b.activateSec) then return 1;
-			if (a.hitSec < b.hitSec) then return -1;
-			if (a.hitSec > b.hitSec) then return 1;
-			return 0;
-		});
-		self._note_activation_enabled = (_note_preload > 0);
-		self._note_activation_index = (self._note_activation_enabled ? 0 : array_length(self._notes));
-		self._note_activation_last_time = -infinity;
-		if (self._note_activation_enabled) {
-			for (var _di = 0; _di < array_length(self._notes); _di++) {
-				var _activation_note = self._notes[_di];
-				if (_activation_note.alwaysActive) {
-					var _activation_key = string(_activation_note.id);
-					if (struct_exists(self._note_activation_records, _activation_key)) {
-						self._note_activation_records[$ _activation_key].activated = true;
-					};
-				} else {
-					instance_deactivate_object(_activation_note.id);
-				};
-			};
-		};
-		// Reject invalid/cyclic father chains before runtime transforms them.
-		for (var _fi = 0; _fi < array_length(self.line_list); _fi++) {
-			var _fl = self.line_list[_fi];
-			if (!instance_exists(_fl)) then continue;
-			var _seen = array_create(array_length(self.line_list), false);
-			var _parent = _fl.isFather;
-			var _valid_parent = true;
-			while (is_real(_parent) && _parent >= 0) {
-				if (_parent >= array_length(self.line_list) || _parent == _fi || _seen[_parent]
-					|| !instance_exists(self.line_list[_parent])) {
-					_valid_parent = false;
-					break;
-				};
-				_seen[_parent] = true;
-				_parent = self.line_list[_parent].isFather;
-			};
-			if (!_valid_parent) then _fl.isFather = -1;
-			_fl._father_chain = [];
-			_parent = _fl.isFather;
-			var _chain_guard = 0;
-			while (is_real(_parent) && _parent >= 0 && _chain_guard < 16) {
-				var _parent_line = self.line_list[_parent];
-				if (!instance_exists(_parent_line)) then break;
-				array_add(_fl._father_chain, _parent_line);
-				_parent = _parent_line.isFather;
-				_chain_guard++;
-			};
-		};
-		// Resolve line depth from zOrder (PCR-aligned).
-		// PCR LEVEL_CONTROLLER sorts obj_judgeline by:
-		//   1) z(=zOrder) ascending
-		//   2) stable id ascending when z is equal
-		// then draws back -> front.  GM depth is inverse of draw order, so we
-		// assign decreasing depth after the same sort.
-		//
-		// zOrder is an ordering key, not an absolute GameMaker depth.
-		// Equal keys preserve judgeLineList order, so later lines draw in front.
-		if (is_array(self.line_list)) {
-			var _n_lines = array_length(self.line_list);
-			var _order = array_create(0);
-			for (var _zi = 0; _zi < _n_lines; _zi++) {
-				var _l0 = self.line_list[_zi];
-				if (!instance_exists(_l0)) then continue;
-				var _z0 = 0;
-				if (variable_instance_exists(_l0, "zIndex") && is_real(_l0.zIndex)) then _z0 = real(_l0.zIndex)
-				else if (variable_instance_exists(_l0, "zOrder") && is_real(_l0.zOrder)) then _z0 = real(_l0.zOrder);
-				if (!is_finite(_z0)) then _z0 = 0;
-				_l0.zOrder = _z0;
-				// PCR alias used by reference project
-				_l0.z = _z0;
-				if (!variable_instance_exists(_l0, "line_id") || !is_real(_l0.line_id)) then _l0.line_id = _zi;
-				array_add(_order, _l0);
-			};
-
-			// Insertion sort: zOrder ASC, then line_id ASC (PCR _compare)
-			for (var _i = 1; _i < array_length(_order); _i++) {
-				var _cur = _order[_i];
-				var _j = _i - 1;
-				while (_j >= 0) {
-					var _prev = _order[_j];
-					var _dz = real(_prev.zOrder) - real(_cur.zOrder);
-					var _swap = false;
-					if (_dz > 0) {
-						_swap = true;
-					} else if (_dz == 0 && real(_prev.line_id) > real(_cur.line_id)) {
-						_swap = true;
-					};
-					if (!_swap) then break;
-					_order[_j + 1] = _prev;
-					_j--;
-				};
-				_order[_j + 1] = _cur;
-			};
-
-			// Keep every line behind regular notes and Hold notes (NOTE + 1).
-			var _line_count = array_length(_order);
-			var _depth_span = DEPTH.LINE - (DEPTH.NOTE + 2);
-			var _depth_step = 1;
-			if (_line_count > _depth_span + 1) {
-				_depth_step = _depth_span / max(1, _line_count - 1);
-			};
-			for (var _ri = 0; _ri < _line_count; _ri++) {
-				_order[_ri].depth = DEPTH.LINE - _ri * _depth_step;
-			};
-		};
-		// Complete the initial line state after every parent chain exists. This
-		// applies raw event values to world transforms, alpha and attached UI in
-		// the same construction frame instead of exposing Create defaults.
-		for (var _initial_line_i = 0; _initial_line_i < array_length(self.line_list); _initial_line_i++) {
-			var _initial_line = self.line_list[_initial_line_i];
-			if (instance_exists(_initial_line)) {
-				with (_initial_line) {
-					rpe_force_event_init = true;
-					event_perform(ev_step, ev_step_end);
-					rpe_force_event_init = false;
-				};
-			};
-		};
-		print("[C-Lines] Done." , game.settings.enableDebug);
-		delete(game_1.chart.judgeLineList);
+		rpe_lines_begin();
+		while (!rpe_lines_pump(0)) {};
+		rpe_lines_finish();
 	});
 	
 	///@desc RPE数学函数(aligned with PCR ArrayToTime / BPM helpers)
@@ -2885,72 +2422,9 @@ function pec_reader_load(ctx, chart_path) {
 }
 
 function pec_create_runtime(ctx) {
-	ctx.line_group = [];
-	ctx.runtime_line_instances = [];
-	ctx.runtime_note_instances = [];
-	ctx._notes = [];
-	ctx._note_activation_index = 0;
-	ctx._note_activation_enabled = false;
-	for (var line_i = 0; line_i < array_length(ctx.chart.judgeLineList); line_i++) {
-		var line_override = chart_line_override(line_i);
-		var line_sprite = chart_line_override_sprite(line_i);
-		var pec_line_instance = instance_create_depth(room_width/2, room_height/2, DEPTH.LINE, oLine_2, {
-			line_id:line_i,
-			events:ctx.chart.judgeLineList[line_i],
-			image_id:(sprite_exists(line_sprite) ? line_sprite : line),
-			line_csv_scale:(is_struct(line_override) ? real(line_override.Scale ?? 1) : 1)
-		});
-		array_add(ctx.line_group, pec_line_instance);
-		array_add(ctx.runtime_line_instances, pec_line_instance);
-	};
-	for (var note_i = 0; note_i < array_length(ctx.chart.notes); note_i++) {
-		var note = ctx.chart.notes[note_i];
-		var note_instance = instance_create_depth(-999, -999, DEPTH.NOTE, oNote_2, {
-			type:note.type, line_id:note.line_id,
-			start_beat:note.startBeat, end_beat:note.endBeat,
-			startSec:note.startSec, endSec:note.endSec,
-			floorPosition:note.floorPosition, endFloorPosition:note.endFloorPosition,
-			xOffset:note.xOffset, isAbove:note.isAbove, isFake:note.isFake,
-			note_speed:note.speed, widthScale:note.xscale, _hl:note.hl,
-			localXFactor:note.localXFactor, sideDirection:note.sideDirection,
-			angleOffset:note.angleOffset, speedFloorStart:note.speedFloorStart,
-			speedFloorEnd:note.speedFloorEnd, speedHoldFloorLength:note.speedHoldFloorLength
-		});
-		array_add(ctx.runtime_note_instances, note_instance);
-		if (variable_global_exists("render_mode") && global.render_mode && !note.isFake
-			&& instance_exists(note_instance)) {
-			var note_hitsound_time = note.startSec;
-			if (note.type != 3 && note.type != 4) then note_hitsound_time += note_instance.hit_offset;
-			note_hitsound_time += ctx.chart.offsetSeconds;
-			note_instance.render_hitsound_scheduled = render_schedule_hitsound(
-				note_instance.sound, note_hitsound_time);
-		};
-		if (!note.isFake) then maxcombo++;
-	};
-	var _preload = 15;
-	if (variable_global_exists("game") && is_struct(game) && is_struct(game.settings)) {
-		_preload = real(game.settings.notePreloadSeconds ?? 15);
-	};
-	ctx._note_activation_enabled = (_preload > 0);
-	if (ctx._note_activation_enabled) {
-		for (var _pai = 0; _pai < array_length(ctx.runtime_note_instances); _pai++) {
-			var _pinst = ctx.runtime_note_instances[_pai];
-			if (!instance_exists(_pinst)) then continue;
-			array_add(ctx._notes, {
-				id: _pinst,
-				startSec: real(_pinst.startSec),
-				endSec: real(_pinst.endSec),
-				activateSec: real(_pinst.startSec) - _preload,
-				type: real(_pinst.type)
-			});
-			instance_deactivate_object(_pinst);
-		};
-		array_sort(ctx._notes, function(a, b) {
-			if (a.activateSec < b.activateSec) then return -1;
-			if (a.activateSec > b.activateSec) then return 1;
-			return 0;
-		});
-	};
+	pec_lines_begin(ctx);
+	while (!pec_lines_pump(0)) {};
+	pec_lines_finish();
 }
 
 var EventLayers = [ // Length: Four 

@@ -24,17 +24,8 @@ draw_text_transformed(cx, room_height * 0.18, GAME_NAME, title_scale, title_scal
 draw_set_colour(c_ltgray);
 draw_text_transformed(cx, room_height * 0.26, lang("menu.subtitle"), subtitle_scale, subtitle_scale, 0);
 
-var buttons = [btn_open, btn_sample];
-var hovers = [hover_open, hover_sample];
-for (var i = 0; i < array_length(buttons); i++) {
-        var b = buttons[i];
-        var hot = hovers[i];
-        draw_set_colour(hot ? make_colour_rgb(70, 110, 180) : make_colour_rgb(40, 48, 64));
-        draw_rectangle(b.x, b.y, b.x + b.w, b.y + b.h, false);
-        draw_set_colour(c_white);
-        draw_rectangle(b.x, b.y, b.x + b.w, b.y + b.h, true);
-        draw_text_transformed(b.x + b.w * 0.5, b.y + b.h * 0.5, b.label, btn_text_scale, btn_text_scale, 0);
-};
+menu_draw_button(btn_open, hover_open, btn_text_scale);
+menu_draw_button(btn_sample, hover_sample, btn_text_scale);
 
 settings_menu_button_draw(hover_settings, s);
 

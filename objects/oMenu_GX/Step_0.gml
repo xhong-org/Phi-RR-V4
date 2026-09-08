@@ -4,7 +4,6 @@ if (layout_w != room_width || layout_h != room_height || layout_scale != scale_n
         pls_gx_menu_layout();
 };
 
-gx_drop_boot();
 if (busy || settings_gui_blocking()) {
         gx_drop_set_enabled(false);
         gx_file_ui_set_drop(false);

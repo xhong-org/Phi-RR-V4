@@ -41,13 +41,14 @@ if (phase == 1) {
                 failed = true;
                 var session_fail = chart_session_ensure();
                 message = lang("loading.failed");
+                var fail_detail = string_length(session_fail.error) ? session_fail.error : "Unsupported or invalid chart.";
                 detail = string_length(session_fail.error) ? session_fail.error : lang("loading.unsupportedChart");
                 // chart_session_fail already cleans extract files/session memory.
                 // Ensure cleanup even if older fail path didn't.
                 chart_session_cleanup(true);
                 phase = 99;
                 chart_loading_animation_abort();
-                if (!pls_is_gx_remote()) then msgbox_warning_async(detail, lang("loading.loaderTitle"));
+                if (!pls_is_gx_remote()) then msgbox_warning_async(fail_detail, "Chart Loader");
                 pls_return_to_entry(detail);
                 exit;
         };

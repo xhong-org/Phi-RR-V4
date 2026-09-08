@@ -42,3 +42,5 @@ _move_count = array_length(_move_events);
 _alpha_count = array_length(_alpha_events);
 _rotate_count = array_length(_rotate_events);
 _speed_count = array_length(_speed_events);
+chart_force_event_init = false;
+if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then visible = false;

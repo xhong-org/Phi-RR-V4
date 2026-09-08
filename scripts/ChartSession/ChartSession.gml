@@ -7,7 +7,7 @@ enum CHART_FORMAT {
         PEC = 3
 };
 
-function chart_session_default() {
+function chart_session_default() { // 立正了
         return {
                 "source_path" : "",
                 "extract_dir" : "",
@@ -176,8 +176,8 @@ function chart_set_gameplay_visible(_visible) {
         with (oNote_2) visible = _show;
 }
 
-/// Park FX behind the loading overlay. Judge lines stay active so CreateLines
-/// init is not thrown away by a later activate.
+/// Park FX behind the loading overlay. Judge lines and notes freeze only after
+/// Create + force-Step init; this function does not deactivate them.
 function chart_idle_behind_loading() {
         if (!(variable_global_exists("loading_animation_active") && global.loading_animation_active)) then return;
         chart_set_gameplay_visible(false);
@@ -273,6 +273,7 @@ function chart_loading_animation_abort() {
         if (variable_global_exists("load_animator_instance")) {
                 global.load_animator_instance = noone;
         };
+        process_mem_trim();
 }
 
 function chart_loading_take_blur_sprite() {

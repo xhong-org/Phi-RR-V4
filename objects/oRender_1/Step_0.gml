@@ -1,15 +1,5 @@
 /// @description
-if (variable_global_exists("loading_animator_finished") && global.loading_animator_finished) {
-    if (!instance_exists(oChartMask)) then instance_create_depth(0, 0, -12000, oChartMask);
-    // Lines stayed active during loading. Only bring FX back; the start
-    // animation hides gameplay without another deactivate/activate cycle.
-    instance_activate_object(oRPEEffect);
-    instance_activate_object(oEffect);
-    instance_activate_object(oEffectNew);
-    rpe_sync_note_activation();
-    if (!instance_exists(oPlayTransition)) then instance_create_depth(0, 0, -999999, oPlayTransition, { owner:id });
-    global.loading_animator_finished = false;
-};
+if (chart_load_step(oLine_1, rpe_lines_pump, rpe_lines_complete, rpe_lines_thaw_force_init, rpe_sync_note_activation)) then exit;
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active) exit;
 //if(game.settings.enableFPS) then window_set_caption($"{GAME_NAME} - FPS: {fps} / {fps_real}");
 var chart_os_hold = chart_android_focus_step();
@@ -34,7 +24,7 @@ if(!game.paused && !chart_os_hold){
 		var _activation_records = _rpe._note_activation_records;
 		while (_note_index < _note_count && _notes[_note_index].activateSec <= _note_now) {
 			var _time_note_id = _notes[_note_index].id;
-			instance_activate_object(_time_note_id);
+			chart_note_activate(_time_note_id);
 			if (is_struct(_activation_records)) {
 				var _time_note_key = string(_time_note_id);
 				if (struct_exists(_activation_records, _time_note_key)) {
@@ -96,7 +86,7 @@ if(!game.paused && !chart_os_hold){
 					if (_sn_to_hit <= 0) then continue;
 					if (is_finite(_sn.visibleTime) && _sn.visibleTime < 999999
 						&& _sn_to_hit_real > _sn.visibleTime) then continue;
-					instance_activate_object(_sn.id);
+					chart_note_activate(_sn.id);
 					_sn.activated = true;
 				};
 			};
@@ -138,7 +128,7 @@ if(!game.paused && !chart_os_hold){
 				if (is_finite(_sh.visibleTime) && _sh.visibleTime < 999999
 						&& _sh_to_hit_real > _sh.visibleTime) { _shi++; continue; };
 				if (_sh_to_hit <= 0) {
-					instance_activate_object(_sh.id);
+					chart_note_activate(_sh.id);
 					_sh.activated = true;
 					_hold_count--;
 					_hold_notes[@ _shi] = _hold_notes[_hold_count];
@@ -153,7 +143,7 @@ if(!game.paused && !chart_os_hold){
 					if (max(_hold_head_px, _hold_tail_px) < _hproj_min
 						|| min(_hold_head_px, _hold_tail_px) > _hproj_max) { _shi++; continue; };
 				};
-				instance_activate_object(_sh.id);
+				chart_note_activate(_sh.id);
 				_sh.activated = true;
 				_hold_count--;
 				_hold_notes[@ _shi] = _hold_notes[_hold_count];

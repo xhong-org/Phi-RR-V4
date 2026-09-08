@@ -3,8 +3,8 @@ chart_session_ensure();
 if (variable_global_exists("render_gui_returning") && global.render_gui_returning) {
         global.render_gui_returning = false;
         chart_session_cleanup(true);
-        game_set_speed(60, gamespeed_fps);
 };
+display_ui_apply();
 
 pending_path = "";
 status_text = lang("menu.statusSelect");

@@ -10,7 +10,7 @@ if(now_time >= now_hit_time && !isMiss && notJudge && hit_status == TYPE.NONE){
 		judgeCalc(self.time, now_hit_time, self.bpm, _hx0, _hy0, self.type, true, true);
 	}else{
 		_bak_time = _now_seconds;
-		render_play_hitsound(sound);
+		skin_play_note_hitsound();
 	};
 	notJudge = false;
 };

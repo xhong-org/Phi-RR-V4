@@ -82,34 +82,26 @@ game_1._note_spatial_group_map = {};
 game_1._note_spatial_groups = [];
 game_1._note_spatial_hold_group_map = {};
 game_1._note_spatial_hold_groups = [];
-game_1.CreateLines();
-var _spatial_groups = game_1._note_spatial_groups;
-var _spatial_group_count = array_length(_spatial_groups);
-for (var _spatial_i = 0; _spatial_i < _spatial_group_count; _spatial_i++) {
-	array_sort(_spatial_groups[_spatial_i].notes, function(a, b) {
-		if (a.spatialFloor < b.spatialFloor) then return -1;
-		if (a.spatialFloor > b.spatialFloor) then return 1;
-		return 0;
-	});
-};
-var _hold_groups = game_1._note_spatial_hold_groups;
-var _hold_group_count = array_length(_hold_groups);
-for (var _hold_group_i = 0; _hold_group_i < _hold_group_count; _hold_group_i++) {
-	var _hold_group = _hold_groups[_hold_group_i];
-	_hold_group.count = array_length(_hold_group.notes);
-	_hold_group.originalNotes = array_create(_hold_group.count);
-	array_copy(_hold_group.originalNotes, 0, _hold_group.notes, 0, _hold_group.count);
-};
-// Expose created RPE lines for note binding later.
-if (!struct_exists(game_1, "line_list") || !is_array(game_1.line_list)) {
-	game_1.line_list = [];
-	with (oLine_1) array_add(game_1.line_list, id);
+skin_gameplay_ensure();
+chart_load_flags_reset();
+var _rpe_render_mode = variable_global_exists("render_mode") && global.render_mode;
+if (_rpe_render_mode) {
+	game_1.CreateLines();
+	rpe_lines_post_bind();
+} else {
+	rpe_lines_begin();
+	if (rpe_lines_pump()) {
+		rpe_lines_finish();
+		rpe_lines_post_bind();
+	} else {
+		_chart_lines_building = true;
+	};
 };
 
 
 // Hit effect manager (same as oRender; required by judgeCalc -> _eff_c)
 _eff_c = (function(){ return; });
-if (game.settings.useOldFX && !pls_is_gxgames()) {
+if (game.settings.useOldFX && !pls_is_gxgames() && !skin_active()) {
 	instance_create_depth(0, 0, 0, oEffect);
 	_eff_c = method(self, function(_x, _y, color = #ffeca0) {
 		if (!game.settings.enableHitEffect) then return;
@@ -155,8 +147,14 @@ play_transition_bound_ui = {
 	"name" : false,
 	"level" : false
 };
-with (oLine_1) {
-	if (is_attach_ui && instance_exists(other.id)) then other.play_transition_bound_ui[$ attach_ui_key] = true;
+if (!_chart_lines_building) {
+	with (oLine_1) {
+		if (is_attach_ui && instance_exists(other.id)) then other.play_transition_bound_ui[$ attach_ui_key] = true;
+	};
+	if (!_rpe_render_mode) {
+		rpe_lines_freeze_after_init();
+		_chart_lines_frozen = true;
+	};
 };
 
 // UI draw prep (mirrors oRender)
@@ -202,11 +200,12 @@ event_user(2);
 if (variable_global_exists("render_mode") && global.render_mode) {
 	instance_create_depth(0, 0, -9999999, oVideoRenderer);
 };
-// Hide chart objects behind the loading overlay. Do not deactivate judge
-// lines: activate is deferred and would skip the next event_perform / Step.
+// Park FX behind the overlay. Lines/notes freeze only after full init.
 chart_idle_behind_loading();
-global.loading_render_ready = true;
-chart_blur_bind_game(false);
-if (pls_is_gxgames()) {
-	chart_loading_animation_finish();
+if (!_chart_lines_building) {
+	global.loading_render_ready = true;
+	chart_blur_bind_game(false);
+	if (pls_is_gxgames()) {
+		chart_loading_animation_finish();
+	};
 };
