@@ -268,8 +268,8 @@ function rpe_lines_create_one(i) {
 			if (off_type != 2 && off_type != 4) {
 				note_hitsound_time += note_factor * note_instance.hitTime2 * 0.001;
 			};
-			note_instance.render_hitsound_scheduled = render_schedule_hitsound(
-				note_instance.sound, note_hitsound_time, custom_hitsound_path, isFake);
+			note_instance.render_hitsound_scheduled = render_schedule_note_hitsound(
+				note_instance, note_hitsound_time, custom_hitsound_path, isFake);
 		};
 		var note_lead = _note_preload;
 		if (is_finite(n_vis) && n_vis >= 0 && n_vis < 999999) then note_lead = min(note_lead, note_factor * n_vis);

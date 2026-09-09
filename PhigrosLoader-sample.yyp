@@ -154,6 +154,7 @@
     {"id":{"name":"ChartSession","path":"scripts/ChartSession/ChartSession.yy",},},
     {"id":{"name":"display_custom","path":"scripts/display_custom/display_custom.yy",},},
     {"id":{"name":"draw_chart_mask","path":"scripts/draw_chart_mask/draw_chart_mask.yy",},},
+    {"id":{"name":"draw_hold_fit","path":"scripts/draw_hold_fit/draw_hold_fit.yy",},},
     {"id":{"name":"draw_hold","path":"scripts/draw_hold/draw_hold.yy",},},
     {"id":{"name":"ds_grid_to_struct_array","path":"scripts/ds_grid_to_struct_array/ds_grid_to_struct_array.yy",},},
     {"id":{"name":"ease_utility","path":"scripts/ease_utility/ease_utility.yy",},},

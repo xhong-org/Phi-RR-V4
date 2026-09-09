@@ -91,8 +91,8 @@ function pec_lines_create_note(i) {
 		var note_hitsound_time = note.startSec;
 		if (note.type != 3 && note.type != 4) then note_hitsound_time += note_instance.hit_offset;
 		note_hitsound_time += ctx.chart.offsetSeconds;
-		note_instance.render_hitsound_scheduled = render_schedule_hitsound(
-			note_instance.sound, note_hitsound_time);
+		note_instance.render_hitsound_scheduled = render_schedule_note_hitsound(
+			note_instance, note_hitsound_time);
 	};
 	if (!note.isFake) then maxcombo++;
 	if (!instance_exists(note_instance)) then return;

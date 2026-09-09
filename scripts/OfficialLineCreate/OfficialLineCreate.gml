@@ -94,8 +94,8 @@ function official_lines_create_note(i) {
 	if (variable_global_exists("render_mode") && global.render_mode && instance_exists(note_instance)) {
 		var note_hitsound_time = (note_instance.type == 2 || note_instance.type == 4)
 			? note_instance.realHitTime : note_instance.judgeRealTime;
-		note_instance.render_hitsound_scheduled = render_schedule_hitsound(
-			note_instance.sound, note_hitsound_time);
+		note_instance.render_hitsound_scheduled = render_schedule_note_hitsound(
+			note_instance, note_hitsound_time);
 	};
 	if (!instance_exists(note_instance)) then return;
 	var hit_sec = real(note_instance.realHitTime);

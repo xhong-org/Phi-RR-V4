@@ -318,7 +318,8 @@ rpe_event_progress = function(ev, st, et) {
         if (ease <= 1) {
                 return clamp((line_time - st) / max(0.0000001, et - st), 0, 1);
         };
-        return clamp(tween_execute(line_time, st, et, 0, 1, ease, e0, e1), 0, 1);
+        // Do not clamp: OutElastic/Back and easing-window samples can exceed 0..1.
+        return tween_execute(line_time, st, et, 0, 1, ease, e0, e1);
 };
 
 rpe_eval_ext_events = function(event_name, default_value) {
@@ -656,6 +657,12 @@ for (var ei = 0; ei < array_length(enames); ei++) {
                 ext_recall[$ en] = real(narr[0].start ?? 0);
         };
 };
+
+line_texture_use_judge_color = is_default_line
+	&& !has_color_events
+	&& !has_gif_events
+	&& !has_paint_events
+	&& !is_attach_ui;
 
 // PCR calcFloorPosition over the same merged table used by runtime.
 rpe_floor_at_sec = function(sec) {

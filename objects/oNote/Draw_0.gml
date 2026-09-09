@@ -22,20 +22,20 @@ if (skin_active()) {
 		else draw_sprite_ext(sprite_index, hl, x, y, image_xscale, image_yscale, image_angle, image_blend, image_alpha);
 	}else if(isHold){
 		if (is_struct(_skin_hold)) {
-			draw_hold(_hx0, _hy0, image_xscale * hk, image_yscale * hk, yscale,
-				image_angle, 0, image_blend, isMiss ? 0.5 : image_alpha, _keep_head, false, _tail_trim * hk, 0.25,
+			draw_hold_fit(_hx0, _hy0, image_xscale * hk, image_yscale * hk, yscale,
+				image_angle, 0, image_blend, isMiss ? 0.5 : image_alpha, _keep_head, false, _tail_trim * hk, 1,
 				_skin_hold.head, _skin_hold.body, _skin_hold.tail);
 		} else {
-			draw_hold(_hx0, _hy0, image_xscale, image_yscale, yscale,
+			draw_hold_fit(_hx0, _hy0, image_xscale, image_yscale, yscale,
 				image_angle, hl, image_blend, isMiss ? 0.5 : image_alpha, false);
 		};
 	}else{
 		if (is_struct(_skin_hold)) {
-			draw_hold(_hx0, _hy0, image_xscale * hk, image_yscale * hk, yscale,
-				image_angle, 0, image_blend, image_alpha, true, !_compact, _tail_trim * hk, 0.25,
+			draw_hold_fit(_hx0, _hy0, image_xscale * hk, image_yscale * hk, yscale,
+				image_angle, 0, image_blend, image_alpha, true, !_compact, _tail_trim * hk, 1,
 				_skin_hold.head, _skin_hold.body, _skin_hold.tail);
 		} else {
-			draw_hold(_hx0, _hy0, image_xscale, image_yscale, yscale,
+			draw_hold_fit(_hx0, _hy0, image_xscale, image_yscale, yscale,
 				image_angle, hl, image_blend, image_alpha, true);
 		};
 	};
@@ -51,9 +51,9 @@ if(!_is_hold){
 	image_alpha = (clamp(realHitTime <= _now_seconds ? 1 - ((_now_seconds - realHitTime) * 1000 / 160) : 1, 0, 1));
 	draw_sprite_ext(sprite_index, hl, x, y, image_xscale, image_yscale, image_angle, image_blend, image_alpha);
 }else if(isHold){
-	draw_hold(_hx0, _hy0, image_xscale, image_yscale, yscale,
+	draw_hold_fit(_hx0, _hy0, image_xscale, image_yscale, yscale,
 		image_angle, hl, image_blend, isMiss ? 0.5 : image_alpha, false);
 }else{
-	draw_hold(_hx0, _hy0, image_xscale, image_yscale, yscale,
+	draw_hold_fit(_hx0, _hy0, image_xscale, image_yscale, yscale,
 		image_angle, hl, image_blend, image_alpha, true);
 };

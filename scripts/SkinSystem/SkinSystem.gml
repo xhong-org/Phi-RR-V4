@@ -16,6 +16,17 @@ function skin_index_path() {
 	return skin_root_dir() + "index.json";
 }
 
+function skin_sfx_dir() {
+	return game_save_id + "skin_sfx/";
+}
+
+function skin_sfx_cleanup() {
+	var dir = skin_sfx_dir();
+	if (!directory_exists(dir)) then return;
+	skin_log($"cleanup {dir}");
+	skin_folder_rmdir(dir);
+}
+
 function skin_norm_dir(_dir) {
 	var s = string_replace_all(string(_dir ?? ""), "\\", "/");
 	if (string_length(s) && string_char_at(s, string_length(s)) != "/") then s += "/";
@@ -363,6 +374,12 @@ function skin_destroy_fmod(_snd) {
 
 function skin_pack_unload(_pack) {
 	if (!is_struct(_pack)) then return;
+	if (struct_exists(_pack, "hold_head") && struct_exists(_pack, "hold_body") && struct_exists(_pack, "hold_tail")) {
+		hold_strip_forget(_pack.hold_head, _pack.hold_body, _pack.hold_tail);
+	};
+	if (struct_exists(_pack, "hold_head_mh") && struct_exists(_pack, "hold_body_mh") && struct_exists(_pack, "hold_tail_mh")) {
+		hold_strip_forget(_pack.hold_head_mh, _pack.hold_body_mh, _pack.hold_tail_mh);
+	};
 	var names = ["click", "click_mh", "drag", "drag_mh", "flick", "flick_mh",
 		"hold", "hold_mh", "hit_fx", "hold_head", "hold_body", "hold_tail",
 		"hold_head_mh", "hold_body_mh", "hold_tail_mh"];
@@ -662,18 +679,20 @@ function skin_sound_ext_matches(_fmt, _ext) {
 	};
 }
 
-function skin_sound_prepared_path(_path) {
+function skin_sound_prepared_path(_path, _force_cache = false) {
 	var src = string(_path ?? "");
 	if (!string_length(src) || !file_exists(src)) then return src;
 	var fmt = skin_sound_format(src);
 	if (fmt == "id3") then fmt = "mp3";
 	if (!string_length(fmt)) {
 		skin_log($"sfx format unknown path={src}");
-		return src;
+		if (!_force_cache) then return src;
+		fmt = string_delete(string_lower(filename_ext(src)), 1, 1);
+		if (!string_length(fmt)) then fmt = "wav";
 	};
 	var ext = string_lower(filename_ext(src));
-	if (skin_sound_ext_matches(fmt, ext)) then return src;
-	var dir = game_save_id + "skin_sfx/";
+	if (skin_sound_ext_matches(fmt, ext) && !_force_cache) then return src;
+	var dir = skin_sfx_dir();
 	if (!directory_exists(dir)) {
 		try { directory_create(dir); } catch (mkdir_err) { delete(mkdir_err); };
 	};
@@ -1010,9 +1029,9 @@ function skin_tex_group_name(_st) {
 function skin_tex_diag_frame() {
 	if (!variable_global_exists("skin_tex_diag_f")) then global.skin_tex_diag_f = 0;
 	global.skin_tex_diag_f += 1;
-	if (global.skin_tex_diag_f == 1) {
-		print($"[Skin] tex typeof tap={typeof(note_tap)} str={string(note_tap)} exists={sprite_exists(note_tap)}");
-	};
+	//if (global.skin_tex_diag_f == 1) {
+		//print($"[Skin] tex typeof tap={typeof(note_tap)} str={string(note_tap)} exists={sprite_exists(note_tap)}");
+	//};
 	var on = skin_active() ? 1 : 0;
 	var grp = skin_tex_group_name(texturegroup_get_status("DefaultNotes"));
 	var loaded = (variable_global_exists("default_notes_texture_loaded") && global.default_notes_texture_loaded) ? 1 : 0;
@@ -1040,16 +1059,16 @@ function skin_tex_diag_frame() {
 			if (canDraw) then draw_n++;
 		};
 	};
-	var msg = $"[Skin] tex f={global.skin_tex_diag_f} on={on} grp={grp} loaded={loaded} notes={note_n} draw={draw_n} vis={vis_n} tap={skin_tex_flag(note_tap)} drag={skin_tex_flag(note_drag)} flick={skin_tex_flag(note_flick)} hh={skin_tex_flag(note_hold_head)} hb={skin_tex_flag(note_hold_body)} he={skin_tex_flag(note_hold_end)} fx={skin_tex_flag(effect)} px={skin_tex_flag(spr_pixel_1)}";
-	if (on) {
-		var pack = skin_runtime();
-		if (!is_struct(pack)) {
-			msg += " pack=NONE";
-		} else {
-			msg += $" click={skin_tex_flag(pack[$ "click"])} click_mh={skin_tex_flag(pack[$ "click_mh"])} dragp={skin_tex_flag(pack[$ "drag"])} drag_mh={skin_tex_flag(pack[$ "drag_mh"])} flickp={skin_tex_flag(pack[$ "flick"])} flick_mh={skin_tex_flag(pack[$ "flick_mh"])} hold={skin_tex_flag(pack[$ "hold"])} hold_mh={skin_tex_flag(pack[$ "hold_mh"])} hit={skin_tex_flag(pack[$ "hit_fx"])} shh={skin_tex_flag(pack[$ "hold_head"])} shb={skin_tex_flag(pack[$ "hold_body"])} sht={skin_tex_flag(pack[$ "hold_tail"])} shh_mh={skin_tex_flag(pack[$ "hold_head_mh"])} shb_mh={skin_tex_flag(pack[$ "hold_body_mh"])} sht_mh={skin_tex_flag(pack[$ "hold_tail_mh"])}";
-		};
-	};
-	print(msg);
+	//var msg = $"[Skin] tex f={global.skin_tex_diag_f} on={on} grp={grp} loaded={loaded} notes={note_n} draw={draw_n} vis={vis_n} tap={skin_tex_flag(note_tap)} drag={skin_tex_flag(note_drag)} flick={skin_tex_flag(note_flick)} hh={skin_tex_flag(note_hold_head)} hb={skin_tex_flag(note_hold_body)} he={skin_tex_flag(note_hold_end)} fx={skin_tex_flag(effect)} px={skin_tex_flag(spr_pixel_1)}";
+	//if (on) {
+	//	var pack = skin_runtime();
+	//	if (!is_struct(pack)) {
+	//		msg += " pack=NONE";
+	//	} else {
+	//		msg += $" click={skin_tex_flag(pack[$ "click"])} click_mh={skin_tex_flag(pack[$ "click_mh"])} dragp={skin_tex_flag(pack[$ "drag"])} drag_mh={skin_tex_flag(pack[$ "drag_mh"])} flickp={skin_tex_flag(pack[$ "flick"])} flick_mh={skin_tex_flag(pack[$ "flick_mh"])} hold={skin_tex_flag(pack[$ "hold"])} hold_mh={skin_tex_flag(pack[$ "hold_mh"])} hit={skin_tex_flag(pack[$ "hit_fx"])} shh={skin_tex_flag(pack[$ "hold_head"])} shb={skin_tex_flag(pack[$ "hold_body"])} sht={skin_tex_flag(pack[$ "hold_tail"])} shh_mh={skin_tex_flag(pack[$ "hold_head_mh"])} shb_mh={skin_tex_flag(pack[$ "hold_body_mh"])} sht_mh={skin_tex_flag(pack[$ "hold_tail_mh"])}";
+	//	};
+	//};
+	//print(msg);
 }
 
 function skin_runtime() {
@@ -1535,6 +1554,23 @@ function skin_note_sound(_kind, _fallback) {
 	};
 	if (!is_undefined(snd) && audio_exists(snd)) then return snd;
 	return _fallback;
+}
+
+function skin_hitsound_path_for_kind(_kind) {
+	var pack = skin_runtime();
+	if (!is_struct(pack)) then return "";
+	switch (string(_kind)) {
+		case "drag": return string(pack[$ "sfx_path_drag"] ?? "");
+		case "flick": return string(pack[$ "sfx_path_flick"] ?? "");
+		default: return string(pack[$ "sfx_path_click"] ?? "");
+	};
+}
+
+function skin_hitsound_path_for_note(_note) {
+	if (!instance_exists(_note)) then return "";
+	var kind = "tap";
+	with (_note) kind = skin_note_kind_from_instance();
+	return skin_hitsound_path_for_kind(kind);
 }
 
 function skin_note_kind_from_instance() {

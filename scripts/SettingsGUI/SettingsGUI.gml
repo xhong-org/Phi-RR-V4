@@ -434,7 +434,7 @@ function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill
 		if (!sprite_exists(_head)) then _head = note_hold_head;
 		if (!sprite_exists(_body)) then _body = note_hold_body;
 		if (!sprite_exists(_tail)) then _tail = note_hold_end;
-		draw_hold(_hx, _hy, _k, _k, _body_scale, 0, _frame, c_white, 1, true, true, 0, 0.25, _head, _body, _tail);
+		draw_hold_fit(_hx, _hy, _k, _k, _body_scale, 0, _frame, c_white, 1, true, true, 0, 1, _head, _body, _tail);
 	};
 	if (is_struct(pack)) {
 		var k_click = fit_k(sprite_exists(pack.click_mh) ? pack.click_mh : pack.click, note_box);

@@ -139,32 +139,54 @@ if (is_default_line) {
 image_blend = __color;
 
 	if (has_text_events) {
-	        if (string_length(line_text) > 0) {
-	                if (line_text_font != -1 && font_exists(line_text_font)) then draw_set_font(line_text_font);
-	                else if (variable_global_exists("game") && is_struct(game) && !is_undefined(game.font) && font_exists(game.font)) then draw_set_font(game.font);
-	                // Text events use a top-left draw origin. The line position is
-	                // still the anchor point, so compensate by the full anchored
-	                // text size before applying the line rotation.
-	            draw_set_halign(fa_center);
-                draw_set_valign(fa_middle);
-                draw_set_colour(image_blend);
-                draw_set_alpha(image_alpha);
-				// Match PCR's 35px line-text size on its 1080px reference canvas.
-				var text_font_size = max(1, font_get_size(draw_get_font()));
-				var tscale = line_canvas_scale * (35 / text_font_size);
-				var text_scale_x = tscale * __scale_x;
-				var text_scale_y = tscale * __scale_y;
-				var text_w = (string_width(line_text));
-				var text_h = (string_height(line_text))
-				var text_local_x = (0.5 - anchor_x) * text_w * text_scale_x;
-				var text_local_y = (anchor_y - 0.5) * text_h * text_scale_y;
-				var text_cos = dcos(image_angle);
-				var text_sin = dsin(image_angle);
-				var text_draw_x = x + text_local_x * text_cos + text_local_y * text_sin;
-				var text_draw_y = y - text_local_x * text_sin + text_local_y * text_cos;
-                draw_text_transformed(text_draw_x, text_draw_y, line_text , text_scale_x, text_scale_y, image_angle);
-                draw_set_alpha(1);
-        };
+		if (string_length(line_text) > 0) {
+			if (line_text_font != -1 && font_exists(line_text_font)) then draw_set_font(line_text_font);
+			else if (variable_global_exists("game") && is_struct(game) && !is_undefined(game.font) && font_exists(game.font)) then draw_set_font(game.font);
+			// Raster origin is top-left. RPE anchor is (0,0) bottom-left, (1,1) top-right.
+			// Offset from string_width/height; do not use fa_center/fa_middle.
+			var _old_halign = draw_get_halign();
+			var _old_valign = draw_get_valign();
+			draw_set_halign(fa_left);
+			draw_set_valign(fa_top);
+			draw_set_colour(image_blend);
+			draw_set_alpha(image_alpha);
+			// Match PCR's 35px line-text size on its 1080px reference canvas.
+			var text_font_size = max(1, font_get_size(draw_get_font()));
+			var tscale = line_canvas_scale * (35 / text_font_size);
+			var text_scale_x = tscale * __scale_x;
+			var text_scale_y = tscale * __scale_y;
+			var text_rows = string_split(string_replace_all(line_text, "\r\n", "\n"), "\n");
+			var text_row_n = array_length(text_rows);
+			if (text_row_n < 1) {
+				text_rows = [line_text];
+				text_row_n = 1;
+			};
+			var text_w = 0;
+			var text_row_h = 0;
+			for (var text_i = 0; text_i < text_row_n; text_i++) {
+				text_w = max(text_w, string_width(text_rows[text_i]));
+				text_row_h = max(text_row_h, string_height(text_rows[text_i]));
+			};
+			if (text_row_h < 1) then text_row_h = string_height(" ");
+			var _view_h = (variable_global_exists("chart_view_height") && is_real(chart_view_height) && chart_view_height > 0)
+				? chart_view_height : _room_h;
+			var text_sep = 50 * (_view_h / 900) * abs(__scale_y);
+			var text_h = text_row_h * abs(text_scale_y) + max(0, text_row_n - 1) * text_sep;
+			var text_ox = -anchor_x * text_w * text_scale_x;
+			var text_oy = -(1 - anchor_y) * text_h;
+			var text_cos = dcos(image_angle);
+			var text_sin = dsin(image_angle);
+			for (var text_i = 0; text_i < text_row_n; text_i++) {
+				var text_lx = text_ox;
+				var text_ly = text_oy + text_i * text_sep;
+				var text_draw_x = x + text_lx * text_cos + text_ly * text_sin;
+				var text_draw_y = y - text_lx * text_sin + text_ly * text_cos;
+				draw_text_transformed(text_draw_x, text_draw_y, text_rows[text_i], text_scale_x, text_scale_y, image_angle);
+			};
+			draw_set_halign(_old_halign);
+			draw_set_valign(_old_valign);
+			draw_set_alpha(1);
+		};
 } else {
 	var frame = 0;
 	if (has_gif_events && is_struct(gif_data) && is_array(gif_data.frames) && array_length(gif_data.frames) > 0) {
@@ -188,7 +210,16 @@ image_blend = __color;
 	var sprite_sin = dsin(image_angle);
 	var sprite_draw_x = x + sprite_local_x * sprite_cos + sprite_local_y * sprite_sin;
 	var sprite_draw_y = y - sprite_local_x * sprite_sin + sprite_local_y * sprite_cos;
-	draw_sprite_ext(_line_sprite, frame, sprite_draw_x, sprite_draw_y, sx , sy, image_angle, image_blend, image_alpha);
+	// Default judge-line sprite uses FC/AP. Color events always win.
+	// Custom texture / GIF / other non-line drawing stays white unless color events apply.
+	var texture_blend = __color;
+	if (line_texture_use_judge_color && variable_global_exists("game") && is_struct(game)
+		&& bool(game.settings.enableLineJudge)) {
+		texture_blend = #ffeca0;
+		if (phi_state_list.good > 0) then texture_blend = make_colour_rgb(162, 238, 255);
+		if (phi_state_list.bad + phi_state_list.miss > 0) then texture_blend = c_white;
+	};
+	draw_sprite_ext(_line_sprite, frame, sprite_draw_x, sprite_draw_y, sx , sy, image_angle, texture_blend, image_alpha);
 };
 
 if (variable_global_exists("game") && is_struct(game) && game.settings.enableDisplayLineID) {

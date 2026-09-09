@@ -30,11 +30,11 @@ if (skin_active()) {
 		var _keep_head = is_struct(_skin_hold) && bool(_skin_hold.keep_head);
 		var _tail_trim = (_use_compact ? _yscale * (_hold_tail_height * 0.5) : 0);
 		if (is_struct(_skin_hold)) {
-			draw_hold(_hx0, _hy0, _xscale * hk, _yscale * hk, yscale,
-				_angle, 0, _blend, a, _is_out || _keep_head, _is_out && !_use_compact, _tail_trim * hk, 0.25,
+			draw_hold_fit(_hx0, _hy0, _xscale * hk, _yscale * hk, yscale,
+				_angle, 0, _blend, a, _is_out || _keep_head, _is_out && !_use_compact, _tail_trim * hk, 1,
 				_skin_hold.head, _skin_hold.body, _skin_hold.tail);
 		} else {
-			draw_hold(_hx0, _hy0, _xscale, _yscale, yscale,
+			draw_hold_fit(_hx0, _hy0, _xscale, _yscale, yscale,
 				_angle, _frame, _blend, a, _is_out, _is_out && !compactHold, _tail_trim);
 		};
 	};
@@ -51,6 +51,6 @@ if (!_is_hold) {
 } else {
 	var a = (isMiss ? 0.5 : _alpha);
 	var _tail_trim = (compactHold ? _yscale * (_hold_tail_height * 0.5) : 0);
-	draw_hold(_hx0, _hy0, _xscale, _yscale, yscale,
+	draw_hold_fit(_hx0, _hy0, _xscale, _yscale, yscale,
 		_angle, _frame, _blend, a, _is_out, _is_out && !compactHold, _tail_trim);
 };

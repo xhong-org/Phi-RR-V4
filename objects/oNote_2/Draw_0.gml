@@ -15,20 +15,20 @@ if (skin_active()) {
 		else draw_sprite_ext(sprite_index, hl, x, y, image_xscale, image_yscale, image_angle, image_blend, image_alpha);
 	} else if (hold_started) {
 		if (is_struct(_skin_hold)) {
-			draw_hold(hx0, hy0, image_xscale * hk, image_yscale * hk, yscale,
-				image_angle, 0, image_blend, image_alpha, _keep_head, false, _compact ? _tail_trim * hk : 0, 0.25,
+			draw_hold_fit(hx0, hy0, image_xscale * hk, image_yscale * hk, yscale,
+				image_angle, 0, image_blend, image_alpha, _keep_head, false, _compact ? _tail_trim * hk : 0, 1,
 				_skin_hold.head, _skin_hold.body, _skin_hold.tail);
 		} else {
-			draw_hold(hx0, hy0, image_xscale, image_yscale, yscale,
+			draw_hold_fit(hx0, hy0, image_xscale, image_yscale, yscale,
 				image_angle, hl, image_blend, image_alpha, false);
 		};
 	} else {
 		if (is_struct(_skin_hold)) {
-			draw_hold(hx0, hy0, image_xscale * hk, image_yscale * hk, yscale,
-				image_angle, 0, image_blend, image_alpha, true, !_compact, _tail_trim * hk, 0.25,
+			draw_hold_fit(hx0, hy0, image_xscale * hk, image_yscale * hk, yscale,
+				image_angle, 0, image_blend, image_alpha, true, !_compact, _tail_trim * hk, 1,
 				_skin_hold.head, _skin_hold.body, _skin_hold.tail);
 		} else {
-			draw_hold(hx0, hy0, image_xscale, image_yscale, yscale,
+			draw_hold_fit(hx0, hy0, image_xscale, image_yscale, yscale,
 				image_angle, hl, image_blend, image_alpha, true, false, 1);
 		};
 	};
@@ -38,9 +38,9 @@ if (skin_active()) {
 if (type != 2) {
 	draw_sprite_ext(sprite_index, hl, x, y, image_xscale, image_yscale, image_angle, image_blend, image_alpha);
 } else if (hold_started) {
-	draw_hold(hx0, hy0, image_xscale, image_yscale, yscale,
+	draw_hold_fit(hx0, hy0, image_xscale, image_yscale, yscale,
 		image_angle, hl, image_blend, image_alpha, false);
 } else {
-	draw_hold(hx0, hy0, image_xscale, image_yscale, yscale,
+	draw_hold_fit(hx0, hy0, image_xscale, image_yscale, yscale,
 		image_angle, hl, image_blend, image_alpha, true, false, 1);
 };

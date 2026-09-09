@@ -4,7 +4,7 @@
 #macro func function
 #macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal { "windows": 40521, "android": 40521, "gxgames": 40526 } // 各平台版本号(独立)
+#macro VerReal { "windows": 40522, "android": 40521, "gxgames": 40526 } // 各平台版本号(独立)
 #macro VerStr "v.4.0.9"
 
 function ver_real() {
@@ -1395,7 +1395,11 @@ function chart_default_resources_unload() {
 };
 
 function render_hitsound_path(_default_sound, _custom_path = "") {
-	var _path = _custom_path;
+	var _path = string(_custom_path ?? "");
+	if (string_length(_path)) {
+		_path = chart_file_readable_path(_path);
+		if (file_exists(_path)) then _path = skin_sound_prepared_path(_path, true);
+	};
 	if (!is_string(_path) || !string_length(_path) || !file_exists(_path)) {
 		switch (_default_sound) {
 			case snd_note_drag: _path = working_directory + "render_sfx/drag.wav"; break;
@@ -1404,6 +1408,15 @@ function render_hitsound_path(_default_sound, _custom_path = "") {
 		};
 	};
 	return file_exists(_path) ? _path : "";
+};
+
+function render_schedule_note_hitsound(_note, _event_time, _custom_path = "", _is_fake = false) {
+	if (!instance_exists(_note)) then return false;
+	var fallback = snd_note_tap;
+	if (variable_instance_exists(_note, "sound") && audio_exists(_note.sound)) then fallback = _note.sound;
+	var path = string(_custom_path ?? "");
+	if (!string_length(path)) then path = skin_hitsound_path_for_note(_note);
+	return render_schedule_hitsound(fallback, _event_time, path, _is_fake);
 };
 
 function render_schedule_hitsound(_default_sound, _event_time, _custom_path = "", _is_fake = false) {
