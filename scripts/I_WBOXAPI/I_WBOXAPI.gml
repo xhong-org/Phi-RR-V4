@@ -65,6 +65,19 @@ function i_wbox_show_packed(_fn, _message, _title, _kind) {
 	}));
 }
 
+function msgbox_crlf() {
+	return chr(13) + chr(10);
+}
+
+function msgbox_join_lines() {
+	var s = "";
+	for (var i = 0; i < argument_count; i++) {
+		if (i > 0) then s += msgbox_crlf();
+		s += string(argument[i]);
+	};
+	return s;
+}
+
 function msgbox_button(text, callback = undefined) {
 	return { text:string(text), callback:callback };
 }

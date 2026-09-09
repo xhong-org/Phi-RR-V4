@@ -70,9 +70,11 @@
     "settings": {
       "title": "设置",
       "close": "关闭",
-      "normal": "正常设置",
+      "normal": "常规设置",
       "developer": "开发者选项",
       "clearData": "清除数据",
+      "reset": "重置设置",
+      "reloadLanguage": "重新加载语言包",
       "hintNormal": "对应 Phigros().settings",
       "hintDeveloper": "开发者选项含有已废弃/已弃用的设置",
       "language": "语言",

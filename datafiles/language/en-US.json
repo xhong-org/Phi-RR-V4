@@ -70,9 +70,11 @@
     "settings": {
       "title": "Settings",
       "close": "Close",
-      "normal": "Settings",
+      "normal": "General",
       "developer": "Developer options",
       "clearData": "Clear data",
+      "reset": "Reset settings",
+      "reloadLanguage": "Reload language packs",
       "hintNormal": "Maps to Phigros().settings",
       "hintDeveloper": "Developer options are settings whose comments contain deprecated markers",
       "language": "Language",

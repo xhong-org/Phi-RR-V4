@@ -91,6 +91,27 @@ struct WireReader {
     }
 };
 
+std::wstring normalize_newlines(std::wstring text) {
+    std::wstring out;
+    out.reserve(text.size() + 8);
+    for (size_t i = 0; i < text.size(); ++i) {
+        if (text[i] == L'\r') {
+            out.push_back(L'\r');
+            if (i + 1 < text.size() && text[i + 1] == L'\n') {
+                out.push_back(L'\n');
+                ++i;
+            } else {
+                out.push_back(L'\n');
+            }
+        } else if (text[i] == L'\n') {
+            out.append(L"\r\n");
+        } else {
+            out.push_back(text[i]);
+        }
+    }
+    return out;
+}
+
 std::wstring utf8_to_wide(std::string_view text) {
     if (text.empty()) return {};
     int count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
@@ -454,7 +475,7 @@ bool parse_show_args(char* data, double length, std::wstring& message, std::wstr
     std::string title_utf8;
     uint8_t kind_u8 = 1;
     if (!reader.read_string(message_utf8) || !reader.read_string(title_utf8) || !reader.read_u8(kind_u8)) return false;
-    message = utf8_to_wide(message_utf8);
+    message = normalize_newlines(utf8_to_wide(message_utf8));
     title = utf8_to_wide(title_utf8);
     kind = kind_u8;
     return true;

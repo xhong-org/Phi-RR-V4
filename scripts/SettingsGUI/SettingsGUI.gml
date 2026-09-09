@@ -210,6 +210,27 @@ function settings_clear_data() {
 	settings_apply_live(undefined);
 }
 
+function settings_reset_defaults() {
+	var fresh = settings_clone(settings_defaults());
+	if (variable_global_exists("game") && is_struct(game) && is_struct(game.settings)) {
+		var names = struct_get_names(fresh);
+		for (var i = 0; i < array_length(names); i++) {
+			game.settings[$ names[i]] = fresh[$ names[i]];
+		};
+	};
+	global.pls_settings = settings_clone(fresh);
+	settings_save_store(settings_store());
+	settings_apply_live(undefined);
+}
+
+function settings_confirm_reset() {
+	var buttons = [
+		msgbox_button("Yes", settings_reset_defaults),
+		msgbox_button("No")
+	];
+	msgbox_warning_async("Do you want to reset settings?", "Warning", buttons, MSGBOX_BUTTON_ALIGN.RIGHT);
+}
+
 function settings_list(_deprecated) {
 	static lists = undefined;
 	if (!is_array(lists)) {
@@ -528,6 +549,8 @@ function settings_developer_warning_text() {
 }
 
 function settings_warn_developer() {
+	if (variable_instance_exists(id, "developer_warned") && developer_warned) then return;
+	developer_warned = true;
 	var msg = settings_developer_warning_text();
 	var buttons = [msgbox_button("OK")];
 	if (i_wbox_native_ready()) {
@@ -644,6 +667,7 @@ function settings_gui_layout() {
 	close_h = 36 * s;
 	close_x = panel_x + panel_w - pad - close_w;
 	close_y = panel_y + 12 * s;
+	settings_gui_action_layout();
 	footer_h = 52 * s;
 	list_x = panel_x + pad;
 	list_w = panel_w - pad * 2;
@@ -667,6 +691,49 @@ function settings_gui_layout() {
 	skin_delete = { x:skin_preview_x + skin_preview_w - 140 * s, y:list_y + list_h - 40 * s, w:140 * s, h:40 * s };
 }
 
+function settings_gui_action_kind() {
+	if (!variable_instance_exists(id, "tab")) then return "";
+	if (tab == 0 || tab == 1) then return "reset";
+	if (tab == 2) then return "reload";
+	return "";
+}
+
+function settings_gui_action_label() {
+	var kind = settings_gui_action_kind();
+	if (kind == "reset") then return lang("settings.reset");
+	if (kind == "reload") then return lang("settings.reloadLanguage");
+	return "";
+}
+
+function settings_gui_action_layout() {
+	var s = layout_s;
+	if (!is_real(s) || s <= 0) then s = 1.0;
+	var kind = settings_gui_action_kind();
+	show_action = (kind != "");
+	action_h = close_h;
+	action_y = close_y;
+	if (!show_action) {
+		action_w = 0;
+		action_x = close_x;
+		return;
+	};
+	var label = settings_gui_action_label();
+	var text_scale = 0.4 * s;
+	var text_w = 0;
+	if (string_length(label)) {
+		if (variable_instance_exists(id, "ui_font") && font_exists(ui_font)) {
+			var old_font = draw_get_font();
+			draw_set_font(ui_font);
+			text_w = string_width(label) * text_scale;
+			draw_set_font(old_font);
+		} else {
+			text_w = string_length(label) * 8 * s;
+		};
+	};
+	action_w = max(close_w, ceil(text_w + 24 * s));
+	action_x = close_x - 8 * s - action_w;
+}
+
 function settings_gui_rows() {
 	return settings_list(tab == 1);
 }
@@ -679,6 +746,7 @@ function settings_gui_hit(_box, _mx, _my) {
 function settings_gui_init() {
 	depth = -2000000;
 	tab = 0;
+	developer_warned = false;
 	scroll = 0;
 	armed = false;
 	dragging = false;
@@ -687,6 +755,12 @@ function settings_gui_init() {
 	drag_start_scroll = 0;
 	editing_key = "";
 	hover_close = false;
+	hover_action = false;
+	show_action = false;
+	action_x = 0;
+	action_y = 0;
+	action_w = 0;
+	action_h = 0;
 	hover_tab_normal = false;
 	hover_tab_dev = false;
 	hover_tab_lang = false;
@@ -776,7 +850,9 @@ function settings_gui_step() {
 
 	var mx = mouse_x;
 	var my = mouse_y;
+	settings_gui_action_layout();
 	hover_close = point_in_rectangle(mx, my, close_x, close_y, close_x + close_w, close_y + close_h);
+	hover_action = show_action && point_in_rectangle(mx, my, action_x, action_y, action_x + action_w, action_y + action_h);
 	hover_tab_normal = settings_gui_hit(tab_normal, mx, my);
 	hover_tab_dev = settings_gui_hit(tab_dev, mx, my);
 	hover_tab_lang = settings_gui_hit(tab_lang, mx, my);
@@ -872,6 +948,31 @@ function settings_gui_step() {
 	if (hover_close) {
 		settings_gui_commit_edit();
 		settings_gui_close();
+		exit;
+	};
+	if (hover_action) {
+		settings_gui_commit_edit();
+		var action_kind = settings_gui_action_kind();
+		if (action_kind == "reset") {
+			settings_confirm_reset();
+		} else if (action_kind == "reload") {
+			var scan = lang_reload();
+			hits_tab = -1;
+			scroll = 0;
+			var loaded_n = is_struct(scan) ? real(scan.loaded ?? 0) : 0;
+			var error_n = is_struct(scan) ? real(scan.error ?? 0) : 0;
+			var skipped_n = is_struct(scan) ? real(scan.skipped ?? 0) : 0;
+			msgbox_info_async(
+				msgbox_join_lines(
+					"- Loaded: " + string(loaded_n),
+					"- Failed: " + string(error_n),
+					"- Skipped: " + string(skipped_n)
+				),
+				"Information",
+				[msgbox_button("OK")],
+				MSGBOX_BUTTON_ALIGN.RIGHT
+			);
+		};
 		exit;
 	};
 	if (hover_tab_normal && tab != 0) {
@@ -977,6 +1078,7 @@ function settings_gui_draw() {
 	var old_alpha = draw_get_alpha();
 	if (font_exists(ui_font)) then draw_set_font(ui_font);
 	else draw_set_font(-1);
+	settings_gui_action_layout();
 
 	var s = layout_s;
 	if (!is_real(s) || s <= 0) then s = 1.0;
@@ -1009,6 +1111,15 @@ function settings_gui_draw() {
 	draw_set_colour(c_white);
 	draw_rectangle(close_x, close_y, close_x + close_w, close_y + close_h, true);
 	draw_text_transformed(close_x + close_w * 0.5, close_y + close_h * 0.5, lang("settings.close"), small_scale + 0.08 * s, small_scale + 0.08 * s, 0);
+
+	if (show_action) {
+		var action_label = settings_gui_action_label();
+		draw_set_colour(hover_action ? fill_hot : fill_idle);
+		draw_rectangle(action_x, action_y, action_x + action_w, action_y + action_h, false);
+		draw_set_colour(c_white);
+		draw_rectangle(action_x, action_y, action_x + action_w, action_y + action_h, true);
+		draw_text_transformed(action_x + action_w * 0.5, action_y + action_h * 0.5, action_label, small_scale + 0.08 * s, small_scale + 0.08 * s, 0);
+	};
 
 	settings_gui_draw_tab(tab_normal, hover_tab_normal, tab == 0, lang("settings.normal"), tab_scale, fill_hot, fill_tab);
 	settings_gui_draw_tab(tab_dev, hover_tab_dev, tab == 1, lang("settings.developer"), tab_scale, fill_hot, fill_tab);

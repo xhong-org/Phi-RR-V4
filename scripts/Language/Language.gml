@@ -239,6 +239,40 @@ function lang_cycle(_dir) {
 	lang_set(packs[idx].id);
 }
 
+function lang_scan_packs() {
+	var files = [];
+	lang_collect_json(lang_dir(), files);
+	var extras = [lang_dir() + "en-US.json", lang_dir() + "zh-CN.json"];
+	for (var e = 0; e < array_length(extras); e++) {
+		array_push(files, extras[e]);
+	};
+	var seen_path = {};
+	var seen_id = {};
+	var packs = [];
+	var loaded = 0;
+	var error_n = 0;
+	var skipped = 0;
+	for (var i = 0; i < array_length(files); i++) {
+		var path = files[i];
+		if (!is_string(path) || !string_length(path)) then continue;
+		if (struct_exists(seen_path, path)) then continue;
+		seen_path[$ path] = true;
+		var pack = lang_try_load_file(path);
+		if (!is_struct(pack)) {
+			error_n += 1;
+			continue;
+		};
+		if (struct_exists(seen_id, "id:" + pack.id)) {
+			skipped += 1;
+			continue;
+		};
+		seen_id[$ "id:" + pack.id] = true;
+		array_push(packs, pack);
+		loaded += 1;
+	};
+	return { packs: packs, loaded: loaded, error: error_n, skipped: skipped };
+}
+
 function lang_init() {
 	global.pls_lang = {
 		id: LANG_DEFAULT,
@@ -248,28 +282,26 @@ function lang_init() {
 		lookup: {},
 		field_labels: {}
 	};
-	var files = [];
-	lang_collect_json(lang_dir(), files);
-	var extras = [lang_dir() + "en-US.json", lang_dir() + "zh-CN.json"];
-	for (var e = 0; e < array_length(extras); e++) {
-		array_push(files, extras[e]);
-	};
-	var seen = {};
-	var packs = [];
-	for (var i = 0; i < array_length(files); i++) {
-		var path = files[i];
-		if (!is_string(path) || struct_exists(seen, path)) then continue;
-		seen[$ path] = true;
-		var pack = lang_try_load_file(path);
-		if (!is_struct(pack)) then continue;
-		if (struct_exists(seen, "id:" + pack.id)) then continue;
-		seen[$ "id:" + pack.id] = true;
-		array_push(packs, pack);
-	};
-	global.pls_lang.packs = packs;
+	var scan = lang_scan_packs();
+	global.pls_lang.packs = is_struct(scan) && is_array(scan.packs) ? scan.packs : [];
 	var saved = lang_saved_id();
 	if (is_struct(lang_find_pack(saved))) then lang_apply(saved);
 	else lang_apply(LANG_DEFAULT);
+}
+
+function lang_reload() {
+	lang_ensure();
+	var current = lang_current_id();
+	var scan = lang_scan_packs();
+	if (!is_struct(scan)) then scan = { packs: [], loaded: 0, error: 0, skipped: 0 };
+	if (is_array(scan.packs) && array_length(scan.packs) > 0) {
+		global.pls_lang.packs = scan.packs;
+		if (is_struct(lang_find_pack(current))) then lang_apply(current);
+		else lang_apply(LANG_DEFAULT);
+		lang_save_id(global.pls_lang.id);
+		lang_refresh_ui();
+	};
+	return scan;
 }
 
 function lang_ensure() {
@@ -306,6 +338,7 @@ function lang_required_keys() {
 		"gx.writeFailed", "gx.notZip", "gx.fileProtocol", "gx.fileProtocolStatus", "gx.downloadingUrl",
 		"gx.notFound", "gx.apiNoResponse", "gx.runServer", "gx.connected", "gx.urlFailed", "gx.downloadMissing",
 		"settings.title", "settings.close", "settings.normal", "settings.developer", "settings.clearData",
+		"settings.reset", "settings.reloadLanguage",
 		"settings.hintNormal", "settings.hintDeveloper", "settings.language", "settings.skin", "settings.hintSkin",
 		"settings.developerWarning", "settings.cleared",
 		"skin.default", "skin.add", "skin.delete", "skin.filter", "skin.importFailed", "skin.parseFailed",
