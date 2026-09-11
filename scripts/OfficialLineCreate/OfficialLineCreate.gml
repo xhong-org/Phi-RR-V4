@@ -6,6 +6,44 @@ function official_lines_creating() {
 		&& bool(game[$ "_chart_lines_creating"] ?? false);
 }
 
+/// Earliest second a note can be on-screen, including notes stuck on a speed-0 line.
+function official_note_visible_activate_sec(_speed_events, _note_floor, _note_speed, _hit_sec, _spb, _preload, _visible_dist = 12, _hold_len = 0) {
+	var activate_sec = _hit_sec - _preload;
+	if (abs(_note_speed) < 0.0000001) then return min(activate_sec, 0);
+	if (!is_array(_speed_events) || array_length(_speed_events) <= 0) then return activate_sec;
+	var note_lo = min(_note_floor, _note_floor + _hold_len);
+	var note_hi = max(_note_floor, _note_floor + _hold_len);
+	var vis_lo = note_lo - _visible_dist;
+	var vis_hi = note_hi + _visible_dist;
+	var event_count = array_length(_speed_events);
+	for (var event_i = 0; event_i < event_count; event_i++) {
+		var speed_event = _speed_events[event_i];
+		if (!is_struct(speed_event)) then continue;
+		var t0 = real(speed_event.startTime ?? 0) * _spb;
+		var t1 = real(speed_event.endTime ?? 0) * _spb;
+		if (event_i == event_count - 1) then t1 = max(t1, _hit_sec + 1);
+		if (t1 < t0) then t1 = t0;
+		var speed_value = real(speed_event.value ?? 0);
+		var floor0 = real(speed_event[$ "floorPosition"] ?? 0);
+		var floor1 = floor0 + (t1 - t0) * speed_value;
+		var line_lo = min(floor0, floor1);
+		var line_hi = max(floor0, floor1);
+		if (line_hi < vis_lo || line_lo > vis_hi) then continue;
+		if (abs(speed_value) < 0.0000001) {
+			activate_sec = min(activate_sec, t0);
+			continue;
+		};
+		if (floor0 >= vis_lo && floor0 <= vis_hi) {
+			activate_sec = min(activate_sec, t0);
+			continue;
+		};
+		var target = (floor0 < vis_lo ? vis_lo : vis_hi);
+		var enter_sec = t0 + (target - floor0) / speed_value;
+		if (enter_sec >= t0 && enter_sec <= t1) then activate_sec = min(activate_sec, enter_sec);
+	};
+	return activate_sec;
+}
+
 function official_lines_begin() {
 	var owner = game;
 	var old_texture_names = (struct_get_names(owner.TextureGroup));
@@ -99,9 +137,25 @@ function official_lines_create_note(i) {
 	};
 	if (!instance_exists(note_instance)) then return;
 	var hit_sec = real(note_instance.realHitTime);
+	var line_index = real(na[$ "id"] ?? 0);
+	var line_data = (is_array(job.judge_lines) && line_index >= 0 && line_index < array_length(job.judge_lines))
+		? job.judge_lines[line_index] : undefined;
+	var speed_events = (is_struct(line_data) && is_array(line_data[$ "speedEvents"]))
+		? line_data.speedEvents : [];
+	var seconds_per_beat = (real(na.bpm) > 0 ? 1.875 / real(na.bpm) : 0);
+	var activate_sec = official_note_visible_activate_sec(
+		speed_events,
+		real(na.yOffset ?? 0),
+		real(na[$ "speed"] ?? 1),
+		hit_sec,
+		seconds_per_beat,
+		real(job.note_preload ?? 15),
+		12,
+		real(na[$ "holdFloorLength"] ?? 0)
+	);
 	array_add(owner._notes, {
 		id: note_instance,
-		activateSec: hit_sec - job.note_preload,
+		activateSec: activate_sec,
 		hitSec: hit_sec
 	});
 }

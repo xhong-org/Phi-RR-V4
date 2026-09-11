@@ -9,9 +9,9 @@ var _skin_hold = skin_hold_parts(_skin_hl);
 if (is_struct(_skin_hold) && sprite_exists(_skin_hold.body)) {
 	_hold_body_height = max(1, sprite_get_height(_skin_hold.body));
 };
-max_visible_position = (game.Math.maxVisiblePos(self.yOffset) + 0.01);
+max_visible_position = (self.yOffset + 0.01);
 maximum_visual_length = (self._is_hold && holdFloorLength > 0
-	? game.Math.maxVisiblePos(self.yOffset + holdFloorLength) + 0.01
+	? (self.yOffset + holdFloorLength + 0.01)
 	: max_visible_position);
 
 switch(self.type){

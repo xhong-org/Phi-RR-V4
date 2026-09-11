@@ -127,6 +127,7 @@ if (global.render_mode) {
         if (!string_length(global.render_output)) {
                 global.render_output = working_directory + "render.mp4";
         };
+        if (!render_ffmpeg_require()) then exit;
         var render_session = chart_session_reset();
         render_session.source_path = global.render_source;
         var render_source_type = directory_exists(global.render_source) ? "directory"

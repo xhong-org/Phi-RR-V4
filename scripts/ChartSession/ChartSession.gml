@@ -1182,24 +1182,34 @@ function chart_info_apply_value(info, key, val) {
         switch (normalized_key) {
                 case "name":
                 case "title":
+                case "名称":
+                case "曲名":
+                case "歌名":
                         info.name = value;
                 break;
                 case "level":
+                case "等级":
+                case "难度":
                         info.level = value;
                 break;
                 case "composer":
                 case "musiccomposer":
                 case "artist":
+                case "曲师":
+                case "作曲":
                         info.composer = value;
                 break;
                 case "charter":
                 case "chartcharter":
                 case "designer":
+                case "谱师":
                         info.charter = value;
                 break;
                 case "illustrator":
                 case "illustrationauthor":
                 case "illustrationartist":
+                case "曲绘":
+                case "画师":
                         info.illustrator = value;
                 break;
                 case "difficulty":
@@ -1210,23 +1220,31 @@ function chart_info_apply_value(info, key, val) {
                 case "background":
                 case "bg":
                 case "picture":
+                case "图片":
+                case "封面":
+                case "插画":
                         info.image = value;
                 break;
                 case "music":
                 case "song":
                 case "songfile":
                 case "audio":
+                case "音乐":
+                case "音频":
                         info.music = value;
                 break;
                 case "chart":
                 case "track":
                 case "chartfile":
+                case "谱面":
                         info.chart = value;
                 break;
                 case "offset":
+                case "偏移":
                         info.offset_ms = number(value, 0);
                 break;
                 case "aspectratio":
+                case "宽高比":
                         var parsed_aspect = chart_parse_aspect_ratio(value, 0);
                         if (parsed_aspect > 0) then info.aspect_ratio = parsed_aspect;
                 break;
@@ -1281,16 +1299,31 @@ function chart_parse_info_csv(info_path) {
 
         var width = ds_grid_width(grid);
         var height = ds_grid_height(grid);
+        var head0 = string_lower(chart_info_trim_value(ds_grid_get(grid, 0, 0)));
+        var head1 = (width >= 2) ? string_lower(chart_info_trim_value(ds_grid_get(grid, 1, 0))) : "";
         if (width >= 2 && height >= 2
-                && string_lower(chart_info_trim_value(ds_grid_get(grid, 0, 0))) == "key"
-                && string_lower(chart_info_trim_value(ds_grid_get(grid, 1, 0))) == "value") {
+                && (head0 == "key" || head0 == "键")
+                && (head1 == "value" || head1 == "值")) {
                 for (var row = 1; row < height; row++) {
                         chart_info_apply_value(info, ds_grid_get(grid, 0, row), ds_grid_get(grid, 1, row));
                 };
         } else if (height >= 2) {
-                // Standard info.csv: first row contains field names, second row values.
-                for (var column = 0; column < width; column++) {
-                        chart_info_apply_value(info, ds_grid_get(grid, column, 0), ds_grid_get(grid, column, 1));
+                var value_row = height - 1;
+                while (value_row > 0) {
+                        var row_has_value = false;
+                        for (var empty_col = 0; empty_col < width; empty_col++) {
+                                if (string_length(chart_info_trim_value(ds_grid_get(grid, empty_col, value_row)))) {
+                                        row_has_value = true;
+                                        break;
+                                };
+                        };
+                        if (row_has_value) then break;
+                        value_row--;
+                };
+                if (value_row > 0) {
+                        for (var column = 0; column < width; column++) {
+                                chart_info_apply_value(info, ds_grid_get(grid, column, 0), ds_grid_get(grid, column, value_row));
+                        };
                 };
         };
         ds_grid_destroy(grid);

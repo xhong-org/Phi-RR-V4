@@ -203,7 +203,9 @@
       "qualityRange": "Quality must be a number (0-51).",
       "aspectPositive": "Aspect ratio must be positive width:height.",
       "outputMissing": "Output directory does not exist.",
-      "chartMissing": "Chart path does not exist."
+      "chartMissing": "Chart path does not exist.",
+      "ffmpegMissingTitle": "Error",
+      "ffmpegMissing": "FFmpeg was not found. Install FFmpeg or add it to the system PATH."
     },
     "video": {
       "title": "VIDEO RENDER",

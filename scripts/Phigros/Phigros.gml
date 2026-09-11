@@ -4,7 +4,7 @@
 #macro func function
 #macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal { "windows": 40522, "android": 40521, "gxgames": 40526 } // 各平台版本号(独立)
+#macro VerReal { "windows": 40523, "android": 40521, "gxgames": 40526 } // 各平台版本号(独立)
 #macro VerStr "v.4.0.9"
 
 function ver_real() {
@@ -1393,6 +1393,76 @@ function chart_default_resources_unload() {
 		print("[Resources] audiogroup_hitsounds unloaded");
 	};
 };
+
+function render_ffmpeg_spec() {
+	var spec = "";
+	if (variable_global_exists("render_ffmpeg")) then spec = string_trim(string(global.render_ffmpeg ?? ""));
+	if (!string_length(spec)) then spec = (os_type == os_windows ? "ffmpeg.exe" : "ffmpeg");
+	return spec;
+}
+
+function render_ffmpeg_join(_dir, _name) {
+	var d = string(_dir ?? "");
+	if (!string_length(d)) then return string(_name ?? "");
+	var last = string_char_at(d, string_length(d));
+	if (last != "/" && last != "\\") then d += "/";
+	return d + string(_name ?? "");
+}
+
+function render_ffmpeg_available() {
+	var spec = render_ffmpeg_spec();
+	if (file_exists(spec)) then return true;
+	var norm = string_replace_all(spec, "\\", "/");
+	var has_dir = (string_pos("/", norm) > 0)
+		|| (string_length(norm) >= 2 && string_char_at(norm, 2) == ":");
+	if (has_dir) then return false;
+	var names = [spec];
+	if (os_type == os_windows) {
+		var lower = string_lower(spec);
+		if (string_length(lower) < 4 || string_copy(lower, string_length(lower) - 3, 4) != ".exe") {
+			array_add(names, spec + ".exe");
+		};
+	};
+	var roots = [program_directory, working_directory];
+	for (var root_i = 0; root_i < array_length(roots); root_i++) {
+		for (var name_i = 0; name_i < array_length(names); name_i++) {
+			if (file_exists(render_ffmpeg_join(roots[root_i], names[name_i]))) then return true;
+		};
+	};
+	var path_env = environment_get_variable("PATH");
+	if (!is_string(path_env) || !string_length(path_env)) then path_env = environment_get_variable("Path");
+	if (!is_string(path_env) || !string_length(path_env)) then return false;
+	var parts = string_split(path_env, os_type == os_windows ? ";" : ":");
+	for (var part_i = 0; part_i < array_length(parts); part_i++) {
+		var dir = string_trim(parts[part_i]);
+		if (!string_length(dir)) then continue;
+		for (var name_i = 0; name_i < array_length(names); name_i++) {
+			if (file_exists(render_ffmpeg_join(dir, names[name_i]))) then return true;
+		};
+	};
+	return false;
+}
+
+function render_ffmpeg_require() {
+	if (render_ffmpeg_available()) then return true;
+	var title = lang("render.ffmpegMissingTitle", "Error");
+	var text = lang("render.ffmpegMissing", "FFmpeg was not found. Install FFmpeg or add it to the system PATH.");
+	var buttons = [msgbox_button(lang("common.ok", "OK"))];
+	if (i_wbox_native_ready()) {
+		msgbox_error_sync(text, title, buttons, MSGBOX_BUTTON_ALIGN.RIGHT);
+	} else {
+		msgbox_error_async(text, title, buttons, MSGBOX_BUTTON_ALIGN.RIGHT);
+	};
+	global.render_mode = false;
+	if (variable_global_exists("render_cli") && global.render_cli) {
+		global.render_cli = false;
+		game_end();
+		return false;
+	};
+	global.render_cli = false;
+	room_goto(room_menu);
+	return false;
+}
 
 function render_hitsound_path(_default_sound, _custom_path = "") {
 	var _path = string(_custom_path ?? "");

@@ -366,6 +366,7 @@ function lang_required_keys() {
 		"render.start", "render.fpsNumeric", "render.aspectFormat", "render.copied", "render.copyUnavailable",
 		"render.pasted", "render.pasteUnavailable", "render.cleared", "render.chartRequired", "render.fpsRange",
 		"render.qualityRange", "render.aspectPositive", "render.outputMissing", "render.chartMissing",
+		"render.ffmpegMissingTitle", "render.ffmpegMissing",
 		"video.title", "video.sample", "video.frame", "video.elapsed", "video.remaining", "video.finalizing",
 		"loadAnim.chart", "loadAnim.illustration", "loadAnim.loading", "loadAnim.tipsFallback"
 	];

@@ -4,8 +4,9 @@ _now_seconds = game.__time[1];
 _now_beat = (_now_seconds * _beat_per_second);
 
 if(_preload_seconds > 0 && realHitTime - _now_seconds > _preload_seconds){
-	var floor_distance = (abs(_line_ref.__value[0] - self.yOffset) * abs(self.speed));
-	if(floor_distance > _max_visible_floor_distance){
+	var line_floor_pre = _line_ref.__value[0];
+	if (line_floor_pre + _max_visible_floor_distance < self.yOffset
+		&& line_floor_pre < max_visible_position - _max_visible_floor_distance) {
 		canDraw = false;
 		exit;
 	};

@@ -24,6 +24,7 @@ var quality = clamp(round(quality_raw), 0, 51);
 fps_text = string(fps_value);
 quality_text = string(quality);
 if (!file_exists(source) && !directory_exists(source)) { setup_set_status(lang("render.chartMissing")); exit; };
+if (!render_ffmpeg_require()) then exit;
 global.render_source = source;
 global.render_output = output;
 global.render_fps = fps_value;
