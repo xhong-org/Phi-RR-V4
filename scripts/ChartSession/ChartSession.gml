@@ -151,6 +151,111 @@ function chart_hud_ready() {
         return false;
 }
 
+function chart_fps_draw_allowed() {
+        if (variable_global_exists("render_mode") && global.render_mode) then return false;
+        if (instance_exists(oSettlement)) then return false;
+        if (instance_exists(oPlayTransition)) {
+                var _transition = instance_find(oPlayTransition, 0);
+                if (variable_instance_exists(_transition, "state")
+                        && _transition.state >= PLAY_TRANSITION_STATE.OUTRO) then return false;
+        };
+        return true;
+}
+
+function render_wants_settlement() {
+        return variable_global_exists("render_mode") && global.render_mode
+                && variable_global_exists("render_settlement") && bool(global.render_settlement);
+}
+
+/// Outro 1s + wait 1s + settlement easings 3s + hold 3s.
+function render_settlement_tail_seconds() {
+        return 8.0;
+}
+
+function chart_ending_index(_level) {
+        var s = string_upper(string_trim(string(_level ?? "")));
+        var prefix = string_copy(s, 1, 2);
+        if (prefix == "EZ") then return 1;
+        if (prefix == "HD") then return 2;
+        if (prefix == "AT") then return 4;
+        return 3;
+}
+
+function chart_ending_path(_level) {
+        var rel = $"resource/ending/ending{chart_ending_index(_level)}.wav";
+        var p = string_replace_all($"{working_directory}{rel}", "\\", "/");
+        if (file_exists(p) || isExists(p)) then return chart_file_readable_path(p);
+        return p;
+}
+
+function wav_pcm_duration_seconds(_path) {
+        if (!is_string(_path) || !string_length(_path)) then return 0;
+        if (!file_exists(_path) && !isExists(_path)) then return 0;
+        var src = -1;
+        try { src = buffer_load(_path); } catch (load_err) { delete(load_err); return 0; };
+        if (!buffer_exists(src)) then return 0;
+        var size = buffer_get_size(src);
+        if (size < 44 || skin_buf_tag(src, 8, 4) != "WAVE") {
+                buffer_delete(src);
+                return 0;
+        };
+        var pos = 12;
+        var channels = 0;
+        var rate = 0;
+        var bits = 0;
+        var data_size = 0;
+        while (pos + 8 <= size) {
+                var ckid = skin_buf_tag(src, pos, 4);
+                buffer_seek(src, buffer_seek_start, pos + 4);
+                var cksize = buffer_read(src, buffer_u32);
+                if (cksize < 0) then break;
+                var payload = pos + 8;
+                if (ckid == "fmt " && payload + 16 <= size) {
+                        buffer_seek(src, buffer_seek_start, payload);
+                        buffer_read(src, buffer_u16);
+                        channels = buffer_read(src, buffer_u16);
+                        rate = buffer_read(src, buffer_u32);
+                        buffer_read(src, buffer_u32);
+                        buffer_read(src, buffer_u16);
+                        bits = buffer_read(src, buffer_u16);
+                } else if (ckid == "data") {
+                        data_size = min(cksize, size - payload);
+                        break;
+                };
+                pos = payload + cksize;
+                if ((cksize mod 2) == 1) then pos++;
+        };
+        buffer_delete(src);
+        var bytes_per_sec = rate * max(1, channels) * max(1, bits / 8);
+        if (bytes_per_sec <= 0 || data_size <= 0) then return 0;
+        return data_size / bytes_per_sec;
+}
+
+function render_schedule_settlement_ending(_chart_seconds) {
+        if (!render_wants_settlement()) then return 0;
+        var level = "";
+        if (variable_global_exists("game") && is_struct(game) && is_struct(game.folder_chart)) {
+                level = string(game.folder_chart.level ?? "");
+        };
+        var path = chart_ending_path(level);
+        if (!file_exists(path) && !isExists(path)) {
+                print($"[Renderer] Ending file missing: {path}");
+                return 0;
+        };
+        path = chart_file_readable_path(path);
+        var chart_sec = max(0, real(_chart_seconds));
+        var start_t = chart_sec + 2.0;
+        var end_t = chart_sec + render_settlement_tail_seconds() + 1.0;
+        var dur = wav_pcm_duration_seconds(path);
+        if (!(dur > 0.05 && dur < 600)) then dur = 8;
+        var count = 0;
+        for (var t = start_t; t < end_t; t += dur) {
+                if (video_renderer_add_hitsound(path, t, 0.6)) then count++;
+        };
+        print($"[Renderer] Settlement ending loops={count} start={start_t} dur={dur} path={path}");
+        return count;
+}
+
 /// Hide or show chart objects without deactivate/activate.
 /// Activating is deferred to the end of the event, so a following
 /// event_perform or first Step is skipped and judge-line init is lost.

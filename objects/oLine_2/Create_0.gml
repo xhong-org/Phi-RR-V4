@@ -4,7 +4,7 @@ depth = DEPTH.LINE;
 if (!variable_instance_exists(id, "image_id") || !sprite_exists(image_id)) then image_id = line;
 if (!variable_instance_exists(id, "line_csv_scale")) then line_csv_scale = 1;
 sprite_index = image_id;
-image_blend = (game.settings.enableLineJudge ? #ffeca0 : c_white);
+image_blend = chart_line_judge_blend();
 var initial_scale = (variable_global_exists("global_scales") ? global_scales : 1);
 if (image_id == line) {
 	image_xscale = 0.9204 * initial_scale;

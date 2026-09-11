@@ -210,14 +210,12 @@ image_blend = __color;
 	var sprite_sin = dsin(image_angle);
 	var sprite_draw_x = x + sprite_local_x * sprite_cos + sprite_local_y * sprite_sin;
 	var sprite_draw_y = y - sprite_local_x * sprite_sin + sprite_local_y * sprite_cos;
-	// Default judge-line sprite uses FC/AP. Color events always win.
-	// Custom texture / GIF / other non-line drawing stays white unless color events apply.
+	// Default line.png uses FC/AP. colorEvents, custom textures, GIF, paint,
+	// attachUI, and text keep __color (often white) and are not sampled.
 	var texture_blend = __color;
 	if (line_texture_use_judge_color && variable_global_exists("game") && is_struct(game)
 		&& bool(game.settings.enableLineJudge)) {
-		texture_blend = #ffeca0;
-		if (phi_state_list.good > 0) then texture_blend = make_colour_rgb(162, 238, 255);
-		if (phi_state_list.bad + phi_state_list.miss > 0) then texture_blend = c_white;
+		texture_blend = chart_line_judge_blend();
 	};
 	draw_sprite_ext(_line_sprite, frame, sprite_draw_x, sprite_draw_y, sx , sy, image_angle, texture_blend, image_alpha);
 };

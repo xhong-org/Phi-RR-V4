@@ -4,7 +4,7 @@
 #macro func function
 #macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal { "windows": 40523, "android": 40521, "gxgames": 40526 } // 各平台版本号(独立)
+#macro VerReal { "windows": 40524, "android": 40521, "gxgames": 40526 } // 各平台版本号(独立)
 #macro VerStr "v.4.0.9"
 
 function ver_real() {
@@ -75,6 +75,19 @@ enum TYPE {
 	BAD,
 	NONE
 };
+
+/// FC/AP color for the default judge line and play start/end bar.
+/// Does not read RPE colorEvents, custom textures, or line text.
+function chart_line_judge_blend() {
+	if (!(variable_global_exists("game") && is_struct(game) && is_struct(game.settings)
+		&& bool(game.settings.enableLineJudge ?? false))) then return c_white;
+	var blend = #ffeca0;
+	if (variable_global_exists("phi_state_list") && is_struct(phi_state_list)) {
+		if (real(phi_state_list.good ?? 0) > 0) then blend = make_colour_rgb(162, 238, 255);
+		if (real(phi_state_list.bad ?? 0) + real(phi_state_list.miss ?? 0) > 0) then blend = c_white;
+	};
+	return blend;
+}
 
 
 
@@ -285,6 +298,39 @@ function ScoreSystem(_mode = undefined){
 	return(_t);	
 };
 
+///@desc Numeric score used by settlement (same rules as ScoreSystem).
+function ScoreSystemValue(_mode = undefined) {
+	if (!is_real(maxcombo) || !is_finite(maxcombo) || maxcombo <= 0) then return 0;
+	var mode;
+	if (is_undefined(_mode)) then mode = (game.settings.enableComboScore);
+	else mode = _mode;
+	var __combo = (phi_state_list);
+	var prefect = is_struct(__combo) ? real(__combo.prefect ?? 0) : 0;
+	var good = is_struct(__combo) ? real(__combo.good ?? 0) : 0;
+	var max_hit = is_struct(__combo) ? real(__combo.max_hitcombo ?? 0) : 0;
+	if (!is_finite(prefect)) then prefect = 0;
+	if (!is_finite(good)) then good = 0;
+	if (!is_finite(max_hit)) then max_hit = 0;
+	var _s;
+	if (mode) {
+		_s = ((int64(900000 * ((prefect + (good * 0.65)) / maxcombo))) + (int64(100000 * (max_hit / maxcombo))));
+	} else {
+		_s = (int64(1000000 * ((prefect + (good * 0.65)) / maxcombo)));
+	};
+	if (is_finite(_s)) then _s = (_s | 0);
+	else _s = 0;
+	return _s;
+};
+
+function ScoreSystemPad(_value) {
+	var _s = is_real(_value) && is_finite(_value) ? (_value | 0) : 0;
+	if (_s < 0) then _s = 0;
+	var _t = string(_s);
+	while (string_length(_t) < 7) {
+		_t = "0" + _t;
+	};
+	return _t;
+};
 
 ///@desc 文件寻找系统(Windows / Android / HTML5)
 function File_Discoverer(disc_path){
@@ -537,6 +583,7 @@ function Phigros() constructor { // 仅仅结构
 		"enableDebug" : true,					// 是否启用Debug(default:true)
 		"enableDisplayLineID" : false,			// 是否显示线ID(已弃用)(default:false)
 		"comboString" : "COMBO",				// combo text(default:"COMBO")
+		"userName" : "Guest",					// settlement player name(default:"Guest")
 		"enableVsync" : true,					// 是否启用垂直同步(default:true)
 		"aa_level" : 8,							// aa_level等级(default:0)
 		"useOldFX" : false,						// 是否使用旧版打击特效(default:false)
@@ -919,8 +966,8 @@ function Phigros() constructor { // 仅仅结构
 		///
 		var name = (struct_get_names(self.settings));
 		for(var i = 0 ; i < array_length(name) ; i ++){
-			if(name[i] != "comboString") then self.settings[$ name[i]] = (self.strToReal(ini_read_string("Settings" , name[i] , self.settings[$ name[i]])));
-			else self.settings[$ name[i]] = (ini_read_string("Settings" , name[i] , self.settings[$ name[i]]));
+			if (is_string(self.settings[$ name[i]])) then self.settings[$ name[i]] = (ini_read_string("Settings" , name[i] , self.settings[$ name[i]]));
+			else self.settings[$ name[i]] = (self.strToReal(ini_read_string("Settings" , name[i] , self.settings[$ name[i]])));
 		};
 		// Only load Chart section from ini when no custom chart session is active.
 		// Otherwise configs.ini defaults (e.g. bg=Illustration.png) overwrite real package metadata.

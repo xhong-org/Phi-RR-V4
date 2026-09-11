@@ -346,7 +346,7 @@ function lang_required_keys() {
 		"fields.enableBlur", "fields.enableFPS", "fields.enableQuikyStart", "fields.enableCanvasZoom",
 		"fields.enableSurface", "fields.enableNoteHightLight", "fields.enableChartGUI", "fields.enableLineJudge",
 		"fields.showBG", "fields.enableHitEffect", "fields.refreshFPSCount", "fields.enableDebug",
-		"fields.enableDisplayLineID", "fields.comboString", "fields.enableVsync", "fields.aa_level",
+		"fields.enableDisplayLineID", "fields.comboString", "fields.userName", "fields.enableVsync", "fields.aa_level",
 		"fields.useOldFX", "fields.enableComboScore", "fields.judgeOffset", "fields.enableAccJudgment",
 		"fields.preventWindowMoveFreeze", "fields.enableRPEMulticore", "fields.rpeWorkerMinLines",
 		"fields.rpeWorkerProfileFrames", "fields.noteUniformScale", "fields.notePreloadSeconds", "fields.TEST1",
@@ -366,9 +366,11 @@ function lang_required_keys() {
 		"render.start", "render.fpsNumeric", "render.aspectFormat", "render.copied", "render.copyUnavailable",
 		"render.pasted", "render.pasteUnavailable", "render.cleared", "render.chartRequired", "render.fpsRange",
 		"render.qualityRange", "render.aspectPositive", "render.outputMissing", "render.chartMissing",
-		"render.ffmpegMissingTitle", "render.ffmpegMissing",
+		"render.ffmpegMissingTitle", "render.ffmpegMissing", "render.recordSettlement",
 		"video.title", "video.sample", "video.frame", "video.elapsed", "video.remaining", "video.finalizing",
-		"loadAnim.chart", "loadAnim.illustration", "loadAnim.loading", "loadAnim.tipsFallback"
+		"loadAnim.chart", "loadAnim.illustration", "loadAnim.loading", "loadAnim.tipsFallback",
+		"result.recorder", "result.maxCombo", "result.accuracy", "result.perfect", "result.good",
+		"result.bad", "result.miss", "result.early", "result.late", "result.guest"
 	];
 	return keys;
 }

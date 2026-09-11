@@ -57,11 +57,27 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 			play_transition_apply(1, true);
 			owner.chart_exit_alpha = 0;
 			line_progress = 0;
+			render_exit_delay_started_frame = global.render_frame;
 			state = PLAY_TRANSITION_STATE.EXIT_DELAY;
 		};
 		exit;
 	};
 	if (state == PLAY_TRANSITION_STATE.EXIT_DELAY) {
+		game.paused = true;
+		if (render_wants_settlement()) {
+			var _wait_s = max(0, (global.render_frame - render_exit_delay_started_frame)
+				/ max(1, global.render_fps));
+			if (_wait_s >= 1.0) {
+				if (!instance_exists(oSettlement)) {
+					instance_create_depth(0, 0, -12500, oSettlement, { owner: owner });
+				};
+				state = PLAY_TRANSITION_STATE.SETTLEMENT;
+				state_started_at = get_timer();
+			};
+		};
+		exit;
+	};
+	if (state == PLAY_TRANSITION_STATE.SETTLEMENT) {
 		game.paused = true;
 		exit;
 	};
@@ -181,6 +197,21 @@ switch (state) {
 	break;
 
 	case PLAY_TRANSITION_STATE.EXIT_DELAY:
-		if (_elapsed >= exit_delay) then play_transition_finish_exit();
+		game.paused = true;
+		if (_elapsed >= exit_delay) {
+			if (variable_global_exists("pls_environment_run") && global.pls_environment_run) {
+				play_transition_finish_exit();
+			} else {
+				if (!instance_exists(oSettlement)) {
+					instance_create_depth(0, 0, -12500, oSettlement, { owner: owner });
+				};
+				state = PLAY_TRANSITION_STATE.SETTLEMENT;
+				state_started_at = _now;
+			};
+		};
+	break;
+
+	case PLAY_TRANSITION_STATE.SETTLEMENT:
+		game.paused = true;
 	break;
 };

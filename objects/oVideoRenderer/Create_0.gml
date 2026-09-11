@@ -36,11 +36,12 @@ global.render_intro_start_delay_seconds = 0.5;
 global.render_intro_seconds = global.render_intro_animation_seconds + global.render_intro_start_delay_seconds;
 global.render_intro_frames = ceil(global.render_intro_seconds * global.render_fps);
 global.render_intro_seconds = global.render_intro_frames / max(1, global.render_fps);
-global.render_outro_seconds = 1.5;
+global.render_outro_seconds = render_wants_settlement() ? render_settlement_tail_seconds() : 1.5;
 global.render_outro_frames = ceil(global.render_outro_seconds * global.render_fps);
 global.render_outro_seconds = global.render_outro_frames / max(1, global.render_fps);
 global.render_chart_frames = 0;
 global.render_frame = -global.render_intro_frames;
+global.render_settlement_finished = false;
 video_renderer_clear_hitsounds();
 random_set_seed(global.render_seed);
 game_set_speed(global.render_fps, gamespeed_fps);
@@ -58,4 +59,4 @@ if (variable_global_exists("game") && is_struct(game)) {
 };
 
 window_set_caption($"Rendering: {global.render_output}");
-print($"[Renderer] Output: {global.render_output}, resolution={global.render_resolution} ({global.render_width}x{global.render_height}), aspect={global.render_aspect_ratio}, fps={global.render_fps}, crf={global.render_crf}, preset={global.render_preset}, encoder={global.render_encoder}");
+print($"[Renderer] Output: {global.render_output}, resolution={global.render_resolution} ({global.render_width}x{global.render_height}), aspect={global.render_aspect_ratio}, fps={global.render_fps}, crf={global.render_crf}, preset={global.render_preset}, encoder={global.render_encoder}, settlement={render_wants_settlement()}");

@@ -82,6 +82,10 @@ if (!encoder_started) {
             hitsound_event.time, hitsound_event.volume)) submitted_hitsounds++;
     };
     print($"[Renderer] Scheduled hitsounds: {submitted_hitsounds}/{array_length(scheduled_hitsounds)}");
+    if (render_wants_settlement()) {
+        var ending_loops = render_schedule_settlement_ending(media.length / 1000000);
+        print($"[Renderer] Settlement ending events: {ending_loops}");
+    };
     render_status = "Rendering video";
     print($"[Renderer] Started: {frame_width}x{frame_height}, frames={total_frames}");
 };
@@ -122,7 +126,13 @@ var output_total_frames = total_frames + global.render_intro_frames + global.ren
 if ((output_frame mod max(1, round(global.render_fps * 5))) == 0) {
     print($"[Renderer] {output_frame}/{output_total_frames}");
 };
-if (global.render_frame >= total_frames + global.render_outro_frames) {
+var render_should_finish = (global.render_frame >= total_frames + global.render_outro_frames);
+if (render_wants_settlement()) {
+	var settlement_fallback = total_frames + global.render_outro_frames + ceil(2 * max(1, global.render_fps));
+	render_should_finish = bool(global.render_settlement_finished)
+		|| (global.render_frame >= settlement_fallback);
+};
+if (render_should_finish) {
     encoder_finished = true;
     overlay_ready = false;
     render_status = "Finalizing video file";

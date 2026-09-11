@@ -11,6 +11,7 @@ enum PLAY_TRANSITION_STATE {
 	PLAYING,
 	OUTRO,
 	EXIT_DELAY,
+	SETTLEMENT,
 	FINISHED
 };
 
@@ -19,11 +20,12 @@ state_started_at = get_timer();
 intro_delay = 100000;
 animation_duration = 1000000;
 play_delay = 500000;
-exit_delay = 500000;
+exit_delay = 1000000;
 progress = 0;
 line_progress = 0;
 render_started_frame = 0;
 render_outro_started_frame = 0;
+render_exit_delay_started_frame = 0;
 transition_instances = [];
 chart_instances_activation_requested = false;
 
@@ -89,7 +91,11 @@ function play_transition_apply(_value, _outro = false) {
 	owner.play_transition_score_y = -max(1, 110 * global_scales) * _hidden;
 	owner.play_transition_ui_alpha = _outro ? (1 - _p) : 1;
 	owner.play_transition_bar_alpha = _outro ? 1 : _p;
-	owner.play_transition_bg_alpha = _outro ? (1 - _p) : _p;
+	var _outro_bg_end = 0.5;
+	if (variable_global_exists("render_mode") && global.render_mode && !render_wants_settlement()) {
+		_outro_bg_end = 0;
+	};
+	owner.play_transition_bg_alpha = _outro ? lerp(1, _outro_bg_end, _p) : _p;
 	line_progress = _outro ? (1 - _p) : _p;
 }
 

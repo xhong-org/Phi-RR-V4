@@ -23,7 +23,14 @@ Optional arguments:
 -encoder <name>        auto, nvenc, amf, qsv, or x264 (default: auto)
 -ffmpeg <path>         FFmpeg executable (default: ffmpeg.exe from PATH)
 -render-seed <number>  Deterministic effect random seed (default: 0)
+-settlement [on|off]   Record the settlement screen after the chart (default: off)
 ```
+
+`-settlement` records the play-end animation and results screen after the
+chart. After every settlement easing finishes, three extra seconds are written
+and encoding stops. The matching `resource/ending/endingN.wav` loop is mixed
+into the output from the settlement start (chart end + 2s). Omit the flag, or
+pass `off`/`false`/`0`, to keep the original chart-only tail.
 
 The renderer writes H.264 video and AAC chart music to an MP4 file. Default
 Tap/Drag/Flick sounds and RPE custom hit sounds are mixed into the final audio

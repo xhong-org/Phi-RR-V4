@@ -111,6 +111,7 @@
       "enableDebug": "是否启用Debug",
       "enableDisplayLineID": "是否显示线ID",
       "comboString": "combo 文本",
+      "userName": "玩家名称",
       "enableVsync": "是否启用垂直同步",
       "aa_level": "抗锯齿等级",
       "useOldFX": "是否使用旧版打击特效",
@@ -205,7 +206,8 @@
       "outputMissing": "输出目录不存在。",
       "chartMissing": "谱面路径不存在。",
       "ffmpegMissingTitle": "错误",
-      "ffmpegMissing": "未找到 FFmpeg。请安装 FFmpeg，或将其加入系统环境变量 PATH。"
+      "ffmpegMissing": "未找到 FFmpeg。请安装 FFmpeg，或将其加入系统环境变量 PATH。",
+      "recordSettlement": "录制结算界面"
     },
     "video": {
       "title": "视频渲染",
@@ -220,6 +222,18 @@
       "illustration": "曲绘",
       "loading": "加载中...",
       "tipsFallback": "Tips: Hello World"
+    },
+    "result": {
+      "recorder": "RECORDER",
+      "maxCombo": "最大连击",
+      "accuracy": "准确度",
+      "perfect": "Perfect",
+      "good": "Good",
+      "bad": "Bad",
+      "miss": "Miss",
+      "early": "Early",
+      "late": "Late",
+      "guest": "Guest"
     }
   }
 }

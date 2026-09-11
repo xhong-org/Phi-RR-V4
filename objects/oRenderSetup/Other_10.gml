@@ -36,6 +36,8 @@ global.render_crf = quality;
 global.render_aa_level = aa_values[aa_index];
 global.render_mode = true;
 global.render_cli = false;
+global.render_settlement = bool(record_settlement);
+global.render_settlement_finished = false;
 chart_session_reset();
 global.chart_session.source_path = source;
 room_goto(room_loading);

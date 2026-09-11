@@ -77,6 +77,7 @@ pause_layout_width = -1;
 pause_layout_height = -1;
 
 function paused_ui_can_control() {
+	if (instance_exists(oSettlement)) then return false;
 	if (instance_exists(oPlayTransition) && !retry_waiting) {
 		var _transition = instance_find(oPlayTransition, 0);
 		if (_transition.state != PLAY_TRANSITION_STATE.PLAYING) then return false;
@@ -160,6 +161,13 @@ function paused_ui_back() {
         owner.chart_exit_started = true;
         owner.chart_exit_timer = get_timer();
         owner.chart_exit_alpha = 1;
+        if (instance_exists(oPlayTransition)) {
+                with (oPlayTransition) play_transition_finish_exit();
+        } else {
+                chart_playback_teardown_for_menu();
+                if (variable_global_exists("pls_environment_run") && global.pls_environment_run) then game_end();
+                else pls_return_to_entry();
+        };
 }
 
 function paused_ui_reset_score() {
@@ -387,10 +395,7 @@ function paused_ui_reset_rpe() {
         with (oRPEEffect) chart_time = 0;
 }
 
-function paused_ui_retry() {
-        if (action_queued) then return;
-        print("[PausedUI] Retry chart");
-        action_queued = true;
+function paused_ui_retry_prepare() {
         game.paused = true;
         m_pause();
         m_stop();
@@ -407,9 +412,29 @@ function paused_ui_retry() {
 
         var retained_offset = game.__time[5];
         game.__time = [0, 0, 0, 0, 0, retained_offset];
+}
+
+function paused_ui_retry() {
+        if (action_queued) then return;
+        print("[PausedUI] Retry chart");
+        action_queued = true;
+        paused_ui_retry_prepare();
         retry_ready = false;
-        retry_waiting = true;
-        retry_mode = 1;
-        retry_started_at = get_timer();
+        retry_waiting = false;
+        retry_mode = 0;
+        action_queued = false;
         draw_logged = false;
+        if (instance_exists(oPlayTransition)) {
+                var transition = instance_find(oPlayTransition, 0);
+                transition.state = PLAY_TRANSITION_STATE.INTRO;
+                transition.state_started_at = get_timer();
+                transition.progress = 0;
+                transition.play_transition_deactivate_gameplay();
+                transition.play_transition_apply(0);
+                print("[PausedUI] Retry prepare animation started");
+        } else {
+                m_play();
+                game.Math.now(0);
+                game.paused = false;
+        };
 }

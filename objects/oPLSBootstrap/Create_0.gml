@@ -20,6 +20,8 @@ global.render_preset = "medium";
 global.render_encoder = "auto";
 global.render_seed = 0;
 global.render_ffmpeg = "ffmpeg.exe";
+global.render_settlement = false;
+global.render_settlement_finished = false;
 global.render_hitsounds = [];
 global.default_notes_texture_loaded = false;
 global.default_hitsounds_load_requested = false;
@@ -114,6 +116,18 @@ for (var i = 1; i < param_count; i++) {
         } else if (parameter_string(i) == "-ffmpeg" && i + 1 < param_count) {
                 i++;
                 global.render_ffmpeg = parameter_string(i);
+        } else if (parameter_string(i) == "-settlement") {
+                global.render_settlement = true;
+                if (i + 1 < param_count) {
+                        var settlement_arg = string_lower(string_trim(parameter_string(i + 1)));
+                        if (string_length(settlement_arg) && string_char_at(settlement_arg, 1) != "-") {
+                                i++;
+                                global.render_settlement = (settlement_arg == "1"
+                                        || settlement_arg == "true"
+                                        || settlement_arg == "on"
+                                        || settlement_arg == "yes");
+                        };
+                };
         } else if (parameter_string(i) == "-exit-test") {
                 global.pls_exit_test = true;
         };

@@ -1,7 +1,7 @@
 /// @description Cache immutable chart data used by the per-frame hot path.
 depth = DEPTH.LINE;
 sprite_index = self.image_id;
-image_blend = (game.settings.enableLineJudge ? #ffeca0 : c_white);
+image_blend = chart_line_judge_blend();
 
 _events = self.events;
 delete(self.events);

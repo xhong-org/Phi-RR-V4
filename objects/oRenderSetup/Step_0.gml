@@ -80,7 +80,7 @@ if (mouse_check_button_pressed(mb_left)) {
     var scale = variable_global_exists("global_scales") ? max(0.01, global_scales) : 1.0;
     var panel_width = 980 * scale;
     var left = (room_width - panel_width) * 0.5;
-    var top = max(18 * scale, room_height * 0.5 - 350 * scale);
+    var top = max(18 * scale, room_height * 0.5 - 380 * scale);
     var row = top + 92 * scale;
     if (point_in_rectangle(mouse_x, mouse_y, left + 610 * scale, row, left + 790 * scale, row + 48 * scale)) {
         if (gx_file_picker_needed()) {
@@ -114,6 +114,10 @@ if (mouse_check_button_pressed(mb_left)) {
         ratio_index = (ratio_index + 1) mod array_length(ratios);
         aspect_text = ratios[ratio_index];
         setup_begin_text();
+    }
+    else if (point_in_rectangle(mouse_x, mouse_y, left + 210 * scale, option_top + 124 * scale, left + 520 * scale, option_top + 172 * scale)) {
+        record_settlement = !record_settlement;
+        exit;
     }
     else if (point_in_rectangle(mouse_x, mouse_y, left + 580 * scale, option_top + 52 * scale, left + 750 * scale, option_top + 104 * scale)) event_user(0);
 };

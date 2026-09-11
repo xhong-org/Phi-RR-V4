@@ -3,8 +3,8 @@ if (font_exists(ui_font)) then draw_set_font(ui_font);
 var scale = variable_global_exists("global_scales") ? max(0.01, global_scales) : 1.0;
 var panel_width = 980 * scale;
 var left = (room_width - panel_width) * 0.5;
-var top = max(18 * scale, room_height * 0.5 - 350 * scale);
-var panel_bottom = top + 670 * scale;
+var top = max(18 * scale, room_height * 0.5 - 380 * scale);
+var panel_bottom = top + 740 * scale;
 draw_set_colour(make_colour_rgb(7, 10, 18)); draw_rectangle(0, 0, room_width, room_height, false);
 draw_set_colour(make_colour_rgb(16, 22, 36)); draw_roundrect_ext(left - 50 * scale, top - 38 * scale, left + panel_width, panel_bottom, 18 * scale, 18 * scale, false);
 draw_set_halign(fa_left); draw_set_valign(fa_top); draw_set_colour(c_white);
@@ -38,6 +38,11 @@ draw_set_colour(make_colour_rgb(190, 198, 218)); draw_text_transformed(left + 41
 draw_text_transformed(left + 590 * scale, option_top, string(aa_values[aa_index]) + "x MSAA", 0.48 * scale, 0.48 * scale, 0);
 draw_set_colour(make_colour_rgb(190, 198, 218)); draw_text_transformed(left, option_top + 62 * scale, lang("render.presetRatio"), 0.48 * scale, 0.48 * scale, 0);
 draw_text_transformed(left + 210 * scale, option_top + 62 * scale, ratios[ratio_index], 0.48 * scale, 0.48 * scale, 0);
+draw_set_colour(make_colour_rgb(190, 198, 218));
+draw_text_transformed(left, option_top + 124 * scale, lang("render.recordSettlement"), 0.48 * scale, 0.48 * scale, 0);
+draw_set_colour(record_settlement ? make_colour_rgb(96, 216, 190) : make_colour_rgb(190, 198, 218));
+draw_text_transformed(left + 210 * scale, option_top + 124 * scale,
+	record_settlement ? lang("common.on") : lang("common.off"), 0.48 * scale, 0.48 * scale, 0);
 draw_set_colour(make_colour_rgb(96, 216, 190)); draw_rectangle(left + 580 * scale, option_top + 52 * scale, left + 750 * scale, option_top + 104 * scale, false);
 draw_set_colour(c_white); draw_text_transformed(left + 665 * scale, option_top + 67 * scale, lang("render.start"), 0.52 * scale, 0.52 * scale, 1);
 if (string_length(status)) { draw_set_colour(status_colour); draw_text_transformed(left + 28 * scale, panel_bottom - 32 * scale, status, 0.42 * scale, 0.42 * scale, 0); };

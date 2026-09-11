@@ -11,6 +11,7 @@ aspect_text = "16:9";
 resolution_index = 1; // 1080p
 ratio_index = 0;
 aa_index = 2; // 8x MSAA
+record_settlement = false;
 fields = ["path", "output", "fps", "quality", "aspect"];
 resolutions = ["720p", "1080p", "1440p", "2160p"];
 ratios = ["16:9", "4:3", "1:1", "9:16"];

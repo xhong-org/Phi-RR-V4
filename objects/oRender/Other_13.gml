@@ -1,4 +1,5 @@
 /// @description 绘制FPS
+if (!chart_fps_draw_allowed()) then exit;
 
 draw_set_halign(fa_left);
 draw_set_colour(c_gray);

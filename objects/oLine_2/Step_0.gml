@@ -18,12 +18,7 @@ if (current_scale != _last_scale || room_height != _last_room_height
 	_last_room_height = room_height;
 	_last_view_width = chart_view_width;
 };
-image_blend = c_white;
-if (game.settings.enableLineJudge) {
-	image_blend = #ffeca0;
-	if (phi_state_list.good > 0) then image_blend = make_colour_rgb(162, 238, 255);
-	if (phi_state_list.bad + phi_state_list.miss > 0) then image_blend = c_white;
-};
+image_blend = chart_line_judge_blend();
 if (line_sec < _last_line_sec) {
 	_move_index = 0; _alpha_index = 0; _rotate_index = 0; _speed_index = 0;
 	_move_x = 0; _move_y = 0; _alpha_value = 1; _rotate_value = 0;

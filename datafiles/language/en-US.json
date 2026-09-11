@@ -111,6 +111,7 @@
       "enableDebug": "Enable debug",
       "enableDisplayLineID": "Show line IDs",
       "comboString": "Combo text",
+      "userName": "Player name",
       "enableVsync": "Enable vertical sync",
       "aa_level": "Anti-aliasing level",
       "useOldFX": "Use legacy hit effects",
@@ -205,7 +206,8 @@
       "outputMissing": "Output directory does not exist.",
       "chartMissing": "Chart path does not exist.",
       "ffmpegMissingTitle": "Error",
-      "ffmpegMissing": "FFmpeg was not found. Install FFmpeg or add it to the system PATH."
+      "ffmpegMissing": "FFmpeg was not found. Install FFmpeg or add it to the system PATH.",
+      "recordSettlement": "Record settlement"
     },
     "video": {
       "title": "VIDEO RENDER",
@@ -220,6 +222,18 @@
       "illustration": "Illustration",
       "loading": "Loading...",
       "tipsFallback": "Tips: Hello World"
+    },
+    "result": {
+      "recorder": "RECORDER",
+      "maxCombo": "Max Combo",
+      "accuracy": "Accuracy",
+      "perfect": "Perfect",
+      "good": "Good",
+      "bad": "Bad",
+      "miss": "Miss",
+      "early": "Early",
+      "late": "Late",
+      "guest": "Guest"
     }
   }
 }
