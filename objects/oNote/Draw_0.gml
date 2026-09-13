@@ -17,7 +17,7 @@ if (skin_active()) {
 			else draw_sprite_ext(sprite_index, 2, _bad_x, _bad_y, image_xscale, image_yscale, _bad_angle, c_red, alpha);
 			exit;
 		};
-		image_alpha = (clamp(realHitTime <= _now_seconds ? 1 - ((_now_seconds - realHitTime) * 1000 / 160) : 1, 0, 1));
+		image_alpha = chart_note_pass_fade(_now_seconds, realHitTime, chart_note_miss_window_sec(self.type, false));
 		if (sprite_exists(_skin_spr)) then draw_sprite_ext(_skin_spr, 0, x, y, image_xscale * sk, image_yscale * sk, image_angle, image_blend, image_alpha);
 		else draw_sprite_ext(sprite_index, hl, x, y, image_xscale, image_yscale, image_angle, image_blend, image_alpha);
 	}else if(isHold){
@@ -48,7 +48,7 @@ if(!_is_hold){
 		draw_sprite_ext(sprite_index, 2, _bad_x, _bad_y, image_xscale, image_yscale, _bad_angle, c_red, alpha);
 		exit;
 	};
-	image_alpha = (clamp(realHitTime <= _now_seconds ? 1 - ((_now_seconds - realHitTime) * 1000 / 160) : 1, 0, 1));
+	image_alpha = chart_note_pass_fade(_now_seconds, realHitTime, chart_note_miss_window_sec(self.type, false));
 	draw_sprite_ext(sprite_index, hl, x, y, image_xscale, image_yscale, image_angle, image_blend, image_alpha);
 }else if(isHold){
 	draw_hold_fit(_hx0, _hy0, image_xscale, image_yscale, yscale,

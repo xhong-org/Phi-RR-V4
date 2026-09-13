@@ -25,10 +25,17 @@ draw_set_colour(c_white);
 draw_set_alpha(1);
 draw_set_valign(fa_middle);
 var title_y = score_bottom - score_h + 26 * s;
+var title_pad = 28 * s;
+var name_scale = 0.28 * s;
+var level_scale = 0.26 * s;
+var level_w = string_width(string(song_level)) * level_scale;
+var name_max_w = max(1, score_w - title_pad * 2 - level_w - 16 * s);
+var name_raw_w = max(1, string_width(string(song_name)));
+name_scale = min(name_scale, name_max_w / name_raw_w);
 draw_set_halign(fa_left);
-draw_text_transformed(score_x + 28 * s, title_y, song_name, 0.28 * s, 0.28 * s, 0);
+draw_text_transformed(score_x + title_pad, title_y, song_name, name_scale, name_scale, 0);
 draw_set_halign(fa_right);
-draw_text_transformed(score_x + score_w - 28 * s, title_y, song_level, 0.26 * s, 0.26 * s, 0);
+draw_text_transformed(score_x + score_w - title_pad, title_y, song_level, level_scale, level_scale, 0);
 settlement_draw_panel(combo_x, combo_bottom, combo_w, combo_h, skew, 0.62);
 settlement_draw_panel(judge_x, judge_bottom, judge_w, judge_h, skew, 0.62);
 
@@ -42,7 +49,13 @@ draw_set_alpha(a0);
 var score_tx = score_x + 28 * s;
 draw_text_transformed(score_tx, score_bottom - score_h * 0.50, ScoreSystemPad(score_show), 0.72 * s, 0.72 * s, 0);
 draw_set_alpha(a0 * 0.85);
-var rec_label = (variable_global_exists("render_mode") && global.render_mode) ? "RECORDER" : "NEW BEST";
+var rec_label = "NEW BEST";
+if (variable_global_exists("render_mode") && global.render_mode) {
+	rec_label = "RECORDER";
+} else if (variable_global_exists("game") && is_struct(game) && is_struct(game.settings)
+	&& bool(game.settings.enableAutoPlay ?? true)) {
+	rec_label = "AUTOPLAY";
+};
 draw_text_transformed(score_tx, score_bottom - score_h * 0.22,
 	$"{rec_label}  {ScoreSystemPad(best_show)}  +{ScoreSystemPad(delta_show)}",
 	0.22 * s, 0.22 * s, 0);

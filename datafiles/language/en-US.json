@@ -116,6 +116,7 @@
       "aa_level": "Anti-aliasing level",
       "useOldFX": "Use legacy hit effects",
       "enableComboScore": "Enable hit score",
+      "enableAutoPlay": "Enable autoplay",
       "judgeOffset": "Auto-hit offset",
       "enableAccJudgment": "Enable strict Auto judgment (may not apply to other formats)",
       "preventWindowMoveFreeze": "Non-blocking window move and resize",

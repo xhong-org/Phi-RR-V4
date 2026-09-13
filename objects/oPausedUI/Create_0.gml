@@ -177,6 +177,8 @@ function paused_ui_reset_score() {
                 phi_state_list.good = 0;
                 phi_state_list.bad = 0;
                 phi_state_list.miss = 0;
+                phi_state_list.early = 0;
+                phi_state_list.late = 0;
                 phi_state_list.acc = 0;
                 phi_state_list.max_hitcombo = 0;
         };

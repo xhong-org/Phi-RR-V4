@@ -5,6 +5,36 @@ var now_time = _now_seconds;
 var now_hit = judgeTime;
 var bpm_use = game_1.Math.bpmAtAbsSec(_now_seconds);
 
+if (!chart_autoplay_active()) {
+	if (now_time > start_sec + lateHitTime && !isMiss && notJudge) {
+		if (is_real_note) {
+			hit_status = judgeCalc(start_sec, now_time, 0, _hx0, _hy0, type, false, true, true);
+		};
+		notJudge = false;
+		isMiss = true;
+		__first__ = true;
+		isHold = true;
+	};
+	if (now_time >= start_sec) {
+		if (!isHold) then isHold = true;
+		if (!__first__ && !notJudge) then __first__ = true;
+		if (!notJudge && !isMiss && (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) && chart_kb_hold_alive()) {
+			if (_now_seconds - _bak_time >= (60 / max(1, bpm_use)) / 2) {
+				var _tick_xy = rpe_note_hit_effect_xy();
+				if (variable_global_exists("_eff_c")) then _eff_c(_tick_xy[0], _tick_xy[1], has_hit_tint ? hit_tint : (hit_status == TYPE.PREFECT ? #ffeca0 : make_colour_rgb(162, 238, 255)));
+				_bak_time = _now_seconds;
+			};
+		};
+		if (now_time >= end_sec && !notJudge) {
+			if (is_real_note) {
+				hit_status = judgeCalc(start_sec, now_hit, 0, _hx0, _hy0, type, false, !isMiss, true);
+			};
+			instance_deactivate_object(self);
+		};
+	};
+	exit;
+};
+
 if (now_time >= now_hit && !isMiss && notJudge && hit_status == TYPE.NONE) {
 	if (is_real_note) {
 		var _hold_xy = rpe_note_hit_effect_xy();

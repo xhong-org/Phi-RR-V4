@@ -4,7 +4,7 @@
 #macro func function
 #macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal { "windows": 40524, "android": 40521, "gxgames": 40526 } // 各平台版本号(独立)
+#macro VerReal { "windows": 40525, "android": 40521, "gxgames": 40526 } // 各平台版本号(独立)
 #macro VerStr "v.4.0.9"
 
 function ver_real() {
@@ -201,7 +201,11 @@ function judgeCalc(oHTime , nHTime , bpm , xx , yy , _type , isFHitEf = true, in
 		if(_type == 3 || _type == 1){
 			color = (make_colour_rgb(162, 238, 255));
 			status = TYPE.GOOD;
-			if(insCombo) then phi_state_list.good ++;
+			if(insCombo) {
+				phi_state_list.good ++;
+				if (score_list[2]) then phi_state_list.early ++;
+				else phi_state_list.late ++;
+			};
 		}else{
 			color = #ffeca0;
 			status = TYPE.PREFECT;
@@ -222,8 +226,7 @@ function judgeCalc(oHTime , nHTime , bpm , xx , yy , _type , isFHitEf = true, in
 			status = TYPE.MISS;
 		};
 		
-	}elif(offset > 200){
-		//()
+	}elif(offset > 160){
 		if(!score_list[2]){
 			if(phi_state_list.max_hitcombo < combo) then phi_state_list.max_hitcombo = combo;
 			if(insCombo){
@@ -253,6 +256,36 @@ function rpe_note_hit_effect_xy() {
 	return [_x_h, _y_h];
 };
 
+/// @desc Non-hold fade after hit: 1 - ((now - hit) / miss). Holds do not use this.
+function chart_note_pass_fade(_now_sec, _hit_sec, _miss_sec) {
+	if (!is_real(_now_sec) || !is_real(_hit_sec) || !is_real(_miss_sec) || _miss_sec <= 0) then return 1;
+	if (_now_sec <= _hit_sec) then return 1;
+	return clamp(1 - ((_now_sec - _hit_sec) / _miss_sec), 0, 1);
+}
+
+function chart_note_miss_window_sec(_jtype, _is_hold) {
+	if (_is_hold || _jtype == 3) then return 0.161;
+	if (_jtype == 2 || _jtype == 4) then return 0.160;
+	return 0.201;
+}
+
+/// @desc True when RPE alphaControl actually changes note alpha (not a constant 1 / 255).
+function rpe_alpha_control_is_identity(_raw) {
+	if (!is_array(_raw) || array_length(_raw) < 2) then return true;
+	for (var i = 0; i < array_length(_raw); i++) {
+		var ce = _raw[i];
+		if (!is_struct(ce)) then continue;
+		var v = ce[$ "alpha"];
+		if (is_undefined(v)) then v = ce[$ "y"];
+		if (is_undefined(v)) then continue;
+		var rv = real(v);
+		if (!is_finite(rv)) then continue;
+		if (rv > 1.5) then rv = rv / 255;
+		if (abs(rv - 1) > 0.001) then return false;
+	};
+	return true;
+}
+
 /// @desc Recalculate the on-line hit-effect position for a PEC note.
 function pec_note_hit_effect_xy() {
 	if (!instance_exists(line_ref)) then return [x, y];
@@ -261,6 +294,360 @@ function pec_note_hit_effect_xy() {
 	var _s = line_ref.__sin;
 	return [line_ref.x + _c * _local_x, line_ref.y - _s * _local_x];
 };
+
+/// @desc Autoplay, including render-mode recording which has no player input.
+function chart_autoplay_active() {
+	if (variable_global_exists("render_mode") && global.render_mode) then return true;
+	if (!(variable_global_exists("game") && is_struct(game) && is_struct(game.settings))) then return true;
+	return bool(game.settings.enableAutoPlay ?? true);
+}
+
+/// @desc Auto-hit offset in milliseconds. Drag/Flick is clamped to +0..+160 (no early, no Bad/Miss band).
+function chart_auto_hit_offset_ms(_jtype = undefined) {
+	if (!(variable_global_exists("game") && is_struct(game) && is_struct(game.settings))) then return 0;
+	var off = real(game.settings.judgeOffset ?? 0);
+	if (bool(game.settings.TEST1 ?? false)) {
+		off = choose(choose(random_range(-95, 0), random_range(0, 95), choose(1, 2, 5, -1, -6, choose(200, 10))), 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+	} else if (abs(off) >= 30000) {
+		off = random_range(-201, 201);
+	};
+	if (!is_undefined(_jtype) && (_jtype == 2 || _jtype == 4)) then return clamp(off, 0, 160);
+	return off;
+}
+
+function chart_kb_desktop() {
+	return (os_type == os_windows || os_type == os_linux || os_type == os_macosx);
+}
+
+function chart_kb_state_get() {
+	static st = undefined;
+	if (is_undefined(st)) then st = { grace_until: -1, held: 0, pressed: 0, prev: array_create(26, false) };
+	return st;
+}
+
+function chart_kb_key_down(_vk) {
+	if (os_type == os_windows) then return keyboard_check_direct(_vk);
+	return keyboard_check(_vk);
+}
+
+/// @desc Poll A-Z via raw key state so 10+ simultaneous keys register.
+function chart_kb_poll() {
+	var st = chart_kb_state_get();
+	st.held = 0;
+	st.pressed = 0;
+	for (var i = 0; i < 26; i++) {
+		var down = chart_kb_key_down(65 + i);
+		if (down) then st.held++;
+		if (down && !st.prev[i]) then st.pressed++;
+		st.prev[i] = down;
+	};
+	return st;
+}
+
+function chart_kb_any_down() {
+	for (var i = 0; i < 26; i++) {
+		if (chart_kb_key_down(65 + i)) then return true;
+	};
+	return false;
+}
+
+/// @desc Headed holds stay alive while any A-Z key is down, or for 80ms after release.
+function chart_kb_hold_alive() {
+	if (chart_kb_any_down()) then return true;
+	var st = chart_kb_state_get();
+	if (st.grace_until < 0) then return false;
+	if (!(variable_global_exists("game") && is_struct(game))) then return false;
+	return (game.__time[1] < st.grace_until);
+}
+
+function chart_player_keyboard_judge_active() {
+	if (chart_autoplay_active()) then return false;
+	if (!chart_kb_desktop()) then return false;
+	if (!(variable_global_exists("game") && is_struct(game)) || game.paused) then return false;
+	if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return false;
+	if (instance_exists(oSettlement)) then return false;
+	if (instance_exists(oPlayTransition)) {
+		var _transition = instance_find(oPlayTransition, 0);
+		if (variable_instance_exists(_transition, "state")
+			&& _transition.state != PLAY_TRANSITION_STATE.PLAYING) then return false;
+	};
+	return true;
+}
+
+function chart_kb_note_hit_sec() {
+	if (object_index == oNote) then return realHitTime;
+	if (object_index == oNote_1) then return start_sec;
+	return startSec;
+}
+
+function chart_kb_note_now_sec() {
+	if (object_index == oNote || object_index == oNote_1) then return _now_seconds;
+	var _off = 0;
+	if (variable_global_exists("game_2") && is_struct(game_2) && is_struct(game_2.chart)) {
+		_off = real(game_2.chart.offsetSeconds ?? 0);
+	};
+	return game.__time[1] - _off;
+}
+
+function chart_kb_note_judge_type() {
+	if (object_index == oNote_2) then return judge_type;
+	return type;
+}
+
+function chart_kb_note_is_hold() {
+	if (object_index == oNote_2) then return (type == 2);
+	return (type == 3);
+}
+
+function chart_kb_note_in_window(_now, _hit, _jtype, _hold) {
+	// Drag/Flick: no early hit; latest is the Perfect band (≤160ms), not Bad/Miss.
+	if (!_hold && (_jtype == 2 || _jtype == 4)) {
+		return (_now >= _hit && _now <= _hit + 0.160);
+	};
+	var early = 0.200;
+	var late = _hold ? 0.161 : 0.201;
+	return (_now >= _hit - early && _now <= _hit + late);
+}
+
+function chart_kb_note_eligible(_mode) {
+	if (variable_instance_exists(id, "kb_ignore") && kb_ignore) then return false;
+	if (object_index == oNote && !inition) then return false;
+	if (object_index == oNote_1 && (!inition || isFake)) then return false;
+	if (object_index == oNote_2 && isFake) then return false;
+	var jtype = chart_kb_note_judge_type();
+	var hold = chart_kb_note_is_hold();
+	if (!chart_kb_note_in_window(chart_kb_note_now_sec(), chart_kb_note_hit_sec(), jtype, hold)) then return false;
+	if (_mode == 0) {
+		if (hold) {
+			if (object_index == oNote_2) then return !hold_started;
+			return (notJudge && hit_status == TYPE.NONE);
+		};
+		if (jtype != 1) then return false;
+		if (object_index == oNote_2) then return !judged;
+		return (!isJudge && !isBad && hit_status == TYPE.NONE);
+	};
+	if (hold || (jtype != 2 && jtype != 4)) then return false;
+	if (object_index == oNote_2) then return !judged;
+	return !isJudge;
+}
+
+function chart_kb_hold_active() {
+	if (!chart_kb_note_is_hold()) then return false;
+	if (object_index == oNote_1 && isFake) then return false;
+	if (object_index == oNote_2 && isFake) then return false;
+	var now = chart_kb_note_now_sec();
+	if (!(hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT)) then return false;
+	if (object_index == oNote) {
+		return (!notJudge && !isMiss && now < realHitTime + hold_time_length);
+	};
+	if (object_index == oNote_1) {
+		return (!notJudge && !isMiss && now < end_sec);
+	};
+	return (hold_started && !isMiss && now < endSec);
+}
+
+function chart_kb_pick(_obj, _mode) {
+	var best_note = noone;
+	var best_dt = infinity;
+	var best_hit = infinity;
+	with (_obj) {
+		if (!chart_kb_note_eligible(_mode)) then continue;
+		var hit = chart_kb_note_hit_sec();
+		var dt = abs(chart_kb_note_now_sec() - hit);
+		if (dt < best_dt || (dt == best_dt && hit < best_hit)) {
+			best_dt = dt;
+			best_hit = hit;
+			best_note = id;
+		};
+	};
+	return best_note;
+}
+
+function chart_kb_apply_hit(_note) {
+	if (_note == noone || !instance_exists(_note)) then return TYPE.NONE;
+	var status = TYPE.NONE;
+	with (_note) status = chart_kb_apply_hit_self();
+	return status;
+}
+
+function chart_kb_apply_hit_self() {
+	var hold = chart_kb_note_is_hold();
+	if (object_index == oNote) {
+		if (hold) {
+			event_user(2);
+			var status_h = judgeCalc(self.time, _now_beat, self.bpm, _hx0, _hy0, self.type, true, false);
+			if (status_h == TYPE.NONE) then return TYPE.NONE;
+			hit_status = status_h;
+			notJudge = false;
+			isHold = true;
+			judgeTime = _now_beat;
+			judgeRealTime = _now_seconds;
+			if (status_h == TYPE.MISS) {
+				isMiss = true;
+				judgeCalc(self.time, _now_beat, self.bpm, _hx0, _hy0, self.type, true, true);
+			} else {
+				_bak_time = _now_seconds;
+				skin_play_note_hitsound();
+			};
+			return status_h;
+		};
+		event_user(1);
+		var line_x = _line_ref.x;
+		var local_x = (_note_x - line_x);
+		var hit_x = (line_x + local_x * _line_ref.__cos);
+		var hit_y = (_line_ref.y - local_x * _line_ref.__sin);
+		var status_n = judgeCalc(self.time, _now_beat, self.bpm, hit_x, hit_y, self.type);
+		if (status_n == TYPE.NONE) then return TYPE.NONE;
+		hit_status = status_n;
+		isJudge = true;
+		judgeRealTime = _now_seconds;
+		if (status_n == TYPE.GOOD || status_n == TYPE.PREFECT) then skin_play_note_hitsound();
+		if (status_n == TYPE.BAD && type == 1) {
+			isBad = true;
+			_bad_x = _note_x;
+			_bad_y = _note_y;
+			_bad_angle = image_angle;
+		} else {
+			instance_deactivate_object(self);
+		};
+		return status_n;
+	};
+	if (object_index == oNote_1) {
+		var tint = has_hit_tint ? hit_tint : undefined;
+		if (hold) {
+			var hold_xy = rpe_note_hit_effect_xy();
+			var status_rh = judgeCalc(start_sec, _now_seconds, 0, hold_xy[0], hold_xy[1], type, true, false, true, tint);
+			if (status_rh == TYPE.NONE) then return TYPE.NONE;
+			hit_status = status_rh;
+			notJudge = false;
+			isHold = true;
+			__first__ = true;
+			judgeTime = _now_seconds;
+			judgeRealTime = _now_seconds;
+			if (status_rh == TYPE.MISS) {
+				isMiss = true;
+				judgeCalc(start_sec, _now_seconds, 0, hold_xy[0], hold_xy[1], type, true, true, true);
+			} else if (is_real_note) {
+				_bak_time = _now_seconds;
+				skin_play_note_hitsound();
+			};
+			return status_rh;
+		};
+		var tap_xy = rpe_note_hit_effect_xy();
+		var status_rn = judgeCalc(start_sec, _now_seconds, 0, tap_xy[0], tap_xy[1], type, true, true, true, tint);
+		if (status_rn == TYPE.NONE) then return TYPE.NONE;
+		hit_status = status_rn;
+		isJudge = true;
+		judgeRealTime = _now_seconds;
+		if (is_real_note && (status_rn == TYPE.GOOD || status_rn == TYPE.PREFECT)) then skin_play_note_hitsound();
+		if (status_rn == TYPE.BAD && type == 1) {
+			isBad = true;
+			_bad_x = x;
+			_bad_y = y;
+			_bad_angle = image_angle;
+		} else {
+			instance_deactivate_object(self);
+		};
+		return status_rn;
+	};
+	var pec_now = chart_kb_note_now_sec();
+	var pec_xy = pec_note_hit_effect_xy();
+	if (hold) {
+		var status_ph = judgeCalc(startSec, pec_now, 0, pec_xy[0], pec_xy[1], judge_type, true, false, true);
+		if (status_ph == TYPE.NONE) then return TYPE.NONE;
+		hit_status = status_ph;
+		hold_started = true;
+		judge_sec = pec_now;
+		if (status_ph == TYPE.MISS) {
+			isMiss = true;
+			judgeCalc(startSec, pec_now, 0, pec_xy[0], pec_xy[1], judge_type, true, true, true);
+		} else {
+			hold_effect_sec = pec_now;
+			skin_play_note_hitsound();
+		};
+		return status_ph;
+	};
+	var status_pn = judgeCalc(startSec, pec_now, 0, pec_xy[0], pec_xy[1], judge_type, true, true, true);
+	if (status_pn == TYPE.NONE) then return TYPE.NONE;
+	hit_status = status_pn;
+	judged = true;
+	if (status_pn == TYPE.GOOD || status_pn == TYPE.PREFECT) then skin_play_note_hitsound();
+	canDraw = false;
+	instance_deactivate_object(self);
+	return status_pn;
+}
+
+function chart_kb_force_miss_hold() {
+	if (!chart_kb_hold_active()) then return;
+	isMiss = true;
+	hit_status = TYPE.MISS;
+	if (object_index == oNote) {
+		judgeCalc(self.time, self.time + 1, self.bpm, _hx0, _hy0, self.type, false, true);
+	} else if (object_index == oNote_1) {
+		if (is_real_note) then judgeCalc(start_sec, start_sec + 1, 0, _hx0, _hy0, type, false, true, true);
+	} else {
+		judgeCalc(startSec, startSec + 1, 0, hx0, hy0, judge_type, false, true, true);
+	};
+}
+
+/// @desc Desktop A-Z fullscreen judgment. One click per Tap/Hold; Drag/Flick while any key is held.
+function chart_kb_judge_step() {
+	var st = chart_kb_poll();
+	if (!chart_player_keyboard_judge_active()) {
+		st.grace_until = -1;
+		exit;
+	};
+	var note_obj = noone;
+	if (instance_exists(oNote)) then note_obj = oNote;
+	else if (instance_exists(oNote_1)) then note_obj = oNote_1;
+	else if (instance_exists(oNote_2)) then note_obj = oNote_2;
+	else exit;
+	with (note_obj) kb_ignore = false;
+	var pressed = st.pressed;
+	var held = st.held;
+	var now = game.__time[1];
+	var guard = 32;
+	while (pressed > 0 && guard > 0) {
+		guard--;
+		var click_note = chart_kb_pick(note_obj, 0);
+		if (click_note == noone) then break;
+		if (chart_kb_apply_hit(click_note) == TYPE.NONE) {
+			click_note.kb_ignore = true;
+			continue;
+		};
+		pressed--;
+	};
+	if (held > 0) {
+		st.grace_until = -1;
+		guard = instance_number(note_obj);
+		while (guard > 0) {
+			guard--;
+			var catch_note = chart_kb_pick(note_obj, 1);
+			if (catch_note == noone) then break;
+			if (chart_kb_apply_hit(catch_note) == TYPE.NONE) {
+				catch_note.kb_ignore = true;
+				continue;
+			};
+		};
+	} else {
+		var has_hold = false;
+		with (note_obj) {
+			if (chart_kb_hold_active()) {
+				has_hold = true;
+				break;
+			};
+		};
+		if (has_hold) {
+			if (st.grace_until < 0) then st.grace_until = now + 0.080;
+			if (now >= st.grace_until) {
+				with (note_obj) chart_kb_force_miss_hold();
+				st.grace_until = -1;
+			};
+		} else {
+			st.grace_until = -1;
+		};
+	};
+}
 
 ///@desc 分数系统
 ///@param _mode {Real} 
@@ -588,6 +975,7 @@ function Phigros() constructor { // 仅仅结构
 		"aa_level" : 8,							// aa_level等级(default:0)
 		"useOldFX" : false,						// 是否使用旧版打击特效(default:false)
 		"enableComboScore" : true,				// 是否启用打击分(default:true)
+		"enableAutoPlay" : true,				// 是否启用自动游玩(default:true)
 		"judgeOffset" : 0,						// 自动打击偏移延迟(default:0)
 		"enableAccJudgment" : true,				// 是否启用Auto严肃判定(可能对其他格式的谱面无效)(default:true)
 		"preventWindowMoveFreeze" : true,		// use non-blocking Windows moving and resizing
@@ -1056,6 +1444,7 @@ function Phigros() constructor { // 仅仅结构
 		self.Configs();
 		if (variable_global_exists("render_mode") && global.render_mode) {
 			self.settings.aa_level = variable_global_exists("render_aa_level") ? global.render_aa_level : 8;
+			self.settings.enableAutoPlay = true;
 			print($"[Renderer] Anti-aliasing: {self.settings.aa_level}x MSAA");
 		};
 		//self.Img();

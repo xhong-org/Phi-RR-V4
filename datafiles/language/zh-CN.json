@@ -116,6 +116,7 @@
       "aa_level": "抗锯齿等级",
       "useOldFX": "是否使用旧版打击特效",
       "enableComboScore": "是否启用打击分",
+      "enableAutoPlay": "是否启用自动游玩",
       "judgeOffset": "自动打击偏移延迟",
       "enableAccJudgment": "是否启用Auto严肃判定（可能对其他格式的谱面无效）",
       "preventWindowMoveFreeze": "窗口移动/缩放时不阻塞",

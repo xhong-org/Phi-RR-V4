@@ -9,6 +9,8 @@ phi_state_list = {
 	"good" : 0,
 	"miss" : 0,
 	"bad" : 0,
+	"early" : 0,
+	"late" : 0,
 	"acc" : 0,
 	"max_hitcombo" : 0
 };

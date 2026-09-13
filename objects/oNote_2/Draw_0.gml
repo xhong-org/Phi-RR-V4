@@ -14,13 +14,14 @@ if (skin_active()) {
 		if (sprite_exists(_skin_spr)) then draw_sprite_ext(_skin_spr, 0, x, y, image_xscale * sk, image_yscale * sk, image_angle, image_blend, image_alpha);
 		else draw_sprite_ext(sprite_index, hl, x, y, image_xscale, image_yscale, image_angle, image_blend, image_alpha);
 	} else if (hold_started) {
+		var hold_a = isMiss ? 0.5 : image_alpha;
 		if (is_struct(_skin_hold)) {
 			draw_hold_fit(hx0, hy0, image_xscale * hk, image_yscale * hk, yscale,
-				image_angle, 0, image_blend, image_alpha, _keep_head, false, _compact ? _tail_trim * hk : 0, 1,
+				image_angle, 0, image_blend, hold_a, _keep_head, false, _compact ? _tail_trim * hk : 0, 1,
 				_skin_hold.head, _skin_hold.body, _skin_hold.tail);
 		} else {
 			draw_hold_fit(hx0, hy0, image_xscale, image_yscale, yscale,
-				image_angle, hl, image_blend, image_alpha, false);
+				image_angle, hl, image_blend, hold_a, false);
 		};
 	} else {
 		if (is_struct(_skin_hold)) {
@@ -39,7 +40,7 @@ if (type != 2) {
 	draw_sprite_ext(sprite_index, hl, x, y, image_xscale, image_yscale, image_angle, image_blend, image_alpha);
 } else if (hold_started) {
 	draw_hold_fit(hx0, hy0, image_xscale, image_yscale, yscale,
-		image_angle, hl, image_blend, image_alpha, false);
+		image_angle, hl, image_blend, isMiss ? 0.5 : image_alpha, false);
 } else {
 	draw_hold_fit(hx0, hy0, image_xscale, image_yscale, yscale,
 		image_angle, hl, image_blend, image_alpha, true, false, 1);

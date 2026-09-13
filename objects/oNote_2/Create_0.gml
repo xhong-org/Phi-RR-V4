@@ -5,6 +5,7 @@ if (variable_global_exists("loading_animation_active") && global.loading_animati
 
 judged = false;
 hold_started = false;
+isMiss = false;
 hit_status = TYPE.NONE;
 hold_effect_sec = -infinity;
 image_alpha = 1;
@@ -40,9 +41,7 @@ image_yscale = uniform_scale ? image_xscale : base_scale;
 hl = 0;
 if (variable_global_exists("BYD_COLOR_MODE") && BYD_COLOR_MODE && type != 2) then hl = 2;
 if (variable_instance_exists(id, "_hl") && _hl == 1) then hl = 1;
-hit_offset = (abs(game.settings.judgeOffset) >= 30000 ? random_range(-201, 201) : game.settings.judgeOffset) * 0.001;
 use_acc_judgment = bool(game.settings.enableAccJudgment ?? true);
-late_window_sec = ((type == 2 || type == 3 || type == 4) ? 0.161 : 0.201);
 hold_body_height = max(1, sprite_get_height(note_hold_body));
 switch (type) {
 	case 1: sprite_index = note_tap; sound = skin_note_sound("tap", snd_note_tap); judge_type = 1; break;
@@ -50,6 +49,8 @@ switch (type) {
 	case 3: sprite_index = note_flick; sound = skin_note_sound("flick", snd_note_flick); judge_type = 4; break;
 	case 4: sprite_index = note_drag; sound = skin_note_sound("drag", snd_note_drag); judge_type = 2; break;
 };
+hit_offset = chart_auto_hit_offset_ms(judge_type) * 0.001;
+late_window_sec = ((judge_type == 2 || judge_type == 4) ? 0.160 : (judge_type == 3 ? 0.161 : 0.201));
 hold_head_attach = 0;
 if (type == 2) {
 		hold_head_attach = max(1, sprite_get_yoffset(sprite_index));

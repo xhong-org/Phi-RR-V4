@@ -26,5 +26,5 @@ event_user(0);
 canDraw = false;
 hl = self._hl;
 
-var late_ms = (_is_hold || self.type == 2 || self.type == 4 ? 161 : 201);
+var late_ms = _is_hold ? 161 : ((self.type == 2 || self.type == 4) ? 160 : 201);
 lateHitTime = (late_ms * 0.001 * _beat_per_second);

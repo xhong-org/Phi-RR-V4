@@ -24,6 +24,9 @@ var pec_alpha_raw = real(line_ref._alpha_raw ?? (line_ref._alpha_value * 255));
 var line_notes_visible = pec_note_alpha_visible(pec_alpha_raw, isAbove, startSec - chart_sec, startSec);
 var behind_line = (speed_pos < -0.000001);
 image_alpha = 1;
+if (type != 2) {
+	image_alpha = chart_note_pass_fade(chart_sec, startSec, late_window_sec);
+};
 
 if (type == 2) {
 	var before = before_hold;
@@ -49,19 +52,26 @@ if (type == 2) {
 	};
 	yscale = body_scale;
 	canDraw = line_notes_visible && (hold_length > 0 || before) && (before ? !behind_line : true);
-	if (!hold_started && chart_sec >= judge_sec) {
-		hold_started = true;
-		if (!isFake) {
-			var hold_sample_sec = (!use_acc_judgment && chart_sec > late_deadline_sec) ? chart_sec : judge_sec;
-			var _hold_xy = pec_note_hit_effect_xy();
-			hit_status = judgeCalc(startSec, hold_sample_sec, 0, _hold_xy[0], _hold_xy[1], judge_type, true, false, true);
-			if (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) {
-				hold_effect_sec = chart_sec;
-				skin_play_note_hitsound();
+	if (chart_autoplay_active()) {
+		if (!hold_started && chart_sec >= judge_sec) {
+			hold_started = true;
+			if (!isFake) {
+				var hold_sample_sec = (!use_acc_judgment && chart_sec > late_deadline_sec) ? chart_sec : judge_sec;
+				var _hold_xy = pec_note_hit_effect_xy();
+				hit_status = judgeCalc(startSec, hold_sample_sec, 0, _hold_xy[0], _hold_xy[1], judge_type, true, false, true);
+				if (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) {
+					hold_effect_sec = chart_sec;
+					skin_play_note_hitsound();
+				};
 			};
 		};
+	} else if (!isFake && !hold_started && !isMiss && chart_sec > late_deadline_sec) {
+		isMiss = true;
+		hold_started = true;
+		hit_status = judgeCalc(startSec, chart_sec, 0, base_x, base_y, judge_type, false, true, true);
 	};
-	if (hold_started && !isFake && (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT)) {
+	if (hold_started && !isFake && !isMiss && (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT)
+		&& (chart_autoplay_active() || chart_kb_hold_alive())) {
 		var bpm_events = game_2.chart.bpmList;
 		if (chart_sec < hold_bpm_last_sec) then hold_bpm_index = pec_bpm_index_at_sec(bpm_events, chart_sec);
 		while (hold_bpm_index + 1 < array_length(bpm_events) && bpm_events[hold_bpm_index + 1].second <= chart_sec) hold_bpm_index++;
@@ -72,11 +82,11 @@ if (type == 2) {
 			hold_effect_sec = chart_sec;
 		};
 	};
-	if (chart_sec >= endSec) {
+	if (chart_sec >= endSec && (hold_started || isMiss || chart_autoplay_active() || chart_sec > late_deadline_sec)) {
 		if (!isFake) {
-			if (hold_started && (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT)) {
+			if (hold_started && (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) && !isMiss) {
 				judgeCalc(startSec, judge_sec, 0, base_x, base_y, judge_type, false, true, true);
-			} else {
+			} else if (!isMiss) {
 				judgeCalc(startSec, endSec + 1, 0, base_x, base_y, judge_type, false, true, true);
 			};
 		};
@@ -93,14 +103,23 @@ x = note_x;
 y = note_y;
 
 
-canDraw = line_notes_visible && !behind_line && !judged && chart_sec < startSec;
-if (chart_sec >= trigger_sec && !judged) {
+canDraw = line_notes_visible && !judged && (chart_sec < startSec ? !behind_line : image_alpha > 0);
+if (chart_autoplay_active()) {
+	if (chart_sec >= trigger_sec && !judged) {
+		judged = true;
+		if (!isFake) {
+			var note_sample_sec = (!use_acc_judgment && chart_sec > late_deadline_sec) ? chart_sec : judge_sec;
+			var _hit_xy = pec_note_hit_effect_xy();
+			hit_status = judgeCalc(startSec, note_sample_sec, 0, _hit_xy[0], _hit_xy[1], judge_type, true, true, true);
+			if (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) then skin_play_note_hitsound();
+		};
+		canDraw = false;
+		instance_deactivate_object(self);
+	};
+} else if (!judged && chart_sec > late_deadline_sec) {
 	judged = true;
 	if (!isFake) {
-		var note_sample_sec = (!use_acc_judgment && chart_sec > late_deadline_sec) ? chart_sec : judge_sec;
-		var _hit_xy = pec_note_hit_effect_xy();
-		hit_status = judgeCalc(startSec, note_sample_sec, 0, _hit_xy[0], _hit_xy[1], judge_type, true, true, true);
-		if (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) then skin_play_note_hitsound();
+		judgeCalc(startSec, chart_sec, 0, x, y, judge_type, false, true, true);
 	};
 	canDraw = false;
 	instance_deactivate_object(self);

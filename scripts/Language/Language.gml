@@ -347,7 +347,7 @@ function lang_required_keys() {
 		"fields.enableSurface", "fields.enableNoteHightLight", "fields.enableChartGUI", "fields.enableLineJudge",
 		"fields.showBG", "fields.enableHitEffect", "fields.refreshFPSCount", "fields.enableDebug",
 		"fields.enableDisplayLineID", "fields.comboString", "fields.userName", "fields.enableVsync", "fields.aa_level",
-		"fields.useOldFX", "fields.enableComboScore", "fields.judgeOffset", "fields.enableAccJudgment",
+		"fields.useOldFX", "fields.enableComboScore", "fields.enableAutoPlay", "fields.judgeOffset", "fields.enableAccJudgment",
 		"fields.preventWindowMoveFreeze", "fields.enableRPEMulticore", "fields.rpeWorkerMinLines",
 		"fields.rpeWorkerProfileFrames", "fields.noteUniformScale", "fields.notePreloadSeconds", "fields.TEST1",
 		"loading.title", "loading.preparing", "loading.noSource", "loading.backToMenu", "loading.queued",

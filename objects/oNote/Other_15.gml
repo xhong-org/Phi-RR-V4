@@ -2,14 +2,22 @@
 var now_time = _now_beat,
 	now_hit_time = judgeTime;
 
+if (!chart_autoplay_active()) {
+	if (now_time > self.time + lateHitTime && !isBad && !isJudge) {
+		judgeCalc(self.time, now_time, self.bpm, 0, 0, self.type, false);
+		instance_deactivate_object(self);
+	};
+	exit;
+};
+
 if(now_time > self.time + lateHitTime && !isBad && !game.settings.enableAccJudgment){
 	judgeCalc(self.time, now_time, self.bpm, 0, 0, self.type, false);
 	instance_deactivate_object(self);
 	exit;
 };
 
-if(now_hit_time >= self.time - lateHitTime && now_hit_time <= self.time + lateHitTime
-	&& (self.type == 2 || self.type == 4) && !isJudge && now_time >= self.time){
+if ((self.type == 2 || self.type == 4) && !isJudge && now_time >= self.time
+	&& now_hit_time >= self.time && now_hit_time <= self.time + lateHitTime) {
 	event_user(1);
 	var line_x = (_line_ref.x),
 		local_x = (_note_x - line_x),

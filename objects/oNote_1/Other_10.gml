@@ -84,13 +84,6 @@ if (_is_hold) {
 	};
 };
 
-// auto-judge offset (same as Official)
-if (variable_global_exists("game") && is_struct(game) && game.settings.TEST1) {
-	hitTime2 = choose(choose(random_range(-95, 0), random_range(0, 95), choose(1, 2, 5, -1, -6, choose(200, 10))), 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-} else if (variable_global_exists("game") && is_struct(game)) {
-	hitTime2 = (abs(game.settings.judgeOffset) >= 30000 ? random_range(-201, 201) : game.settings.judgeOffset);
-} else {
-	hitTime2 = 0;
-};
+hitTime2 = chart_auto_hit_offset_ms(type);
 
 inition = true;

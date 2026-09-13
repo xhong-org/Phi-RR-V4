@@ -8,6 +8,9 @@ var _yscale = image_yscale;
 var _angle = image_angle;
 var _blend = image_blend;
 var _alpha = image_alpha;
+if (!_is_hold && !isBad && !rpe_skip_pass_fade) {
+	_alpha *= chart_note_pass_fade(_now_seconds, start_sec, chart_note_miss_window_sec(type, false));
+};
 
 if (skin_active()) {
 	var _skin_kind = (type == 2 ? "drag" : (type == 4 ? "flick" : "tap"));

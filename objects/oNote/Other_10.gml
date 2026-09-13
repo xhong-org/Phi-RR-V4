@@ -60,8 +60,7 @@ _last_global_scales = initial_scale;
 
 if(self.type != 3 && BYD_COLOR_MODE) then hl = 2;
 hit_status = TYPE.NONE;
-if(game.settings.TEST1) then hitTime2 = (choose( choose(random_range(-95 , 0) , random_range(0 , 95) , choose(1 , 2 , 5 , -1 , -6 , choose(200 , 10))) , 0 , 1 , 2 , 3 , 4 , 5 , 6, 7 , 8 , 9 , 10 ));
-else hitTime2 = (abs(game.settings.judgeOffset) >= 30000 ? random_range(-201, 201) : game.settings.judgeOffset);
+hitTime2 = chart_auto_hit_offset_ms(self.type);
 
 judgeTime = (self.time + hitTime2 * 0.001 * _beat_per_second);
 judgeRealTime = (judgeTime * _seconds_per_beat);

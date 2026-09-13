@@ -4,6 +4,16 @@ if (_is_hold || !inition || isFake) then exit;
 var now_time = _now_seconds;
 var now_hit = judgeTime;
 
+if (!chart_autoplay_active()) {
+	if (now_time > start_sec + lateHitTime && !isBad && !isJudge) {
+		if (is_real_note) {
+			judgeCalc(start_sec, now_time, 0, _note_x, _note_y, type, false, true, true);
+		};
+		instance_deactivate_object(self);
+	};
+	exit;
+};
+
 if (now_time > start_sec + lateHitTime && !isBad && !isJudge && !game.settings.enableAccJudgment) {
 	if (is_real_note) {
 		judgeCalc(start_sec, now_time, 0, _note_x, _note_y, type, false, true, true);
@@ -12,7 +22,8 @@ if (now_time > start_sec + lateHitTime && !isBad && !isJudge && !game.settings.e
 	exit;
 };
 
-if ((type == 2 || type == 4) && !isJudge && now_time >= start_sec && now_hit >= start_sec - lateHitTime && now_hit <= start_sec + lateHitTime) {
+if ((type == 2 || type == 4) && !isJudge && now_time >= start_sec
+	&& now_hit >= start_sec && now_hit <= start_sec + lateHitTime) {
 	if (is_real_note) {
 		var _hit_xy = rpe_note_hit_effect_xy();
 		hit_status = judgeCalc(start_sec, now_hit, 0, _hit_xy[0], _hit_xy[1], type, true, true, true, has_hit_tint ? hit_tint : undefined);
@@ -50,7 +61,4 @@ if (now_time >= now_hit) {
 	};
 };
 
-if (isJudge && !isBad) {
-	var fade = clamp(1 - ((_now_seconds - judgeRealTime) * 1000 / 160), 0, 1);
-	image_alpha = alpha * fade;
-};
+

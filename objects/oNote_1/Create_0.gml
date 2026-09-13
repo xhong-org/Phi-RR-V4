@@ -107,6 +107,10 @@ _is_out_line = true;
 _position_floor_delta = 0;
 _note_position_speed = 0;
 _control_position_speed = 0;
+rpe_skip_pass_fade = (abs(real(alpha) - 1) > 0.001);
+if (!rpe_skip_pass_fade && instance_exists(_line_ref)) {
+	rpe_skip_pass_fade = !rpe_alpha_control_is_identity(_line_ref.alphaControl);
+};
 _ox_v = 0;
 _oy_v = 0;
 outside = false;

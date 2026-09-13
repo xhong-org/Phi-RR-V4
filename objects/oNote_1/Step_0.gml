@@ -10,7 +10,7 @@ _now_seconds = (variable_instance_exists(_line_ref, "line_sec") ? _line_ref.line
 _line_time = (variable_instance_exists(_line_ref, "line_time") ? _line_ref.line_time : 0);
 
 // Judge windows are seconds so multi-BPM charts use the correct unit.
-var late_ms = (_is_hold || type == 2 || type == 4 ? 161 : 201);
+var late_ms = _is_hold ? 161 : ((type == 2 || type == 4) ? 160 : 201);
 lateHitTime = late_ms * 0.001;
 judgeTime = start_sec + hitTime2 * 0.001;
 

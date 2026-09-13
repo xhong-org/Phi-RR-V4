@@ -354,6 +354,8 @@ if (variable_global_exists("phi_state_list") && is_struct(phi_state_list)) {
 	good_count = real(phi_state_list.good ?? 0);
 	bad_count = real(phi_state_list.bad ?? 0);
 	miss_count = real(phi_state_list.miss ?? 0);
+	early_count = real(phi_state_list.early ?? 0);
+	late_count = real(phi_state_list.late ?? 0);
 	max_combo = real(phi_state_list.max_hitcombo ?? 0);
 	acc_value = real(phi_state_list.acc ?? 0);
 };
