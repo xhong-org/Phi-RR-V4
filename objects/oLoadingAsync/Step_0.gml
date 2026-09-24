@@ -120,6 +120,10 @@ if (phase == 2) {
                 exit;
         };
 		chart_default_resources_load();
+        if (variable_global_exists("pls_archive_test") && global.pls_archive_test
+                && !instance_exists(oRPELineTextureAudit)) {
+                instance_create_depth(0, 0, 0, oRPELineTextureAudit);
+        };
         phase = 3;
         phase_timer = 0;
         exit;

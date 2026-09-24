@@ -240,8 +240,5 @@ draw_attached_video = function(line_instance) {
 	var alpha = clamp(real(video.alpha.value), 0, 1);
 	var dim = clamp(real(video.dim.value), 0, 1);
 	pls_draw_flush();
-	ffvideos_ext_draw(video_handle,
-		draw_x / room_width, draw_y / room_height,
-		(draw_x + draw_width) / room_width, (draw_y + draw_height) / room_height,
-		alpha, dim);
+	chart_video_draw_masked(video_handle, draw_x, draw_y, draw_width, draw_height, alpha, dim);
 };

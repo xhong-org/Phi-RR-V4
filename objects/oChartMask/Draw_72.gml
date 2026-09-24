@@ -7,6 +7,7 @@ gpu_push_state();
 surface_set_target(surface_id);
 target_active = true;
 chart_surface_active = true;
+chart_mask_scissor_set();
 gpu_set_blendmode(bm_normal);
 draw_set_colour(c_white);
 draw_set_alpha(1);

@@ -17,22 +17,21 @@ function chart_view_refresh(_room_w, _room_h) {
 	globalvar chart_view_left, chart_view_width, chart_view_height, chart_view_right;
 	globalvar chart_aspect_ratio;
 	chart_view_height = max(1, _room_h);
-	if (!chart_mask_enabled()) {
-		// Unmasked play area is the full room: same HUD layout, larger w.
-		chart_view_width = max(1, round(_room_w));
-		chart_view_left = 0;
-		chart_view_right = chart_view_left + chart_view_width;
-		return;
-	};
 	var _aspect = chart_aspect_ratio;
 	if (!is_real(_aspect) || !is_finite(_aspect) || _aspect <= 0) {
 		_aspect = 16 / 9;
 		chart_aspect_ratio = _aspect;
 	};
-	chart_view_width = min(max(1, _room_w), chart_view_height * _aspect);
-	// Pixel-align the effective viewport so composition, clipping and the
-	// aspect mask share the same edge. Fractional coordinates leave a dark
-	// seam under MSAA in render mode.
+	// Phira keeps the chart inside its aspect even when the mask is off.
+	// Line length is square in that viewport, while positions use 1350 by 900.
+	// A wider maximized window would stretch X, so the scale events that
+	// cancel rotation no longer land on the rectangle corners.
+	var _window_aspect = _room_w / chart_view_height;
+	if (_window_aspect > _aspect) {
+		chart_view_width = chart_view_height * _aspect;
+	} else {
+		chart_view_width = _room_w;
+	};
 	chart_view_width = max(1, round(chart_view_width));
 	chart_view_left = round((_room_w - chart_view_width) * 0.5);
 	chart_view_right = chart_view_left + chart_view_width;
@@ -198,6 +197,64 @@ function chart_surface_end() {
 	pls_draw_flush();
 	chart_surface_active = false;
 	return true;
+}
+
+function chart_mask_scissor_set() {
+	if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return;
+	if (!variable_global_exists("chart_view_width") || !is_real(chart_view_width) || chart_view_width <= 0) then return;
+	if (!variable_global_exists("chart_view_left") || !is_real(chart_view_left)) then return;
+	if (!variable_global_exists("chart_view_right") || !is_real(chart_view_right)) then return;
+	if (!variable_global_exists("chart_view_height") || !is_real(chart_view_height) || chart_view_height <= 0) then return;
+	var _left = floor(chart_view_left);
+	var _width = max(1, ceil(chart_view_right) - _left);
+	var _height = max(1, ceil(chart_view_height));
+	gpu_set_scissor(_left, 0, _width, _height);
+	chart_clip_begin();
+}
+
+function chart_mask_scissor_clear() {
+	chart_clip_end();
+	gpu_set_scissor(0, 0, max(1, room_width), max(1, room_height));
+}
+
+/// FFVideos replaces the rasterizer and only clips to the render target.
+/// Draw it into a viewport-sized surface so overflow outside 0..1 is cropped
+/// with the correct source UVs, then blit that surface inside the mask.
+function chart_video_draw_masked(_handle, _x, _y, _width, _height, _alpha, _dim) {
+	chart_mask_scissor_set();
+	if (!variable_global_exists("chart_view_width") || chart_view_width <= 1 || chart_view_height <= 1) {
+		return ffvideos_ext_draw(_handle, _x / room_width, _y / room_height, (_x + _width) / room_width, (_y + _height) / room_height, _alpha, _dim);
+	};
+	var _view_w = max(1, round(chart_view_width));
+	var _view_h = max(1, round(chart_view_height));
+	var _view_x = chart_view_left;
+	if (!variable_global_exists("chart_video_mask_surface")) then globalvar chart_video_mask_surface;
+	if (!surface_exists(chart_video_mask_surface)
+		|| abs(surface_get_width(chart_video_mask_surface) - _view_w) > 2
+		|| abs(surface_get_height(chart_video_mask_surface) - _view_h) > 2) {
+		if (surface_exists(chart_video_mask_surface)) then surface_free(chart_video_mask_surface);
+		chart_video_mask_surface = surface_create(_view_w, _view_h);
+	};
+	if (!surface_exists(chart_video_mask_surface)) {
+		return ffvideos_ext_draw(_handle, _x / room_width, _y / room_height, (_x + _width) / room_width, (_y + _height) / room_height, _alpha, _dim);
+	};
+	var _caller = surface_get_target();
+	pls_draw_flush();
+	surface_set_target(chart_video_mask_surface);
+	draw_clear_alpha(c_black, 0);
+	var _rel_x = _x - _view_x;
+	var _rel_y = _y;
+	var _status = ffvideos_ext_draw(_handle,
+		_rel_x / _view_w, _rel_y / _view_h,
+		(_rel_x + _width) / _view_w, (_rel_y + _height) / _view_h,
+		_alpha, _dim);
+	pls_draw_flush();
+	surface_reset_target();
+	if (surface_exists(_caller)) then surface_set_target(_caller);
+	chart_mask_scissor_set();
+	gpu_set_blendmode(bm_normal);
+	draw_surface(chart_video_mask_surface, _view_x, 0);
+	return _status;
 }
 
 function chart_clip_begin() {

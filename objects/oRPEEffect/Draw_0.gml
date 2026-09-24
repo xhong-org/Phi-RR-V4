@@ -1,4 +1,5 @@
 /// @description Apply chart-local effects before the HUD renderer.
+chart_mask_scissor_set();
 if (variable_instance_exists(id, "effect_boundary_role")) {
 	var _boundary_state = effect_boundary_state;
 	if (effect_boundary_role == "start") {

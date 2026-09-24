@@ -1,4 +1,6 @@
 /// @description Semi-transparent cover and skewed loading layout.
+// The chart viewport scissor must not crop this full-room cover.
+chart_mask_scissor_clear();
 if (pls_is_gxgames() && room != room_loading && room != room_menu) {
     chart_loading_animation_finish();
     exit;

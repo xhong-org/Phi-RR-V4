@@ -48,13 +48,7 @@ var draw_y = (chart_view_height - draw_height) * 0.5;
 var alpha = clamp(real(videos[video_index].alpha.value), 0, 1);
 var dim = clamp(real(videos[video_index].dim.value), 0, 1);
 pls_draw_flush();
-var video_draw_status = ffvideos_ext_draw(video_handle,
-	draw_x / room_width,
-	draw_y / room_height,
-	(draw_x + draw_width) / room_width,
-	(draw_y + draw_height) / room_height,
-	alpha,
-	dim);
+var video_draw_status = chart_video_draw_masked(video_handle, draw_x, draw_y, draw_width, draw_height, alpha, dim);
 if (video_draw_status < 0) {
 	if (!video_error_logged) {
 		print($"[FFVideos] Draw failed: status={status}, size={video_width}x{video_height}, error={ffvideos_ext_get_error(video_handle)}");

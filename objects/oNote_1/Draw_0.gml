@@ -1,4 +1,5 @@
 /// @description Draw RPE note
+chart_mask_scissor_set();
 if (!canDraw) then exit;
 
 var _sprite = sprite_index;

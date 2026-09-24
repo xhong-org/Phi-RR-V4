@@ -8,8 +8,10 @@ if (!variable_instance_exists(id, "start_height") || !is_real(start_height) || s
         start_height = max(1, room_height);
 };
 
-// Interactive rooms follow the window; offline rendering keeps its requested surface size.
-var _render_sizing = variable_global_exists("render_mode") && global.render_mode;
+// Interactive rooms follow the window. Rendering and archive tests keep the
+// requested surface so -resolution is stable across machines.
+var _archive_sizing = variable_global_exists("pls_archive_test") && global.pls_archive_test;
+var _render_sizing = (variable_global_exists("render_mode") && global.render_mode) || _archive_sizing;
 var _sw = _render_sizing ? global.render_width : pls_window_width();
 var _sh = _render_sizing ? global.render_height : pls_window_height();
 // Window/canvas size jitters by 1-2px on Windows (DWM) and GX. Ignore that or

@@ -4,7 +4,7 @@
 #macro func function
 #macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal { "windows": 40525, "android": 40521, "gxgames": 40526 } // 各平台版本号(独立)
+#macro VerReal { "windows": 40526, "android": 40521, "gxgames": 40526 } // 各平台版本号(独立)
 #macro VerStr "v.4.0.9"
 
 function ver_real() {
@@ -960,7 +960,7 @@ function Phigros() constructor { // 仅仅结构
 		"enableFPS" : true,						// 是否显示FPS(default:true)
 		"enableQuikyStart" : true,				// 是否启用快速启动(已弃用)(default:true)
 		"enableCanvasZoom" : false,				// 是否启用摄像头缩放(已弃用)(default:false)
-		"enableSurface" : false,				// 是否启用遮罩(default:false)
+		"enableSurface" : true,					// 是否启用遮罩(default:true)
 		"enableNoteHightLight" : true,			// 是否启用音符多押高亮(default:true)
 		"enableChartGUI" : true,				// 是否启用UI(default:true)
 		"enableLineJudge" : true,				// 是否启用FC/AP指示器(default:true)
@@ -1681,6 +1681,35 @@ function Phigros() constructor { // 仅仅结构
 	//});
 };
 
+function rpe_read_info_number(root_path, key_name, fallback) {
+	var root = chart_path_norm(root_path);
+	if (string_length(root) && string_char_at(root, string_length(root)) != "/") then root += "/";
+	var info_paths = [root + "info.yml", root + "info.yaml", root + "info.txt"];
+	var want = string_lower(string_replace_all(string(key_name), " ", ""));
+	for (var path_i = 0; path_i < array_length(info_paths); path_i++) {
+		var info_path = info_paths[path_i];
+		if (!chart_file_exists_any(info_path)) then continue;
+		var text = chart_read_text_file(info_path, -1);
+		if (!string_length(text)) then continue;
+		var lines = string_split(string_replace_all(text, "\r", ""), "\n");
+		for (var info_i = 0; info_i < array_length(lines); info_i++) {
+			var line_text = string_replace_all(lines[info_i], "\n", "");
+			if (!string_length(line_text)) then continue;
+			var first = string_char_at(line_text, 1);
+			if (first == "#" || first == "-" || first == " " || first == "\t") then continue;
+			var sep = string_pos(":", line_text);
+			if (sep <= 0) then sep = string_pos("=", line_text);
+			if (sep <= 0) then continue;
+			var key = string_lower(string_replace_all(string_copy(line_text, 1, sep - 1), " ", ""));
+			key = string_replace_all(key, "\t", "");
+			if (key != want) then continue;
+			var value = chart_info_trim_value(string_copy(line_text, sep + 1, string_length(line_text) - sep));
+			return number(value, fallback);
+		};
+	};
+	return fallback;
+}
+
 function rpe_read_info_offset_ms(root_path) {
 	var root = chart_path_norm(root_path);
 	if (string_length(root) && string_char_at(root, string_length(root)) != "/") then root += "/";
@@ -1788,7 +1817,8 @@ function chart_default_resources_load() {
 		print("[Resources] DefaultNotes texture group loaded");
 	};
 
-	if (variable_global_exists("render_mode") && global.render_mode) then return true;
+	if ((variable_global_exists("render_mode") && global.render_mode)
+		|| (variable_global_exists("pls_archive_test") && global.pls_archive_test)) then return true;
 	if (!variable_global_exists("default_hitsounds_load_requested")) {
 		global.default_hitsounds_load_requested = false;
 	};
@@ -1803,6 +1833,7 @@ function chart_default_resources_load() {
 
 function chart_default_resources_ready() {
 	if (variable_global_exists("render_mode") && global.render_mode) then return true;
+	if (variable_global_exists("pls_archive_test") && global.pls_archive_test) then return true;
 	return audio_group_is_loaded(audiogroup_hitsounds);
 };
 
@@ -1994,7 +2025,8 @@ function RPE() constructor{
 		"meta_offset" : 0,
 		"info_offset" : 0,
 		"song" : "",
-		"background" : ""
+		"background" : "",
+		"line_length" : 6
 	};
 	
 	static version = 0;
@@ -2064,6 +2096,9 @@ function RPE() constructor{
 		self.chart_info.meta_offset = meta_offset;
 		self.chart_info.info_offset = info_offset;
 		self.chart_info.offset = meta_offset + info_offset;
+		var info_line_length = rpe_read_info_number(InChartPath, "linelength", 6);
+		if (!is_finite(info_line_length) || info_line_length <= 0) then info_line_length = 6;
+		self.chart_info.line_length = info_line_length;
 		var meta_aspect = meta[$ "aspectRatio"] ?? (meta[$ "aspect_ratio"] ?? undefined);
 		var parsed_meta_aspect = chart_parse_aspect_ratio(meta_aspect, 0);
 		if (parsed_meta_aspect > 0) {

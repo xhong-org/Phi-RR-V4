@@ -8,8 +8,10 @@ start_height = room_height;
 if (start_width <= 0) then start_width = 1366;
 if (start_height <= 0) then start_height = 768;
 
-if (variable_global_exists("render_mode") && global.render_mode) {
+var _archive_sizing = variable_global_exists("pls_archive_test") && global.pls_archive_test;
+if ((variable_global_exists("render_mode") && global.render_mode) || _archive_sizing) {
 	// Keep gameplay coordinates proportional to the original 1366x768 design.
+	// Archive tests honor -resolution the same way, so text size can be compared.
 	start_width = 1366;
 	start_height = 768;
 	room_width = global.render_width;

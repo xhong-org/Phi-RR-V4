@@ -1,4 +1,5 @@
 /// @description Composite effective chart viewport.
+chart_mask_scissor_clear();
 if (!target_active || !surface_exists(surface_id)) then exit;
 pls_draw_flush();
 if (instance_exists(oPausedUI)) {
@@ -21,11 +22,17 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 gpu_set_blendmode_ext(bm_one, bm_zero);
 draw_set_colour(c_white);
 draw_set_alpha(1);
-var _copy_left = chart_mask_enabled() ? floor(chart_view_left) : 0;
-var _copy_width = chart_mask_enabled()
-	? max(1, ceil(chart_view_right) - _copy_left)
-	: max(1, surface_get_width(surface_id));
-var _copy_height = chart_mask_enabled() ? chart_view_height : max(1, surface_get_height(surface_id));
+// Always composite the chart viewport. Lines are longer than the 16:9 area;
+// copying the whole surface lets that overflow paint over the side mask.
+var _copy_left = floor(chart_view_left);
+var _copy_right = ceil(chart_view_right);
+var _copy_width = max(1, _copy_right - _copy_left);
+var _copy_height = max(1, chart_view_height);
+if (!chart_mask_enabled() && _copy_width >= surface_get_width(surface_id) - 1) {
+	_copy_left = 0;
+	_copy_width = max(1, surface_get_width(surface_id));
+	_copy_height = max(1, surface_get_height(surface_id));
+};
 draw_surface_part(surface_id, _copy_left, 0, _copy_width, _copy_height, _copy_left, 0);
 gpu_set_blendmode(bm_normal);
 pls_draw_flush();

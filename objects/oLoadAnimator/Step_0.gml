@@ -25,7 +25,7 @@ if (!assets_loaded && _session.ready) {
             };
         };
     };
-	audio_play_sound(snd_start , 0 , 0);
+	if (audio_exists(snd_start)) then audio_play_sound(snd_start, 0, 0);
     assets_loaded = true;
     state = LOAD_ANIM_STATE.COVERING;
     started_at = current_time;

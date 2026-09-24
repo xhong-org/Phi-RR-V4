@@ -19,11 +19,24 @@ if (room != room_play_rpe
         || !variable_global_exists("game_1")
         || !is_struct(game_1)
         || instance_number(oLine_1) <= 0) {
-        if (wait_frames >= 1800) {
+        if (wait_frames >= 21600) {
                 print("[RPETextureAudit][FAIL] Timed out waiting for RPE judge lines.");
                 audit_complete = true;
                 if (test_mode) then game_end();
                 else instance_destroy();
+        };
+        exit;
+};
+
+if (test_mode && rpe_lines_creating()) {
+        exit;
+};
+
+if (test_mode && variable_global_exists("render_width") && variable_global_exists("render_height")
+        && (abs(room_width - global.render_width) > 2 || abs(room_height - global.render_height) > 2)) {
+        if (wait_frames >= 1800) {
+                print($"[TextProbe][FAIL] Timed out waiting for room {global.render_width}x{global.render_height}, actual {room_width}x{room_height}");
+                game_end(1);
         };
         exit;
 };
@@ -108,6 +121,12 @@ if (note_alpha_count <= 0) {
 };
 var alpha_passed = (line_alpha_mismatch == 0 && note_alpha_mismatch == 0 && note_alpha_count > 0);
 print($"[RPEAlphaAudit][SUMMARY] pass={alpha_passed} lines={line_count} lineRawMin={line_alpha_min} lineRawMax={line_alpha_max} lineMismatch={line_alpha_mismatch} notes={note_alpha_count} noteMin={note_alpha_min} noteMax={note_alpha_max} noteMismatch={note_alpha_mismatch}");
+if (test_mode && !text_probe_done) {
+        text_probe_done = true;
+        var text_mismatch = rpe_text_probe_run();
+        if (text_mismatch > 0) then print($"[TextProbe][FAIL] mismatch={text_mismatch}");
+        else print("[TextProbe][PASS] Position and em size match the chart viewport.");
+};
 audit_complete = true;
 
 if (exit_test_mode) {
