@@ -98,13 +98,15 @@ if (!encoder_started) {
 var _mask_left = floor(chart_view_left);
 var _mask_right = ceil(chart_view_right);
 var _mask_height = max(1, ceil(chart_view_height));
-if (_mask_left > 0) {
-    gpu_set_scissor(0, 0, _mask_left, _mask_height);
-    chart_draw_background(false);
-};
-if (_mask_right < room_width) {
-    gpu_set_scissor(_mask_right, 0, max(1, room_width - _mask_right), _mask_height);
-    chart_draw_background(false);
+if (!chart_mask_released()) {
+	if (_mask_left > 0) {
+	    gpu_set_scissor(0, 0, _mask_left, _mask_height);
+	    chart_draw_background(false);
+	};
+	if (_mask_right < room_width) {
+	    gpu_set_scissor(_mask_right, 0, max(1, room_width - _mask_right), _mask_height);
+	    chart_draw_background(false);
+	};
 };
 gpu_set_scissor(0, 0, room_width, room_height);
 pls_draw_flush();

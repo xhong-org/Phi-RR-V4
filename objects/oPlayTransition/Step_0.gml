@@ -3,6 +3,12 @@ if (!instance_exists(owner) || !variable_global_exists("game") || !is_struct(gam
 	exit;
 };
 
+if (variable_instance_exists(id, "mask_released") && mask_released) {
+	depth = -12200;
+} else {
+	depth = DEPTH.HEF + 2;
+};
+
 if (state == PLAY_TRANSITION_STATE.PLAYING && chart_instances_activation_requested) {
     play_transition_activate_chart_instances();
     chart_instances_activation_requested = false;
@@ -49,14 +55,11 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 	if (state == PLAY_TRANSITION_STATE.OUTRO) {
 		var _render_outro_elapsed = max(0,
 			(global.render_frame - render_outro_started_frame) / max(1, global.render_fps));
-		progress = clamp(_render_outro_elapsed / 1.0, 0, 1);
-		var _render_outro_eased = Easings.InOutExpo(progress);
-		play_transition_apply(_render_outro_eased, true);
-		owner.chart_exit_alpha = 1 - _render_outro_eased;
-		if (_render_outro_elapsed >= 1.0) {
-			play_transition_apply(1, true);
-			owner.chart_exit_alpha = 0;
-			line_progress = 0;
+		var _render_phase_elapsed = _render_outro_elapsed - end_phase_origin_s;
+		var _render_end_signal = play_transition_step_end_phase(_render_phase_elapsed, 1.0);
+		if (_render_end_signal == 1) {
+			end_phase_origin_s = _render_outro_elapsed;
+		} else if (_render_end_signal == 2) {
 			render_exit_delay_started_frame = global.render_frame;
 			state = PLAY_TRANSITION_STATE.EXIT_DELAY;
 		};
@@ -183,14 +186,10 @@ switch (state) {
 	break;
 
 	case PLAY_TRANSITION_STATE.OUTRO:
-		progress = clamp(_elapsed / animation_duration, 0, 1);
-		var _outro_eased = Easings.InOutExpo(progress);
-		play_transition_apply(_outro_eased, true);
-		owner.chart_exit_alpha = 1 - _outro_eased;
-		if (progress >= 1) {
-			play_transition_apply(1, true);
-			owner.chart_exit_alpha = 0;
-			line_progress = 0;
+		var _end_signal = play_transition_step_end_phase(_elapsed, animation_duration);
+		if (_end_signal == 1) {
+			state_started_at = _now;
+		} else if (_end_signal == 2) {
 			state = PLAY_TRANSITION_STATE.EXIT_DELAY;
 			state_started_at = _now;
 		};

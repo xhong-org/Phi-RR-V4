@@ -36,11 +36,6 @@ if (variable_global_exists("chart_session") && is_struct(global.chart_session)) 
 	var _session_aspect = chart_parse_aspect_ratio(global.chart_session[$ "aspect_ratio"] ?? (16 / 9), 16 / 9);
 	if (is_finite(_session_aspect) && _session_aspect > 0) then chart_aspect_ratio = _session_aspect;
 };
-globalvar chart_clip_ready, chart_clip_context, chart_clip_original_state, chart_clip_state;
-chart_clip_ready = false;
-chart_clip_context = 0;
-chart_clip_original_state = 0;
-chart_clip_state = 0;
 globalvar chart_surface, chart_surface_active;
 chart_surface = -1;
 chart_surface_active = false;

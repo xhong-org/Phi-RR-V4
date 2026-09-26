@@ -1,3 +1,4 @@
+// Both sweeps stay inside the chart mask. The side bars get their own black.
 if (line_progress <= 0 || state == PLAY_TRANSITION_STATE.PLAYING
 	|| state == PLAY_TRANSITION_STATE.EXIT_DELAY
 	|| state == PLAY_TRANSITION_STATE.SETTLEMENT) then exit;

@@ -1,5 +1,6 @@
 /// @description Load and normalize RPE extra.json videos and effects.
-depth = DEPTH.BG - 1;
+// In front of oBG_1 so the background video cannot paint over the chart dim.
+depth = DEPTH.BG - 2;
 videos = [];
 video_index = -1;
 video_completed = -1;
@@ -240,5 +241,10 @@ draw_attached_video = function(line_instance) {
 	var alpha = clamp(real(video.alpha.value), 0, 1);
 	var dim = clamp(real(video.dim.value), 0, 1);
 	pls_draw_flush();
-	chart_video_draw_masked(video_handle, draw_x, draw_y, draw_width, draw_height, alpha, dim);
+	chart_mask_scissor_clear();
+	ffvideos_ext_draw(video_handle,
+		draw_x / room_width, draw_y / room_height,
+		(draw_x + draw_width) / room_width, (draw_y + draw_height) / room_height,
+		alpha, dim);
+	chart_mask_scissor_set();
 };

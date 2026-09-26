@@ -23,6 +23,11 @@ play_delay = 500000;
 exit_delay = 1000000;
 progress = 0;
 line_progress = 0;
+mask_end_phase = 0;
+mask_released = false;
+end_cover_alpha = 0;
+end_cover_span = 0;
+end_phase_origin_s = 0;
 render_started_frame = 0;
 render_outro_started_frame = 0;
 render_exit_delay_started_frame = 0;
@@ -97,6 +102,65 @@ function play_transition_apply(_value, _outro = false) {
 	};
 	owner.play_transition_bg_alpha = _outro ? lerp(1, _outro_bg_end, _p) : _p;
 	line_progress = _outro ? (1 - _p) : _p;
+}
+
+function play_transition_step_end_phase(_elapsed, _duration) {
+	var _dur = max(0.000001, _duration);
+	progress = clamp(_elapsed / _dur, 0, 1);
+	var _eased = Easings.InOutExpo(progress);
+	if (!chart_mask_enabled()) {
+		mask_released = false;
+		end_cover_alpha = 0;
+		end_cover_span = 0;
+		play_transition_apply(_eased, true);
+		owner.chart_exit_alpha = 1 - _eased;
+		if (progress < 1) then return 0;
+		play_transition_apply(1, true);
+		owner.chart_exit_alpha = 0;
+		line_progress = 0;
+		return 2;
+	};
+	if (mask_end_phase <= 0) {
+		mask_released = false;
+		end_cover_alpha = 0;
+		end_cover_span = 0;
+		play_transition_apply(_eased, true);
+		owner.play_transition_bg_alpha = 1;
+		owner.chart_exit_alpha = 1 - _eased;
+		if (progress < 1) then return 0;
+		line_progress = 0;
+		mask_end_phase = 1;
+		mask_released = true;
+		depth = -12200;
+		end_cover_alpha = 0.6;
+		end_cover_span = 0;
+		owner.play_transition_bg_alpha = 0;
+		return 1;
+	};
+	if (mask_end_phase == 1) {
+		mask_released = true;
+		line_progress = 0;
+		play_transition_apply(1, true);
+		owner.play_transition_bg_alpha = 0;
+		owner.chart_exit_alpha = 0;
+		end_cover_span = 1;
+		end_cover_alpha = lerp(0.6, 0, _eased);
+		if (progress < 1) then return 0;
+		mask_end_phase = 2;
+		end_cover_alpha = 0;
+		end_cover_span = 1;
+		return 1;
+	};
+	mask_released = true;
+	line_progress = 0;
+	play_transition_apply(1, true);
+	owner.play_transition_bg_alpha = 0;
+	owner.chart_exit_alpha = 0;
+	end_cover_span = 1;
+	end_cover_alpha = lerp(0, 0.3, _eased);
+	if (progress < 1) then return 0;
+	end_cover_alpha = 0.3;
+	return 2;
 }
 
 function play_transition_begin_exit() {

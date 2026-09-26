@@ -13,6 +13,33 @@ function chart_mask_enabled() {
 	return is_struct(s) && bool(s.enableSurface ?? false);
 }
 
+function chart_mask_released() {
+	if (!chart_mask_enabled() || !instance_exists(oPlayTransition)) then return false;
+	var _transition = instance_find(oPlayTransition, 0);
+	return variable_instance_exists(_transition, "mask_released") && _transition.mask_released;
+}
+
+function chart_play_ending() {
+	if (instance_exists(oSettlement)) then return true;
+	if (!instance_exists(oPlayTransition)) then return false;
+	var _transition = instance_find(oPlayTransition, 0);
+	if (!variable_instance_exists(_transition, "state")) then return false;
+	return _transition.state >= PLAY_TRANSITION_STATE.OUTRO
+		&& _transition.state < PLAY_TRANSITION_STATE.FINISHED;
+}
+
+function chart_background_dim_alpha() {
+	var _transition_alpha = 1;
+	if (instance_exists(oPlayTransition)) {
+		var _transition = instance_find(oPlayTransition, 0);
+		if (instance_exists(_transition.owner) && variable_instance_exists(_transition.owner, "play_transition_active")
+			&& _transition.owner.play_transition_active) {
+			_transition_alpha = _transition.owner.play_transition_bg_alpha;
+		};
+	};
+	return 0.6 * _transition_alpha;
+}
+
 function chart_view_refresh(_room_w, _room_h) {
 	globalvar chart_view_left, chart_view_width, chart_view_height, chart_view_right;
 	globalvar chart_aspect_ratio;
@@ -117,62 +144,68 @@ function chart_draw_background(_dim = true) {
 	var _dh = _bh * _sc;
 	var _cx = _area_x + _area_w * 0.5;
 	var _cy = _area_h * 0.5;
-	var _transition_alpha = 1;
-	if (instance_exists(oPlayTransition)) {
-		var _transition = instance_find(oPlayTransition, 0);
-		if (instance_exists(_transition.owner) && _transition.owner.play_transition_active) {
-			_transition_alpha = _transition.owner.play_transition_bg_alpha;
-		};
-	};
 	draw_sprite_stretched_ext(game.bg, 0, _cx - _dw * 0.5, _cy - _dh * 0.5, _dw, _dh, image_blend, 1);
 	gpu_set_texfilter(_old_filter);
-	// Dim only the valid chart viewport, never the full room. The final
-	// application-surface background pass skips this so the chart surface's
-	// single dim pass is not compounded.
-	if (_dim) {
-		draw_set_colour(c_black);
-		draw_set_alpha(0.6 * _transition_alpha);
-		draw_rectangle(chart_view_left, 0, chart_view_right, chart_view_height, false);
-	};
+	// Viewport dim is drawn later, on the chart surface only. This pass stays
+	// the undimmed illustration so the letterbox keeps the plain blurred art.
 	draw_set_alpha(_old_alpha);
 	draw_set_colour(_old_colour);
 	gpu_set_blendmode(bm_normal);
 }
 
-function chart_clip_init() {
-	globalvar chart_clip_ready, chart_clip_context, chart_clip_original_state, chart_clip_state;
-	if (chart_clip_ready) then return true;
-	if (os_type != os_windows || !extension_exists("ID3D11")) then return false;
-	var _info = os_get_info();
-	if (!ds_map_exists(_info, "video_d3d11_device") || !ds_map_exists(_info, "video_d3d11_context") || !ds_map_exists(_info, "video_d3d11_swapchain")) then return false;
-	if (!id3d11_is_initialized()) {
-		if (!__id3d11_bootstrap_raw(
-			string(_info[? "video_d3d11_device"]),
-			string(_info[? "video_d3d11_context"]),
-			string(_info[? "video_d3d11_swapchain"]))) then return false;
-	};
+function chart_viewport_dim_draw() {
+	if (!variable_global_exists("chart_surface_active") || !chart_surface_active) then return;
+	if (!variable_global_exists("chart_view_left") || !is_real(chart_view_left)) then return;
+	if (!variable_global_exists("chart_view_right") || !is_real(chart_view_right)) then return;
+	if (!variable_global_exists("chart_view_height") || !is_real(chart_view_height)) then return;
+	if (chart_mask_released()) then return;
+	var _alpha = chart_background_dim_alpha();
+	if (_alpha <= 0) then return;
+	pls_draw_flush();
+	chart_mask_scissor_set();
+	var _old_colour = draw_get_colour();
+	var _old_alpha = draw_get_alpha();
+	// Colour darkens. Alpha stays as it is, so the viewport replace blit keeps
+	// an opaque picture. Ordinary alpha blending writes a transparent black
+	// layer, and that replace blit turns the whole viewport solid black.
+	gpu_set_blendmode_ext_sepalpha(bm_src_alpha, bm_inv_src_alpha, bm_zero, bm_one);
+	draw_set_colour(c_black);
+	draw_set_alpha(_alpha);
+	draw_rectangle(chart_view_left, 0, chart_view_right, chart_view_height, false);
+	pls_draw_flush();
+	draw_set_alpha(_old_alpha);
+	draw_set_colour(_old_colour);
+	gpu_set_blendmode(bm_normal);
+}
 
-	chart_clip_context = id3d11_get_context_handle();
-	var _device = id3d11_get_device_handle();
-	if (chart_clip_context == 0 || _device == 0) then return false;
-
-	chart_clip_original_state = id3d11_device_context_rs_get_state(chart_clip_context);
-	var _desc;
-	if (chart_clip_original_state != 0) {
-		_desc = id3d11_rasterizer_state_get_desc(chart_clip_original_state);
-	} else {
-		_desc = new ID3D11RasterizerDesc();
-		_desc.fillMode = ID3D11FillMode.Solid;
-		_desc.cullMode = ID3D11CullMode.Back;
-		_desc.depthClipEnable = true;
-	};
-	_desc.scissorEnable = true;
-	var _created = id3d11_device_create_rasterizer_state(_device, _desc);
-	id3d11_handle_release(_device);
-	if (_created.hresult < 0 || _created.handle == 0) then return false;
-	chart_clip_state = _created.handle;
-	chart_clip_ready = true;
-	return true;
+function chart_mask_side_dim_draw() {
+	if (!instance_exists(oPlayTransition)) then return;
+	var _transition = instance_find(oPlayTransition, 0);
+	if (!variable_instance_exists(_transition, "end_cover_alpha")) then return;
+	var _alpha = _transition.end_cover_alpha;
+	if (_alpha <= 0) then return;
+	if (!variable_global_exists("chart_view_left") || !is_real(chart_view_left)) then return;
+	if (!variable_global_exists("chart_view_right") || !is_real(chart_view_right)) then return;
+	var _span = clamp(real(_transition.end_cover_span ?? 0), 0, 1);
+	var _frame_w = chart_frame_width();
+	var _frame_h = chart_frame_height();
+	// The letterbox lives outside the 16:9 chart view. Size the black to the
+	// whole frame, not to chart_view, or the bars stay uncovered.
+	var _left = lerp(chart_view_left, 0, _span);
+	var _right = lerp(chart_view_right, _frame_w, _span);
+	if (_right - _left <= 1) then return;
+	pls_draw_flush();
+	gpu_set_scissor(0, 0, _frame_w, _frame_h);
+	var _old_colour = draw_get_colour();
+	var _old_alpha = draw_get_alpha();
+	gpu_set_blendmode(bm_normal);
+	draw_set_colour(c_black);
+	draw_set_alpha(_alpha);
+	draw_rectangle(_left, 0, _right, _frame_h, false);
+	pls_draw_flush();
+	draw_set_alpha(_old_alpha);
+	draw_set_colour(_old_colour);
+	gpu_set_blendmode(bm_normal);
 }
 
 function chart_surface_begin() {
@@ -200,6 +233,7 @@ function chart_surface_end() {
 }
 
 function chart_mask_scissor_set() {
+	if (chart_mask_released()) then return;
 	if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return;
 	if (!variable_global_exists("chart_view_width") || !is_real(chart_view_width) || chart_view_width <= 0) then return;
 	if (!variable_global_exists("chart_view_left") || !is_real(chart_view_left)) then return;
@@ -209,86 +243,27 @@ function chart_mask_scissor_set() {
 	var _width = max(1, ceil(chart_view_right) - _left);
 	var _height = max(1, ceil(chart_view_height));
 	gpu_set_scissor(_left, 0, _width, _height);
-	chart_clip_begin();
+}
+
+function chart_frame_width() {
+	var _w = max(1, room_width);
+	if (application_surface_is_enabled() && surface_exists(application_surface)) {
+		_w = max(_w, surface_get_width(application_surface));
+	};
+	return max(_w, window_get_width(), display_get_gui_width());
+}
+
+function chart_frame_height() {
+	var _h = max(1, room_height);
+	if (application_surface_is_enabled() && surface_exists(application_surface)) {
+		_h = max(_h, surface_get_height(application_surface));
+	};
+	return max(_h, window_get_height(), display_get_gui_height());
 }
 
 function chart_mask_scissor_clear() {
-	chart_clip_end();
-	gpu_set_scissor(0, 0, max(1, room_width), max(1, room_height));
-}
-
-/// FFVideos replaces the rasterizer and only clips to the render target.
-/// Draw it into a viewport-sized surface so overflow outside 0..1 is cropped
-/// with the correct source UVs, then blit that surface inside the mask.
-function chart_video_draw_masked(_handle, _x, _y, _width, _height, _alpha, _dim) {
-	chart_mask_scissor_set();
-	if (!variable_global_exists("chart_view_width") || chart_view_width <= 1 || chart_view_height <= 1) {
-		return ffvideos_ext_draw(_handle, _x / room_width, _y / room_height, (_x + _width) / room_width, (_y + _height) / room_height, _alpha, _dim);
-	};
-	var _view_w = max(1, round(chart_view_width));
-	var _view_h = max(1, round(chart_view_height));
-	var _view_x = chart_view_left;
-	if (!variable_global_exists("chart_video_mask_surface")) then globalvar chart_video_mask_surface;
-	if (!surface_exists(chart_video_mask_surface)
-		|| abs(surface_get_width(chart_video_mask_surface) - _view_w) > 2
-		|| abs(surface_get_height(chart_video_mask_surface) - _view_h) > 2) {
-		if (surface_exists(chart_video_mask_surface)) then surface_free(chart_video_mask_surface);
-		chart_video_mask_surface = surface_create(_view_w, _view_h);
-	};
-	if (!surface_exists(chart_video_mask_surface)) {
-		return ffvideos_ext_draw(_handle, _x / room_width, _y / room_height, (_x + _width) / room_width, (_y + _height) / room_height, _alpha, _dim);
-	};
-	var _caller = surface_get_target();
-	pls_draw_flush();
-	surface_set_target(chart_video_mask_surface);
-	draw_clear_alpha(c_black, 0);
-	var _rel_x = _x - _view_x;
-	var _rel_y = _y;
-	var _status = ffvideos_ext_draw(_handle,
-		_rel_x / _view_w, _rel_y / _view_h,
-		(_rel_x + _width) / _view_w, (_rel_y + _height) / _view_h,
-		_alpha, _dim);
-	pls_draw_flush();
-	surface_reset_target();
-	if (surface_exists(_caller)) then surface_set_target(_caller);
-	chart_mask_scissor_set();
-	gpu_set_blendmode(bm_normal);
-	draw_surface(chart_video_mask_surface, _view_x, 0);
-	return _status;
-}
-
-function chart_clip_begin() {
-	globalvar chart_clip_ready, chart_clip_context, chart_clip_state;
-	if (!chart_mask_enabled()) then return false;
-	if (!chart_clip_init()) then return false;
-	pls_draw_flush();
-	var _rect = new ID3D11Rect();
-	_rect.left = floor(chart_view_left);
-	_rect.top = 0;
-	_rect.right = ceil(chart_view_right);
-	_rect.bottom = ceil(chart_view_height);
-	id3d11_device_context_rs_set_state(chart_clip_context, chart_clip_state);
-	id3d11_device_context_rs_set_scissor_rects(chart_clip_context, [_rect]);
-	return true;
-}
-
-function chart_clip_end() {
-	globalvar chart_clip_ready, chart_clip_context, chart_clip_original_state;
-	if (!chart_clip_ready) then return false;
-	pls_draw_flush();
-	id3d11_device_context_rs_set_state(chart_clip_context, chart_clip_original_state);
-	return true;
+	gpu_set_scissor(0, 0, chart_frame_width(), chart_frame_height());
 }
 
 function chart_clip_shutdown() {
-	globalvar chart_clip_ready, chart_clip_context, chart_clip_original_state, chart_clip_state;
-	if (!chart_clip_ready) then return;
-	chart_clip_end();
-	if (chart_clip_state != 0) then id3d11_handle_release(chart_clip_state);
-	if (chart_clip_original_state != 0) then id3d11_handle_release(chart_clip_original_state);
-	if (chart_clip_context != 0) then id3d11_handle_release(chart_clip_context);
-	chart_clip_state = 0;
-	chart_clip_original_state = 0;
-	chart_clip_context = 0;
-	chart_clip_ready = false;
 }

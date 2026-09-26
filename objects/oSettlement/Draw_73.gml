@@ -1,5 +1,6 @@
 /// @description Draw settlement above the composited chart.
 if (consumed) then exit;
+chart_mask_scissor_clear();
 pls_draw_flush();
 
 var old_colour = draw_get_colour();
