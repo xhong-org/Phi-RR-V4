@@ -52,6 +52,16 @@ if (start_width > 0 && start_height > 0) {
 };
 chart_view_refresh(room_width, room_height);
 
+// Fit the application surface before anything draws. Resizing it after the
+// frame is drawn clears that frame, which flashes black on entering a room.
+if (application_surface_is_enabled() && surface_exists(application_surface)) {
+	var _surface_w = surface_get_width(application_surface);
+	var _surface_h = surface_get_height(application_surface);
+	if (abs(_surface_w - room_width) > 2 || abs(_surface_h - room_height) > 2) {
+		surface_resize(application_surface, max(1, room_width), max(1, room_height));
+	};
+};
+
 if (os_type == os_windows && extension_exists("I_Pulse")) {
 	var render_window = variable_global_exists("render_mode") && global.render_mode;
 	var prevent_move_freeze = !render_window;

@@ -6,41 +6,182 @@ function official_lines_creating() {
 		&& bool(game[$ "_chart_lines_creating"] ?? false);
 }
 
-/// Earliest second a note can be on-screen, including notes stuck on a speed-0 line.
-function official_note_visible_activate_sec(_speed_events, _note_floor, _note_speed, _hit_sec, _spb, _preload, _visible_dist = 12, _hold_len = 0) {
-	var activate_sec = _hit_sec - _preload;
-	if (abs(_note_speed) < 0.0000001) then return min(activate_sec, 0);
-	if (!is_array(_speed_events) || array_length(_speed_events) <= 0) then return activate_sec;
-	var note_lo = min(_note_floor, _note_floor + _hold_len);
-	var note_hi = max(_note_floor, _note_floor + _hold_len);
-	var vis_lo = note_lo - _visible_dist;
-	var vis_hi = note_hi + _visible_dist;
-	var event_count = array_length(_speed_events);
-	for (var event_i = 0; event_i < event_count; event_i++) {
-		var speed_event = _speed_events[event_i];
-		if (!is_struct(speed_event)) then continue;
-		var t0 = real(speed_event.startTime ?? 0) * _spb;
-		var t1 = real(speed_event.endTime ?? 0) * _spb;
-		if (event_i == event_count - 1) then t1 = max(t1, _hit_sec + 1);
-		if (t1 < t0) then t1 = t0;
-		var speed_value = real(speed_event.value ?? 0);
-		var floor0 = real(speed_event[$ "floorPosition"] ?? 0);
-		var floor1 = floor0 + (t1 - t0) * speed_value;
-		var line_lo = min(floor0, floor1);
-		var line_hi = max(floor0, floor1);
-		if (line_hi < vis_lo || line_lo > vis_hi) then continue;
-		if (abs(speed_value) < 0.0000001) {
-			activate_sec = min(activate_sec, t0);
-			continue;
-		};
-		if (floor0 >= vis_lo && floor0 <= vis_hi) {
-			activate_sec = min(activate_sec, t0);
-			continue;
-		};
-		var target = (floor0 < vis_lo ? vis_lo : vis_hi);
-		var enter_sec = t0 + (target - floor0) / speed_value;
-		if (enter_sec >= t0 && enter_sec <= t1) then activate_sec = min(activate_sec, enter_sec);
+function official_view_metrics() {
+	var view_h = (variable_global_exists("chart_view_height") && is_real(chart_view_height) && chart_view_height > 1)
+		? chart_view_height : room_height;
+	var view_w = (variable_global_exists("chart_view_width") && is_real(chart_view_width) && chart_view_width > 1)
+		? chart_view_width : view_h * 16 / 9;
+	var view_l = (variable_global_exists("chart_view_left") && is_real(chart_view_left)) ? chart_view_left : 0;
+	return {
+		view_l: view_l,
+		view_w: view_w,
+		view_h: view_h,
+		view_r: view_l + view_w,
+		// 1.25 covers the note sprite and a line sitting on the viewport edge.
+		diag: point_distance(0, 0, view_w, view_h) * 1.25,
+		scale: max(1, view_h * 0.6)
 	};
+}
+
+function official_norm_gap(_x_norm, _y_norm, _metrics) {
+	var px = _metrics.view_l + _metrics.view_w * _x_norm;
+	var py = _metrics.view_h * (1 - _y_norm);
+	var dx = 0;
+	if (px < _metrics.view_l) then dx = _metrics.view_l - px;
+	else if (px > _metrics.view_r) then dx = px - _metrics.view_r;
+	var dy = 0;
+	if (py < 0) then dy = -py;
+	else if (py > _metrics.view_h) then dy = py - _metrics.view_h;
+	if (dx == 0 && dy == 0) then return 0;
+	return point_distance(0, 0, dx, dy);
+}
+
+function official_line_vis_cache(_line_data, _metrics) {
+	var bpm = real(_line_data[$ "bpm"] ?? 60);
+	if (bpm <= 0) then bpm = 60;
+	var spb = 1.875 / bpm;
+	var speed_events = is_array(_line_data[$ "speedEvents"]) ? _line_data.speedEvents : [];
+	var speed_n = array_length(speed_events);
+	var seg_n = 0;
+	for (var speed_i = 0; speed_i < speed_n; speed_i++) {
+		if (is_struct(speed_events[speed_i])) then seg_n++;
+	};
+	var t0s = array_create(seg_n, 0);
+	var t1s = array_create(seg_n, 0);
+	var floors = array_create(seg_n, 0);
+	var values = array_create(seg_n, 0);
+	var gaps = array_create(seg_n, 0);
+	var floor_acc = 0;
+	var seg_i = 0;
+	for (var speed_j = 0; speed_j < speed_n; speed_j++) {
+		var speed_event = speed_events[speed_j];
+		if (!is_struct(speed_event)) then continue;
+		var event_floor = floor_acc;
+		if (is_real(speed_event[$ "floorPosition"])) then event_floor = speed_event.floorPosition;
+		var beat0 = real(speed_event.startTime ?? 0);
+		var beat1 = real(speed_event.endTime ?? beat0);
+		var sec0 = beat0 * spb;
+		var sec1 = beat1 * spb;
+		if (sec1 < sec0) then sec1 = sec0;
+		var speed_value = real(speed_event.value ?? 0);
+		floors[seg_i] = event_floor;
+		values[seg_i] = speed_value;
+		t0s[seg_i] = sec0;
+		// The runtime keeps the final speed past its declared end.
+		t1s[seg_i] = (seg_i == seg_n - 1) ? max(sec1, 10000000) : sec1;
+		floor_acc = event_floor + max(0, sec1 - sec0) * speed_value;
+		seg_i++;
+	};
+	var move_events = is_array(_line_data[$ "judgeLineMoveEvents"]) ? _line_data.judgeLineMoveEvents : [];
+	var move_n = array_length(move_events);
+	var move_count = 0;
+	for (var move_i = 0; move_i < move_n; move_i++) {
+		if (is_struct(move_events[move_i])) then move_count++;
+	};
+	var mt0 = array_create(move_count, 0);
+	var mt1 = array_create(move_count, 0);
+	var mg0 = array_create(move_count, 0);
+	var mg1 = array_create(move_count, 0);
+	var move_write = 0;
+	for (var move_j = 0; move_j < move_n; move_j++) {
+		var move_event = move_events[move_j];
+		if (!is_struct(move_event)) then continue;
+		var move_t0 = real(move_event.startTime ?? 0) * spb;
+		var move_t1 = real(move_event.endTime ?? 0) * spb;
+		if (move_t1 < move_t0) then move_t1 = move_t0;
+		var x0 = real(move_event.start ?? 0);
+		var y0 = real(move_event[$ "start2"] ?? 0);
+		var x1 = real(move_event[$ "end"] ?? x0);
+		var y1 = real(move_event[$ "end2"] ?? y0);
+		mt0[move_write] = move_t0;
+		mt1[move_write] = move_t1;
+		mg0[move_write] = official_norm_gap(x0, y0, _metrics);
+		mg1[move_write] = official_norm_gap(x1, y1, _metrics);
+		move_write++;
+	};
+	var def_gap = official_norm_gap(0, 0, _metrics);
+	var cursor = 0;
+	for (var gap_i = 0; gap_i < seg_n; gap_i++) {
+		var seg_t0 = t0s[gap_i];
+		var seg_t1 = t1s[gap_i];
+		while (cursor < move_count && mt1[cursor] < seg_t0) cursor++;
+		var held = def_gap;
+		if (cursor > 0) then held = mg1[cursor - 1];
+		var gap = held;
+		var look = cursor;
+		while (look < move_count && mt0[look] <= seg_t1) {
+			if (mt1[look] >= seg_t0) then gap = max(gap, max(mg0[look], mg1[look]));
+			look++;
+		};
+		gaps[gap_i] = gap;
+	};
+	var lead_sec = (seg_n > 0) ? t0s[0] : 0;
+	var lead_gap = def_gap;
+	if (lead_sec > 0) {
+		for (var lead_i = 0; lead_i < move_count; lead_i++) {
+			if (mt0[lead_i] > lead_sec) then break;
+			if (mt1[lead_i] >= 0) then lead_gap = max(lead_gap, max(mg0[lead_i], mg1[lead_i]));
+		};
+	};
+	return {
+		metrics: _metrics,
+		seg_n: seg_n,
+		t0s: t0s,
+		t1s: t1s,
+		floors: floors,
+		values: values,
+		gaps: gaps,
+		lead_sec: lead_sec,
+		lead_gap: lead_gap
+	};
+}
+
+/// Earliest second this note can be judged or seen.
+/// Holds use the whole body span: the head can sit outside the viewport while the body still crosses it.
+function official_note_activate_sec(_cache, _floor, _speed, _hit_sec, _hold_len, _is_hold) {
+	var judge_at = max(0, _hit_sec - 0.5);
+	if (!_is_hold && abs(_speed) < 0.0000001) then return 0;
+	if (_is_hold && (_speed == 0 || abs(_hold_len) < 0.0000001)) then return judge_at;
+	var metrics = _cache.metrics;
+	var unit = metrics.scale;
+	if (!_is_hold) then unit *= max(abs(_speed), 0.0000001);
+	var note_lo = min(_floor, _floor + _hold_len);
+	var note_hi = max(_floor, _floor + _hold_len);
+	var diag = metrics.diag;
+	var visual = infinity;
+	var seg_n = _cache.seg_n;
+	if (seg_n <= 0) {
+		var pad0 = (diag + _cache.lead_gap) / unit;
+		if (0 >= note_lo - pad0 && 0 <= note_hi + pad0) then visual = 0;
+	} else if (_cache.lead_sec > 0) {
+		var pad_before = (diag + _cache.lead_gap) / unit;
+		if (0 >= note_lo - pad_before && 0 <= note_hi + pad_before) then visual = 0;
+	};
+	var t0s = _cache.t0s;
+	var t1s = _cache.t1s;
+	var floors = _cache.floors;
+	var values = _cache.values;
+	var gaps = _cache.gaps;
+	for (var seg_i = 0; seg_i < seg_n; seg_i++) {
+		var t0 = t0s[seg_i];
+		var t1 = t1s[seg_i];
+		var speed_value = values[seg_i];
+		var floor0 = floors[seg_i];
+		var pad = (diag + gaps[seg_i]) / unit;
+		var vis_lo = note_lo - pad;
+		var vis_hi = note_hi + pad;
+		var floor1 = floor0 + (t1 - t0) * speed_value;
+		if (max(floor0, floor1) < vis_lo || min(floor0, floor1) > vis_hi) then continue;
+		if (abs(speed_value) < 0.0000001 || (floor0 >= vis_lo && floor0 <= vis_hi)) {
+			visual = min(visual, max(t0, 0));
+			continue;
+		};
+		var target = (floor0 < vis_lo) ? vis_lo : vis_hi;
+		var enter_sec = t0 + (target - floor0) / speed_value;
+		if (enter_sec >= t0 && enter_sec <= t1) then visual = min(visual, enter_sec);
+	};
+	var activate_sec = min(judge_at, visual);
+	if (!is_real(activate_sec) || activate_sec < 0) then return 0;
 	return activate_sec;
 }
 
@@ -71,7 +212,8 @@ function official_lines_begin() {
 		next_line: 0,
 		next_note: 0,
 		phase: 0,
-		note_preload: real(owner.settings.notePreloadSeconds ?? 15)
+		view: official_view_metrics(),
+		line_vis: array_create(line_count, undefined)
 	};
 	owner._chart_lines_creating = true;
 	chart_set_gameplay_visible(false);
@@ -93,6 +235,8 @@ function official_lines_create_line(i) {
 	owner.line_list[i] = l;
 	array_add(owner.runtime_line_instances, l);
 	chart_lines_hide_created(l);
+	var line_data = job.judge_lines[i];
+	job.line_vis[i] = official_line_vis_cache(is_struct(line_data) ? line_data : {}, job.view);
 }
 
 function official_lines_force_init() {
@@ -136,27 +280,32 @@ function official_lines_create_note(i) {
 			note_instance, note_hitsound_time);
 	};
 	if (!instance_exists(note_instance)) then return;
-	var hit_sec = real(note_instance.realHitTime);
 	var line_index = real(na[$ "id"] ?? 0);
-	var line_data = (is_array(job.judge_lines) && line_index >= 0 && line_index < array_length(job.judge_lines))
-		? job.judge_lines[line_index] : undefined;
-	var speed_events = (is_struct(line_data) && is_array(line_data[$ "speedEvents"]))
-		? line_data.speedEvents : [];
-	var seconds_per_beat = (real(na.bpm) > 0 ? 1.875 / real(na.bpm) : 0);
-	var activate_sec = official_note_visible_activate_sec(
-		speed_events,
+	var line_cache = undefined;
+	if (line_index >= 0 && line_index < array_length(job.line_vis)) {
+		line_cache = job.line_vis[line_index];
+		if (!is_struct(line_cache)) {
+			var line_data = (is_array(job.judge_lines) && line_index < array_length(job.judge_lines))
+				? job.judge_lines[line_index] : {};
+			line_cache = official_line_vis_cache(is_struct(line_data) ? line_data : {}, job.view);
+			job.line_vis[line_index] = line_cache;
+		};
+	};
+	if (!is_struct(line_cache)) then line_cache = official_line_vis_cache({}, job.view);
+	var is_hold = (real(na.type ?? 0) == 3);
+	var hold_len = is_hold ? real(na[$ "holdFloorLength"] ?? 0) : 0;
+	var activate_sec = official_note_activate_sec(
+		line_cache,
 		real(na.yOffset ?? 0),
 		real(na[$ "speed"] ?? 1),
-		hit_sec,
-		seconds_per_beat,
-		real(job.note_preload ?? 15),
-		12,
-		real(na[$ "holdFloorLength"] ?? 0)
+		real(note_instance.realHitTime),
+		hold_len,
+		is_hold
 	);
 	array_add(owner._notes, {
 		id: note_instance,
 		activateSec: activate_sec,
-		hitSec: hit_sec
+		hitSec: real(note_instance.realHitTime)
 	});
 }
 
@@ -200,10 +349,9 @@ function official_lines_finish() {
 		if (a.hitSec > b.hitSec) then return 1;
 		return 0;
 	});
-	var _preload = 15;
-	if (is_struct(owner._chart_line_job)) then _preload = real(owner._chart_line_job.note_preload ?? 15);
-	owner._note_activation_enabled = (_preload > 0);
-	owner._note_activation_index = (owner._note_activation_enabled ? 0 : array_length(owner._notes));
+	// Official ignores notePreloadSeconds. Notes wake when their body can meet the view.
+	owner._note_activation_enabled = true;
+	owner._note_activation_index = 0;
 	for (var _di = 0; _di < array_length(owner._notes); _di++) {
 		instance_deactivate_object(owner._notes[_di].id);
 	};

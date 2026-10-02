@@ -136,6 +136,27 @@ for (var i = 1; i < param_count; i++) {
 global.render_height = render_base_height;
 global.render_width = max(2, round((render_base_height * render_aspect_width / render_aspect_height) / 2) * 2);
 
+global.pls_probe_until = 0;
+global.pls_probe_shot = 0;
+global.pls_probe_exit_sent = false;
+var _probe_shot_text = environment_get_variable("PLS_PROBE_SHOT");
+if (string_length(_probe_shot_text)) {
+	global.pls_probe_shot = real(_probe_shot_text);
+	if (is_nan(global.pls_probe_shot) || !is_finite(global.pls_probe_shot) || global.pls_probe_shot <= 0) {
+		global.pls_probe_shot = 0;
+	};
+};
+var _probe_until_text = environment_get_variable("PLS_PROBE_UNTIL");
+if (string_length(_probe_until_text)) {
+	global.pls_probe_until = real(_probe_until_text);
+	if (is_nan(global.pls_probe_until) || !is_finite(global.pls_probe_until) || global.pls_probe_until <= 0) {
+		global.pls_probe_until = 0;
+	} else {
+		global.pls_probe_t0 = get_timer();
+		print($"[RPE Probe] Exit after chart time {global.pls_probe_until}s");
+	};
+};
+
 if (global.render_mode) {
 	global.render_cli = true;
         if (!string_length(global.render_output)) {
@@ -158,6 +179,9 @@ if (global.render_mode) {
         environment_session.source_path = environment_archive_source;
         print($"[ArchiveRun] Source: {environment_archive_source}");
         room_goto(room_loading);
+} else if (global.pls_probe_until > 0) {
+	print("[RPE Probe] No chart source");
+	game_end();
 } else {
         display_ui_apply();
         room_goto(room_menu);

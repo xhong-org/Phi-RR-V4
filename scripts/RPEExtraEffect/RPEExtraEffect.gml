@@ -82,23 +82,191 @@ function rpe_effect_tween_value(now, start_time, end_time, start_value, end_valu
 function rpe_effect_sample_anim(anim, chart_time) {
 	if (anim.fixed || !is_array(anim.events) || array_length(anim.events) <= 0) then return anim.value;
 	var events = anim.events;
+	// PhiZone keeps the latest event that has started and clamps past its end.
+	// Filling the gap by easing toward the next event smears a 1-beat stab
+	// across the whole rest, which is the torn chromatic / glitch section.
 	if (chart_time < events[0].startTime) then return events[0].start;
+	var chosen = 0;
 	for (var event_i = 0; event_i < array_length(events); event_i++) {
-		var current_event = events[event_i];
-		if (chart_time >= current_event.startTime && chart_time < current_event.endTime) {
-			return rpe_effect_tween_value(chart_time, current_event.startTime, current_event.endTime,
-				current_event.start, current_event[$ "end"], anim.kind,
-				current_event.easingType, current_event.easingLeft, current_event.easingRight);
-		};
-		if (event_i + 1 < array_length(events)) {
-			var next_event = events[event_i + 1];
-			if (chart_time < next_event.startTime) {
-				return rpe_effect_tween_value(chart_time, current_event.endTime, next_event.startTime,
-					current_event[$ "end"], next_event.start, anim.kind);
-			};
+		if (chart_time < events[event_i].startTime) then break;
+		chosen = event_i;
+	};
+	var current_event = events[chosen];
+	if (chart_time >= current_event.endTime) then return current_event[$ "end"];
+	return rpe_effect_tween_value(chart_time, current_event.startTime, current_event.endTime,
+		current_event.start, current_event[$ "end"], anim.kind,
+		current_event.easingType, current_event.easingLeft, current_event.easingRight);
+}
+
+// True when this pass cannot change a pixel, so the capture and the full-frame
+// readback can be skipped. Gate stays "on" for most of Designant while params
+// is 0; chromatic and glitch only stab for a beat, then hold 0.
+function rpe_effect_pass_idle(pass, chart_time) {
+	if (!is_struct(pass)) then return true;
+	var shader_name = string(pass[$ "shaderName"] ?? "");
+	var vars = pass[$ "vars"];
+	if (!is_struct(vars)) then return false;
+	if (shader_name == "glitch") {
+		var glitch_power_anim = vars[$ "power"];
+		var color_anim = vars[$ "colorRate"];
+		var glitch_power = is_struct(glitch_power_anim) ? rpe_effect_sample_anim(glitch_power_anim, chart_time) : 0;
+		var color_rate = is_struct(color_anim) ? rpe_effect_sample_anim(color_anim, chart_time) : 0;
+		return abs(glitch_power) < 0.00005 && abs(color_rate) < 0.00005;
+	};
+	if (shader_name == "chromatic" || string_pos("chromatic_random_rate", shader_name) > 0) {
+		var chromatic_anim = vars[$ "power"];
+		var chromatic_power = is_struct(chromatic_anim) ? rpe_effect_sample_anim(chromatic_anim, chart_time) : 0;
+		return abs(chromatic_power) < 0.00005;
+	};
+	if (string_pos("gate.glsl", shader_name) > 0) {
+		var params_anim = vars[$ "params"];
+		var params = is_struct(params_anim) ? rpe_effect_sample_anim(params_anim, chart_time) : 0;
+		return abs(params) < 0.00005;
+	};
+	// white_overlay stays armed for the whole Designant rest (about 94s–138s)
+	// while factor only leaves 0 for one beat. That still captured the frame.
+	if (string_pos("white_overlay.glsl", shader_name) > 0) {
+		var overlay_anim = vars[$ "factor"];
+		var overlay_factor = is_struct(overlay_anim) ? rpe_effect_sample_anim(overlay_anim, chart_time) : 0;
+		return abs(overlay_factor) < 0.00005;
+	};
+	// lum holds 0.8 / 0.6 for the whole Designant rest after a 1-beat dip.
+	// factor 1 does not change the layer, so the capture can stay off.
+	if (string_pos("lum.glsl", shader_name) > 0) {
+		var lum_anim = vars[$ "factor"];
+		var lum_factor = is_struct(lum_anim) ? rpe_effect_sample_anim(lum_anim, chart_time) : 1;
+		return abs(lum_factor - 1) < 0.00005;
+	};
+	if (string_pos("invis.glsl", shader_name) > 0) {
+		var invis_anim = vars[$ "factor"];
+		var invis_factor = is_struct(invis_anim) ? rpe_effect_sample_anim(invis_anim, chart_time) : 0;
+		return abs(invis_factor) < 0.00005;
+	};
+	if (shader_name == "grayscale") {
+		var gray_anim = vars[$ "factor"];
+		var gray_factor = is_struct(gray_anim) ? rpe_effect_sample_anim(gray_anim, chart_time) : 0;
+		return abs(gray_factor) < 0.00005;
+	};
+	return false;
+}
+
+function rpe_effect_sample_factor(pass, chart_time) {
+	if (!is_struct(pass)) then return 0;
+	var vars = pass[$ "vars"];
+	if (!is_struct(vars)) then return 0;
+	var anim = vars[$ "factor"];
+	if (!is_struct(anim)) then return 0;
+	return rpe_effect_sample_anim(anim, chart_time);
+}
+
+// [lum, gray, invis]. "heavy": some pass still needs the sampled shader path.
+// Grayscale mixes as 1-(1-a)*(1-b). lum multiplies. invis mixes the same way;
+// 1 means the captured layer is fully transparent.
+function rpe_effect_layer_fast(effects, chart_time) {
+	if (!is_array(effects)) then return "heavy";
+	var any_pass = false;
+	var lum_factor = 1;
+	var gray_factor = 0;
+	var invis_factor = 0;
+	for (var fast_i = 0; fast_i < array_length(effects); fast_i++) {
+		var fast_pass = effects[fast_i];
+		if (!is_struct(fast_pass)) then continue;
+		if (chart_time < fast_pass.startTime || chart_time >= fast_pass.endTime) then continue;
+		if (rpe_effect_pass_idle(fast_pass, chart_time)) then continue;
+		any_pass = true;
+		var fast_name = string(fast_pass[$ "shaderName"] ?? "");
+		if (string_pos("lum.glsl", fast_name) > 0) {
+			lum_factor *= clamp(rpe_effect_sample_factor(fast_pass, chart_time), 0, 1);
+		} else if (fast_name == "grayscale") {
+			var gray_sample = clamp(rpe_effect_sample_factor(fast_pass, chart_time), 0, 1);
+			gray_factor = 1 - (1 - gray_factor) * (1 - gray_sample);
+		} else if (string_pos("invis.glsl", fast_name) > 0) {
+			var invis_sample = clamp(rpe_effect_sample_factor(fast_pass, chart_time), 0, 1);
+			invis_factor = 1 - (1 - invis_factor) * (1 - invis_sample);
+		} else {
+			return "heavy";
 		};
 	};
-	return events[array_length(events) - 1][$ "end"];
+	if (!any_pass) then return "heavy";
+	return [lum_factor, gray_factor, invis_factor];
+}
+
+function rpe_effect_active_gray() {
+	var when = 0;
+	var found_time = false;
+	with (oRPEEffect) {
+		if (variable_instance_exists(id, "effect_boundary_role")) then continue;
+		when = chart_time;
+		found_time = true;
+		break;
+	};
+	if (!found_time) then return 0;
+	var gray = 0;
+	with (oRPEEffect) {
+		if (!variable_instance_exists(id, "effect_boundary_effects")) then continue;
+		var fast = rpe_effect_layer_fast(effect_boundary_effects, when);
+		if (is_array(fast) && fast[1] > gray) then gray = fast[1];
+	};
+	return gray;
+}
+
+// Video 2 is z 1.5, under the grayscale bands, and FFVideos ignores the sprite
+// shader. Copy the current target, grade that copy, and draw it back. A native
+// fullscreen pass here replaces the chart target and the notes never land.
+function rpe_effect_grade_backdrop() {
+	static gray_copy = -1;
+	static gray_logged = false;
+	var gray = rpe_effect_active_gray();
+	if (gray < 0.00005 || !shader_is_compiled(shd_rpe_grayscale)) then return;
+	var parent = surface_get_target();
+	if (!surface_exists(parent)) then return;
+	var parent_w = surface_get_width(parent);
+	var parent_h = surface_get_height(parent);
+	if (parent_w < 1 || parent_h < 1) then return;
+	if (!surface_exists(gray_copy)
+		|| abs(surface_get_width(gray_copy) - parent_w) > 2
+		|| abs(surface_get_height(gray_copy) - parent_h) > 2) {
+		if (surface_exists(gray_copy)) then surface_free(gray_copy);
+		gray_copy = surface_create(parent_w, parent_h);
+	};
+	if (!surface_exists(gray_copy)) then return;
+	pls_draw_flush();
+	gpu_push_state();
+	gpu_set_blendmode_ext(bm_one, bm_zero);
+	surface_reset_target();
+	surface_set_target(gray_copy);
+	draw_clear_alpha(c_black, 0);
+	draw_surface(parent, 0, 0);
+	pls_draw_flush();
+	surface_reset_target();
+	surface_set_target(parent);
+	shader_set(shd_rpe_grayscale);
+	var gray_uniform = shader_get_uniform(shd_rpe_grayscale, "factor");
+	if (gray_uniform != -1) then shader_set_uniform_f(gray_uniform, gray);
+	draw_surface(gray_copy, 0, 0);
+	pls_draw_flush();
+	shader_reset();
+	gpu_pop_state();
+	if (!gray_logged) {
+		gray_logged = true;
+		print($"[RPE Effect] Gray backdrop: factor={gray}");
+	};
+}
+
+// mix(pixel, white, factor) without sampling the frame. Source is straight
+// white at alpha=factor, so the colour term must multiply by source alpha.
+function rpe_effect_draw_white_overlay(_factor, _left, _top, _width, _height) {
+	if (_width < 1 || _height < 1) then return;
+	_factor = clamp(_factor, 0, 1);
+	if (_factor < 0.00005) then return;
+	gpu_set_blendmode_ext_sepalpha(bm_src_alpha, bm_inv_src_alpha, bm_one, bm_inv_src_alpha);
+	draw_set_colour(c_white);
+	draw_set_alpha(_factor);
+	draw_rectangle(_left, _top, _left + _width, _top + _height, false);
+	pls_draw_flush();
+	draw_set_colour(c_white);
+	draw_set_alpha(1);
+	gpu_set_blendmode_ext(bm_one, bm_zero);
 }
 
 function rpe_effect_defaults(shader_name) {
@@ -168,6 +336,71 @@ function rpe_effect_external_mapping(shader_path) {
 		print($"[RPE Effect] GLSL runtime translation is unavailable; use HLSL or add '// @gamemaker-effect <builtin>': {relative_path}");
 	};
 	return "";
+}
+
+// Chart chromatic shaders write only gl_FragColor.rgb. A zero weight sum is NaN
+// and the blend then drops every pixel in the captured layer, notes included.
+// Unroll the counted break-loop. A dynamic HLSL loop on this GPU can fail the
+// whole sample, including the branch that should copy the capture unchanged.
+function rpe_effect_unroll_sample_loop(source) {
+	var header = "for(int i=0;i<64;++i){";
+	var guard = "if(i>=sample_count)break;";
+	var header_at = string_pos(header, source);
+	if (header_at <= 0) then return source;
+	var guard_at = string_pos(guard, source);
+	if (guard_at <= header_at) then return source;
+	var scan = header_at + string_length(header);
+	var _depth = 1;
+	var end_at = 0;
+	var length = string_length(source);
+	while (scan <= length && _depth > 0) {
+		var ch = string_char_at(source, scan);
+		if (ch == "{") then _depth += 1;
+		else if (ch == "}") then _depth -= 1;
+		if (_depth == 0) then end_at = scan;
+		scan += 1;
+	};
+	if (end_at <= guard_at) then return source;
+	var body_at = guard_at + string_length(guard);
+	var body = string_copy(source, body_at, end_at - body_at);
+	var unrolled = "";
+	for (var sample_index = 0; sample_index < 64; sample_index++) {
+		var sample_body = string_replace(body, "float(i)", "float(" + string(sample_index) + ")");
+		unrolled += "if(" + string(sample_index) + "<sample_count){" + sample_body + "}";
+	};
+	source = string_delete(source, header_at, end_at - header_at + 1);
+	source = string_insert(unrolled, source, header_at);
+	source = string_replace(source, "precision mediump float;", "precision highp float;");
+	return source;
+}
+
+function rpe_effect_preserve_frag_alpha(source) {
+	if (!is_string(source) || string_pos("screenTexture", source) <= 0) then return source;
+	source = rpe_effect_unroll_sample_loop(source);
+	var replacement = "{vec4 _rpeBase=texture2D(screenTexture,uv);float _rpeW=sum.x+sum.y+sum.z;gl_FragColor=(_rpeW>0.001)?vec4(c/max(sum,vec3(0.0001)),_rpeBase.a):_rpeBase;}";
+	source = string_replace_all(source, "gl_FragColor.rgb=c/sum;", replacement);
+	source = string_replace_all(source, "gl_FragColor.rgb = c/sum;", replacement);
+	return rpe_effect_clip_output_coverage(source);
+}
+
+// Shaders such as patch mix toward vec4(0,0,0,1). Empty capture pixels then
+// become opaque and the composite blacks out the whole chart. Keep coverage
+// inside the unshaded sample.
+function rpe_effect_clip_output_coverage(source) {
+	if (!is_string(source)) then return source;
+	if (string_pos("gl_FragColor", source) <= 0 || string_pos("uv", source) <= 0) then return source;
+	var main_at = string_pos("void main", source);
+	if (main_at <= 0) then return source;
+	var brace_scan = string_pos("{", string_delete(source, 1, main_at - 1));
+	if (brace_scan <= 0) then return source;
+	var brace_at = main_at + brace_scan - 1;
+	source = string_insert("vec4 _rpeFrag;", source, brace_at + 1);
+	source = string_replace_all(source, "gl_FragColor", "_rpeFrag");
+	var epilogue = "vec4 _rpeCover=texture2D(screenTexture,uv);float _rpeA=min(_rpeFrag.a,_rpeCover.a);float _rpeS=(_rpeFrag.a>0.001)?(_rpeA/_rpeFrag.a):0.0;gl_FragColor=vec4(_rpeFrag.rgb*_rpeS,_rpeA);";
+	var last = string_length(source);
+	while (last > 0 && string_char_at(source, last) != "}") last -= 1;
+	if (last <= 0) then return source;
+	return string_insert(epilogue, source, last);
 }
 
 function rpe_effect_external_defaults(shader_name) {
@@ -275,9 +508,12 @@ function rpe_effect_parse(extra, bpm_points) {
 		};
 		var start_beat = rpe_effect_beat_value(source[$ "start"], 0);
 		var end_beat = rpe_effect_beat_value(source[$ "end"], start_beat);
+		// targetRange is the PhiZone layer field. Without it the shader is not a
+		// layer effect, even when "global" is omitted: render the whole frame.
+		var has_layer_range = is_struct(source[$ "targetRange"]);
 		var target_min = -infinity;
 		var target_max = infinity;
-		if (is_struct(source[$ "targetRange"])) {
+		if (has_layer_range) {
 			target_min = real(source.targetRange[$ "minZIndex"] ?? -infinity);
 			target_max = real(source.targetRange[$ "maxZIndex"] ?? infinity);
 		};
@@ -291,7 +527,8 @@ function rpe_effect_parse(extra, bpm_points) {
 			targetMax:target_max,
 			vars:defaults
 		};
-		if (bool(source[$ "global"] ?? false)) array_add(result.global, effect_record);
+		var render_global = bool(source[$ "global"] ?? false) || !has_layer_range;
+		if (render_global) array_add(result.global, effect_record);
 		else array_add(result.local, effect_record);
 	};
 	return result;

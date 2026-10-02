@@ -1,13 +1,13 @@
 /// @description 
 
-depth = DEPTH.HEF;
+depth = (variable_global_exists("chart_layer_mode") && global.chart_layer_mode) ? chart_layer_depth(7) : DEPTH.HEF;
 note_scale = 1;
 image_blend = #ffeca0;
 // Part System 粒子系统
 p1 = part_system_create_layer("Instances",false);//part_system_create();
 part_system_automatic_draw(p1,false);
 part_system_automatic_update(p1,false);
-part_system_depth(p1,depth);
+part_system_depth(p1, depth);
 //part_system_layer()
 
 //depth = DEPTH.HIT_FX;

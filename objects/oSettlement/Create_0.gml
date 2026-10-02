@@ -315,13 +315,7 @@ function settlement_do_retry() {
 		};
 	};
 	if (instance_exists(oPlayTransition)) {
-		with (oPlayTransition) {
-			state = PLAY_TRANSITION_STATE.INTRO;
-			state_started_at = get_timer();
-			progress = 0;
-			play_transition_deactivate_gameplay();
-			play_transition_apply(0);
-		};
+		with (oPlayTransition) play_transition_restart_intro();
 	};
 	consumed = true;
 	instance_destroy();

@@ -2,6 +2,10 @@
 chart_mask_scissor_set();
 if (!canDraw) then exit;
 
+var _clip_line = noone;
+if (variable_instance_exists(id, "_line_ref")) then _clip_line = _line_ref;
+var _clip = chart_note_scale_clip_begin(_clip_line);
+
 var _sprite = sprite_index;
 var _frame = hl;
 var _xscale = image_xscale;
@@ -24,10 +28,11 @@ if (skin_active()) {
 			var a = ((1 - (_now_seconds - judgeRealTime)) * 0.5);
 			if (sprite_exists(_skin_spr)) then draw_sprite_ext(_skin_spr, 0, _bad_x, _bad_y, _xscale * sk, _yscale * sk, _bad_angle, c_red, a);
 			else draw_sprite_ext(_sprite, 2, _bad_x, _bad_y, _xscale, _yscale, _bad_angle, c_red, a);
-			exit;
+		} else if (sprite_exists(_skin_spr)) {
+			draw_sprite_ext(_skin_spr, 0, x, y, _xscale * sk, _yscale * sk, _angle, _blend, _alpha);
+		} else {
+			draw_sprite_ext(_sprite, _frame, x, y, _xscale, _yscale, _angle, _blend, _alpha);
 		};
-		if (sprite_exists(_skin_spr)) then draw_sprite_ext(_skin_spr, 0, x, y, _xscale * sk, _yscale * sk, _angle, _blend, _alpha);
-		else draw_sprite_ext(_sprite, _frame, x, y, _xscale, _yscale, _angle, _blend, _alpha);
 	} else {
 		var a = (isMiss ? 0.5 : _alpha);
 		var _use_compact = compactHold || (is_struct(_skin_hold) && bool(_skin_hold.compact));
@@ -42,19 +47,18 @@ if (skin_active()) {
 				_angle, _frame, _blend, a, _is_out, _is_out && !compactHold, _tail_trim);
 		};
 	};
-	exit;
-};
-
-if (!_is_hold) {
+} else if (!_is_hold) {
 	if (isBad) {
 		var a = ((1 - (_now_seconds - judgeRealTime)) * 0.5);
 		draw_sprite_ext(_sprite, 2, _bad_x, _bad_y, _xscale, _yscale, _bad_angle, c_red, a);
-		exit;
+	} else {
+		draw_sprite_ext(_sprite, _frame, x, y, _xscale, _yscale, _angle, _blend, _alpha);
 	};
-	draw_sprite_ext(_sprite, _frame, x, y, _xscale, _yscale, _angle, _blend, _alpha);
 } else {
 	var a = (isMiss ? 0.5 : _alpha);
 	var _tail_trim = (compactHold ? _yscale * (_hold_tail_height * 0.5) : 0);
 	draw_hold_fit(_hx0, _hy0, _xscale, _yscale, yscale,
 		_angle, _frame, _blend, a, _is_out, _is_out && !compactHold, _tail_trim);
 };
+
+chart_note_scale_clip_end(_clip);

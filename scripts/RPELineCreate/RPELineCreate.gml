@@ -17,6 +17,34 @@ function rpe_lines_begin() {
 	var rpe = game_1;
 	var judge_lines = rpe.chart[$ "judgeLineList"] ?? [];
 	if (!is_array(judge_lines)) then judge_lines = [];
+	// PhiZone zIndex / targetRange share one depth map. Charts that omit both
+	// keep the legacy zOrder spacing so Phira line order does not move.
+	global.chart_layer_mode = false;
+	if (instance_exists(oExtraPlay)
+		&& variable_instance_exists(oExtraPlay, "requests_chart_layers")
+		&& oExtraPlay.requests_chart_layers) then global.chart_layer_mode = true;
+	for (var layer_line_i = 0; layer_line_i < array_length(judge_lines) && !global.chart_layer_mode; layer_line_i++) {
+		var layer_line = judge_lines[layer_line_i];
+		if (!is_struct(layer_line)) then continue;
+		if (is_real(layer_line[$ "zIndex"])) {
+			global.chart_layer_mode = true;
+			break;
+		};
+		var layer_notes = layer_line[$ "notes"];
+		if (!is_array(layer_notes)) then continue;
+		for (var layer_note_i = 0; layer_note_i < array_length(layer_notes); layer_note_i++) {
+			var layer_note = layer_notes[layer_note_i];
+			if (is_struct(layer_note) && is_real(layer_note[$ "zIndex"])) {
+				global.chart_layer_mode = true;
+				break;
+			};
+		};
+	};
+	if (global.chart_layer_mode && instance_exists(oExtraPlay)
+		&& variable_instance_exists(oExtraPlay, "effect_controller")
+		&& instance_exists(oExtraPlay.effect_controller)) {
+		oExtraPlay.effect_controller.depth = chart_layer_depth(24);
+	};
 	var line_group_size = array_length(judge_lines);
 	rpe.fatherLineList = [];
 	rpe.line_list = array_create(line_group_size, noone);
@@ -126,7 +154,10 @@ function rpe_lines_create_one(i) {
 		"events": (events),
 		"extEvents": (l_s[$ "extended"] ?? {}),
 		"zOrder": (l_s[$ "zOrder"] ?? 0),
+		"z_order_raw": real(l_s[$ "zOrder"] ?? 0),
 		"zIndex": (l_s[$ "zIndex"] ?? undefined),
+		"appearance_on_attach": (is_real(l_s[$ "appearanceOnAttach"]) ? real(l_s[$ "appearanceOnAttach"]) : 0),
+		"scale_on_notes": (is_real(l_s[$ "scaleOnNotes"]) ? real(l_s[$ "scaleOnNotes"]) : 0),
 		"bpmfactor": (l_s[$ "bpmfactor"] ?? 1)
 	}));
 	rpe.line_list[i] = l;
@@ -229,9 +260,11 @@ function rpe_lines_create_one(i) {
 			};
 		};
 
+		var note_explicit_z = n_s[$ "zIndex"];
 		var note_instance = instance_create_depth(-999, -999, DEPTH.NOTE, oNote_1, {
 			"type": off_type,
 			"rpe_type": rpe_type,
+			"note_layer_z": chart_note_layer_z(rpe_type, is_real(note_explicit_z) ? real(note_explicit_z) : undefined) + n * 0.0000001,
 			"isAbove": n_above,
 			"alpha": (n_alpha / 255),
 			"start_beat": st_beat,
@@ -411,13 +444,61 @@ function rpe_lines_finish() {
 		};
 
 		var _line_count = array_length(_order);
-		var _depth_span = DEPTH.LINE - (DEPTH.NOTE + 2);
-		var _depth_step = 1;
-		if (_line_count > _depth_span + 1) {
-			_depth_step = _depth_span / max(1, _line_count - 1);
-		};
-		for (var _ri = 0; _ri < _line_count; _ri++) {
-			_order[_ri].depth = DEPTH.LINE - _ri * _depth_step;
+		if (variable_global_exists("chart_layer_mode") && global.chart_layer_mode) {
+			var unique_orders = [];
+			for (var _ui = 0; _ui < _line_count; _ui++) {
+				var _unique_line = _order[_ui];
+				if (variable_instance_exists(_unique_line, "zIndex") && is_real(_unique_line.zIndex)) then continue;
+				var _raw_order = real(_unique_line.z_order_raw ?? _unique_line.zOrder);
+				var _raw_seen = false;
+				for (var _uj = 0; _uj < array_length(unique_orders); _uj++) {
+					if (unique_orders[_uj] == _raw_order) {
+						_raw_seen = true;
+						break;
+					};
+				};
+				if (!_raw_seen) then array_add(unique_orders, _raw_order);
+			};
+			array_sort(unique_orders, function(a, b) { return sign(a - b); });
+			var precedence_step = 1 / max(1, array_length(unique_orders));
+			for (var _ri = 0; _ri < _line_count; _ri++) {
+				var _layer_line = _order[_ri];
+				var _layer_z;
+				if (variable_instance_exists(_layer_line, "zIndex") && is_real(_layer_line.zIndex)) {
+					_layer_z = real(_layer_line.zIndex);
+				} else {
+					var _raw_order = real(_layer_line.z_order_raw ?? _layer_line.zOrder);
+					var _prec_index = 0;
+					for (var _pj = 0; _pj < array_length(unique_orders); _pj++) {
+						if (unique_orders[_pj] == _raw_order) {
+							_prec_index = _pj;
+							break;
+						};
+					};
+					_layer_z = 2 + _prec_index * precedence_step;
+				};
+				_layer_z += real(_layer_line.line_id) * 0.0000001;
+				_layer_line.layer_z = _layer_z;
+				_layer_line.depth = chart_layer_depth(_layer_z);
+			};
+			if (is_array(rpe.runtime_note_instances)) {
+				for (var _note_depth_i = 0; _note_depth_i < array_length(rpe.runtime_note_instances); _note_depth_i++) {
+					var _note_depth = rpe.runtime_note_instances[_note_depth_i];
+					if (!instance_exists(_note_depth)) then continue;
+					if (variable_instance_exists(_note_depth, "note_layer_z") && is_real(_note_depth.note_layer_z)) {
+						_note_depth.depth = chart_layer_depth(_note_depth.note_layer_z);
+					};
+				};
+			};
+		} else {
+			var _depth_span = DEPTH.LINE - (DEPTH.NOTE + 2);
+			var _depth_step = 1;
+			if (_line_count > _depth_span + 1) {
+				_depth_step = _depth_span / max(1, _line_count - 1);
+			};
+			for (var _ri = 0; _ri < _line_count; _ri++) {
+				_order[_ri].depth = DEPTH.LINE - _ri * _depth_step;
+			};
 		};
 	};
 

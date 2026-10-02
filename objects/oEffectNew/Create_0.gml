@@ -1,5 +1,7 @@
 ///@desc 打击特效渲染初始化
-depth = DEPTH.HEF;
+// PhiZone hit effects sit at z 7. DEPTH.HEF (-11000) falls inside invis [8, 16)
+// and the chart's lum/grayscale band is only [7, 7.01), so the burst never returns.
+depth = (variable_global_exists("chart_layer_mode") && global.chart_layer_mode) ? chart_layer_depth(7) : DEPTH.HEF;
 isDraw = true;
 globalvar eff_create;
 effect_events = [];

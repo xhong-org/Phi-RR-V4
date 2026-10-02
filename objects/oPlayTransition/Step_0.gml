@@ -2,6 +2,16 @@ if (!instance_exists(owner) || !variable_global_exists("game") || !is_struct(gam
 	instance_destroy();
 	exit;
 };
+if (variable_global_exists("pls_probe_until") && global.pls_probe_until > 0
+	&& variable_global_exists("pls_probe_t0")
+	&& !(variable_global_exists("pls_probe_exit_sent") && global.pls_probe_exit_sent)
+	&& !(variable_global_exists("pls_chromatic_front_logged") && global.pls_chromatic_front_logged)
+	&& (get_timer() - global.pls_probe_t0) >= 240000000) {
+	global.pls_probe_exit_sent = true;
+	print("[RPE Probe] wall timeout before chromatic front log");
+	game_end();
+	exit;
+};
 
 if (variable_instance_exists(id, "mask_released") && mask_released) {
 	depth = -12200;

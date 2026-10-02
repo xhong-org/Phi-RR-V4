@@ -4,6 +4,8 @@ surface_id = -1;
 surface_width = 0;
 surface_height = 0;
 target_active = false;
+// True only on the draw that created the composition surface.
+surface_born = false;
 globalvar chart_surface_active;
 chart_surface_active = false;
 globalvar chart_background_surface;
@@ -16,6 +18,7 @@ function chart_mask_surface_ensure() {
         surface_id = surface_create(_w, _h);
         surface_width = _w;
         surface_height = _h;
+        surface_born = surface_exists(surface_id);
     };
     return surface_exists(surface_id);
 }

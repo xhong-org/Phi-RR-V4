@@ -12,3 +12,6 @@ gpu_set_blendmode(bm_normal);
 draw_set_colour(c_white);
 draw_set_alpha(1);
 draw_clear_alpha(c_black, 0);
+// The first frame of a new surface can drop everything drawn after the clear.
+// Put the illustration in now so a same-frame composite is not empty black.
+if (surface_born) then chart_draw_background(false);

@@ -292,7 +292,59 @@ function pls_font_path(path) {
 }
 
 function pls_font_add(path, size, bold = false, italic = false, first = -infinity, last = infinity) {
-        return font_add(pls_font_path(path), size, bold, italic, -infinity, infinity);
+        return font_add(pls_font_path(path), size, bold, italic, first, last);
+}
+
+/// Included Files copied by GitHub Desktop can be an LFS pointer or a truncated file.
+/// font_add on those returns a handle that draws nothing.
+function pls_font_file_ok(_path) {
+        if (!is_string(_path) || !string_length(_path) || !file_exists(_path)) then return false;
+        if (pls_is_html5()) then return true;
+        var bin = -1;
+        var ok = false;
+        try {
+                bin = file_bin_open(_path, 0);
+                if (bin != -1) {
+                        var b0 = file_bin_read_byte(bin);
+                        var b1 = file_bin_read_byte(bin);
+                        var b2 = file_bin_read_byte(bin);
+                        var b3 = file_bin_read_byte(bin);
+                        var ttf = (b0 == 0 && b1 == 1 && b2 == 0 && b3 == 0);
+                        var otto = (b0 == ord("O") && b1 == ord("T") && b2 == ord("T") && b3 == ord("O"));
+                        var tru = (b0 == ord("t") && b1 == ord("r") && b2 == ord("u") && b3 == ord("e"));
+                        var ttc = (b0 == ord("t") && b1 == ord("t") && b2 == ord("c") && b3 == ord("f"));
+                        ok = ttf || otto || tru || ttc;
+                };
+        } catch (font_err) {
+                delete(font_err);
+                ok = false;
+        };
+        if (bin != -1) {
+                try { file_bin_close(bin); } catch (close_err) { delete(close_err); };
+        };
+        return ok;
+}
+
+function pls_font_add_system(size, bold, italic) {
+        var names = ["Microsoft YaHei", "Microsoft YaHei UI", "SimHei", "SimSun", "Noto Sans CJK SC", "Arial"];
+        if (os_type == os_android) {
+                names = [
+                        "/system/fonts/NotoSansCJK-Regular.ttc",
+                        "/system/fonts/NotoSansSC-Regular.otf",
+                        "/system/fonts/DroidSansFallback.ttf"
+                ];
+        };
+        for (var i = 0; i < array_length(names); i++) {
+                var font_id = -1;
+                try {
+                        font_id = font_add(names[i], size, bold, italic, 32, 65535);
+                } catch (add_err) {
+                        delete(add_err);
+                        font_id = -1;
+                };
+                if (font_exists(font_id)) then return font_id;
+        };
+        return -1;
 }
 
 function pls_font_enable_sdf(font_id, enable) {
@@ -323,11 +375,20 @@ function pls_ui_font_add(size, bold = true, italic = false, first = -infinity, l
                 var existing = cache[$ key];
                 if (font_exists(existing)) then return existing;
         };
-        var path = pls_bundled_font_path();
-        if (!file_exists(path)) then return -1;
+        if (!variable_global_exists("pls_font_page_ready")) {
+                // Default 1024px evicts CJK glyphs mid-frame on smaller GPUs, so settings text draws blank.
+                font_texture_page_size = max(1024, font_texture_page_size);
+                if (font_texture_page_size < 2048) then font_texture_page_size = 2048;
+                global.pls_font_page_ready = true;
+        };
         font_add_enable_aa(true);
-        var font_id = pls_font_add(path, size, bold, italic, first, last);
-        if (!font_exists(font_id)) then return font_id;
+        var path = pls_bundled_font_path();
+        var font_id = -1;
+        if (pls_font_file_ok(path)) {
+                font_id = pls_font_add(path, size, bold, italic, first, last);
+        };
+        if (!font_exists(font_id)) then font_id = pls_font_add_system(size, bold, italic);
+        if (!font_exists(font_id)) then return -1;
         if (enable_sdf) then pls_font_enable_sdf(font_id, true);
         cache[$ key] = font_id;
         return font_id;

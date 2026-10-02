@@ -27,7 +27,7 @@ function settings_catalog() {
 		{ key:"enableFPS", comment:"是否显示FPS(default:true)" },
 		{ key:"enableQuikyStart", comment:"是否启用快速启动(已弃用)(default:true)" },
 		{ key:"enableCanvasZoom", comment:"是否启用摄像头缩放(已弃用)(default:false)" },
-		{ key:"enableSurface", comment:"是否启用遮罩(default:false)" },
+		{ key:"enableSurface", comment:"是否启用遮罩(default:true)" },
 		{ key:"enableNoteHightLight", comment:"是否启用音符多押高亮(default:true)" },
 		{ key:"enableChartGUI", comment:"是否启用UI(default:true)" },
 		{ key:"enableLineJudge", comment:"是否启用FC/AP指示器(default:true)" },
@@ -50,47 +50,41 @@ function settings_catalog() {
 		{ key:"rpeWorkerMinLines", comment:"minimum line count for native parallel resolve" },
 		{ key:"rpeWorkerProfileFrames", comment:"frames averaged between worker timing logs" },
 		{ key:"noteUniformScale", comment:"RPE note size/sizeControl also scale height" },
-		{ key:"notePreloadSeconds", comment:"note preload seconds (0-60)" },
+		{ key:"notePreloadSeconds", comment:"RPE/PEC note preload seconds (0-60). Official ignores this." },
+		{ key:"disableChartShader", comment:"禁用谱面 Shader(default:false)" },
+		{ key:"directGlslEs", comment:"Windows 直接编译 GLSL ES，不经 HLSL 翻译(default:false)" },
+		{ key:"disableChartVideo", comment:"禁用谱面视频(default:false)" },
 		{ key:"TEST1", comment:"judge offset jitter test (default false)" }
 	];
 	return cat;
 }
 
+function settings_ui_font() {
+	// SDF at the settings panel's sub-1 scale is invisible on some GPUs. Raster font stays readable.
+	return pls_ui_font_add(24, false, false, 32, 65535, false);
+}
+
+/// Largest uniform scale that keeps _text inside the box. Font must already be set.
+function settings_fit_text_scale(_text, _max_w, _max_h) {
+	var label = string(_text ?? "");
+	if (!string_length(label)) then return 1;
+	var gw = string_width(label);
+	var gh = string_height(label);
+	if (gw < 1) then gw = 1;
+	if (gh < 1) then gh = 1;
+	return max(0.05, min(max(1, _max_w) / gw, max(1, _max_h) / gh));
+}
+
+/// Same values as Phigros.settings before configs.ini is applied.
 function settings_defaults() {
-	static d = undefined;
-	if (!is_undefined(d)) then return d;
-	d = {
-		enableBlur: true,
-		enableFPS: true,
-		enableQuikyStart: true,
-		enableCanvasZoom: false,
-		enableSurface: false,
-		enableNoteHightLight: true,
-		enableChartGUI: true,
-		enableLineJudge: true,
-		showBG: true,
-		enableHitEffect: true,
-		refreshFPSCount: 60,
-		enableDebug: true,
-		enableDisplayLineID: false,
-		comboString: "COMBO",
-		userName: "Guest",
-		enableVsync: true,
-		aa_level: 8,
-		useOldFX: false,
-		enableComboScore: true,
-		enableAutoPlay: true,
-		judgeOffset: 0,
-		enableAccJudgment: true,
-		preventWindowMoveFreeze: true,
-		enableRPEMulticore: true,
-		rpeWorkerMinLines: 32,
-		rpeWorkerProfileFrames: 1800,
-		noteUniformScale: false,
-		notePreloadSeconds: 15,
-		TEST1: false
+	if (!variable_global_exists("phigros_settings_baseline") || !is_struct(global.phigros_settings_baseline)) {
+		var _probe = new Phigros();
+		delete _probe;
 	};
-	return d;
+	if (!variable_global_exists("phigros_settings_baseline") || !is_struct(global.phigros_settings_baseline)) {
+		return {};
+	};
+	return global.phigros_settings_baseline;
 }
 
 function settings_clone(_src) {
@@ -101,6 +95,11 @@ function settings_clone(_src) {
 		out[$ names[i]] = _src[$ names[i]];
 	};
 	return out;
+}
+
+function chart_setting_on(_key) {
+	if (!variable_global_exists("game") || !is_struct(game) || !is_struct(game.settings)) then return false;
+	return bool(game.settings[$ _key] ?? false);
 }
 
 function settings_kind(_key) {
@@ -138,6 +137,17 @@ function settings_clamp_store(_store) {
 	if (struct_exists(_store, "judgeOffset")) then _store.judgeOffset = clamp(real(_store.judgeOffset), -5000, 5000);
 }
 
+/// The shipped configs.ini only had a few Settings keys. Those are not a user save.
+/// A real save written by the settings UI includes userName / aa_level / comboString.
+function settings_saved_key_ignored(_key) {
+	if (!ini_section_exists("Settings")) then return true;
+	var legacy = !ini_key_exists("Settings", "userName")
+		&& !ini_key_exists("Settings", "aa_level")
+		&& !ini_key_exists("Settings", "comboString");
+	if (legacy) then return true;
+	return !ini_key_exists("Settings", _key);
+}
+
 function settings_load_into(_store) {
 	if (!is_struct(_store)) then return;
 	var f = settings_ini_path();
@@ -145,6 +155,7 @@ function settings_load_into(_store) {
 	var names = struct_get_names(_store);
 	for (var i = 0; i < array_length(names); i++) {
 		var key = names[i];
+		if (settings_saved_key_ignored(key)) then continue;
 		var cur = _store[$ key];
 		if (settings_kind(key) == "string") {
 			_store[$ key] = ini_read_string("Settings", key, string(cur ?? ""));
@@ -229,7 +240,7 @@ function settings_reset_defaults() {
 
 function settings_confirm_reset() {
 	var buttons = [
-		msgbox_button("Yes", settings_reset_defaults),
+		msgbox_button("Yes", settings_gui_reset_and_sync),
 		msgbox_button("No")
 	];
 	msgbox_warning_async("Do you want to reset settings?", "Warning", buttons, MSGBOX_BUTTON_ALIGN.RIGHT);
@@ -255,6 +266,240 @@ function settings_list(_deprecated) {
 		};
 	};
 	return lists[_deprecated ? 1 : 0];
+}
+
+/// Collapsible groups on the General tab. Deprecated keys are the old developer list.
+function settings_group_defs() {
+	static groups = [
+		{ id:"display", keys:["enableBlur", "enableSurface", "enableLineJudge", "showBG", "enableHitEffect", "enableNoteHightLight", "enableChartGUI", "aa_level", "useOldFX", "enableVsync"] },
+		{ id:"debug", keys:["enableFPS", "refreshFPSCount", "enableDebug", "preventWindowMoveFreeze", "enableRPEMulticore", "rpeWorkerMinLines", "rpeWorkerProfileFrames", "TEST1"] },
+		{ id:"chart", keys:["comboString", "userName", "enableAutoPlay", "enableComboScore", "judgeOffset", "enableAccJudgment", "notePreloadSeconds", "noteUniformScale", "disableChartShader", "directGlslEs", "disableChartVideo"] },
+		{ id:"deprecated", keys:["enableQuikyStart", "enableCanvasZoom", "enableDisplayLineID"] }
+	];
+	return groups;
+}
+
+function settings_group_title(_id) {
+	switch (_id) {
+		case "display": return lang("settings.groupDisplay", "Display");
+		case "debug": return lang("settings.groupDebug", "Debug");
+		case "chart": return lang("settings.groupChart", "Chart");
+		case "deprecated": return lang("settings.groupDeprecated", "Deprecated");
+	};
+	return string(_id);
+}
+
+function settings_catalog_index() {
+	static index = undefined;
+	if (is_struct(index)) then return index;
+	index = {};
+	var cat = settings_catalog();
+	for (var i = 0; i < array_length(cat); i++) {
+		index[$ cat[i].key] = cat[i];
+	};
+	return index;
+}
+
+function settings_grouped_keys() {
+	static built = undefined;
+	if (is_struct(built)) then return built;
+	var groups = settings_group_defs();
+	var explicit = {};
+	built = {};
+	for (var g = 0; g < array_length(groups); g++) {
+		var keys = [];
+		var src = groups[g].keys;
+		for (var k = 0; k < array_length(src); k++) {
+			array_push(keys, src[k]);
+			explicit[$ src[k]] = true;
+		};
+		built[$ groups[g].id] = keys;
+	};
+	var cat = settings_catalog();
+	for (var i = 0; i < array_length(cat); i++) {
+		var key = cat[i].key;
+		if (struct_exists(explicit, key)) then continue;
+		var bucket = settings_comment_is_deprecated(cat[i].comment) ? "deprecated" : "chart";
+		array_push(built[$ bucket], key);
+		explicit[$ key] = true;
+	};
+	var defaults = settings_defaults();
+	var names = struct_get_names(defaults);
+	for (var n = 0; n < array_length(names); n++) {
+		var extra = names[n];
+		if (struct_exists(explicit, extra) || extra == "language" || extra == "skinId") then continue;
+		array_push(built[$ "chart"], extra);
+	};
+	return built;
+}
+
+function settings_gui_group_state() {
+	if (!variable_instance_exists(id, "group_open") || !is_struct(group_open)) {
+		group_open = { display:false, debug:false, chart:false, deprecated:false };
+	};
+	return group_open;
+}
+
+function settings_gui_fold_sig() {
+	var state = settings_gui_group_state();
+	return string(bool(state[$ "display"])) + string(bool(state[$ "debug"])) + string(bool(state[$ "chart"])) + string(bool(state[$ "deprecated"]));
+}
+
+function settings_gui_visible_rows() {
+	var index = settings_catalog_index();
+	var grouped = settings_grouped_keys();
+	var state = settings_gui_group_state();
+	var groups = settings_group_defs();
+	var rows = [];
+	for (var g = 0; g < array_length(groups); g++) {
+		var group_id = groups[g].id;
+		array_push(rows, { type:"group", id:group_id });
+		if (!bool(state[$ group_id])) then continue;
+		var keys = grouped[$ group_id];
+		if (!is_array(keys)) then continue;
+		for (var k = 0; k < array_length(keys); k++) {
+			var item = index[$ keys[k]];
+			if (!is_struct(item)) then item = { key:keys[k], comment:keys[k] };
+			array_push(rows, { type:"field", item:item });
+		};
+	};
+	return rows;
+}
+
+function settings_gui_draft() {
+	if (!variable_instance_exists(id, "draft") || !is_struct(draft)) {
+		draft = settings_clone(settings_store());
+		draft_saved = settings_clone(draft);
+	};
+	return draft;
+}
+
+function settings_gui_draft_set(_key, _value) {
+	var editing = settings_gui_draft();
+	if (settings_kind(_key) == "bool") then _value = bool(_value);
+	editing[$ _key] = _value;
+	settings_clamp_store(editing);
+}
+
+function settings_values_equal(_key, _a, _b) {
+	var kind = settings_kind(_key);
+	if (kind == "bool") then return bool(_a ?? false) == bool(_b ?? false);
+	if (kind == "string") then return string(_a ?? "") == string(_b ?? "");
+	if (is_real(_a) && is_real(_b)) then return _a == _b;
+	return string(_a ?? "") == string(_b ?? "");
+}
+
+function settings_gui_deprecated_dirty() {
+	var editing = settings_gui_draft();
+	var saved = variable_instance_exists(id, "draft_saved") ? draft_saved : undefined;
+	if (!is_struct(saved)) then return false;
+	var keys = settings_grouped_keys()[$ "deprecated"];
+	if (!is_array(keys)) then return false;
+	for (var i = 0; i < array_length(keys); i++) {
+		var key = keys[i];
+		if (!settings_values_equal(key, editing[$ key], saved[$ key])) then return true;
+	};
+	return false;
+}
+
+function settings_gui_commit_to_store(_include_deprecated) {
+	var editing = settings_gui_draft();
+	var saved = is_struct(draft_saved) ? draft_saved : settings_clone(settings_store());
+	var dest = settings_store();
+	var skip = {};
+	if (!_include_deprecated) {
+		var deprecated_keys = settings_grouped_keys()[$ "deprecated"];
+		if (is_array(deprecated_keys)) {
+			for (var d = 0; d < array_length(deprecated_keys); d++) skip[$ deprecated_keys[d]] = true;
+		};
+	};
+	var names = struct_get_names(editing);
+	for (var i = 0; i < array_length(names); i++) {
+		var key = names[i];
+		var value = editing[$ key];
+		if (struct_exists(skip, key)) {
+			value = struct_exists(saved, key) ? saved[$ key] : dest[$ key];
+			editing[$ key] = value;
+		};
+		dest[$ key] = value;
+	};
+	settings_clamp_store(dest);
+	settings_clamp_store(editing);
+	settings_save_store(dest);
+	settings_apply_live(undefined);
+	draft_saved = settings_clone(dest);
+	settings_gui_close();
+}
+
+function settings_gui_sync_draft() {
+	if (!instance_exists(oSettings)) then return;
+	with (oSettings) {
+		draft = settings_clone(settings_store());
+		draft_saved = settings_clone(draft);
+	};
+}
+
+function settings_gui_reset_and_sync() {
+	settings_reset_defaults();
+	settings_gui_sync_draft();
+}
+
+function settings_gui_save_yes() {
+	if (!instance_exists(oSettings)) then return;
+	with (oSettings) settings_gui_commit_to_store(true);
+}
+
+function settings_gui_save_normal_only() {
+	if (!instance_exists(oSettings)) then return;
+	with (oSettings) settings_gui_commit_to_store(false);
+}
+
+function settings_deprecated_save_warning_text() {
+	return "The settings you changed include deprecated options. Saving may cause Phi-RR to crash. Are you sure you want to save?";
+}
+
+function settings_gui_request_save() {
+	settings_gui_commit_edit();
+	if (!settings_gui_deprecated_dirty()) {
+		settings_gui_commit_to_store(true);
+		return;
+	};
+	var buttons = [
+		msgbox_button("Yes", settings_gui_save_yes),
+		msgbox_button("Cancel"),
+		msgbox_button("Only normal", settings_gui_save_normal_only)
+	];
+	var msg = settings_deprecated_save_warning_text();
+	if (i_wbox_native_ready()) {
+		msgbox_warning_sync(msg, "Warning", buttons, MSGBOX_BUTTON_ALIGN.RIGHT);
+	} else {
+		msgbox_warning_async(msg, "Warning", buttons, MSGBOX_BUTTON_ALIGN.RIGHT);
+	};
+}
+
+function settings_gui_discard_close() {
+	if (variable_instance_exists(id, "editing_key")) then editing_key = "";
+	if (os_type == os_android) {
+		try { keyboard_virtual_hide(); } catch (hide_err) { delete(hide_err); };
+	};
+	settings_gui_close();
+}
+
+function settings_gui_button_width(_label, _min_w, _h) {
+	var text_w = 0;
+	if (string_length(_label)) {
+		var measure_font = settings_ui_font();
+		if (font_exists(measure_font)) {
+			var old_font = draw_get_font();
+			draw_set_font(measure_font);
+			var text_scale = settings_fit_text_scale(_label, 100000, _h * 0.62);
+			text_w = string_width(_label) * text_scale;
+			draw_set_font(old_font);
+		} else {
+			text_w = string_length(_label) * _h * 0.45;
+		};
+	};
+	return max(_min_w, ceil(text_w + _h * 0.7));
 }
 
 function settings_field_label(_key, _comment) {
@@ -320,9 +565,9 @@ function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill
 		draw_set_halign(fa_left);
 		draw_set_valign(fa_middle);
 		draw_set_colour(c_white);
-		draw_text_transformed(list_x + 10 * _s, row_y + row_h * 0.38, string(item.name ?? ""), _body, _body, 0);
+		draw_text_transformed(list_x + 10 * _s, row_y + row_h * 0.32, string(item.name ?? ""), _body, _body, 0);
 		draw_set_colour(make_colour_rgb(150, 160, 180));
-		draw_text_transformed(list_x + 10 * _s, row_y + row_h * 0.72, string(item.author ?? ""), _small, _small, 0);
+		draw_text_transformed(list_x + 10 * _s, row_y + row_h * 0.74, string(item.author ?? ""), _small, _small, 0);
 	};
 	draw_set_halign(fa_center);
 	draw_set_valign(fa_middle);
@@ -330,7 +575,9 @@ function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill
 	draw_rectangle(skin_add.x, skin_add.y, skin_add.x + skin_add.w, skin_add.y + skin_add.h, false);
 	draw_set_colour(c_white);
 	draw_rectangle(skin_add.x, skin_add.y, skin_add.x + skin_add.w, skin_add.y + skin_add.h, true);
-	draw_text_transformed(skin_add.x + skin_add.w * 0.5, skin_add.y + skin_add.h * 0.5, lang("skin.add", "Add skin"), _body, _body, 0);
+	var add_label = lang("skin.add", "Add skin");
+	var add_scale = settings_fit_text_scale(add_label, skin_add.w * 0.84, skin_add.h * 0.62);
+	draw_text_transformed(skin_add.x + skin_add.w * 0.5, skin_add.y + skin_add.h * 0.5, add_label, add_scale, add_scale, 0);
 
 	var pack = skin_preview_runtime();
 	if (is_struct(pack)) then skin_pack_gpu_ensure(pack, true);
@@ -510,7 +757,9 @@ function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill
 		draw_rectangle(del_x, del_y, del_x + skin_delete.w, del_y + skin_delete.h, false);
 		draw_set_colour(c_white);
 		draw_rectangle(del_x, del_y, del_x + skin_delete.w, del_y + skin_delete.h, true);
-		draw_text_transformed(del_x + skin_delete.w * 0.5, del_y + skin_delete.h * 0.5, lang("skin.delete", "Delete"), _body, _body, 0);
+		var del_label = lang("skin.delete", "Delete");
+		var del_scale = settings_fit_text_scale(del_label, skin_delete.w * 0.84, skin_delete.h * 0.62);
+		draw_text_transformed(del_x + skin_delete.w * 0.5, del_y + skin_delete.h * 0.5, del_label, del_scale, del_scale, 0);
 	};
 
 	if (used_surf) {
@@ -527,7 +776,8 @@ function settings_gui_draw_tab(_box, _hot, _on, _label, _scale, _fill_on, _fill_
 	draw_rectangle(_box.x, _box.y, _box.x + _box.w, _box.y + _box.h, false);
 	draw_set_colour(c_white);
 	draw_rectangle(_box.x, _box.y, _box.x + _box.w, _box.y + _box.h, true);
-	draw_text_transformed(_box.x + _box.w * 0.5, _box.y + _box.h * 0.5, _label, _scale, _scale, 0);
+	var text_scale = settings_fit_text_scale(_label, _box.w * 0.84, _box.h * 0.62);
+	draw_text_transformed(_box.x + _box.w * 0.5, _box.y + _box.h * 0.5, _label, text_scale, text_scale, 0);
 }
 
 function settings_gui_blocking() {
@@ -573,8 +823,8 @@ function settings_menu_button_layout() {
 		btn_settings = { label:lang("common.settings"), x:0, y:0, w:1, h:1 };
 	};
 	btn_settings.label = lang("common.settings");
-	btn_settings.w = max(110, 140 * s);
-	btn_settings.h = max(36, 44 * s);
+	btn_settings.w = 140 * s;
+	btn_settings.h = 44 * s;
 	btn_settings.x = rw - btn_settings.w - pad;
 	btn_settings.y = pad;
 }
@@ -587,17 +837,21 @@ function settings_menu_button_hit(_mx, _my) {
 function settings_menu_button_draw(_hover, _s) {
 	if (!variable_instance_exists(id, "btn_settings") || !is_struct(btn_settings)) then return;
 	var b = btn_settings;
-	var scale = (is_real(_s) && _s > 0) ? _s : 1.0;
+	var old_font = draw_get_font();
 	var old_halign = draw_get_halign();
 	var old_valign = draw_get_valign();
 	var old_colour = draw_get_colour();
+	var button_font = settings_ui_font();
+	if (font_exists(button_font)) then draw_set_font(button_font);
 	draw_set_halign(fa_center);
 	draw_set_valign(fa_middle);
 	draw_set_colour(_hover ? make_colour_rgb(70, 110, 180) : make_colour_rgb(40, 48, 64));
 	draw_rectangle(b.x, b.y, b.x + b.w, b.y + b.h, false);
 	draw_set_colour(c_white);
 	draw_rectangle(b.x, b.y, b.x + b.w, b.y + b.h, true);
-	draw_text_transformed(b.x + b.w * 0.5, b.y + b.h * 0.5, b.label, 0.48 * scale, 0.48 * scale, 0);
+	var text_scale = settings_fit_text_scale(b.label, b.w * 0.76, b.h * 0.64);
+	draw_text_transformed(b.x + b.w * 0.5, b.y + b.h * 0.5, b.label, text_scale, text_scale, 0);
+	draw_set_font(old_font);
 	draw_set_halign(old_halign);
 	draw_set_valign(old_valign);
 	draw_set_colour(old_colour);
@@ -632,17 +886,17 @@ function settings_gui_commit_edit() {
 		try { keyboard_virtual_hide(); } catch (hide_err) { delete(hide_err); };
 	};
 	if (settings_kind(key) == "string") {
-		settings_set(key, text);
+		settings_gui_draft_set(key, text);
 	} else {
-		var parsed = settings_parse_value(text, settings_store()[$ key]);
-		settings_set(key, parsed);
+		var parsed = settings_parse_value(text, settings_gui_draft()[$ key]);
+		settings_gui_draft_set(key, parsed);
 	};
 }
 
 function settings_gui_begin_edit(_key) {
 	settings_gui_commit_edit();
 	editing_key = _key;
-	keyboard_string = string(settings_store()[$ _key] ?? "");
+	keyboard_string = string(settings_gui_draft()[$ _key] ?? "");
 	if (os_type == os_android) {
 		try { keyboard_virtual_show(0, 0, 0, false); }
 		catch (show_err) { delete(show_err); };
@@ -662,22 +916,26 @@ function settings_gui_layout() {
 	var pad = 18 * s;
 	tab_h = 46 * s;
 	tab_y = panel_y + 58 * s;
-	tab_w = (panel_w - pad * 5) / 4;
+	tab_w = (panel_w - pad * 4) / 3;
 	tab_normal = { x:panel_x + pad, y:tab_y, w:tab_w, h:tab_h };
-	tab_dev = { x:panel_x + pad * 2 + tab_w, y:tab_y, w:tab_w, h:tab_h };
-	tab_lang = { x:panel_x + pad * 3 + tab_w * 2, y:tab_y, w:tab_w, h:tab_h };
-	tab_skin = { x:panel_x + pad * 4 + tab_w * 3, y:tab_y, w:tab_w, h:tab_h };
-	close_w = 90 * s;
-	close_h = 36 * s;
-	close_x = panel_x + panel_w - pad - close_w;
-	close_y = panel_y + 12 * s;
+	tab_lang = { x:panel_x + pad * 2 + tab_w, y:tab_y, w:tab_w, h:tab_h };
+	tab_skin = { x:panel_x + pad * 3 + tab_w * 2, y:tab_y, w:tab_w, h:tab_h };
+	var header_h = 36 * s;
+	save_h = header_h;
+	discard_h = header_h;
+	save_y = panel_y + 12 * s;
+	discard_y = save_y;
+	save_w = settings_gui_button_width(lang("settings.save", "Save"), 90 * s, header_h);
+	discard_w = settings_gui_button_width(lang("settings.discardClose", "Don't save and close"), 90 * s, header_h);
+	save_x = panel_x + panel_w - pad - save_w;
+	discard_x = save_x - 8 * s - discard_w;
 	settings_gui_action_layout();
 	footer_h = 52 * s;
 	list_x = panel_x + pad;
 	list_w = panel_w - pad * 2;
 	list_y = tab_y + tab_h + 12 * s;
 	list_h = panel_h - (list_y - panel_y) - footer_h - pad;
-	row_h = max(48, 58 * s);
+	row_h = 58 * s;
 	visible_rows = max(1, floor(list_h / row_h));
 	clear_w = 160 * s;
 	clear_h = 40 * s;
@@ -697,8 +955,8 @@ function settings_gui_layout() {
 
 function settings_gui_action_kind() {
 	if (!variable_instance_exists(id, "tab")) then return "";
-	if (tab == 0 || tab == 1) then return "reset";
-	if (tab == 2) then return "reload";
+	if (tab == 0) then return "reset";
+	if (tab == 1) then return "reload";
 	return "";
 }
 
@@ -714,32 +972,33 @@ function settings_gui_action_layout() {
 	if (!is_real(s) || s <= 0) then s = 1.0;
 	var kind = settings_gui_action_kind();
 	show_action = (kind != "");
-	action_h = close_h;
-	action_y = close_y;
+	action_h = discard_h;
+	action_y = discard_y;
 	if (!show_action) {
 		action_w = 0;
-		action_x = close_x;
+		action_x = discard_x;
 		return;
 	};
 	var label = settings_gui_action_label();
-	var text_scale = 0.4 * s;
 	var text_w = 0;
 	if (string_length(label)) {
-		if (variable_instance_exists(id, "ui_font") && font_exists(ui_font)) {
+		var measure_font = settings_ui_font();
+		if (font_exists(measure_font)) {
 			var old_font = draw_get_font();
-			draw_set_font(ui_font);
+			draw_set_font(measure_font);
+			var text_scale = settings_fit_text_scale(label, 100000, action_h * 0.62);
 			text_w = string_width(label) * text_scale;
 			draw_set_font(old_font);
 		} else {
-			text_w = string_length(label) * 8 * s;
+			text_w = string_length(label) * action_h * 0.45;
 		};
 	};
-	action_w = max(close_w, ceil(text_w + 24 * s));
-	action_x = close_x - 8 * s - action_w;
+	action_w = max(discard_h * 2.5, ceil(text_w + discard_h * 0.7));
+	action_x = discard_x - 8 * s - action_w;
 }
 
 function settings_gui_rows() {
-	return settings_list(tab == 1);
+	return settings_gui_visible_rows();
 }
 
 function settings_gui_hit(_box, _mx, _my) {
@@ -758,8 +1017,12 @@ function settings_gui_init() {
 	drag_start_y = 0;
 	drag_start_scroll = 0;
 	editing_key = "";
-	hover_close = false;
+	hover_save = false;
+	hover_discard = false;
 	hover_action = false;
+	group_open = { display:false, debug:false, chart:false, deprecated:false };
+	draft = settings_clone(settings_store());
+	draft_saved = settings_clone(draft);
 	show_action = false;
 	action_x = 0;
 	action_y = 0;
@@ -794,9 +1057,86 @@ function settings_gui_init() {
 	hits_w = -1;
 	hits_h = -1;
 	hits_s = -1;
-	ui_font = pls_ui_font_add(24);
+	hits_fold = "";
+	ui_font = settings_ui_font();
 	settings_store();
 	settings_gui_layout();
+}
+
+function settings_gui_refresh_hits() {
+	var rows = (tab == 0) ? settings_gui_rows() : [];
+	var lang_rows = lang_packs();
+	var skin_rows = skin_menu_items();
+	var skin_visible = max(1, floor(skin_list_h / row_h));
+	var fold = settings_gui_fold_sig();
+	if (hits_tab == tab && hits_scroll == scroll && hits_visible == visible_rows
+		&& hits_w == layout_w && hits_h == layout_h && hits_s == layout_s && hits_fold == fold) then return;
+	hits_tab = tab;
+	hits_scroll = scroll;
+	hits_visible = visible_rows;
+	hits_w = layout_w;
+	hits_h = layout_h;
+	hits_s = layout_s;
+	hits_fold = fold;
+	row_hits = [];
+	lang_hits = [];
+	skin_hits = [];
+	if (tab == 2) {
+		var skin_last = min(array_length(skin_rows), scroll + skin_visible);
+		for (var si = scroll; si < skin_last; si++) {
+			var skin_item = skin_rows[si];
+			if (!is_struct(skin_item)) then continue;
+			var skin_row_y = list_y + (si - scroll) * row_h;
+			array_push(skin_hits, {
+				skin_id: string(skin_item.skin_id ?? ""),
+				box: { x:list_x, y:skin_row_y, w:skin_list_w, h:row_h }
+			});
+		};
+	} else if (tab == 1) {
+		var lang_last = min(array_length(lang_rows), scroll + visible_rows);
+		for (var li = scroll; li < lang_last; li++) {
+			var pack = lang_rows[li];
+			if (!is_struct(pack)) then continue;
+			var lang_row_y = list_y + (li - scroll) * row_h;
+			array_push(lang_hits, {
+				locale: string(pack.id ?? ""),
+				y: lang_row_y,
+				box: { x:list_x, y:lang_row_y, w:list_w, h:row_h }
+			});
+		};
+	} else {
+		var last = min(array_length(rows), scroll + visible_rows);
+		for (var i = scroll; i < last; i++) {
+			var entry = rows[i];
+			var row_y = list_y + (i - scroll) * row_h;
+			if (entry.type == "group") {
+				array_push(row_hits, {
+					row_type:"group",
+					group_id:entry.id,
+					box:{ x:list_x, y:row_y, w:list_w, h:row_h }
+				});
+				continue;
+			};
+			var item = entry.item;
+			var ctrl_h = max(8, row_h * 0.62);
+			var ctrl_w = min(list_w * 0.42, max(220 * layout_s, ctrl_h * 3.4));
+			var ctrl_x = list_x + list_w - ctrl_w - 8 * layout_s;
+			var ctrl_y = row_y + (row_h - ctrl_h) * 0.5;
+			var kind = settings_kind(item.key);
+			var hit = { row_type:"field", key:item.key, kind:kind, row:i, y:row_y, minus:undefined, plus:undefined, toggle:undefined, field:undefined };
+			if (kind == "bool") {
+				hit.toggle = { x:ctrl_x, y:ctrl_y, w:ctrl_w, h:ctrl_h };
+			} else if (kind == "number") {
+				var btn_w = ctrl_h;
+				hit.minus = { x:ctrl_x, y:ctrl_y, w:btn_w, h:ctrl_h };
+				hit.plus = { x:ctrl_x + ctrl_w - btn_w, y:ctrl_y, w:btn_w, h:ctrl_h };
+				hit.field = { x:ctrl_x + btn_w + 4 * layout_s, y:ctrl_y, w:ctrl_w - btn_w * 2 - 8 * layout_s, h:ctrl_h };
+			} else {
+				hit.field = { x:ctrl_x, y:ctrl_y, w:ctrl_w, h:ctrl_h };
+			};
+			array_push(row_hits, hit);
+		};
+	};
 }
 
 function settings_gui_step() {
@@ -831,44 +1171,44 @@ function settings_gui_step() {
 		exit;
 	};
 
-	var rows = settings_gui_rows();
+	var rows = (tab == 0) ? settings_gui_rows() : [];
 	var lang_rows = lang_packs();
 	var skin_rows = skin_menu_items();
 	var list_count = array_length(rows);
-	if (tab == 2) then list_count = array_length(lang_rows);
-	else if (tab == 3) then list_count = array_length(skin_rows);
+	if (tab == 1) then list_count = array_length(lang_rows);
+	else if (tab == 2) then list_count = array_length(skin_rows);
 	var skin_visible = max(1, floor(skin_list_h / row_h));
-	var max_scroll = max(0, list_count - ((tab == 3) ? skin_visible : visible_rows));
+	var max_scroll = max(0, list_count - ((tab == 2) ? skin_visible : visible_rows));
 	scroll = clamp(scroll, 0, max_scroll);
 
 	if (is_string(editing_key) && string_length(editing_key)) {
 		if (keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_escape)) {
-			if (keyboard_check_pressed(vk_escape)) then keyboard_string = string(settings_store()[$ editing_key] ?? "");
+			if (keyboard_check_pressed(vk_escape)) then keyboard_string = string(settings_gui_draft()[$ editing_key] ?? "");
 			settings_gui_commit_edit();
 			exit;
 		};
 	} else if (keyboard_check_pressed(vk_escape)) {
-		settings_gui_close();
+		settings_gui_discard_close();
 		exit;
 	};
 
 	var mx = mouse_x;
 	var my = mouse_y;
 	settings_gui_action_layout();
-	hover_close = point_in_rectangle(mx, my, close_x, close_y, close_x + close_w, close_y + close_h);
+	hover_save = point_in_rectangle(mx, my, save_x, save_y, save_x + save_w, save_y + save_h);
+	hover_discard = point_in_rectangle(mx, my, discard_x, discard_y, discard_x + discard_w, discard_y + discard_h);
 	hover_action = show_action && point_in_rectangle(mx, my, action_x, action_y, action_x + action_w, action_y + action_h);
 	hover_tab_normal = settings_gui_hit(tab_normal, mx, my);
-	hover_tab_dev = settings_gui_hit(tab_dev, mx, my);
 	hover_tab_lang = settings_gui_hit(tab_lang, mx, my);
 	hover_tab_skin = settings_gui_hit(tab_skin, mx, my);
-	hover_skin_add = (tab == 3) && settings_gui_hit(skin_add, mx, my);
-	hover_skin_delete = (tab == 3) && (skin_selected_id() != SKIN_DEFAULT_ID) && settings_gui_hit(skin_delete, mx, my);
+	hover_skin_add = (tab == 2) && settings_gui_hit(skin_add, mx, my);
+	hover_skin_delete = (tab == 2) && (skin_selected_id() != SKIN_DEFAULT_ID) && settings_gui_hit(skin_delete, mx, my);
 	hover_clear = show_clear && point_in_rectangle(mx, my, clear_x, clear_y, clear_x + clear_w, clear_y + clear_h);
 
 	if (mouse_wheel_up()) then scroll = max(0, scroll - 1);
 	if (mouse_wheel_down()) then scroll = min(max_scroll, scroll + 1);
 
-	var in_list = (tab == 3)
+	var in_list = (tab == 2)
 		? point_in_rectangle(mx, my, list_x, list_y, list_x + skin_list_w, list_y + skin_list_h)
 		: point_in_rectangle(mx, my, list_x, list_y, list_x + list_w, list_y + list_h);
 	if (mouse_check_button_pressed(mb_left) && in_list) {
@@ -886,72 +1226,17 @@ function settings_gui_step() {
 	};
 	if (!mouse_check_button(mb_left)) then dragging = false;
 
-	if (hits_tab != tab || hits_scroll != scroll || hits_visible != visible_rows
-		|| hits_w != layout_w || hits_h != layout_h || hits_s != layout_s) {
-		hits_tab = tab;
-		hits_scroll = scroll;
-		hits_visible = visible_rows;
-		hits_w = layout_w;
-		hits_h = layout_h;
-		hits_s = layout_s;
-		row_hits = [];
-		lang_hits = [];
-		skin_hits = [];
-		if (tab == 3) {
-			var skin_last = min(array_length(skin_rows), scroll + skin_visible);
-			for (var si = scroll; si < skin_last; si++) {
-				var skin_item = skin_rows[si];
-				if (!is_struct(skin_item)) then continue;
-				var skin_row_y = list_y + (si - scroll) * row_h;
-				array_push(skin_hits, {
-					skin_id: string(skin_item.skin_id ?? ""),
-					box: { x:list_x, y:skin_row_y, w:skin_list_w, h:row_h }
-				});
-			};
-		} else if (tab == 2) {
-			var lang_last = min(array_length(lang_rows), scroll + visible_rows);
-			for (var li = scroll; li < lang_last; li++) {
-				var pack = lang_rows[li];
-				if (!is_struct(pack)) then continue;
-				var lang_row_y = list_y + (li - scroll) * row_h;
-				array_push(lang_hits, {
-					locale: string(pack.id ?? ""),
-					y: lang_row_y,
-					box: { x:list_x, y:lang_row_y, w:list_w, h:row_h }
-				});
-			};
-		} else {
-			var last = min(array_length(rows), scroll + visible_rows);
-			for (var i = scroll; i < last; i++) {
-				var item = rows[i];
-				var row_y = list_y + (i - scroll) * row_h;
-				var ctrl_w = min(220 * layout_s, list_w * 0.38);
-				var ctrl_x = list_x + list_w - ctrl_w - 8 * layout_s;
-				var ctrl_h = min(36 * layout_s, row_h - 10 * layout_s);
-				var ctrl_y = row_y + (row_h - ctrl_h) * 0.5;
-				var kind = settings_kind(item.key);
-				var hit = { key:item.key, kind:kind, row:i, y:row_y, minus:undefined, plus:undefined, toggle:undefined, field:undefined };
-				if (kind == "bool") {
-					hit.toggle = { x:ctrl_x, y:ctrl_y, w:ctrl_w, h:ctrl_h };
-				} else if (kind == "number") {
-					var btn_w = 40 * layout_s;
-					hit.minus = { x:ctrl_x, y:ctrl_y, w:btn_w, h:ctrl_h };
-					hit.plus = { x:ctrl_x + ctrl_w - btn_w, y:ctrl_y, w:btn_w, h:ctrl_h };
-					hit.field = { x:ctrl_x + btn_w + 4 * layout_s, y:ctrl_y, w:ctrl_w - btn_w * 2 - 8 * layout_s, h:ctrl_h };
-				} else {
-					hit.field = { x:ctrl_x, y:ctrl_y, w:ctrl_w, h:ctrl_h };
-				};
-				array_push(row_hits, hit);
-			};
-		};
-	};
+	settings_gui_refresh_hits();
 
 	if (!armed || !mouse_check_button_pressed(mb_left)) then exit;
 	if (drag_moved) then exit;
 
-	if (hover_close) {
-		settings_gui_commit_edit();
-		settings_gui_close();
+	if (hover_save) {
+		settings_gui_request_save();
+		exit;
+	};
+	if (hover_discard) {
+		settings_gui_discard_close();
 		exit;
 	};
 	if (hover_action) {
@@ -985,27 +1270,20 @@ function settings_gui_step() {
 		scroll = 0;
 		exit;
 	};
-	if (hover_tab_dev && tab != 1) {
+	if (hover_tab_lang && tab != 1) {
 		settings_gui_commit_edit();
 		tab = 1;
 		scroll = 0;
-		settings_warn_developer();
 		exit;
 	};
-	if (hover_tab_lang && tab != 2) {
+	if (hover_tab_skin && tab != 2) {
 		settings_gui_commit_edit();
 		tab = 2;
-		scroll = 0;
-		exit;
-	};
-	if (hover_tab_skin && tab != 3) {
-		settings_gui_commit_edit();
-		tab = 3;
 		scroll = 0;
 		skin_preview_set(skin_selected_id());
 		exit;
 	};
-	if (tab == 3) {
+	if (tab == 2) {
 		if (hover_skin_add) {
 			skin_log("add button clicked");
 			skin_pick_file();
@@ -1026,13 +1304,14 @@ function settings_gui_step() {
 	if (hover_clear) {
 		settings_gui_commit_edit();
 		settings_clear_data();
+		settings_gui_sync_draft();
 		scroll = 0;
 		if (!pls_is_gx_remote()) {
 			msgbox_info_async("Data cleared and defaults restored.", "Settings", [msgbox_button("OK")], MSGBOX_BUTTON_ALIGN.RIGHT);
 		};
 		exit;
 	};
-	if (tab == 2) {
+	if (tab == 1) {
 		var current_locale = lang_current_id();
 		for (var lp = 0; lp < array_length(lang_hits); lp++) {
 			var lang_hit = lang_hits[lp];
@@ -1045,24 +1324,34 @@ function settings_gui_step() {
 
 	for (var h = 0; h < array_length(row_hits); h++) {
 		var rh = row_hits[h];
+		if (rh.row_type == "group") {
+			if (settings_gui_hit(rh.box, mx, my)) {
+				var state = settings_gui_group_state();
+				state[$ rh.group_id] = !bool(state[$ rh.group_id]);
+				var shown = array_length(settings_gui_rows());
+				scroll = clamp(scroll, 0, max(0, shown - visible_rows));
+				hits_fold = "";
+				exit;
+			};
+			continue;
+		};
 		var key = rh.key;
-		var store = settings_store();
-		var cur = store[$ key];
+		var cur = settings_gui_draft()[$ key];
 		if (is_struct(rh.toggle) && settings_gui_hit(rh.toggle, mx, my)) {
 			settings_gui_commit_edit();
-			settings_set(key, !bool(cur));
+			settings_gui_draft_set(key, !bool(cur));
 			exit;
 		};
 		if (is_struct(rh.minus) && settings_gui_hit(rh.minus, mx, my)) {
 			settings_gui_commit_edit();
-			if (key == "aa_level") then settings_set(key, settings_aa_cycle(real(cur), -1));
-			else settings_set(key, real(cur) - settings_number_step(key));
+			if (key == "aa_level") then settings_gui_draft_set(key, settings_aa_cycle(real(cur), -1));
+			else settings_gui_draft_set(key, real(cur) - settings_number_step(key));
 			exit;
 		};
 		if (is_struct(rh.plus) && settings_gui_hit(rh.plus, mx, my)) {
 			settings_gui_commit_edit();
-			if (key == "aa_level") then settings_set(key, settings_aa_cycle(real(cur), 1));
-			else settings_set(key, real(cur) + settings_number_step(key));
+			if (key == "aa_level") then settings_gui_draft_set(key, settings_aa_cycle(real(cur), 1));
+			else settings_gui_draft_set(key, real(cur) + settings_number_step(key));
 			exit;
 		};
 		if (is_struct(rh.field) && settings_gui_hit(rh.field, mx, my)) {
@@ -1080,16 +1369,22 @@ function settings_gui_draw() {
 	var old_valign = draw_get_valign();
 	var old_colour = draw_get_colour();
 	var old_alpha = draw_get_alpha();
-	if (font_exists(ui_font)) then draw_set_font(ui_font);
+	shader_reset();
+	gpu_set_blendmode(bm_normal);
+	var draw_font = settings_ui_font();
+	if (!font_exists(draw_font) && variable_instance_exists(id, "ui_font")) then draw_font = ui_font;
+	if (font_exists(draw_font)) then draw_set_font(draw_font);
 	else draw_set_font(-1);
+	settings_gui_refresh_hits();
 	settings_gui_action_layout();
 
 	var s = layout_s;
 	if (!is_real(s) || s <= 0) then s = 1.0;
-	var title_scale = 0.7 * s;
-	var tab_scale = 0.48 * s;
-	var body_scale = 0.42 * s;
-	var small_scale = 0.32 * s;
+	var font_h = max(1, string_height("Ag"));
+	var title_scale = max(0.05, (34 * s) / font_h);
+	var tab_scale = max(0.05, (tab_h * 0.62) / font_h);
+	var body_scale = max(0.05, (row_h * 0.36) / font_h);
+	var small_scale = max(0.05, (row_h * 0.30) / font_h);
 	var fill_idle = make_colour_rgb(40, 48, 64);
 	var fill_hot = make_colour_rgb(70, 110, 180);
 	var fill_tab = make_colour_rgb(28, 34, 48);
@@ -1110,11 +1405,20 @@ function settings_gui_draw() {
 	draw_text_transformed(panel_x + 18 * s, panel_y + 30 * s, lang("settings.title"), title_scale, title_scale, 0);
 
 	draw_set_halign(fa_center);
-	draw_set_colour(hover_close ? fill_hot : fill_idle);
-	draw_rectangle(close_x, close_y, close_x + close_w, close_y + close_h, false);
+	draw_set_colour(hover_save ? fill_hot : fill_idle);
+	draw_rectangle(save_x, save_y, save_x + save_w, save_y + save_h, false);
 	draw_set_colour(c_white);
-	draw_rectangle(close_x, close_y, close_x + close_w, close_y + close_h, true);
-	draw_text_transformed(close_x + close_w * 0.5, close_y + close_h * 0.5, lang("settings.close"), small_scale + 0.08 * s, small_scale + 0.08 * s, 0);
+	draw_rectangle(save_x, save_y, save_x + save_w, save_y + save_h, true);
+	var save_label = lang("settings.save", "Save");
+	var save_scale = settings_fit_text_scale(save_label, save_w * 0.84, save_h * 0.62);
+	draw_text_transformed(save_x + save_w * 0.5, save_y + save_h * 0.5, save_label, save_scale, save_scale, 0);
+	draw_set_colour(hover_discard ? fill_hot : fill_idle);
+	draw_rectangle(discard_x, discard_y, discard_x + discard_w, discard_y + discard_h, false);
+	draw_set_colour(c_white);
+	draw_rectangle(discard_x, discard_y, discard_x + discard_w, discard_y + discard_h, true);
+	var discard_label = lang("settings.discardClose", "Don't save and close");
+	var discard_scale = settings_fit_text_scale(discard_label, discard_w * 0.86, discard_h * 0.62);
+	draw_text_transformed(discard_x + discard_w * 0.5, discard_y + discard_h * 0.5, discard_label, discard_scale, discard_scale, 0);
 
 	if (show_action) {
 		var action_label = settings_gui_action_label();
@@ -1122,15 +1426,15 @@ function settings_gui_draw() {
 		draw_rectangle(action_x, action_y, action_x + action_w, action_y + action_h, false);
 		draw_set_colour(c_white);
 		draw_rectangle(action_x, action_y, action_x + action_w, action_y + action_h, true);
-		draw_text_transformed(action_x + action_w * 0.5, action_y + action_h * 0.5, action_label, small_scale + 0.08 * s, small_scale + 0.08 * s, 0);
+		var action_scale = settings_fit_text_scale(action_label, action_w * 0.86, action_h * 0.62);
+		draw_text_transformed(action_x + action_w * 0.5, action_y + action_h * 0.5, action_label, action_scale, action_scale, 0);
 	};
 
 	settings_gui_draw_tab(tab_normal, hover_tab_normal, tab == 0, lang("settings.normal"), tab_scale, fill_hot, fill_tab);
-	settings_gui_draw_tab(tab_dev, hover_tab_dev, tab == 1, lang("settings.developer"), tab_scale, fill_hot, fill_tab);
-	settings_gui_draw_tab(tab_lang, hover_tab_lang, tab == 2, lang("settings.language"), tab_scale, fill_hot, fill_tab);
-	settings_gui_draw_tab(tab_skin, hover_tab_skin, tab == 3, lang("settings.skin", "Skin"), tab_scale, fill_hot, fill_tab);
+	settings_gui_draw_tab(tab_lang, hover_tab_lang, tab == 1, lang("settings.language"), tab_scale, fill_hot, fill_tab);
+	settings_gui_draw_tab(tab_skin, hover_tab_skin, tab == 2, lang("settings.skin", "Skin"), tab_scale, fill_hot, fill_tab);
 
-	if (tab == 3) {
+	if (tab == 2) {
 		settings_gui_draw_skins(s, body_scale, small_scale, fill_idle, fill_hot, fill_on);
 	} else {
 	draw_set_colour(make_colour_rgb(22, 29, 45));
@@ -1138,7 +1442,7 @@ function settings_gui_draw() {
 	draw_set_colour(make_colour_rgb(70, 80, 96));
 	draw_rectangle(list_x, list_y, list_x + list_w, list_y + list_h, true);
 
-	if (tab == 2) {
+	if (tab == 1) {
 		var packs = lang_packs();
 		var current_locale = lang_current_id();
 		var lang_last = min(array_length(packs), scroll + visible_rows);
@@ -1154,37 +1458,67 @@ function settings_gui_draw() {
 				draw_set_colour(make_colour_rgb(20, 26, 40));
 				draw_rectangle(list_x + 2, pack_y, list_x + list_w - 2, pack_y + row_h, false);
 			};
+			var author = string(pack[$ "author"] ?? "");
+			var name_w = string_length(author) ? list_w * 0.58 : list_w * 0.9;
+			var pack_label = lang_pack_label(pack);
+			var pack_scale = min(body_scale, settings_fit_text_scale(pack_label, name_w, row_h * 0.40));
 			draw_set_halign(fa_left);
 			draw_set_valign(fa_middle);
 			draw_set_colour(c_white);
-			draw_text_transformed(list_x + 12 * s, pack_y + row_h * 0.38, lang_pack_label(pack), body_scale, body_scale, 0);
+			draw_text_transformed(list_x + 12 * s, pack_y + row_h * 0.32, pack_label, pack_scale, pack_scale, 0);
 			draw_set_colour(make_colour_rgb(150, 160, 180));
-			draw_text_transformed(list_x + 12 * s, pack_y + row_h * 0.72, string(pack.id ?? ""), small_scale, small_scale, 0);
+			var id_scale = min(small_scale, settings_fit_text_scale(string(pack.id ?? ""), name_w, row_h * 0.30));
+			draw_text_transformed(list_x + 12 * s, pack_y + row_h * 0.74, string(pack.id ?? ""), id_scale, id_scale, 0);
+			if (string_length(author)) {
+				draw_set_halign(fa_right);
+				draw_set_colour(c_white);
+				var author_scale = min(body_scale, settings_fit_text_scale(author, list_w * 0.34, row_h * 0.62));
+				draw_text_transformed(list_x + list_w - 12 * s, pack_y + row_h * 0.5, author, author_scale, author_scale, 0);
+			};
 		};
 	} else {
 	var rows = settings_gui_rows();
-	var store = settings_store();
+	var store = settings_gui_draft();
+	var fold = settings_gui_group_state();
 	var last = min(array_length(rows), scroll + visible_rows);
 	for (var i = scroll; i < last; i++) {
-		var item = rows[i];
+		var entry = rows[i];
 		var row_y = list_y + (i - scroll) * row_h;
+		if (entry.type == "group") {
+			var group_open_now = bool(fold[$ entry.id]);
+			draw_set_colour(entry.id == "deprecated" ? make_colour_rgb(64, 40, 48) : make_colour_rgb(32, 44, 68));
+			draw_rectangle(list_x + 2, row_y, list_x + list_w - 2, row_y + row_h, false);
+			var mark = group_open_now ? "-  " : "+  ";
+			var group_label = mark + settings_group_title(entry.id);
+			var group_scale = min(body_scale, settings_fit_text_scale(group_label, list_w * 0.9, row_h * 0.62));
+			draw_set_halign(fa_left);
+			draw_set_valign(fa_middle);
+			draw_set_colour(c_white);
+			draw_text_transformed(list_x + 16 * s, row_y + row_h * 0.5, group_label, group_scale, group_scale, 0);
+			continue;
+		};
+		var item = entry.item;
 		if ((i - scroll) mod 2 == 1) {
 			draw_set_colour(make_colour_rgb(20, 26, 40));
 			draw_rectangle(list_x + 2, row_y, list_x + list_w - 2, row_y + row_h, false);
 		};
 		var label = settings_field_label(item.key, item.comment);
+		var label_w = max(40, list_w * 0.52);
+		var label_scale = min(body_scale, settings_fit_text_scale(label, label_w, row_h * 0.40));
+		var key_scale = min(small_scale, settings_fit_text_scale(item.key, label_w, row_h * 0.30));
 		draw_set_halign(fa_left);
 		draw_set_valign(fa_middle);
 		draw_set_colour(c_white);
-		draw_text_transformed(list_x + 12 * s, row_y + row_h * 0.38, label, body_scale, body_scale, 0);
+		draw_text_transformed(list_x + 28 * s, row_y + row_h * 0.32, label, label_scale, label_scale, 0);
 		draw_set_colour(make_colour_rgb(150, 160, 180));
-		draw_text_transformed(list_x + 12 * s, row_y + row_h * 0.72, item.key, small_scale, small_scale, 0);
+		draw_text_transformed(list_x + 28 * s, row_y + row_h * 0.74, item.key, key_scale, key_scale, 0);
 	};
 
 	draw_set_halign(fa_center);
 	draw_set_valign(fa_middle);
 	for (var h = 0; h < array_length(row_hits); h++) {
 		var rh = row_hits[h];
+		if (rh.row_type == "group") then continue;
 		var cur = store[$ rh.key];
 		if (rh.kind == "bool" && is_struct(rh.toggle)) {
 			var on = bool(cur);
@@ -1192,7 +1526,9 @@ function settings_gui_draw() {
 			draw_rectangle(rh.toggle.x, rh.toggle.y, rh.toggle.x + rh.toggle.w, rh.toggle.y + rh.toggle.h, false);
 			draw_set_colour(c_white);
 			draw_rectangle(rh.toggle.x, rh.toggle.y, rh.toggle.x + rh.toggle.w, rh.toggle.y + rh.toggle.h, true);
-			draw_text_transformed(rh.toggle.x + rh.toggle.w * 0.5, rh.toggle.y + rh.toggle.h * 0.5, on ? lang("common.on") : lang("common.off"), body_scale, body_scale, 0);
+			var toggle_label = on ? lang("common.on") : lang("common.off");
+			var toggle_scale = settings_fit_text_scale(toggle_label, rh.toggle.w * 0.78, rh.toggle.h * 0.64);
+			draw_text_transformed(rh.toggle.x + rh.toggle.w * 0.5, rh.toggle.y + rh.toggle.h * 0.5, toggle_label, toggle_scale, toggle_scale, 0);
 		} else if (rh.kind == "number") {
 			var shown = (editing_key == rh.key) ? keyboard_string : string(cur);
 			if (is_struct(rh.minus)) {
@@ -1200,21 +1536,24 @@ function settings_gui_draw() {
 				draw_rectangle(rh.minus.x, rh.minus.y, rh.minus.x + rh.minus.w, rh.minus.y + rh.minus.h, false);
 				draw_set_colour(c_white);
 				draw_rectangle(rh.minus.x, rh.minus.y, rh.minus.x + rh.minus.w, rh.minus.y + rh.minus.h, true);
-				draw_text_transformed(rh.minus.x + rh.minus.w * 0.5, rh.minus.y + rh.minus.h * 0.5, "-", body_scale, body_scale, 0);
+				var minus_scale = settings_fit_text_scale("-", rh.minus.w * 0.6, rh.minus.h * 0.64);
+				draw_text_transformed(rh.minus.x + rh.minus.w * 0.5, rh.minus.y + rh.minus.h * 0.5, "-", minus_scale, minus_scale, 0);
 			};
 			if (is_struct(rh.plus)) {
 				draw_set_colour(fill_idle);
 				draw_rectangle(rh.plus.x, rh.plus.y, rh.plus.x + rh.plus.w, rh.plus.y + rh.plus.h, false);
 				draw_set_colour(c_white);
 				draw_rectangle(rh.plus.x, rh.plus.y, rh.plus.x + rh.plus.w, rh.plus.y + rh.plus.h, true);
-				draw_text_transformed(rh.plus.x + rh.plus.w * 0.5, rh.plus.y + rh.plus.h * 0.5, "+", body_scale, body_scale, 0);
+				var plus_scale = settings_fit_text_scale("+", rh.plus.w * 0.6, rh.plus.h * 0.64);
+				draw_text_transformed(rh.plus.x + rh.plus.w * 0.5, rh.plus.y + rh.plus.h * 0.5, "+", plus_scale, plus_scale, 0);
 			};
 			if (is_struct(rh.field)) {
 				draw_set_colour(editing_key == rh.key ? make_colour_rgb(38, 75, 104) : make_colour_rgb(22, 29, 45));
 				draw_rectangle(rh.field.x, rh.field.y, rh.field.x + rh.field.w, rh.field.y + rh.field.h, false);
 				draw_set_colour(c_white);
 				draw_rectangle(rh.field.x, rh.field.y, rh.field.x + rh.field.w, rh.field.y + rh.field.h, true);
-				draw_text_transformed(rh.field.x + rh.field.w * 0.5, rh.field.y + rh.field.h * 0.5, shown, body_scale, body_scale, 0);
+				var shown_scale = settings_fit_text_scale(shown, rh.field.w * 0.84, rh.field.h * 0.64);
+				draw_text_transformed(rh.field.x + rh.field.w * 0.5, rh.field.y + rh.field.h * 0.5, shown, shown_scale, shown_scale, 0);
 			};
 		} else if (is_struct(rh.field)) {
 			var text = (editing_key == rh.key) ? keyboard_string : string(cur ?? "");
@@ -1222,7 +1561,8 @@ function settings_gui_draw() {
 			draw_rectangle(rh.field.x, rh.field.y, rh.field.x + rh.field.w, rh.field.y + rh.field.h, false);
 			draw_set_colour(c_white);
 			draw_rectangle(rh.field.x, rh.field.y, rh.field.x + rh.field.w, rh.field.y + rh.field.h, true);
-			draw_text_transformed(rh.field.x + rh.field.w * 0.5, rh.field.y + rh.field.h * 0.5, text, body_scale, body_scale, 0);
+			var text_scale = settings_fit_text_scale(text, rh.field.w * 0.84, rh.field.h * 0.64);
+			draw_text_transformed(rh.field.x + rh.field.w * 0.5, rh.field.y + rh.field.h * 0.5, text, text_scale, text_scale, 0);
 		};
 	};
 	};
@@ -1233,16 +1573,21 @@ function settings_gui_draw() {
 		draw_rectangle(clear_x, clear_y, clear_x + clear_w, clear_y + clear_h, false);
 		draw_set_colour(c_white);
 		draw_rectangle(clear_x, clear_y, clear_x + clear_w, clear_y + clear_h, true);
-		draw_text_transformed(clear_x + clear_w * 0.5, clear_y + clear_h * 0.5, lang("settings.clearData"), body_scale, body_scale, 0);
+		var clear_label = lang("settings.clearData");
+		var clear_scale = settings_fit_text_scale(clear_label, clear_w * 0.84, clear_h * 0.62);
+		draw_text_transformed(clear_x + clear_w * 0.5, clear_y + clear_h * 0.5, clear_label, clear_scale, clear_scale, 0);
 	};
 
 	draw_set_halign(fa_right);
 	draw_set_colour(c_gray);
 	var hint = lang("settings.hintNormal");
-	if (tab == 1) then hint = lang("settings.hintDeveloper");
-	else if (tab == 2) then hint = lang_current_label();
-	else if (tab == 3) then hint = lang("settings.hintSkin", "Add a resource pack, then select it. It applies when you enter a chart.");
-	draw_text_transformed(panel_x + panel_w - 18 * s, panel_y + panel_h - 26 * s, hint, small_scale, small_scale, 0);
+	if (tab == 1) then hint = lang_current_label();
+	else if (tab == 2) then hint = lang("settings.hintSkin", "Add a resource pack, then select it. It applies when you enter a chart.");
+	var hint_left = panel_x + 18 * s;
+	if (show_clear) then hint_left = clear_x + clear_w + 12 * s;
+	var hint_w = max(40, panel_x + panel_w - 18 * s - hint_left);
+	var hint_scale = min(small_scale, settings_fit_text_scale(hint, hint_w, row_h * 0.30));
+	draw_text_transformed(panel_x + panel_w - 18 * s, panel_y + panel_h - 26 * s, hint, hint_scale, hint_scale, 0);
 
 	draw_set_font(old_font);
 	draw_set_halign(old_halign);

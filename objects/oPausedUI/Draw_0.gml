@@ -1,2 +1,2 @@
-/// @description Pause UI is appended by oChartMask after chart content.
+/// @description Pause menu is drawn in Draw End, after the chart blit.
 exit;

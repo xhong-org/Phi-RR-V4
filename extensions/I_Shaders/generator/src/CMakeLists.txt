@@ -10,7 +10,7 @@ if(WIN32)
   target_sources(${PROJECT_NAME} PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/../../../I_NativeCommon/I_Modules.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/../../native/I_Shaders.rc")
-  target_link_libraries(${PROJECT_NAME} PRIVATE d3d11 d3dcompiler dxguid)
+  target_link_libraries(${PROJECT_NAME} PRIVATE d3d11 d3dcompiler dxguid opengl32)
 elseif(ANDROID)
   set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "IShaders")
   target_sources(${PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../../native/I_Shaders_android.cpp")

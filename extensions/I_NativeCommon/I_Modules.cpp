@@ -5,6 +5,7 @@
 
 #if defined(I_SHADERS_BUILD)
 #include "native/IShadersInternal_native.h"
+#include "native/I_Shaders_gles.h"
 #elif defined(I_PARALLEL_BUILD)
 #include "native/IParallelInternal_native.h"
 #elif defined(I_PULSE_BUILD)
@@ -277,6 +278,11 @@ ID3D11RasterizerState* g_fullscreenRasterizer = nullptr;
 ID3D11DepthStencilState* g_fullscreenDepthStencil = nullptr;
 ID3D11BlendState* g_fullscreenBlend = nullptr;
 ID3D11SamplerState* g_fullscreenSampler = nullptr;
+ID3D11Texture2D* g_captureTexture = nullptr;
+ID3D11ShaderResourceView* g_captureSrv = nullptr;
+DXGI_FORMAT g_captureFormat = DXGI_FORMAT_UNKNOWN;
+UINT g_captureWidth = 0;
+UINT g_captureHeight = 0;
 UINT g_previousSlot = 0;
 bool g_active = false;
 std::int32_t g_lastTargetWidth = 0;
@@ -528,21 +534,36 @@ VSOutput main(uint vertexId : SV_VertexID) {
     blendDesc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
     if (FAILED(g_device->CreateBlendState(&blendDesc, &g_fullscreenBlend))) return -1;
     D3D11_SAMPLER_DESC samplerDesc{};
-    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    // Chart surfaces only have mip 0 filled. A linear mip filter blends that
+    // with an empty mip and the sample comes back black.
+    samplerDesc.Filter = D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT;
     samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
     samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
     samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
-    samplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+    samplerDesc.MaxLOD = 0;
     if (FAILED(g_device->CreateSamplerState(&samplerDesc, &g_fullscreenSampler))) return -1;
+    rpe_gles_startup();
     setError({});
     return 3;
 }
 
 std::int32_t rpe_hlsl_state() {
-    return 202607257 + (g_device ? 1 : 0) + (g_context ? 2 : 0);
+    return 202607257 + (g_device ? 1 : 0) + (g_context ? 2 : 0) + (rpe_gles_available() ? 4 : 0);
 }
 
 std::int32_t rpe_hlsl_compile(std::string_view source, std::string_view sourceName) {
+    if (rpe_gles_is_source(source)) {
+        if (!rpe_gles_available()) {
+            setError(rpe_gles_last_error().empty()
+                ? "Direct GLSL ES compiler is not available."
+                : rpe_gles_last_error());
+            return -1;
+        }
+        const std::int32_t handle = rpe_gles_compile(source, sourceName);
+        if (handle < 0) setError(rpe_gles_last_error());
+        else setError({});
+        return handle;
+    }
     if (!g_device || !g_context || source.empty()) {
         setError("RPE HLSL backend is not initialized.");
         return -1;
@@ -673,6 +694,7 @@ std::int32_t rpe_hlsl_compile(std::string_view source, std::string_view sourceNa
 
 bool rpe_hlsl_set_uniform_component(std::int32_t handle, std::string_view name,
     std::int32_t component, float value) {
+    if (handle >= 1000000) return rpe_gles_set_uniform(handle, name, component, value);
     const auto shaderIt = g_shaders.find(handle);
     if (shaderIt == g_shaders.end() || name.empty() || component < 0 || component > 3) return false;
     ShaderRecord& record = *shaderIt->second;
@@ -689,6 +711,7 @@ bool rpe_hlsl_set_uniform_component(std::int32_t handle, std::string_view name,
 }
 
 bool rpe_hlsl_begin(std::int32_t handle) {
+    if (handle >= 1000000) return rpe_gles_available();
     restoreState();
     const auto shaderIt = g_shaders.find(handle);
     if (!g_context || shaderIt == g_shaders.end()) return false;
@@ -705,15 +728,129 @@ bool rpe_hlsl_begin(std::int32_t handle) {
     return true;
 }
 
+DXGI_FORMAT rpeColorViewFormat(DXGI_FORMAT format) {
+    switch (format) {
+        case DXGI_FORMAT_R8G8B8A8_TYPELESS: return DXGI_FORMAT_R8G8B8A8_UNORM;
+        case DXGI_FORMAT_B8G8R8A8_TYPELESS: return DXGI_FORMAT_B8G8R8A8_UNORM;
+        case DXGI_FORMAT_R16G16B16A16_TYPELESS: return DXGI_FORMAT_R16G16B16A16_FLOAT;
+        default: return format;
+    }
+}
+
+void rpeReleaseCapture() {
+    if (g_captureSrv) g_captureSrv->Release();
+    if (g_captureTexture) g_captureTexture->Release();
+    g_captureSrv = nullptr;
+    g_captureTexture = nullptr;
+    g_captureFormat = DXGI_FORMAT_UNKNOWN;
+    g_captureWidth = 0;
+    g_captureHeight = 0;
+}
+
+// GameMaker does not leave the surface that was just drawn in PS slot 0.
+// Sampling that slot replaces the captured notes, hits and UI. The current
+// render target already holds that draw, so copy it and sample the copy.
+ID3D11ShaderResourceView* rpeSnapshotRenderTarget() {
+    if (!g_device || !g_context) return nullptr;
+    ID3D11RenderTargetView* targetView = nullptr;
+    ID3D11DepthStencilView* depthView = nullptr;
+    g_context->OMGetRenderTargets(1, &targetView, &depthView);
+    if (!targetView) {
+        if (depthView) depthView->Release();
+        return nullptr;
+    }
+    ID3D11Resource* targetResource = nullptr;
+    targetView->GetResource(&targetResource);
+    ID3D11Texture2D* targetTexture = nullptr;
+    if (!targetResource || FAILED(targetResource->QueryInterface(__uuidof(ID3D11Texture2D),
+        reinterpret_cast<void**>(&targetTexture))) || !targetTexture) {
+        if (targetResource) targetResource->Release();
+        targetView->Release();
+        if (depthView) depthView->Release();
+        return nullptr;
+    }
+    D3D11_TEXTURE2D_DESC targetDesc{};
+    targetTexture->GetDesc(&targetDesc);
+    if (targetDesc.Width == 0 || targetDesc.Height == 0 || targetDesc.SampleDesc.Count != 1) {
+        targetTexture->Release();
+        targetResource->Release();
+        targetView->Release();
+        if (depthView) depthView->Release();
+        return nullptr;
+    }
+    const DXGI_FORMAT viewFormat = rpeColorViewFormat(targetDesc.Format);
+    if (!g_captureTexture || g_captureWidth != targetDesc.Width || g_captureHeight != targetDesc.Height
+        || g_captureFormat != targetDesc.Format) {
+        rpeReleaseCapture();
+        D3D11_TEXTURE2D_DESC copyDesc = targetDesc;
+        copyDesc.MipLevels = 1;
+        copyDesc.ArraySize = 1;
+        copyDesc.SampleDesc.Count = 1;
+        copyDesc.SampleDesc.Quality = 0;
+        copyDesc.Usage = D3D11_USAGE_DEFAULT;
+        copyDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+        copyDesc.CPUAccessFlags = 0;
+        copyDesc.MiscFlags = 0;
+        if (FAILED(g_device->CreateTexture2D(&copyDesc, nullptr, &g_captureTexture))) {
+            targetTexture->Release();
+            targetResource->Release();
+            targetView->Release();
+            if (depthView) depthView->Release();
+            return nullptr;
+        }
+        D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc{};
+        viewDesc.Format = viewFormat;
+        viewDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        viewDesc.Texture2D.MostDetailedMip = 0;
+        viewDesc.Texture2D.MipLevels = 1;
+        if (FAILED(g_device->CreateShaderResourceView(g_captureTexture, &viewDesc, &g_captureSrv))) {
+            rpeReleaseCapture();
+            targetTexture->Release();
+            targetResource->Release();
+            targetView->Release();
+            if (depthView) depthView->Release();
+            return nullptr;
+        }
+        g_captureWidth = targetDesc.Width;
+        g_captureHeight = targetDesc.Height;
+        g_captureFormat = targetDesc.Format;
+    }
+    ID3D11ShaderResourceView* previousSrvs[4] = {};
+    g_context->PSGetShaderResources(0, 4, previousSrvs);
+    ID3D11ShaderResourceView* unbound[4] = {};
+    g_context->PSSetShaderResources(0, 4, unbound);
+    g_context->OMSetRenderTargets(0, nullptr, nullptr);
+    const UINT sourceSubresource = D3D11CalcSubresource(0, 0, targetDesc.MipLevels);
+    g_context->CopySubresourceRegion(g_captureTexture, 0, 0, 0, 0, targetTexture, sourceSubresource, nullptr);
+    g_context->OMSetRenderTargets(1, &targetView, depthView);
+    g_context->PSSetShaderResources(0, 4, previousSrvs);
+    for (ID3D11ShaderResourceView* previousSrv : previousSrvs) {
+        if (previousSrv) previousSrv->Release();
+    }
+    targetTexture->Release();
+    targetResource->Release();
+    targetView->Release();
+    if (depthView) depthView->Release();
+    g_captureSrv->AddRef();
+    return g_captureSrv;
+}
+
 std::int32_t rpe_hlsl_draw(std::int32_t handle, float uvLeft, float uvTop,
     float uvRight, float uvBottom) {
+    if (handle >= 1000000) {
+        const std::int32_t result = rpe_gles_draw(g_device, g_context, handle,
+            uvLeft, uvTop, uvRight, uvBottom, &g_lastTargetWidth, &g_lastTargetHeight);
+        if (result <= 0) setError(rpe_gles_last_error());
+        else setError({});
+        return result;
+    }
     restoreState();
     const auto shaderIt = g_shaders.find(handle);
     if (!g_context || !g_fullscreenVertexShader || shaderIt == g_shaders.end()) return 0;
     ShaderRecord& record = *shaderIt->second;
 
-    ID3D11ShaderResourceView* sourceView = nullptr;
-    g_context->PSGetShaderResources(0, 1, &sourceView);
+    ID3D11ShaderResourceView* sourceView = rpeSnapshotRenderTarget();
+    if (!sourceView) g_context->PSGetShaderResources(0, 1, &sourceView);
     if (!sourceView) return 1;
 
     ID3D11VertexShader* previousVertexShader = nullptr;
@@ -1039,18 +1176,21 @@ bool rpe_hlsl_end() {
 }
 
 bool rpe_hlsl_release(std::int32_t handle) {
+    if (handle >= 1000000) return rpe_gles_release(handle);
     restoreState();
     return g_shaders.erase(handle) > 0;
 }
 
 void rpe_hlsl_shutdown() {
     restoreState();
+    rpe_gles_shutdown();
     g_shaders.clear();
     if (g_fullscreenVertexShader) g_fullscreenVertexShader->Release();
     if (g_fullscreenSampler) g_fullscreenSampler->Release();
     if (g_fullscreenBlend) g_fullscreenBlend->Release();
     if (g_fullscreenDepthStencil) g_fullscreenDepthStencil->Release();
     if (g_fullscreenRasterizer) g_fullscreenRasterizer->Release();
+    rpeReleaseCapture();
     g_fullscreenVertexShader = nullptr;
     g_fullscreenSampler = nullptr;
     g_fullscreenBlend = nullptr;

@@ -63,6 +63,10 @@ local_settings.json
 /*.mov
 /*.mkv
 /*.avi
+/*.obj
+/*.py
+*.py
+*.obj
 *.hitsounds.stem.f32le
 *.hitsounds.tmp.mp4
 *.hitsound.*.f32le
@@ -71,11 +75,14 @@ local_settings.json
 *.temp
 *.log
 
+
+
 # Local diagnostics and comparison output
 /chart.json
 /rpe_position_comparison.csv
 /rpe_trajectory*.csv
 /rpe_trajectory*_summary.md
+gm-options.json
 
 # Environment files and credentials
 .env

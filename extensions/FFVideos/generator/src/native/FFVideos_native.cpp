@@ -64,6 +64,7 @@ ComPtr<ID3D11PixelShader> g_pixelShader;
 ComPtr<ID3D11SamplerState> g_sampler;
 ComPtr<ID3D11Buffer> g_drawConstants;
 ComPtr<ID3D11RasterizerState> g_rasterizer;
+ComPtr<ID3D11RasterizerState> g_rasterizerScissor;
 ComPtr<ID3D11DepthStencilState> g_depthStencil;
 ComPtr<ID3D11BlendState> g_blend;
 
@@ -179,6 +180,8 @@ float4 main(float4 position : SV_Position, float2 uv : TEXCOORD0) : SV_Target {
     rasterizer.CullMode = D3D11_CULL_NONE;
     rasterizer.DepthClipEnable = TRUE;
     if (FAILED(g_device->CreateRasterizerState(&rasterizer, &g_rasterizer))) return false;
+    rasterizer.ScissorEnable = TRUE;
+    if (FAILED(g_device->CreateRasterizerState(&rasterizer, &g_rasterizerScissor))) return false;
 
     D3D11_DEPTH_STENCIL_DESC depth{};
     depth.DepthEnable = FALSE;
@@ -270,6 +273,7 @@ void resetGlobals() {
     g_blend.Reset();
     g_depthStencil.Reset();
     g_rasterizer.Reset();
+    g_rasterizerScissor.Reset();
     g_drawConstants.Reset();
     g_sampler.Reset();
     g_pixelShader.Reset();
@@ -593,11 +597,26 @@ std::int32_t ffvideos_draw(std::int32_t handle, float left, float top, float rig
     ID3D11ShaderResourceView* frameViews[2] = {player->yView.Get(), player->uvView.Get()};
     ID3D11SamplerState* sampler = g_sampler.Get();
     ID3D11Buffer* constantsBuffer = g_drawConstants.Get();
+    UINT scissorCount = 0;
+    g_context->RSGetScissorRects(&scissorCount, nullptr);
+    D3D11_RECT scissors[D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE]{};
+    if (scissorCount > D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE) {
+        scissorCount = D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE;
+    }
+    if (scissorCount > 0) g_context->RSGetScissorRects(&scissorCount, scissors);
+    bool scissorEnabled = false;
+    for (UINT scissorIndex = 0; scissorIndex < scissorCount; ++scissorIndex) {
+        if (scissors[scissorIndex].right > scissors[scissorIndex].left
+            && scissors[scissorIndex].bottom > scissors[scissorIndex].top) {
+            scissorEnabled = true;
+            break;
+        }
+    }
     g_context->RSSetViewports(1, &viewport);
     g_context->IASetInputLayout(nullptr);
     g_context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     g_context->IASetVertexBuffers(0, 1, &noVertexBuffer, &zero, &zero);
-    g_context->RSSetState(g_rasterizer.Get());
+    g_context->RSSetState(scissorEnabled ? g_rasterizerScissor.Get() : g_rasterizer.Get());
     g_context->OMSetDepthStencilState(g_depthStencil.Get(), 0);
     const FLOAT blendFactor[4]{};
     g_context->OMSetBlendState(g_blend.Get(), blendFactor, 0xffffffffu);

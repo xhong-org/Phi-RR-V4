@@ -1,6 +1,7 @@
 {
   "name": "English",
-  "version": "1.0.0",
+  "version": "1.0.5",
+  "author": "XTHX_FORM",
   "objects": {
     "common": {
       "ok": "OK",
@@ -70,7 +71,13 @@
     "settings": {
       "title": "Settings",
       "close": "Close",
+      "save": "Save",
+      "discardClose": "Don't save and close",
       "normal": "General",
+      "groupDisplay": "Display",
+      "groupDebug": "Debug",
+      "groupChart": "Chart",
+      "groupDeprecated": "Deprecated",
       "developer": "Developer options",
       "clearData": "Clear data",
       "reset": "Reset settings",
@@ -124,7 +131,10 @@
       "rpeWorkerMinLines": "Minimum line count for native parallel resolve",
       "rpeWorkerProfileFrames": "Frames averaged between worker timing logs",
       "noteUniformScale": "RPE note size/sizeControl also scale height",
-      "notePreloadSeconds": "Note preload seconds (0-60)",
+      "notePreloadSeconds": "Note preload seconds (0-60, RPE/PEC only)",
+      "disableChartShader": "Disable chart shaders",
+      "directGlslEs": "Compile GLSL ES directly (Beta)",
+      "disableChartVideo": "Disable chart videos",
       "TEST1": "Judge offset jitter test"
     },
     "loading": {

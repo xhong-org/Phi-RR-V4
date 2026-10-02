@@ -15,8 +15,6 @@ if (!is_array(game.line_list) || self.line_id < 0 || self.line_id >= array_lengt
         exit;
 };
 _line_ref = (game.line_list[self.line_id]);
-_preload_seconds = (game.settings.notePreloadSeconds);
-_max_visible_floor_distance = 12;
 _last_global_scales = -1;
 _now_seconds = 0;
 _now_beat = 0;

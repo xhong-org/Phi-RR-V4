@@ -1,2 +1,15 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# GitHub Desktop on Windows otherwise rewrites these and font_add draws nothing.
+*.ttf binary
+*.otf binary
+*.ttc binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.wav binary
+*.ogg binary
+*.mp3 binary
+*.dll binary
+*.so binary
+*.a binary
+*.zip binary
+*.pez binary

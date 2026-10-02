@@ -1370,7 +1370,6 @@ std::int32_t ffvideos_draw(std::int32_t handle, float left, float top, float rig
         static_cast<GLsizei>((clippedBottom - clippedTop) * height));
 
     if (const auto bindVao = bindVertexArrayFn()) bindVao(g_vao);
-    glDisable(GL_SCISSOR_TEST);
     glDisable(GL_CULL_FACE);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glActiveTexture(GL_TEXTURE0);

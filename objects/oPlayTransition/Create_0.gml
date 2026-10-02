@@ -163,6 +163,23 @@ function play_transition_step_end_phase(_elapsed, _duration) {
 	return 2;
 }
 
+function play_transition_restart_intro() {
+	// Settlement retry keeps the ending cover unless this is cleared. The
+	// intro dim only runs while the mask is still held.
+	mask_end_phase = 0;
+	mask_released = false;
+	end_cover_alpha = 0;
+	end_cover_span = 0;
+	end_phase_origin_s = 0;
+	depth = DEPTH.HEF + 2;
+	progress = 0;
+	line_progress = 0;
+	state = PLAY_TRANSITION_STATE.INTRO;
+	state_started_at = get_timer();
+	play_transition_deactivate_gameplay();
+	play_transition_apply(0);
+}
+
 function play_transition_begin_exit() {
 	if (state >= PLAY_TRANSITION_STATE.OUTRO) then return;
 	game.paused = true;

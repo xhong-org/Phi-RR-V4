@@ -9,17 +9,27 @@ if (!is_real(s) || s <= 0) then s = 1.0;
 var _room_w = room_width;
 var _room_h = room_height;
 
-// An attached video replaces the complete judge-line visual. This suppression
-// is unconditional for the bound line: the video may be inactive, but the
-// line texture, paint output, and text events must remain hidden.
+// No zIndex: the video is painted with this line, and appearanceOnAttach 0
+// (the default, including charts that never set it) hides the line. A declared
+// video zIndex is drawn by oExtraPlay, so this line stays on its own layer.
+// appearanceOnAttach 1/2 keeps the line visible above or under that video.
 var line_has_attached_video = false;
+var attached_video_owns_depth = false;
 if (instance_exists(oExtraPlay)) {
 	with (oExtraPlay) {
-		line_has_attached_video = video_attached_to_line(other.id);
-		if (line_has_attached_video) then draw_attached_video(other.id);
+		var _attached_video = video_line_index(other.id);
+		line_has_attached_video = _attached_video >= 0;
+		if (line_has_attached_video && is_real(videos[_attached_video].zIndex)) {
+			attached_video_owns_depth = true;
+		};
+		if (line_has_attached_video && !attached_video_owns_depth) then draw_attached_video(_attached_video);
 	};
-	if (line_has_attached_video) then exit;
 };
+var attach_look = 0;
+if (variable_instance_exists(id, "appearance_on_attach") && is_real(appearance_on_attach)) {
+	attach_look = appearance_on_attach;
+};
+if (line_has_attached_video && attach_look <= 0 && !has_text_events) then exit;
 
 if (has_paint_events) {
 	if (!surface_exists(paint_surface)
@@ -258,7 +268,11 @@ image_blend = __color;
 	// Default line.png uses FC/AP. colorEvents, custom textures, GIF, paint,
 	// attachUI, and text keep __color (often white) and are not sampled.
 	var texture_blend = __color;
-	if (line_texture_use_judge_color && variable_global_exists("game") && is_struct(game)
+	// appearanceOnAttach 1 stays white unless color events already set __color.
+	// 2 uses the FC/AP judge tint, same as an ordinary default line.
+	var judge_tint = line_texture_use_judge_color
+		&& !(line_has_attached_video && attach_look == 1);
+	if (judge_tint && variable_global_exists("game") && is_struct(game)
 		&& bool(game.settings.enableLineJudge)) {
 		texture_blend = chart_line_judge_blend();
 	};

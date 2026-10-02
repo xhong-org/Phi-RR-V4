@@ -86,4 +86,9 @@ if (_is_hold) {
 
 hitTime2 = chart_auto_hit_offset_ms(type);
 
+if (variable_global_exists("chart_layer_mode") && global.chart_layer_mode
+	&& variable_instance_exists(id, "note_layer_z") && is_real(note_layer_z)) {
+	depth = chart_layer_depth(note_layer_z);
+};
+
 inition = true;

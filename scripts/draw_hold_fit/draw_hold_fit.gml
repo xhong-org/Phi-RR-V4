@@ -1,3 +1,42 @@
+function hold_sprite_is_default_note(_spr) {
+	return _spr == note_hold_head || _spr == note_hold_body || _spr == note_hold_end;
+}
+
+function hold_sprite_frames_ready(_spr) {
+	if (!sprite_exists(_spr)) then return false;
+	if (pls_is_html5()) then return true;
+	var frames = sprite_get_number(_spr);
+	for (var f = 0; f < frames; f++) {
+		var tex = sprite_get_texture(_spr, f);
+		if (is_undefined(tex) || (is_real(tex) && tex < 0)) then return false;
+		if (!texture_is_ready(tex)) then return false;
+	};
+	return true;
+}
+
+/// DefaultNotes is dynamicpages. Baking a hold before its page is fetched copies the fallback page.
+function hold_default_notes_prefetch() {
+	if (pls_is_html5() || !texturegroup_exists("DefaultNotes")) then return;
+	var status = texturegroup_get_status("DefaultNotes");
+	if (status == texturegroup_status_unloaded) {
+		if (texturegroup_load("DefaultNotes", true) >= 0) {
+			global.default_notes_texture_loaded = true;
+		};
+	} else if (status == texturegroup_status_loaded) {
+		texture_prefetch("DefaultNotes");
+	};
+	if (sprite_exists(note_hold_head)) then sprite_prefetch(note_hold_head);
+	if (sprite_exists(note_hold_body)) then sprite_prefetch(note_hold_body);
+	if (sprite_exists(note_hold_end)) then sprite_prefetch(note_hold_end);
+}
+
+function hold_default_notes_ready() {
+	if (pls_is_html5()) then return true;
+	return hold_sprite_frames_ready(note_hold_head)
+		&& hold_sprite_frames_ready(note_hold_body)
+		&& hold_sprite_frames_ready(note_hold_end);
+}
+
 function hold_strip_cache() {
 	if (!variable_global_exists("__hold_strip_cache") || !is_struct(global.__hold_strip_cache)) {
 		global.__hold_strip_cache = {};
@@ -43,6 +82,11 @@ function hold_strip_emit_quad(_hx, _hy, _c, _s, _left, _right, _d0, _d1, _u0, _v
 /// @description Bake tail+body+head (all hl frames) into one strip so joins are interior texels.
 function hold_strip_compose(_head, _body, _tail) {
 	if (!sprite_exists(_head) || !sprite_exists(_body) || !sprite_exists(_tail)) then return undefined;
+	if ((hold_sprite_is_default_note(_head) || hold_sprite_is_default_note(_body) || hold_sprite_is_default_note(_tail))
+		&& !hold_default_notes_ready()) {
+		hold_default_notes_prefetch();
+		return undefined;
+	};
 	var _frames = min(sprite_get_number(_head), min(sprite_get_number(_body), sprite_get_number(_tail)));
 	_frames = max(1, _frames);
 	var _hw = sprite_get_width(_head);
@@ -62,6 +106,9 @@ function hold_strip_compose(_head, _body, _tail) {
 	var _surf = surface_create(_w, _h);
 	if (!surface_exists(_surf)) then return undefined;
 	var _spr = -1;
+	// Baking must not inherit a note clip shader. Uniforms stay on that shader.
+	var _prev_shader = shader_current();
+	if (_prev_shader != -1) then shader_reset();
 	skin_copy_surface_begin();
 	for (var _f = 0; _f < _frames; _f++) {
 		surface_set_target(_surf);
@@ -79,6 +126,7 @@ function hold_strip_compose(_head, _body, _tail) {
 	};
 	skin_copy_surface_end();
 	surface_free(_surf);
+	if (_prev_shader != -1 && shader_is_compiled(_prev_shader)) then shader_set(_prev_shader);
 	if (!asset_sprite_valid(_spr)) then return undefined;
 	sprite_set_offset(_spr, _ox, _oy);
 	return {
@@ -163,6 +211,12 @@ function draw_hold_fit(x, y, scalex, scaley, hold_body_scale, angle = 0, subimg 
 	var _body_scale = max(0, real(hold_body_scale));
 	var _alpha = clamp(real(alpha), 0, 1);
 	if (_alpha <= 0 || _xscale == 0) then return;
+
+	if ((hold_sprite_is_default_note(head_spr) || hold_sprite_is_default_note(body_spr) || hold_sprite_is_default_note(end_spr))
+		&& !hold_default_notes_ready()) {
+		hold_default_notes_prefetch();
+		return;
+	};
 
 	var _body_len = _body_scale * max(1, sprite_get_height(body_spr));
 	var _info = hold_strip_get(head_spr, body_spr, end_spr);

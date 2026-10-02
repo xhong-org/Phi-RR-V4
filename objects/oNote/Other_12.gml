@@ -19,7 +19,7 @@ var base_y = line_y - local_x * rotation_sin;
 
 var hold_floor_length = (variable_instance_exists(id, "holdFloorLength") ? holdFloorLength : hold_time_length);
 var head_cover_delta = (max_visible_position - line_floor);
-var is_out = (!isHold) && (self.speed < 0 ? (head_cover_delta * self.speed > 0) : (head_cover_delta > 0));
+var is_out = (!isHold) && (head_cover_delta > 0);
 var _skin_hold = skin_active() ? skin_hold_parts(hl) : undefined;
 var _head_spr = note_hold_head;
 var _compact = false;
@@ -51,11 +51,7 @@ if (is_out) {
 };
 
 image_angle = (-180 * (!isAbove) + rotation);
-var tail_cover_delta = (maximum_visual_length - line_floor);
-var is_out_line;
-if (time_before) {
-	is_out_line = (self.speed < 0 ? (tail_cover_delta * self.speed >= -0.000001) : (line_floor <= maximum_visual_length));
-} else {
-	is_out_line = true;
-};
-canDraw = (is_out_line && hold_length > 0);
+var is_out_line = true;
+if (time_before) then is_out_line = (line_floor <= maximum_visual_length);
+// PCR official holds with speed 0 or no duration are parsed with alpha 0.
+canDraw = (self.speed != 0 && hold_time_length > 0 && is_out_line && hold_length > 0);

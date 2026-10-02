@@ -1148,6 +1148,7 @@ function skin_preview_set(_id) {
 	skin_preview_unload();
 	if (skin_id == SKIN_DEFAULT_ID) {
 		global.skin_preview_id = skin_id;
+		hold_default_notes_prefetch();
 		if (instance_exists(oSettings)) then skin_preview_cycle_reset();
 		return true;
 	};

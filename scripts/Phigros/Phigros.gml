@@ -4,7 +4,7 @@
 #macro func function
 #macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal { "windows": 40526, "android": 40521, "gxgames": 40526 } // 各平台版本号(独立)
+#macro VerReal { "windows": 40528, "android": 40521, "gxgames": 40526 } // 各平台版本号(独立)
 #macro VerStr "v.4.0.9"
 
 function ver_real() {
@@ -66,6 +66,136 @@ enum DEPTH {
 	HEF = -11000,
 	BG = -100
 };
+
+/// PhiZone z: higher values draw later. 1000 depth per unit keeps 1.5 and 2
+/// apart, and a line-id tie break cannot cross into the next layer.
+function chart_layer_depth(z) {
+	return -1000 * z;
+}
+
+/// RPE type 1 tap, 2 hold, 3 flick, 4 drag. Explicit zIndex wins.
+function chart_note_layer_z(rpe_type, explicit_z = undefined) {
+	if (is_real(explicit_z) && is_finite(explicit_z)) then return explicit_z;
+	var priority = 3;
+	if (rpe_type == 2) then priority = 1;
+	else if (rpe_type == 3) then priority = 4;
+	else if (rpe_type == 4) then priority = 2;
+	return priority + 2;
+}
+
+/// Pixel width of the judge line as Draw draws it. Used to clip an attached video.
+function chart_line_pixel_width(line_instance) {
+	if (!instance_exists(line_instance)) then return 0;
+	var view_w = 1;
+	if (variable_global_exists("chart_view_width") && is_real(chart_view_width) && chart_view_width > 0) {
+		view_w = chart_view_width;
+	};
+	var scale_x = real(line_instance.__scale_x);
+	if (!is_finite(scale_x)) then scale_x = 1;
+	var sprite = line_instance.sprite_index;
+	var sprite_w = max(1, sprite_get_width(sprite));
+	if (line_instance.is_default_line) {
+		if (!line_instance.has_text_events && !line_instance.is_attach_ui) then scale_x *= 0.5;
+		var line_length = 6;
+		if (variable_global_exists("game_1") && is_struct(game_1) && is_struct(game_1.chart_info)) {
+			var info_line_length = real(game_1.chart_info[$ "line_length"] ?? 6);
+			if (is_finite(info_line_length) && info_line_length > 0) then line_length = info_line_length;
+		};
+		return abs(scale_x * line_length * view_w);
+	};
+	var csv = chart_line_override(line_instance.line_id);
+	if (is_struct(csv)) {
+		var csv_scale = chart_line_csv_sprite_scale(csv, sprite);
+		return abs(csv_scale[0] * scale_x) * sprite_w;
+	};
+	return abs((view_w / 1350) * scale_x) * sprite_w;
+}
+
+/// PhiZone scaleOnNotes 2. Notes stay full size and are masked to the line's
+/// current pixel width. The strip is infinite along the note highway.
+/// Returns 0 (no clip), 1 (scissor), or 2 (rotated shader).
+function chart_note_scale_clip_begin(line_instance) {
+	static u_clip = -1;
+	static u_half = -1;
+	static fetched = false;
+	if (!instance_exists(line_instance)) then return 0;
+	var mode = 0;
+	if (variable_instance_exists(line_instance, "scale_on_notes") && is_real(line_instance.scale_on_notes)) {
+		mode = real(line_instance.scale_on_notes);
+	};
+	if (mode != 2) then return 0;
+
+	var half_w = chart_line_pixel_width(line_instance) * 0.5;
+	var ang = line_instance.image_angle;
+	var norm = ang mod 360;
+	if (norm < 0) then norm += 360;
+	var view_l = 0;
+	var view_t = 0;
+	var view_r = room_width;
+	var view_b = room_height;
+	if (variable_global_exists("chart_view_left") && is_real(chart_view_left)) then view_l = chart_view_left;
+	if (variable_global_exists("chart_view_right") && is_real(chart_view_right)) then view_r = chart_view_right;
+	if (variable_global_exists("chart_view_height") && is_real(chart_view_height) && chart_view_height > 0) then view_b = chart_view_height;
+
+	var horizontal = (norm <= 0.75 || norm >= 359.25 || abs(norm - 180) <= 0.75);
+	var vertical = (abs(norm - 90) <= 0.75 || abs(norm - 270) <= 0.75);
+	if (horizontal || vertical) {
+		var clip_l = view_l;
+		var clip_t = view_t;
+		var clip_r = view_r;
+		var clip_b = view_b;
+		if (horizontal) {
+			clip_l = line_instance.x - half_w;
+			clip_r = line_instance.x + half_w;
+		} else {
+			clip_t = line_instance.y - half_w;
+			clip_b = line_instance.y + half_w;
+		};
+		var l = max(view_l, clip_l);
+		var t = max(view_t, clip_t);
+		var r = min(view_r, clip_r);
+		var b = min(view_b, clip_b);
+		// Wider than the chart view: the default pipeline must draw notes and hits.
+		if (l <= view_l && t <= view_t && r >= view_r && b >= view_b) then return 0;
+		var sl = floor(l);
+		var st = floor(t);
+		var sw = max(0, ceil(r) - sl);
+		var sh = max(0, ceil(b) - st);
+		gpu_set_scissor(sl, st, sw, sh);
+		return 1;
+	};
+
+	var dir_x = dcos(ang);
+	var dir_y = -dsin(ang);
+	var cover = true;
+	if (abs((view_l - line_instance.x) * dir_x + (view_t - line_instance.y) * dir_y) > half_w) then cover = false;
+	else if (abs((view_r - line_instance.x) * dir_x + (view_t - line_instance.y) * dir_y) > half_w) then cover = false;
+	else if (abs((view_l - line_instance.x) * dir_x + (view_b - line_instance.y) * dir_y) > half_w) then cover = false;
+	else if (abs((view_r - line_instance.x) * dir_x + (view_b - line_instance.y) * dir_y) > half_w) then cover = false;
+	if (cover) then return 0;
+	// shader_reset inside a z-range capture drops later sprites off that surface.
+	var _capture_target = surface_get_target();
+	if (surface_exists(_capture_target) && _capture_target != application_surface) then return 0;
+	if (!shader_is_compiled(shd_note_scale_clip)) then return 0;
+	if (!fetched) {
+		u_clip = shader_get_uniform(shd_note_scale_clip, "u_clip");
+		u_half = shader_get_uniform(shd_note_scale_clip, "u_half");
+		fetched = (u_clip >= 0 && u_half >= 0);
+		if (!fetched) then return 0;
+	};
+	shader_set(shd_note_scale_clip);
+	shader_set_uniform_f(u_clip, line_instance.x, line_instance.y, dir_x, dir_y);
+	shader_set_uniform_f(u_half, half_w);
+	return 2;
+}
+
+function chart_note_scale_clip_end(active) {
+	if (active == 1) {
+		chart_mask_scissor_set();
+	} else if (active == 2) {
+		shader_reset();
+	};
+}
 
 
 enum TYPE {
@@ -972,7 +1102,7 @@ function Phigros() constructor { // 仅仅结构
 		"comboString" : "COMBO",				// combo text(default:"COMBO")
 		"userName" : "Guest",					// settlement player name(default:"Guest")
 		"enableVsync" : true,					// 是否启用垂直同步(default:true)
-		"aa_level" : 8,							// aa_level等级(default:0)
+		"aa_level" : 0,							// aa_level等级(default:0)
 		"useOldFX" : false,						// 是否使用旧版打击特效(default:false)
 		"enableComboScore" : true,				// 是否启用打击分(default:true)
 		"enableAutoPlay" : true,				// 是否启用自动游玩(default:true)
@@ -983,10 +1113,22 @@ function Phigros() constructor { // 仅仅结构
 		"rpeWorkerMinLines" : 32,				// minimum line count for native parallel resolve
 		"rpeWorkerProfileFrames" : 1800,		// frames averaged between worker timing logs
 		"noteUniformScale" : false,				// RPE note size/sizeControl also scale height
-		"notePreloadSeconds" : 15,				// note preload seconds (0-60)
+		"notePreloadSeconds" : 3,				// RPE/PEC note preload seconds (0-60). Official ignores this.
+		"disableChartShader" : false,			// 禁用谱面 Shader(default:false)
+		"directGlslEs" : false,					// Windows: compile chart GLSL ES directly (default:false)
+		"disableChartVideo" : false,			// 禁用谱面视频(default:false)
 		"TEST1" : false							// judge offset jitter test (default false)
 	};
-	
+
+	// Captured once, before Configs() overwrites this shared static with configs.ini.
+	if (!variable_global_exists("phigros_settings_baseline") || !is_struct(global.phigros_settings_baseline)) {
+		global.phigros_settings_baseline = {};
+		var _settings_names = struct_get_names(settings);
+		for (var _settings_i = 0; _settings_i < array_length(_settings_names); _settings_i++) {
+			var _settings_key = _settings_names[_settings_i];
+			global.phigros_settings_baseline[$ _settings_key] = settings[$ _settings_key];
+		};
+	};
 	
 	/// 必要的函数
 	///@desc String->Real
@@ -1354,8 +1496,9 @@ function Phigros() constructor { // 仅仅结构
 		///
 		var name = (struct_get_names(self.settings));
 		for(var i = 0 ; i < array_length(name) ; i ++){
+			if (settings_saved_key_ignored(name[i])) then continue;
 			if (is_string(self.settings[$ name[i]])) then self.settings[$ name[i]] = (ini_read_string("Settings" , name[i] , self.settings[$ name[i]]));
-			else self.settings[$ name[i]] = (self.strToReal(ini_read_string("Settings" , name[i] , self.settings[$ name[i]])));
+			else self.settings[$ name[i]] = (self.strToReal(ini_read_string("Settings" , name[i] , string(self.settings[$ name[i]])), self.settings[$ name[i]]));
 		};
 		// Only load Chart section from ini when no custom chart session is active.
 		// Otherwise configs.ini defaults (e.g. bg=Illustration.png) overwrite real package metadata.

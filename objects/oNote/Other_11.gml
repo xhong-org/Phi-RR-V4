@@ -20,12 +20,7 @@ x = (line_x + local_x * rotation_cos + local_y * rotation_sin);
 y = (line_y - local_x * rotation_sin + local_y * rotation_cos);
 image_angle = rotation;
 
-var time_before = (_now_seconds < realHitTime);
-var cover_delta = (max_visible_position - line_floor);
-var is_out_line;
-if (time_before) {
-	is_out_line = (self.speed < 0 ? (cover_delta * self.speed >= -0.000001) : (cover_delta > 0));
-} else {
-	is_out_line = true;
-};
+// PCR shows a note until the line floor passes it. Note speed only flips the side.
+var is_out_line = true;
+if (_now_seconds < realHitTime) then is_out_line = (max_visible_position > line_floor);
 canDraw = is_out_line;

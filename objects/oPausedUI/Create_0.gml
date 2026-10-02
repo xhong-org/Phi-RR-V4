@@ -1,7 +1,7 @@
 /// @description Shared PCR-style pause overlay.
 if (!variable_instance_exists(id, "owner")) then owner = noone;
-// Draw End must run after oChartMask (-12000), on the final application target.
-depth = -99999999//-11999;
+// Draw End runs after oChartMask (-12000) has blitted the chart.
+depth = -99999999;
 
 opened_at = get_timer();
 was_paused = false;
@@ -15,9 +15,108 @@ retry_ready = false;
 retry_mode = 0;
 retry_started_at = 0;
 retry_delay = 3000000;
+countdown_shown = -1;
+// Saira's live SDF draw is blank in this pass. Rasterize the TTF once, with
+// SDF off, and keep the glyphs as ordinary sprites.
+// Settings AA is MSAA on the swapchain. It never filters texels inside a
+// sprite, and bm_normal squares coverage, so the font's gray fringe is lost.
+// Bake at 2x the on-screen em and store premultiplied coverage.
+countdown_em = 47 * 1.4;
+countdown_supersample = 2;
+countdown_font_size = ceil(countdown_em * countdown_supersample);
+countdown_font = pls_ui_font_add(countdown_font_size, true, false, ord("0"), ord("9"), false);
+countdown_sprites = [-1, -1, -1, -1];
+if (font_exists(countdown_font)) {
+    gpu_push_state();
+    shader_reset();
+    gpu_set_blendenable(true);
+    gpu_set_texfilter(true);
+    gpu_set_alphatestenable(false);
+    draw_set_font(countdown_font);
+    draw_set_halign(fa_left);
+    draw_set_valign(fa_top);
+    draw_set_colour(c_white);
+    draw_set_alpha(1);
+    for (var _bake_digit = 1; _bake_digit <= 3; _bake_digit++) {
+        var _bake_text = string(_bake_digit);
+        var _bake_pad = 16;
+        var _bake_tw = max(1, ceil(string_width(_bake_text)));
+        var _bake_th = max(1, ceil(string_height(_bake_text)));
+        var _bake_w = _bake_tw + _bake_pad * 2;
+        var _bake_h = _bake_th + _bake_pad * 2;
+        var _bake_surface = surface_create(_bake_w, _bake_h);
+        if (!surface_exists(_bake_surface)) then continue;
+        surface_set_target(_bake_surface);
+        draw_clear_alpha(c_black, 0);
+        gpu_set_blendenable(true);
+        gpu_set_texfilter(true);
+        gpu_set_alphatestenable(false);
+        // Straight-alpha font: RGB picks up coverage once, alpha stays linear.
+        gpu_set_blendmode_ext_sepalpha(bm_src_alpha, bm_inv_src_alpha, bm_one, bm_inv_src_alpha);
+        draw_set_font(countdown_font);
+        draw_set_colour(c_white);
+        draw_set_alpha(1);
+        draw_text(_bake_pad, _bake_pad, _bake_text);
+        surface_reset_target();
+        var _bake_sprite = sprite_create_from_surface(_bake_surface, 0, 0, _bake_w, _bake_h, false, true, _bake_w * 0.5, _bake_h * 0.5);
+        surface_free(_bake_surface);
+        if (sprite_exists(_bake_sprite)) then countdown_sprites[_bake_digit] = _bake_sprite;
+    };
+    gpu_pop_state();
+    print($"[PausedUI] Saira sprites font={countdown_font} size={countdown_font_size} ss={countdown_supersample} 1={sprite_exists(countdown_sprites[1])} 2={sprite_exists(countdown_sprites[2])} 3={sprite_exists(countdown_sprites[3])}");
+} else {
+    print($"[PausedUI] Saira countdown font missing path={pls_bundled_font_path()}");
+};
+
+// Used only when the Saira sprite failed to bake.
+paused_ui_draw_bar = function(_x, _y, _w, _h) {
+    var _sw = max(1, sprite_get_width(spr_pixel_2));
+    var _sh = max(1, sprite_get_height(spr_pixel_2));
+    draw_sprite_ext(spr_pixel_2, 0, _x, _y, max(_w, 1) / _sw, max(_h, 1) / _sh, 0, c_white, 1);
+};
+paused_ui_draw_digit = function(_digit, _cx, _cy, _height) {
+    var _h = max(48, _height);
+    var _w = _h * 0.62;
+    var _t = max(8, _h * 0.16);
+    var _left = _cx - _w * 0.5;
+    var _right = _cx + _w * 0.5 - _t;
+    var _top = _cy - _h * 0.5;
+    var _mid_y = _cy - _t * 0.5;
+    var _bot = _cy + _h * 0.5 - _t;
+    var _vh = (_h - _t) * 0.5;
+    // 0 top, 1 upper-right, 2 lower-right, 3 bottom, 4 lower-left, 5 upper-left, 6 middle
+    var _segs = [false, false, false, false, false, false, false];
+    if (_digit == 1) {
+        _segs[1] = true;
+        _segs[2] = true;
+    } else if (_digit == 2) {
+        _segs[0] = true;
+        _segs[1] = true;
+        _segs[6] = true;
+        _segs[4] = true;
+        _segs[3] = true;
+    } else {
+        _segs[0] = true;
+        _segs[1] = true;
+        _segs[6] = true;
+        _segs[2] = true;
+        _segs[3] = true;
+    };
+    if (_segs[0]) then paused_ui_draw_bar(_left, _top, _w, _t);
+    if (_segs[6]) then paused_ui_draw_bar(_left, _mid_y, _w, _t);
+    if (_segs[3]) then paused_ui_draw_bar(_left, _bot, _w, _t);
+    if (_segs[5]) then paused_ui_draw_bar(_left, _top, _t, _vh);
+    if (_segs[1]) then paused_ui_draw_bar(_right, _top, _t, _vh);
+    if (_segs[4]) then paused_ui_draw_bar(_left, _cy, _t, _vh);
+    if (_segs[2]) then paused_ui_draw_bar(_right, _cy, _t, _vh);
+};
 
 paused_ui_draw = function() {
     if (!paused_ui_can_control() || (!game.paused && !retry_waiting)) then exit;
+    if (!draw_logged) {
+        draw_logged = true;
+        print($"[PausedUI] Menu draw paused={game.paused} retry={retry_waiting}");
+    };
     var _old_colour = draw_get_colour();
     var _old_alpha = draw_get_alpha();
     var _fade = clamp((get_timer() - opened_at) / 100000, 0, 1);
@@ -41,11 +140,33 @@ paused_ui_draw = function() {
     draw_set_alpha(retry_waiting ? 1 : _fade);
     if (retry_waiting && retry_mode == 2) {
         var _seconds_left = max(1, ceil((retry_delay - (get_timer() - retry_started_at)) / 1000000));
-        draw_set_font(game.font);
-        draw_set_halign(fa_center);
-        draw_set_valign(fa_middle);
-        draw_text_transformed(room_width * 0.5, room_height * 0.5, string(_seconds_left),
-            1.4 * ui_scale, 1.4 * ui_scale, 0);
+        shader_reset();
+        draw_set_colour(c_white);
+        draw_set_alpha(1);
+        // Bake is countdown_em * supersample. Scale brings it back to Saira 47 * 1.4 * ui_scale.
+        var _digit_scale = max(ui_scale, 0.5) / max(1, countdown_supersample);
+        var _digit_x = chart_view_left + chart_view_width * 0.5;
+        var _digit_y = chart_view_height * 0.5;
+        var _digit_sprite = (is_array(countdown_sprites) && _seconds_left < array_length(countdown_sprites))
+            ? countdown_sprites[_seconds_left] : -1;
+        if (sprite_exists(_digit_sprite)) {
+            var _digit_filter = gpu_get_texfilter();
+            gpu_set_texfilter(true);
+            gpu_set_alphatestenable(false);
+            // Sprite RGB is already multiplied by coverage.
+            gpu_set_blendmode_ext(bm_one, bm_inv_src_alpha);
+            draw_sprite_ext(_digit_sprite, 0, _digit_x, _digit_y, _digit_scale, _digit_scale, 0, c_white, 1);
+            gpu_set_blendmode(bm_normal);
+            gpu_set_texfilter(_digit_filter);
+        } else {
+            gpu_set_texfilter(false);
+            paused_ui_draw_digit(_seconds_left, _digit_x, _digit_y, 47 * 1.4 * max(ui_scale, 0.5));
+        };
+        pls_draw_flush();
+        if (_seconds_left != countdown_shown) {
+            countdown_shown = _seconds_left;
+            print($"[PausedUI] Countdown draw {_seconds_left} sprite={sprite_exists(_digit_sprite)} at {_digit_x},{_digit_y} scale={_digit_scale}");
+        };
     } else if (!retry_waiting) {
         var _base_scale = 0.9 * ui_scale;
         for (var _i = 0; _i < 3; _i++) {
@@ -149,6 +270,7 @@ function paused_ui_resume() {
         retry_mode = 2;
         retry_started_at = get_timer();
         draw_logged = false;
+        countdown_shown = -1;
         print("[PausedUI] Resume countdown started");
 }
 
@@ -387,10 +509,16 @@ function paused_ui_reset_rpe() {
                 };
         };
         with (oExtraPlay) {
-                if (video_handle >= 0) then ffvideos_ext_close(video_handle);
-                video_handle = -1;
-                video_index = -1;
-                video_completed = -1;
+                video_close_all();
+                for (var _video_i = 0; _video_i < array_length(videos); _video_i++) {
+                        videos[_video_i].completed = false;
+                        videos[_video_i].error_logged = false;
+                        if (videos[_video_i].duration_ms > 0) {
+                                videos[_video_i].endTime = videos[_video_i].startTime + videos[_video_i].duration_ms / 1000;
+                        } else {
+                                videos[_video_i].endTime = infinity;
+                        };
+                };
                 video_chart_time = 0;
                 video_last_chart_time = -infinity;
         };
@@ -427,12 +555,7 @@ function paused_ui_retry() {
         action_queued = false;
         draw_logged = false;
         if (instance_exists(oPlayTransition)) {
-                var transition = instance_find(oPlayTransition, 0);
-                transition.state = PLAY_TRANSITION_STATE.INTRO;
-                transition.state_started_at = get_timer();
-                transition.progress = 0;
-                transition.play_transition_deactivate_gameplay();
-                transition.play_transition_apply(0);
+                with (oPlayTransition) play_transition_restart_intro();
                 print("[PausedUI] Retry prepare animation started");
         } else {
                 m_play();

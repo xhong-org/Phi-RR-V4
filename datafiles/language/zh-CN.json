@@ -1,6 +1,7 @@
 {
   "name": "简体中文",
-  "version": "1.0.0",
+  "version": "1.0.5",
+  "author": "XTHX_FORM",
   "objects": {
     "common": {
       "ok": "确定",
@@ -70,7 +71,13 @@
     "settings": {
       "title": "设置",
       "close": "关闭",
+      "save": "保存",
+      "discardClose": "不保存并关闭",
       "normal": "常规设置",
+      "groupDisplay": "画面",
+      "groupDebug": "调试",
+      "groupChart": "谱面",
+      "groupDeprecated": "弃用",
       "developer": "开发者选项",
       "clearData": "清除数据",
       "reset": "重置设置",
@@ -124,7 +131,10 @@
       "rpeWorkerMinLines": "启用原生并行解析的最小判定线数量",
       "rpeWorkerProfileFrames": "工作线程计时日志的平均帧数",
       "noteUniformScale": "RPE note 的 size/sizeControl 同时缩放高度",
-      "notePreloadSeconds": "音符预加载秒数（0-60）",
+      "notePreloadSeconds": "音符预加载秒数（0-60，仅 RPE/PEC）",
+      "disableChartShader": "禁用谱面 Shader",
+      "directGlslEs": "直接编译 GLSL ES（Beta）",
+      "disableChartVideo": "禁用谱面视频",
       "TEST1": "判定偏移抖动测试"
     },
     "loading": {

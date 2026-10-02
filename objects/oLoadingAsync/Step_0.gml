@@ -1,6 +1,15 @@
 /// @description Stepwise loading with non-blocking ZIP extraction.
 // Resolve the package and illustration first. Expensive default resources wait
 // until the black cover has crossed the screen.
+if (variable_global_exists("pls_probe_until") && global.pls_probe_until > 0
+        && variable_global_exists("pls_probe_t0")
+        && !(variable_global_exists("pls_probe_exit_sent") && global.pls_probe_exit_sent)
+        && (get_timer() - global.pls_probe_t0) >= 240000000) {
+        global.pls_probe_exit_sent = true;
+        print($"[RPE Probe] loading wall timeout phase={phase} failed={failed}");
+        game_end();
+        exit;
+};
 if (variable_global_exists("loading_animation_load_start")
         && !global.loading_animation_load_start && phase == 2) exit;
 if (done || failed) {
@@ -58,6 +67,12 @@ if (phase == 1) {
                 chart_session_cleanup(true);
                 phase = 99;
                 chart_loading_animation_abort();
+                if (variable_global_exists("pls_probe_until") && global.pls_probe_until > 0) {
+                        global.pls_probe_exit_sent = true;
+                        print($"[RPE Probe] chart load failed: {detail}");
+                        game_end();
+                        exit;
+                };
                 if (!pls_is_gx_remote()) then msgbox_warning_async(fail_detail, "Chart Loader" , [ msgbox_button("OK") ] , MSGBOX_BUTTON_ALIGN.RIGHT);
                 pls_return_to_entry(detail);
                 exit;
@@ -88,6 +103,12 @@ if (phase == 10) {
                 chart_session_cleanup(true);
                 phase = 99;
                 chart_loading_animation_abort();
+                if (variable_global_exists("pls_probe_until") && global.pls_probe_until > 0) {
+                        global.pls_probe_exit_sent = true;
+                        print($"[RPE Probe] chart load failed: {detail}");
+                        game_end();
+                        exit;
+                };
                 if (!pls_is_gx_remote()) then msgbox_warning_async(zip_detail, "Chart Loader" , [ msgbox_button("OK") ] , MSGBOX_BUTTON_ALIGN.RIGHT);
                 pls_return_to_entry(detail);
                 exit;
@@ -116,6 +137,12 @@ if (phase == 2) {
                 chart_session_fail(detail, true);
                 phase = 99;
                 chart_loading_animation_abort();
+                if (variable_global_exists("pls_probe_until") && global.pls_probe_until > 0) {
+                        global.pls_probe_exit_sent = true;
+                        print($"[RPE Probe] chart load failed: {detail}");
+                        game_end();
+                        exit;
+                };
                 pls_return_to_entry(detail);
                 exit;
         };

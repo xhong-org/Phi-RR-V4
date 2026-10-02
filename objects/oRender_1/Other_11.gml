@@ -91,7 +91,6 @@ draw_text_transformed_colour(u_level[0], u_level[1], _ui_level, u_level[5], u_le
 draw_set_valign(fa_center);
 draw_text_transformed_colour(u_score[0], u_score[1], ScoreSystem(), u_score[5], u_score[6], u_score[4], u_score[2], u_score[2], u_score[2], u_score[2], u_score[3]);
 
-// pause icon
 draw_sprite_ext(spr_pause, 0, u_pause[0], u_pause[1], u_pause[5], u_pause[6], u_pause[4], u_pause[2], u_pause[3]);
 
 // progress bar
