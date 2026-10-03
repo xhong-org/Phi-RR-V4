@@ -49,10 +49,9 @@ function chart_view_refresh(_room_w, _room_h) {
 		_aspect = 16 / 9;
 		chart_aspect_ratio = _aspect;
 	};
-	// Phira keeps the chart inside its aspect even when the mask is off.
-	// Line length is square in that viewport, while positions use 1350 by 900.
-	// A wider maximized window would stretch X, so the scale events that
-	// cancel rotation no longer land on the rectangle corners.
+	// Height stays the window height. Only the width changes: a wider window
+	// is cropped to height * aspect. Positions stay raw_x * width/1350 and
+	// raw_y * height/900, with no extra aspect fit.
 	var _window_aspect = _room_w / chart_view_height;
 	if (_window_aspect > _aspect) {
 		chart_view_width = chart_view_height * _aspect;
@@ -153,6 +152,39 @@ function chart_draw_background(_dim = true) {
 	gpu_set_blendmode(bm_normal);
 }
 
+/// GameMaker can select a blend and only send it on the next sprite.
+/// FFVideos saves the blend actually bound, then writes that one back. After the
+/// viewport dim, that saved blend keeps destination alpha. A shader layer is
+/// cleared to alpha 0, notes and hits never store coverage, and the composite
+/// drops them. Submitting the blend here makes the saved value match.
+function chart_gpu_blend_commit() {
+	var _inside_capture = false;
+	if (instance_exists(oRPEEffect)) {
+		with (oRPEEffect) {
+			if (!variable_instance_exists(id, "effect_boundary_role")
+				&& variable_instance_exists(id, "effect_capture_stack")
+				&& is_array(effect_capture_stack)
+				&& array_length(effect_capture_stack) > 0) {
+				_inside_capture = true;
+			};
+		};
+	};
+	var _colour = draw_get_colour();
+	var _alpha = draw_get_alpha();
+	gpu_set_blendmode_ext(bm_zero, bm_one);
+	if (_inside_capture) {
+		gpu_set_blendmode_ext_sepalpha(bm_src_alpha, bm_inv_src_alpha, bm_one, bm_inv_src_alpha);
+	} else {
+		gpu_set_blendmode(bm_normal);
+	};
+	draw_set_colour(c_black);
+	draw_set_alpha(0);
+	draw_rectangle(0, 0, 1, 1, false);
+	pls_draw_flush();
+	draw_set_colour(_colour);
+	draw_set_alpha(_alpha);
+}
+
 function chart_viewport_dim_draw() {
 	if (!variable_global_exists("chart_surface_active") || !chart_surface_active) then return;
 	if (!variable_global_exists("chart_view_left") || !is_real(chart_view_left)) then return;
@@ -176,6 +208,7 @@ function chart_viewport_dim_draw() {
 	draw_set_alpha(_old_alpha);
 	draw_set_colour(_old_colour);
 	gpu_set_blendmode(bm_normal);
+	chart_gpu_blend_commit();
 }
 
 function chart_mask_side_dim_draw() {

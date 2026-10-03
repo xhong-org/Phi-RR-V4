@@ -21,7 +21,7 @@ if (!variable_instance_exists(id, "floorPosition")) then floorPosition = 0;
 if (!variable_instance_exists(id, "endFloorPosition")) then endFloorPosition = floorPosition;
 if (!variable_instance_exists(id, "holdFloorLength")) then holdFloorLength = endFloorPosition - floorPosition;
 if (!variable_instance_exists(id, "size")) then size = 1;
-if (!variable_instance_exists(id, "speed")) then speed = 1;
+if (!variable_instance_exists(id, "note_speed")) then note_speed = 1;
 if (!variable_instance_exists(id, "visibleTime")) then visibleTime = 999999;
 if (!variable_instance_exists(id, "isFake")) then isFake = false;
 if (!variable_instance_exists(id, "note_tint")) then note_tint = c_white;
@@ -48,7 +48,12 @@ holdFloorLength = real(holdFloorLength);
 if (holdFloorLength == 0) then holdFloorLength = (endFloorPosition - floorPosition);
 hold_length_floor = holdFloorLength;
 size = real(size);
-speed = real(speed);
+// Chart multiplier arrives as note_speed. Reading the built-in speed here
+// returns 0: the creation struct has not copied it into hspeed yet.
+note_speed = real(note_speed);
+if (!is_finite(note_speed)) then note_speed = 1;
+speed = 0;
+direction = 0;
 visibleTime = real(visibleTime);
 alpha = clamp(real(alpha), 0, 1);
 isAbove = bool(isAbove);
@@ -128,7 +133,7 @@ if (variable_global_exists("game_1") && is_struct(game_1)
 		yOrigin:yorigin,
 		visibleTime:visibleTime,
 		timeFactor:_line_time_factor,
-		speed:speed,
+		speed:note_speed,
 		alpha:alpha,
 		above:isAbove,
 		activated:false,
@@ -146,7 +151,7 @@ if (variable_global_exists("game_1") && is_struct(game_1)
 		};
 	};
 	game_1._note_activation_records[$ string(id)] = _spatial_record;
-	if (visibleTime > 0 && speed != 0) {
+	if (visibleTime > 0 && note_speed != 0) {
 		if (_is_hold) {
 			var _hold_group_key = string(line_id) + ":" + string(isAbove);
 			var _hold_group;
@@ -159,12 +164,12 @@ if (variable_global_exists("game_1") && is_struct(game_1)
 			};
 			array_add(_hold_group.notes, _spatial_record);
 		} else {
-			_spatial_record.spatialFloor += yOffset / (540 * speed);
-			_spatial_record.endSpatialFloor += yOffset / (540 * speed);
-			var _group_key = string(line_id) + ":" + string(isAbove) + ":" + string(speed);
+			_spatial_record.spatialFloor += yOffset / (540 * note_speed);
+			_spatial_record.endSpatialFloor += yOffset / (540 * note_speed);
+			var _group_key = string(line_id) + ":" + string(isAbove) + ":" + string(note_speed);
 			var _spatial_group;
 			if (!struct_exists(game_1._note_spatial_group_map, _group_key)) {
-				_spatial_group = { line:_line_ref, speed:speed, above:isAbove,
+				_spatial_group = { line:_line_ref, speed:note_speed, above:isAbove,
 					spatialSafe:_spatial_record.spatialSafe, notes:[] };
 				game_1._note_spatial_group_map[$ _group_key] = _spatial_group;
 				array_add(game_1._note_spatial_groups, _spatial_group);

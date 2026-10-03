@@ -112,13 +112,13 @@ function rpe_text_probe_run() {
 		var expect_y = -line_instance.__raw_y * (view_h / 900) + view_h * 0.5;
 		var dx = line_instance.x - expect_x;
 		var dy = line_instance.y - expect_y;
-		var em_x = 0.04 * view_w * abs(line_instance.__scale_x);
-		var em_y = 0.04 * view_w * abs(line_instance.__scale_y);
+		var em_x = (50 / 1350) * view_w * abs(line_instance.__scale_x);
+		var em_y = (50 / 1350) * view_w * abs(line_instance.__scale_y);
 		var shown = string_replace_all(string_replace_all(line_instance.line_text, "\n", "\\n"), "\r", "");
 		if (string_length(shown) > 48) then shown = string_copy(shown, 1, 48);
 		var pos_ok = abs(dx) <= 0.6 && abs(dy) <= 0.6;
 		var size_ratio = (view_w > 0) ? (em_x / view_w) : 0;
-		var size_ok = abs(size_ratio - 0.04 * abs(line_instance.__scale_x)) <= 0.00001;
+		var size_ok = abs(size_ratio - (50 / 1350) * abs(line_instance.__scale_x)) <= 0.00001;
 		if (!pos_ok || !size_ok) then mismatch++;
 		var norm_x = (view_w > 0) ? ((line_instance.x - view_left - view_w * 0.5) / view_w) : 0;
 		var norm_y = (view_h > 0) ? ((line_instance.y - view_h * 0.5) / view_h) : 0;
@@ -126,22 +126,19 @@ function rpe_text_probe_run() {
 		if (string_pos("\n", line_instance.line_text) > 0) then newline_rpe = 50;
 		print($"[TextProbe] line={line_instance.line_id} t={sample.sec} text=\"{shown}\" raw=({line_instance.__raw_x},{line_instance.__raw_y}) screen=({line_instance.x},{line_instance.y}) expect=({expect_x},{expect_y}) d=({dx},{dy}) norm=({norm_x},{norm_y}) scale=({line_instance.__scale_x},{line_instance.__scale_y}) em=({em_x},{em_y}) emPerW={size_ratio} newlineRpe={newline_rpe} anchor=({line_instance.anchor_x},{line_instance.anchor_y}) rot={line_instance.image_angle} posOk={pos_ok} sizeOk={size_ok}");
 	};
-	var line_length = 6;
-	if (variable_global_exists("game_1") && is_struct(game_1) && is_struct(game_1.chart_info)) {
-		var info_line_length = real(game_1.chart_info[$ "line_length"] ?? 6);
-		if (is_finite(info_line_length) && info_line_length > 0) then line_length = info_line_length;
-	};
 	var logged_lines = 0;
 	var judge_count = instance_number(oLine_1);
 	for (var line_i = 0; line_i < judge_count && logged_lines < 4; line_i++) {
 		var judge = instance_find(oLine_1, line_i);
 		if (!instance_exists(judge) || !judge.is_default_line || judge.has_text_events || judge.is_attach_ui) then continue;
 		if (abs(judge.__scale_x) < 0.2) then continue;
-		var half_rpe = abs(judge.__scale_x) * 0.5 * line_length * 675;
-		var expect_half = abs(judge.__scale_x) * line_length * 337.5;
-		var half_ok = abs(half_rpe - expect_half) <= 0.01;
+		var half_rpe = chart_line_pixel_width(judge);
+		var preview_w = 1350;
+		if (variable_global_exists("chart_aspect_ratio")) then preview_w = rpe_preview_size(chart_aspect_ratio)[0];
+		var expect_half = abs(judge.__scale_x) * 4000 * (view_w / preview_w);
+		var half_ok = abs(half_rpe - expect_half) <= 0.05;
 		if (!half_ok) then mismatch++;
-		print($"[LineProbe] line={judge.line_id} scaleX={judge.__scale_x} lineLength={line_length} halfRpe={half_rpe} expect={expect_half} view={view_w}x{view_h} halfOk={half_ok}");
+		print($"[LineProbe] line={judge.line_id} scaleX={judge.__scale_x} widthPx={half_rpe} expect={expect_half} view={view_w}x{view_h} widthOk={half_ok}");
 		logged_lines++;
 	};
 	if (array_length(samples) <= 0) then mismatch = 1;

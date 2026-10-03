@@ -106,48 +106,6 @@ if (has_paint_events) {
 };
 
 if (image_alpha <= 0) then exit;
-if ((__scale_x == 0) || (__scale_y == 0)) then exit;
-
-// Phira renders the chart inside a viewport whose aspect is limited by the
-// chart aspect. Narrow windows keep their full height; wide windows crop the
-// sides. Use that viewport for texture dimensions.
-var texture_view_w = chart_view_width;
-var sx;
-var sy;
-if (is_default_line) {
-	// line.png is a geometric line. scaleX is halved only with no text events and
-	// no attachUI. Phira's lineLength (6 on this chart) is the unscaled half-length
-	// in world units, so event scale 1 reaches 2025 RPE and ends meet at every
-	// viewport size. An absent scaleY reads as 0 for the thickness probe (0.0076)
-	// and 1 for the transform; an explicit 1 uses thickness 0.01.
-	var line_scale_x = __scale_x;
-	if (!has_text_events && !is_attach_ui) then line_scale_x *= 0.5;
-	var line_length = 6;
-	if (variable_global_exists("game_1") && is_struct(game_1) && is_struct(game_1.chart_info)) {
-		var info_line_length = real(game_1.chart_info[$ "line_length"] ?? 6);
-		if (is_finite(info_line_length) && info_line_length > 0) then line_length = info_line_length;
-	};
-	var scale_y_events = extEvents[$ "scaleYEvents"];
-	var line_thick = 0.0076;
-	if (is_array(scale_y_events) && array_length(scale_y_events) > 0 && abs(__scale_y - 1) <= 0.0001) then line_thick = 0.01;
-	var line_sprite_w = max(1, sprite_get_width(sprite_index));
-	var line_sprite_h = max(1, sprite_get_height(sprite_index));
-	sx = (line_scale_x * line_length * texture_view_w) / line_sprite_w;
-	sy = (line_thick * __scale_y * texture_view_w * 0.5) / line_sprite_h;
-} else {
-	// Custom textures keep native pixels inside Phira's scale (event * 2/1350).
-	// Screen size = native * event * view_w/1350, so both axes share one factor.
-	var _csv = chart_line_override(line_id);
-	if (is_struct(_csv)) {
-		var _csv_scale = chart_line_csv_sprite_scale(_csv, sprite_index);
-		sx = _csv_scale[0] * __scale_x;
-		sy = _csv_scale[1] * __scale_y;
-	} else {
-		var texture_scale = texture_view_w / 1350;
-		sx = texture_scale * __scale_x;
-		sy = texture_scale * __scale_y;
-	};
-};
 
 // Apply color from extended colorEvents (or default white)
 image_blend = __color;
@@ -156,84 +114,62 @@ image_blend = __color;
 		if (string_length(line_text) > 0) {
 			if (line_text_font != -1 && font_exists(line_text_font)) then draw_set_font(line_text_font);
 			else if (variable_global_exists("game") && is_struct(game) && !is_undefined(game.font) && font_exists(game.font)) then draw_set_font(game.font);
-			// Raster origin is top-left. RPE anchor is (0,0) bottom-left, (1,1) top-right.
-			// Offset from string_width/height; do not use fa_center/fa_middle.
+			// PhiEdit Label is font size 100 with node scale (scaleX, scaleY) * 0.5,
+			// left aligned. Anchor (0,0) is the bottom-left of that line box and
+			// (1,1) is the top-right. cmdysj's line box is one em (ascender 880,
+			// descender -120). image_angle is already the negated chart rotation,
+			// which is cocos's clockwise rotation in this Y-down space.
 			var _old_halign = draw_get_halign();
 			var _old_valign = draw_get_valign();
 			draw_set_halign(fa_left);
 			draw_set_valign(fa_top);
 			draw_set_colour(image_blend);
 			draw_set_alpha(image_alpha);
-			// Phira draws line text at size 1. One em is 4% of the chart viewport
-			// width, on both axes, then the line scale is applied around the anchor.
-			// The anchor sits 0.44em below the ascender. A "\n" advances 50 RPE Y,
-			// then the line scale. Ink ignores leading and trailing spaces.
 			var text_view_w = _room_w;
-			var text_view_h = _room_h;
 			if (variable_global_exists("chart_view_width") && is_real(chart_view_width) && chart_view_width > 0) {
 				text_view_w = chart_view_width;
 			};
-			if (variable_global_exists("chart_view_height") && is_real(chart_view_height) && chart_view_height > 0) {
-				text_view_h = chart_view_height;
-			};
-			// font_get_size is not the em. U+25A0 advances one em in this font.
-			// Scale that measured em to 4% of the chart viewport, not by global_scales.
 			var text_em_px = string_width("■");
 			if (text_em_px < 1) then text_em_px = max(1, font_get_size(draw_get_font()));
-			var text_unit = (0.04 * text_view_w) / text_em_px;
+			var text_unit = (50 * (text_view_w / 1350)) / text_em_px;
 			var text_scale_x = text_unit * __scale_x;
 			var text_scale_y = text_unit * __scale_y;
-			var text_asc_px = 0.88 * text_em_px;
-			var text_line_px = text_em_px;
-			if (abs(text_scale_y) > 0.000001) then text_line_px = (50 * (text_view_h / 900)) / text_unit;
-			var text_rows = string_split(string_replace_all(line_text, "\r\n", "\n"), "\n");
+			var text_body = string_replace_all(line_text, "\r\n", "\n");
+			text_body = string_replace_all(text_body, "\r", "");
+			var text_rows = string_split(text_body, "\n");
 			var text_row_n = array_length(text_rows);
 			if (text_row_n < 1) {
-				text_rows = [line_text];
+				text_rows = [text_body];
 				text_row_n = 1;
 			};
-			var ink_left = 0;
-			var ink_right = 0;
-			var have_ink = false;
+			var text_w = 0;
 			for (var text_i = 0; text_i < text_row_n; text_i++) {
 				var row = text_rows[text_i];
-				var row_len = string_length(row);
-				var lead_n = 0;
-				while (lead_n < row_len) {
-					var lead_ch = string_char_at(row, lead_n + 1);
-					if (lead_ch != " " && lead_ch != "\t") then break;
-					lead_n++;
+				var row_width = 0;
+				if (text_row_n > 1 && text_i == text_row_n - 1) {
+					var row_len = string_length(row);
+					var trail_n = row_len;
+					while (trail_n > 0) {
+						var trail_ch = string_char_at(row, trail_n);
+						if (trail_ch != " " && trail_ch != "\t") then break;
+						trail_n--;
+					};
+					if (trail_n > 0) then row_width = string_width(string_copy(row, 1, trail_n));
+				} else if (string_length(row) > 0) {
+					row_width = string_width(row);
 				};
-				var trail_n = row_len;
-				while (trail_n > lead_n) {
-					var trail_ch = string_char_at(row, trail_n);
-					if (trail_ch != " " && trail_ch != "\t") then break;
-					trail_n--;
-				};
-				if (trail_n <= lead_n) then continue;
-				var row_left = (lead_n > 0) ? string_width(string_copy(row, 1, lead_n)) : 0;
-				var row_right = string_width(string_copy(row, 1, trail_n));
-				if (!have_ink) {
-					ink_left = row_left;
-					ink_right = row_right;
-					have_ink = true;
-				} else {
-					ink_left = min(ink_left, row_left);
-					ink_right = max(ink_right, row_right);
-				};
+				if (row_width > text_w) then text_w = row_width;
 			};
-			var text_w = have_ink ? max(0, ink_right - ink_left) : 0;
-			var pen_x = have_ink ? -(ink_left + anchor_x * text_w) : 0;
-			var layout_h = (text_row_n - 1) * text_line_px + text_asc_px;
-			var anchor_from_top = (1 - anchor_y) * layout_h;
+			var text_h = text_row_n * text_em_px;
+			var pen_x = -anchor_x * text_w;
+			var pen_top = -(1 - anchor_y) * text_h;
 			var text_cos = dcos(image_angle);
 			var text_sin = dsin(image_angle);
 			for (var text_i = 0; text_i < text_row_n; text_i++) {
 				var row = text_rows[text_i];
 				if (string_length(row) <= 0) then continue;
-				var pen_y = -anchor_from_top + text_i * text_line_px;
 				var text_lx = pen_x * text_scale_x;
-				var text_ly = pen_y * text_scale_y;
+				var text_ly = (pen_top + text_i * text_em_px) * text_scale_y;
 				var text_draw_x = x + text_lx * text_cos + text_ly * text_sin;
 				var text_draw_y = y - text_lx * text_sin + text_ly * text_cos;
 				draw_text_transformed(text_draw_x, text_draw_y, row, text_scale_x, text_scale_y, image_angle);
@@ -257,14 +193,39 @@ image_blend = __color;
 		frame = 0;
 	};
 	var _line_sprite = sprite_index;
-	var anchor_width = sprite_get_width(_line_sprite);
-	var anchor_height = sprite_get_height(_line_sprite);
-	var sprite_local_x = (0.5 - anchor_x) * anchor_width * sx;
-	var sprite_local_y = (anchor_y - 0.5) * anchor_height * sy;
-	var sprite_cos = dcos(image_angle);
-	var sprite_sin = dsin(image_angle);
-	var sprite_draw_x = x + sprite_local_x * sprite_cos + sprite_local_y * sprite_sin;
-	var sprite_draw_y = y - sprite_local_x * sprite_sin + sprite_local_y * sprite_cos;
+	var anchor_width = max(1, sprite_get_width(_line_sprite));
+	var anchor_height = max(1, sprite_get_height(_line_sprite));
+	var texture_view_w = chart_view_width;
+	var sx;
+	var sy;
+	if (!is_default_line) {
+		var _csv = chart_line_override(line_id);
+		if (is_struct(_csv)) {
+			var _csv_scale = chart_line_csv_sprite_scale(_csv, _line_sprite);
+			sx = _csv_scale[0] * __scale_x;
+			sy = _csv_scale[1] * __scale_y;
+		} else {
+			var texture_px = rpe_judge_line_pixel_size(false, __scale_x, __scale_y, anchor_width, anchor_height, texture_view_w);
+			sx = texture_px[0] / anchor_width;
+			sy = texture_px[1] / anchor_height;
+		};
+	} else {
+		var line_px = rpe_judge_line_pixel_size(true, __scale_x, __scale_y, anchor_width, anchor_height, texture_view_w);
+		sx = line_px[0] / anchor_width;
+		sy = line_px[1] / anchor_height;
+	};
+	// Cocos anchor Y is up. The anchor pixel must sit on the line after scale
+	// and rotation. Runtime sprite_add keeps origin (0, 0); a 1x1 Box.png
+	// cannot store a 0.5 offset, so a centred 4000x4000 backdrop was drawn
+	// from the line toward the bottom-right.
+	var anchor_local_x = anchor_x * anchor_width;
+	var anchor_local_y = (1 - anchor_y) * anchor_height;
+	if (!is_default_line) {
+		sprite_set_offset(_line_sprite, 0, 0);
+	} else {
+		anchor_local_x -= sprite_get_xoffset(_line_sprite);
+		anchor_local_y -= sprite_get_yoffset(_line_sprite);
+	};
 	// Default line.png uses FC/AP. colorEvents, custom textures, GIF, paint,
 	// attachUI, and text keep __color (often white) and are not sampled.
 	var texture_blend = __color;
@@ -276,7 +237,15 @@ image_blend = __color;
 		&& bool(game.settings.enableLineJudge)) {
 		texture_blend = chart_line_judge_blend();
 	};
-	draw_sprite_ext(_line_sprite, frame, sprite_draw_x, sprite_draw_y, sx , sy, image_angle, texture_blend, image_alpha);
+	// draw_sprite_ext scales and rotates around the sprite origin. Shift that
+	// origin so the anchor pixel stays on the line. Same rotation as notes.
+	var anchor_shift_x = -anchor_local_x * sx;
+	var anchor_shift_y = -anchor_local_y * sy;
+	var anchor_cos = dcos(image_angle);
+	var anchor_sin = dsin(image_angle);
+	var sprite_draw_x = x + anchor_shift_x * anchor_cos + anchor_shift_y * anchor_sin;
+	var sprite_draw_y = y - anchor_shift_x * anchor_sin + anchor_shift_y * anchor_cos;
+	draw_sprite_ext(_line_sprite, frame, sprite_draw_x, sprite_draw_y, sx, sy, image_angle, texture_blend, image_alpha);
 };
 
 if (variable_global_exists("game") && is_struct(game) && game.settings.enableDisplayLineID) {

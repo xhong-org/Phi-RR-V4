@@ -109,6 +109,13 @@ if (!chart_mask_released()) {
 	};
 };
 gpu_set_scissor(0, 0, room_width, room_height);
+// The GUI watermark sits on the progress overlay, which is painted after
+// this read. Stamp the same label onto the finished chart first.
+chart_draw_recorded_version();
+if (!variable_instance_exists(id, "version_logged")) {
+	version_logged = true;
+	print($"[Renderer] Version watermark: {chart_version_label()}");
+};
 pls_draw_flush();
 if (!video_renderer_capture()) {
     render_status = "GPU capture stopped unexpectedly";

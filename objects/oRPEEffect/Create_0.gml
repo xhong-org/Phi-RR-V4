@@ -12,6 +12,7 @@ fx_pong = -1;
 fx_sample = -1;
 fx_over = -1;
 fx_under = -1;
+fx_copy_hold = -1;
 fx_compose_buffer = -1;
 fx_under_sampler = -1;
 // Outermost entry is the chart mask. Nested ranges must composite onto the
@@ -187,6 +188,9 @@ effect_compile_externals = function() {
 				external_source = string_replace(external_source, "float y=uv.y;", "float y=1.0-uv.y;");
 				print("[RPE Effect] scene_beam sweeps from the top downward");
 			};
+			if (string_pos("vignette", string_lower(external_relative)) > 0) {
+				external_source = rpe_effect_vignette_screen_falloff(external_source);
+			};
 			external_pass.externalUniforms = external_uniforms_parse(external_source);
 			external_source = rpe_effect_preserve_frag_alpha(external_source);
 			external_pass.externalGlesHandle = -1;
@@ -328,55 +332,61 @@ effect_surfaces_ensure = function() {
 	return surface_exists(fx_ping) && surface_exists(fx_pong);
 };
 
+// Keep a sample surface that is never the bound target. Reuse it: freeing a
+// full-frame texture every draw waits on the GPU.
+effect_surface_fit = function(_surface, _width, _height) {
+	if (surface_exists(_surface)
+		&& surface_get_width(_surface) == _width
+		&& surface_get_height(_surface) == _height) then return _surface;
+	if (surface_exists(_surface)) then surface_free(_surface);
+	return surface_create(_width, _height);
+};
+
+// GPU copy. surface_getpixel / buffer_get_surface map a staging texture on the
+// same context that presents the swap chain. With vsync that waits out the
+// queued presents, so a 60 Hz display locks at 20 fps and the GPU sits idle.
+// A bound source or destination is unbound by pushing a tiny hold target and
+// popping it again, so the caller's stack depth does not change.
+effect_gpu_copy_part = function(_src, _dest, _x, _y, _width, _height) {
+	if (!surface_exists(_src) || !surface_exists(_dest) || _src == _dest) then return false;
+	if (_width < 1 || _height < 1) then return false;
+	// Submit the draws, then copy on the GPU. Do not switch to another target
+	// first: that flushes the swap chain and the frame waits even at 500x400.
+	pls_draw_flush();
+	surface_copy_part(_dest, _x, _y, _src, _x, _y, _width, _height);
+	return true;
+};
+
+effect_gpu_copy = function(_src, _dest) {
+	if (!surface_exists(_src)) then return false;
+	return effect_gpu_copy_part(_src, _dest, 0, 0, surface_get_width(_src), surface_get_height(_src));
+};
+
 // Copy a render target into fx_sample, which is never bound as a target.
-// Shader sampling of a surface this device just rendered is empty, while a
-// CPU read sees the same pixels as surface_save.
+// Shaders sample this copy. Sampling the surface that was just drawn is empty
+// on this device while that surface is still the render target.
 effect_sample_upload = function(_src) {
 	if (!surface_exists(_src)) then return false;
 	var _upload_width = surface_get_width(_src);
 	var _upload_height = surface_get_height(_src);
 	if (_upload_width < 1 || _upload_height < 1) then return false;
-	// A texture that was already sampled stays stale after buffer_set on this
-	// device. Recreate it so the next draw sees the uploaded pixels.
-	if (surface_exists(fx_sample)) then surface_free(fx_sample);
-	fx_sample = surface_create(_upload_width, _upload_height);
+	fx_sample = effect_surface_fit(fx_sample, _upload_width, _upload_height);
 	if (!surface_exists(fx_sample)) then return false;
-	var _upload_bytes = _upload_width * _upload_height * 4;
-	if (!buffer_exists(fx_compose_buffer) || buffer_get_size(fx_compose_buffer) != _upload_bytes) {
-		if (buffer_exists(fx_compose_buffer)) then buffer_delete(fx_compose_buffer);
-		fx_compose_buffer = buffer_create(_upload_bytes, buffer_fixed, 1);
-	};
-	if (!buffer_exists(fx_compose_buffer)) then return false;
-	surface_getpixel(_src, 0, 0);
-	buffer_get_surface(fx_compose_buffer, _src, 0);
-	buffer_set_surface(fx_compose_buffer, fx_sample, 0);
-	return true;
+	return effect_gpu_copy(_src, fx_sample);
 };
 
 // Copy _src into fx_over (_slot 0) or fx_under (_slot 1). The destination is
-// never bound as a target. Recreate it: a texture already sampled stays stale
-// after buffer_set on this device. Do not free fx_sample here.
+// never bound as a target. Do not free fx_sample here.
 effect_upload_into = function(_src, _slot) {
 	if (!surface_exists(_src)) then return false;
 	var _upload_width = surface_get_width(_src);
 	var _upload_height = surface_get_height(_src);
 	if (_upload_width < 1 || _upload_height < 1) then return false;
-	var _dest = (_slot == 0) ? fx_over : fx_under;
-	if (surface_exists(_dest)) then surface_free(_dest);
-	_dest = surface_create(_upload_width, _upload_height);
+	var _dest = effect_surface_fit((_slot == 0) ? fx_over : fx_under, _upload_width, _upload_height);
 	if (_slot == 0) then fx_over = _dest;
 	else fx_under = _dest;
 	if (!surface_exists(_dest)) then return false;
-	var _upload_bytes = _upload_width * _upload_height * 4;
-	if (!buffer_exists(fx_compose_buffer) || buffer_get_size(fx_compose_buffer) != _upload_bytes) {
-		if (buffer_exists(fx_compose_buffer)) then buffer_delete(fx_compose_buffer);
-		fx_compose_buffer = buffer_create(_upload_bytes, buffer_fixed, 1);
-	};
-	if (!buffer_exists(fx_compose_buffer)) then return false;
-	surface_getpixel(_src, 0, 0);
-	buffer_get_surface(fx_compose_buffer, _src, 0);
-	buffer_set_surface(fx_compose_buffer, _dest, 0);
-	return true;
+	return effect_gpu_copy(_src, _dest);
 };
 
 effect_render = function(effect_list, input_override = -1, composite_target = -1, caller_was_bound = true) {
@@ -466,7 +476,7 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 	if (!surface_exists(composite_target)) then composite_target = surface_get_target();
 	effect_caller_target = composite_target;
 	// The chart mask may already be the current target. The offscreen shade then
-	// needs two resets before the CPU copy. A global pass unbinds first, so the
+	// needs two resets before the offscreen copy. A global pass unbinds first, so the
 	// caller is not on the stack and a second reset would drop the frame.
 	// Instance state: the restore closure cannot see locals. A fullscreen pass
 	// unbinds the chart first, so the caller is not on the stack. Resetting
@@ -531,15 +541,28 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 		effect_width = clamp(ceil(chart_view_width), 0, effect_width - effect_left);
 		effect_height = clamp(ceil(chart_view_height), 0, surface_get_height(input_surface));
 	};
-	if (!effect_sample_upload(input_surface)) {
+	if (!surface_exists(input_surface)) {
 		gpu_pop_state();
 		draw_set_colour(previous_colour);
 		draw_set_alpha(previous_alpha);
 		return;
 	};
-	var source_surface = fx_sample;
+	// Windows HLSL can copy the chart on the GPU and shade that copy in place.
+	// Android and GX still need a surface that is not the live framebuffer.
+	var _direct_external = (os_type != os_android && !rpe_ext_shader_gx());
+	var source_surface = input_surface;
+	if (!_direct_external) {
+		if (!effect_sample_upload(input_surface)) {
+			gpu_pop_state();
+			draw_set_colour(previous_colour);
+			draw_set_alpha(previous_alpha);
+			return;
+		};
+		source_surface = fx_sample;
+	};
 	var target_surface = fx_pong;
 	var _presented_direct = false;
+	var _shaded = false;
 	// Fold stacked white mixes into one factor: 1-(1-a)*(1-b).
 	var _pending_white = 0;
 	for (var pass_i = 0; pass_i < array_length(active); pass_i++) {
@@ -556,7 +579,7 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 			};
 			continue;
 		};
-		if (source_surface == fx_ping || source_surface == fx_pong) {
+		if (!_direct_external && (source_surface == fx_ping || source_surface == fx_pong)) {
 			if (!effect_sample_upload(source_surface)) then continue;
 			source_surface = fx_sample;
 		};
@@ -618,10 +641,22 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 					};
 				};
 			};
-			pls_draw_flush();
-			release_caller_for_offscreen();
 			var external_begin_status = 0;
 			var external_uvs;
+			var _external_result = target_surface;
+			var _external_pushed = true;
+			// Fullscreen Windows passes shade the chart surface itself. A scissor
+			// keeps the letterbox. Leaving the surface bound avoids a target
+			// switch, and there is no second copy back onto the caller.
+			var _shade_chart = _direct_external && surface_exists(effect_caller_target)
+				&& source_surface == effect_caller_target
+				&& (!surface_exists(input_override) || input_override == effect_caller_target);
+			if (_shade_chart && effect_caller_was_bound && !effect_entry_released && !effect_caller_pushed) {
+				_external_pushed = false;
+				_external_result = effect_caller_target;
+			} else {
+				release_caller_for_offscreen();
+			};
 			if (os_type == os_android || rpe_ext_shader_gx()) {
 				// Read the source framebuffer directly. Sampling a GM surface
 				// texture while it is still an FBO attachment returns black on
@@ -645,27 +680,62 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 					(effect_left + effect_width) / external_target_width,
 					effect_height / external_target_height
 				];
-			} else {
-				gpu_set_blendmode_ext(bm_one, bm_zero);
-				surface_set_target(target_surface);
-				draw_clear_alpha(c_black, 0);
-				draw_surface_part(source_surface, effect_left, 0, effect_width, effect_height, effect_left, 0);
+			} else if (_shade_chart && !_external_pushed) {
+				if (!effect_caller_was_bound) chart_mask_scissor_set();
 				if (_pending_white > 0.00005) {
 					rpe_effect_draw_white_overlay(_pending_white, effect_left, 0, effect_width, effect_height);
 					_pending_white = 0;
 				};
 				pls_draw_flush();
 				external_begin_status = rpe_ext_begin(external_handle);
-				external_uvs = texture_get_uvs(surface_get_texture(source_surface));
+				external_uvs = texture_get_uvs(surface_get_texture(effect_caller_target));
+				_presented_direct = true;
+			} else {
+				// One bind: clear, draw the chart into it, then shade that image.
+				// A second target switch per pass flushes the GPU and the frame
+				// misses 60 Hz even when the window is only 500x400.
+				var _inplace = (source_surface == fx_ping || source_surface == fx_pong);
+				var _dest = _shade_chart ? effect_caller_target : (_inplace ? source_surface : target_surface);
+				if (!surface_exists(_dest) || (_dest == source_surface && !_inplace && !_shade_chart)) {
+					if (effect_caller_was_bound && surface_exists(effect_caller_target)) {
+						surface_set_target(effect_caller_target);
+						effect_caller_pushed = true;
+						effect_left_caller_bound = true;
+					};
+					continue;
+				};
+				gpu_set_blendmode_ext(bm_one, bm_zero);
+				surface_set_target(_dest);
+				// Shading the chart itself must not clear it first. Offscreen
+				// passes clear, then draw the chart in, all inside this one bind.
+				if (!_inplace && !_shade_chart) {
+					draw_clear_alpha(c_black, 0);
+					if (source_surface != _dest) {
+						draw_surface_part(source_surface, effect_left, 0, effect_width, effect_height, effect_left, 0);
+					};
+				};
+				if (_pending_white > 0.00005) {
+					rpe_effect_draw_white_overlay(_pending_white, effect_left, 0, effect_width, effect_height);
+					_pending_white = 0;
+				};
+				if (!effect_caller_was_bound) chart_mask_scissor_set();
+				pls_draw_flush();
+				external_begin_status = rpe_ext_begin(external_handle);
+				external_uvs = texture_get_uvs(surface_get_texture(_dest));
+				_external_result = _dest;
+				if (_shade_chart) _presented_direct = true;
 			};
 			if (external_begin_status <= 0) {
 				if (!struct_exists(external_draw_logged, external_draw_key)) {
 					print($"[RPE Effect] External begin failed: shader={pass.shaderName}, status={external_begin_status}, error={rpe_ext_get_error()}");
 					external_draw_logged[$ external_draw_key] = true;
 				};
-				restore_caller_target();
-				effect_caller_pushed = surface_exists(effect_caller_target);
-				effect_left_caller_bound = effect_caller_pushed;
+				if (_external_pushed) restore_caller_target();
+				else if (effect_caller_was_bound && surface_exists(effect_caller_target)) {
+					effect_left_caller_bound = true;
+				};
+				effect_caller_pushed = surface_exists(effect_caller_target) && _external_pushed;
+				effect_left_caller_bound = effect_caller_pushed || effect_left_caller_bound;
 				continue;
 			};
 			var external_draw_status = rpe_ext_draw(external_handle,
@@ -678,11 +748,20 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 				external_draw_logged[$ external_draw_key] = true;
 				if (string_pos("chromatic_random_rate", pass.shaderName) > 0) then global.pls_chromatic_front_logged = true;
 			};
-			restore_caller_target();
-			effect_caller_pushed = surface_exists(effect_caller_target);
-			effect_left_caller_bound = effect_caller_pushed;
-			source_surface = target_surface;
-			target_surface = (source_surface == fx_ping) ? fx_pong : fx_ping;
+			if (!effect_caller_was_bound) chart_mask_scissor_clear();
+			if (_external_pushed) {
+				restore_caller_target();
+				effect_caller_pushed = surface_exists(effect_caller_target);
+				effect_left_caller_bound = effect_caller_pushed;
+			} else {
+				effect_caller_pushed = false;
+				effect_left_caller_bound = surface_exists(effect_caller_target);
+			};
+			source_surface = _external_result;
+			if (target_surface == source_surface) {
+				target_surface = (source_surface == fx_ping) ? fx_pong : fx_ping;
+			};
+			_shaded = true;
 			continue;
 		};
 		var pass_shader = rpe_effect_shader_asset(pass.shaderName);
@@ -695,6 +774,10 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 			uniform_key = "@glsl:gate.glsl";
 		};
 		if (pass_shader == -1 || !shader_is_compiled(pass_shader)) then continue;
+		if (source_surface != fx_sample) {
+			if (!effect_sample_upload(source_surface)) then continue;
+			source_surface = fx_sample;
+		};
 		// Nested last passes blend on the GPU. Draw the effect into a cleared
 		// offscreen surface, then premul-over it onto the parent. Drawing that
 		// shader onto the parent smears the frame. Do not walk pixels on the CPU.
@@ -738,12 +821,17 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 			// One reset for the offscreen set above. The caller was already
 			// released, so a second reset would pop the frame under it.
 			surface_reset_target();
-			var _over_ok = effect_upload_into(target_surface, 0);
+			var _copied_full = _full_frame && surface_exists(effect_caller_target)
+				&& effect_gpu_copy_part(target_surface, effect_caller_target, effect_left, 0, effect_width, effect_height);
 			if (surface_exists(effect_caller_target)) {
 				surface_set_target(effect_caller_target);
 				effect_caller_pushed = true;
 				effect_left_caller_bound = true;
 			};
+			if (_copied_full) {
+				_presented_direct = true;
+			} else {
+			var _over_ok = effect_upload_into(target_surface, 0);
 			if (_over_ok) {
 				// A fullscreen pass replaces the chart. Premul-over drops pixels
 				// whose alpha is 0, so the shade never shows. A layer pass must
@@ -757,6 +845,7 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 				pls_draw_flush();
 				_presented_direct = true;
 			};
+			};
 		} else if (_draw_on_parent) {
 			_presented_direct = true;
 		} else {
@@ -766,6 +855,7 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 			source_surface = target_surface;
 			target_surface = (source_surface == fx_ping) ? fx_pong : fx_ping;
 		};
+		_shaded = true;
 		var _builtin_draw_key = $"builtin@{pass.shaderName}@{pass.startTime}";
 		if (!struct_exists(external_draw_logged, _builtin_draw_key)) {
 			external_draw_logged[$ _builtin_draw_key] = true;
@@ -793,7 +883,13 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 		};
 		_pending_white = 0;
 	};
-	if (!_presented_direct && (source_surface == fx_ping || source_surface == fx_pong)) {
+	if (_shaded && !_presented_direct && _full_frame && _direct_external
+		&& (source_surface == fx_ping || source_surface == fx_pong)
+		&& surface_exists(effect_caller_target)
+		&& effect_gpu_copy_part(source_surface, effect_caller_target, effect_left, 0, effect_width, effect_height)) {
+		_presented_direct = true;
+	};
+	if (_shaded && !_presented_direct && (source_surface == fx_ping || source_surface == fx_pong)) {
 		if (!effect_sample_upload(source_surface)) {
 			unwind_detached_caller();
 			gpu_pop_state();
@@ -803,7 +899,7 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 		};
 		source_surface = fx_sample;
 	};
-	if (!_presented_direct) {
+	if (_shaded && !_presented_direct) {
 		shader_reset();
 		var _composite_width = max(1, surface_get_width(source_surface));
 		var _composite_height = max(1, surface_get_height(source_surface));

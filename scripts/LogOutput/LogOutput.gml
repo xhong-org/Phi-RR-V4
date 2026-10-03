@@ -162,15 +162,15 @@ function LogGetPath() {
 /// @param str Message to write.
 /// @param isOutputFile Write to the session log as well as the debug console.
 function LogOutputFile(str, isOutputFile = true) {
-	var message = string(str);
-	show_debug_message(message);
+	var _message = string(str);
+	show_debug_message(_message);
 	if (!isOutputFile) then return;
 	// GX IDBFS appends stall more the longer the session log grows.
 	if (pls_is_gxgames()) then return;
 
 	var path = LogGetPath();
 	if (!string_length(path)) then return;
-	LogAppendLine(path, $"{LogStamp()} {message}\n");
+	LogAppendLine(path, $"{LogStamp()} {_message}\n");
 }
 
 function LogUninit() {

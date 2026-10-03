@@ -5,20 +5,21 @@ if (!instance_exists(_line)) { canDraw = false; exit; };
 
 var line_floor = real(_line.__value[0]);
 _position_floor_delta = floorPosition - line_floor;
-_note_position_speed = speed * _position_floor_delta;
+// Same sample coordinate as the pre-170 player: note speed times floor delta.
+_note_position_speed = note_speed * _position_floor_delta;
 _control_position_speed = _note_position_speed;
 
 	var notes_w = chart_view_width * 0.05625;
 	var notes_h = chart_view_height * 0.6;
 var posx = (xOffset / 75.375) * notes_w;
 if (variable_instance_exists(_line, "__incline_sin")) {
-	var incline_y = _note_position_speed + (2 * yOffset / 900 * speed);
+	var incline_y = _note_position_speed + (2 * yOffset / 900 * note_speed);
 	posx *= 1 - real(_line.__incline_sin) * incline_y * 1.25;
 };
 	var posy = (yorigin * chart_view_height) + (_note_position_speed * notes_h);
-posx *= rpe_sample_control(1, _note_position_speed, 1);
-posy *= rpe_sample_control(3, _note_position_speed, 1);
-var control_size = rpe_sample_control(2, _note_position_speed, 1);
+posx *= rpe_sample_control(1, _control_position_speed, 1);
+posy *= rpe_sample_control(3, _control_position_speed, 1);
+var control_size = rpe_sample_control(2, _control_position_speed, 1);
 image_xscale = (global_scales / 6) * size * control_size;
 var _settings = game.settings;
 var uniform_scale = bool(_settings.noteUniformScale ?? false);

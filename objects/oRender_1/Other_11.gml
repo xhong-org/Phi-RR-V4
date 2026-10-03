@@ -38,7 +38,8 @@ if (_transition_active) {
 	if (!play_transition_bound_ui.bar) then u_bar[@ 3] *= _transition_bar_alpha;
 };
 
-// apply attached slots: offset from center, not hard absolute line xy
+// Bound HUD stays on the original layout above. The line only contributes its
+// offset from the chart center: position = original + (line - center).
 if (variable_instance_exists(id, "bindUI") && is_struct(bindUI)
 	&& variable_instance_exists(id, "bindUI_attached") && is_struct(bindUI_attached)) {
 	var _keys = ["combonumber", "combo", "name", "level", "score", "pause", "bar"];
@@ -54,7 +55,6 @@ if (variable_instance_exists(id, "bindUI") && is_struct(bindUI)
 		var base_y = s[1];
 		var base_sx = s[5];
 		var base_sy = s[6];
-		// position = default layout + center-relative line offset
 		s[@ 0] = base_x + b[0];
 		s[@ 1] = base_y + b[1];
 		s[@ 2] = b[2];
@@ -80,7 +80,6 @@ draw_text_transformed_colour(u_combo_num[0], u_combo_num[1], string(combo), u_co
 draw_set_halign(fa_left);
 draw_set_valign(fa_center);
 draw_text_transformed_colour(u_name[0], u_name[1], _ui_name, u_name[5], u_name[6], u_name[4], u_name[2], u_name[2], u_name[2], u_name[2], u_name[3]);
-//draw_text_transformed_colour(100 ,100, string_format(game.__time[1] , 0 , 10), u_name[5], u_name[6], u_name[4], u_name[2], u_name[2], u_name[2], u_name[2], u_name[3]);
 
 // difficulty
 draw_set_halign(fa_right);
@@ -88,8 +87,23 @@ draw_set_valign(fa_bottom);
 draw_text_transformed_colour(u_level[0], u_level[1], _ui_level, u_level[5], u_level[6], u_level[4], u_level[2], u_level[2], u_level[2], u_level[2], u_level[3]);
 
 // score
+// fa_center. A bound line near chart y=-820 plus the top default puts the
+// glyph center on the window edge (Wavetapper). Keep that offset, and keep
+// a zero-offset score (Algebra) on the original top layout. Only lift a
+// score whose text box crosses the same bottom inset the level uses.
+var score_text = ScoreSystem();
+if (variable_instance_exists(id, "bindUI_attached") && is_struct(bindUI_attached)
+	&& struct_exists(bindUI_attached, "score") && bindUI_attached.score
+	&& abs(u_score[4]) <= 0.5) {
+	var score_box_h = string_height(score_text) * abs(u_score[6]);
+	var score_bottom = u_score[1] + score_box_h * 0.5;
+	var score_limit = room_height - (10 * global_scales);
+	if (score_bottom > score_limit) {
+		u_score[@ 1] -= (score_bottom - score_limit);
+	};
+};
 draw_set_valign(fa_center);
-draw_text_transformed_colour(u_score[0], u_score[1], ScoreSystem(), u_score[5], u_score[6], u_score[4], u_score[2], u_score[2], u_score[2], u_score[2], u_score[3]);
+draw_text_transformed_colour(u_score[0], u_score[1], score_text, u_score[5], u_score[6], u_score[4], u_score[2], u_score[2], u_score[2], u_score[2], u_score[3]);
 
 draw_sprite_ext(spr_pause, 0, u_pause[0], u_pause[1], u_pause[5], u_pause[6], u_pause[4], u_pause[2], u_pause[3]);
 

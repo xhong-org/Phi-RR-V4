@@ -43,7 +43,7 @@ function rpe_lines_begin() {
 	if (global.chart_layer_mode && instance_exists(oExtraPlay)
 		&& variable_instance_exists(oExtraPlay, "effect_controller")
 		&& instance_exists(oExtraPlay.effect_controller)) {
-		oExtraPlay.effect_controller.depth = chart_layer_depth(24);
+		chart_set_instance_depth(oExtraPlay.effect_controller, chart_layer_depth(24));
 	};
 	var line_group_size = array_length(judge_lines);
 	rpe.fatherLineList = [];
@@ -279,7 +279,7 @@ function rpe_lines_create_one(i) {
 			"endFloorPosition": end_floor,
 			"holdFloorLength": (end_floor - note_floor),
 			"size": n_size,
-			"speed": n_speed,
+			"note_speed": n_speed,
 			"visibleTime": n_vis,
 			"isFake": isFake,
 			"note_tint": note_tint,
@@ -479,14 +479,14 @@ function rpe_lines_finish() {
 				};
 				_layer_z += real(_layer_line.line_id) * 0.0000001;
 				_layer_line.layer_z = _layer_z;
-				_layer_line.depth = chart_layer_depth(_layer_z);
+				chart_set_instance_depth(_layer_line, chart_layer_depth(_layer_z));
 			};
 			if (is_array(rpe.runtime_note_instances)) {
 				for (var _note_depth_i = 0; _note_depth_i < array_length(rpe.runtime_note_instances); _note_depth_i++) {
 					var _note_depth = rpe.runtime_note_instances[_note_depth_i];
 					if (!instance_exists(_note_depth)) then continue;
 					if (variable_instance_exists(_note_depth, "note_layer_z") && is_real(_note_depth.note_layer_z)) {
-						_note_depth.depth = chart_layer_depth(_note_depth.note_layer_z);
+						chart_set_instance_depth(_note_depth, chart_layer_depth(_note_depth.note_layer_z));
 					};
 				};
 			};
@@ -497,7 +497,7 @@ function rpe_lines_finish() {
 				_depth_step = _depth_span / max(1, _line_count - 1);
 			};
 			for (var _ri = 0; _ri < _line_count; _ri++) {
-				_order[_ri].depth = DEPTH.LINE - _ri * _depth_step;
+				chart_set_instance_depth(_order[_ri], DEPTH.LINE - _ri * _depth_step);
 			};
 		};
 	};

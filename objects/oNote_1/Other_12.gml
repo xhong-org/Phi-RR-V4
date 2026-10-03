@@ -6,7 +6,7 @@ if (!instance_exists(_line)) { canDraw = false; exit; };
 var line_floor = real(_line.__value[0]);
 var time_before = (_now_seconds < start_sec);
 _position_floor_delta = floorPosition - line_floor;
-_control_position_speed = speed * _position_floor_delta;
+_control_position_speed = note_speed * _position_floor_delta;
 
 if (time_before) {
 	// Phira: hold head and body both live in speed-scaled floor space.
@@ -65,7 +65,7 @@ var length_floor = hold_length_floor;
 if (length_floor == 0) then length_floor = (endFloorPosition - floorPosition);
 // Phira hold geometry: head/tail are speed * y_control * floor, so the body
 // length is the same scale times (tailFloor - headFloor).
-var base_length = notes_h * speed * control_y * uniform_factor;
+var base_length = notes_h * note_speed * control_y * uniform_factor;
 
 var _skin_hold = skin_active() ? skin_hold_parts(hl) : undefined;
 var _use_compact = compactHold || (is_struct(_skin_hold) && bool(_skin_hold.compact));
@@ -104,7 +104,7 @@ var sWH = scene_w * 0.5;
 var sHH = scene_h * 0.5;
 var dx = x - sWH;
 var dy = y - sHH;
-var dyn_r = sWH * 1.2365 + sHH + speed * max(0, _note_position_speed) * notes_h;
+var dyn_r = sWH * 1.2365 + sHH + note_speed * max(0, _note_position_speed) * notes_h;
 var dyn_r_sq = dyn_r * dyn_r;
 outside = ((dx * dx + dy * dy) >= dyn_r_sq);
 if (outside) {

@@ -280,6 +280,9 @@ ID3D11BlendState* g_fullscreenBlend = nullptr;
 ID3D11SamplerState* g_fullscreenSampler = nullptr;
 ID3D11Texture2D* g_captureTexture = nullptr;
 ID3D11ShaderResourceView* g_captureSrv = nullptr;
+ID3D11Buffer* g_quadBuffer = nullptr;
+float g_quadWidth = -1.0f;
+float g_quadHeight = -1.0f;
 DXGI_FORMAT g_captureFormat = DXGI_FORMAT_UNKNOWN;
 UINT g_captureWidth = 0;
 UINT g_captureHeight = 0;
@@ -719,11 +722,8 @@ bool rpe_hlsl_begin(std::int32_t handle) {
     g_previousSlot = record.constantSlot;
     g_context->PSGetShader(&g_previousShader, nullptr, nullptr);
     g_context->PSGetConstantBuffers(g_previousSlot, 1, &g_previousConstants);
-    if (record.constants && !record.constantData.empty()) {
-        g_context->UpdateSubresource(record.constants, 0, nullptr, record.constantData.data(), 0, 0);
-        g_context->PSSetConstantBuffers(record.constantSlot, 1, &record.constants);
-    }
-    g_context->PSSetShader(record.shader, nullptr, 0);
+    // Draw uploads the constants. Updating a buffer that is still bound stalls
+    // the immediate context, which caps the frame well below the resolution cost.
     g_active = true;
     return true;
 }
@@ -745,6 +745,41 @@ void rpeReleaseCapture() {
     g_captureFormat = DXGI_FORMAT_UNKNOWN;
     g_captureWidth = 0;
     g_captureHeight = 0;
+}
+
+void rpeReleaseQuad() {
+    if (g_quadBuffer) g_quadBuffer->Release();
+    g_quadBuffer = nullptr;
+    g_quadWidth = -1.0f;
+    g_quadHeight = -1.0f;
+}
+
+// Translated chart vertex shaders draw a 4-vertex strip. Recreating that
+// immutable buffer on every pass allocates and waits on the driver.
+ID3D11Buffer* rpeQuadBuffer(float width, float height) {
+    if (!g_device || width <= 0.0f || height <= 0.0f) return nullptr;
+    if (g_quadBuffer && g_quadWidth == width && g_quadHeight == height) return g_quadBuffer;
+    rpeReleaseQuad();
+    struct QuadVertex { float position[3]; float colour[4]; float uv[2]; };
+    const QuadVertex vertices[4] = {
+        {{0, 0, 0}, {1, 1, 1, 1}, {0, 0}},
+        {{width, 0, 0}, {1, 1, 1, 1}, {1, 0}},
+        {{0, height, 0}, {1, 1, 1, 1}, {0, 1}},
+        {{width, height, 0}, {1, 1, 1, 1}, {1, 1}}
+    };
+    D3D11_BUFFER_DESC quadDesc{};
+    quadDesc.ByteWidth = sizeof(vertices);
+    quadDesc.Usage = D3D11_USAGE_IMMUTABLE;
+    quadDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+    D3D11_SUBRESOURCE_DATA quadData{};
+    quadData.pSysMem = vertices;
+    if (FAILED(g_device->CreateBuffer(&quadDesc, &quadData, &g_quadBuffer))) {
+        g_quadBuffer = nullptr;
+        return nullptr;
+    }
+    g_quadWidth = width;
+    g_quadHeight = height;
+    return g_quadBuffer;
 }
 
 // GameMaker does not leave the surface that was just drawn in PS slot 0.
@@ -946,6 +981,8 @@ std::int32_t rpe_hlsl_draw(std::int32_t handle, float uvLeft, float uvTop,
     }
 
     if (record.constants && !record.constantData.empty()) {
+        ID3D11Buffer* unbound = nullptr;
+        g_context->PSSetConstantBuffers(record.constantSlot, 1, &unbound);
         g_context->UpdateSubresource(record.constants, 0, nullptr, record.constantData.data(), 0, 0);
         g_context->PSSetConstantBuffers(record.constantSlot, 1, &record.constants);
     }
@@ -958,27 +995,14 @@ std::int32_t rpe_hlsl_draw(std::int32_t handle, float uvLeft, float uvTop,
             -1, 1, 0, 1
         };
         std::memcpy(record.vertexConstantData.data() + record.vertexMatrixOffset, matrix, sizeof(matrix));
+        ID3D11Buffer* unboundVertex = nullptr;
+        g_context->VSSetConstantBuffers(record.vertexConstantSlot, 1, &unboundVertex);
         g_context->UpdateSubresource(record.vertexConstants, 0, nullptr,
             record.vertexConstantData.data(), 0, 0);
         g_context->VSSetConstantBuffers(record.vertexConstantSlot, 1, &record.vertexConstants);
     }
     ID3D11Buffer* quadBuffer = nullptr;
-    if (record.vertexShader && record.inputLayout) {
-        struct QuadVertex { float position[3]; float colour[4]; float uv[2]; };
-        const QuadVertex vertices[4] = {
-            {{0, 0, 0}, {1, 1, 1, 1}, {0, 0}},
-            {{viewportWidth, 0, 0}, {1, 1, 1, 1}, {1, 0}},
-            {{0, viewportHeight, 0}, {1, 1, 1, 1}, {0, 1}},
-            {{viewportWidth, viewportHeight, 0}, {1, 1, 1, 1}, {1, 1}}
-        };
-        D3D11_BUFFER_DESC quadDesc{};
-        quadDesc.ByteWidth = sizeof(vertices);
-        quadDesc.Usage = D3D11_USAGE_IMMUTABLE;
-        quadDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-        D3D11_SUBRESOURCE_DATA quadData{};
-        quadData.pSysMem = vertices;
-        if (FAILED(g_device->CreateBuffer(&quadDesc, &quadData, &quadBuffer))) quadBuffer = nullptr;
-    }
+    if (record.vertexShader && record.inputLayout) quadBuffer = rpeQuadBuffer(viewportWidth, viewportHeight);
     const UINT quadStride = 9 * sizeof(float);
     const UINT quadOffset = 0;
     g_context->IASetInputLayout(record.inputLayout);
@@ -1019,7 +1043,6 @@ std::int32_t rpe_hlsl_draw(std::int32_t handle, float uvLeft, float uvTop,
     if (previousVertexShader) previousVertexShader->Release();
     if (previousVertexBuffer) previousVertexBuffer->Release();
     if (previousVertexConstants) previousVertexConstants->Release();
-    if (quadBuffer) quadBuffer->Release();
     if (previousBlend) previousBlend->Release();
     if (previousDepthStencil) previousDepthStencil->Release();
     if (previousRasterizer) previousRasterizer->Release();
@@ -1191,6 +1214,7 @@ void rpe_hlsl_shutdown() {
     if (g_fullscreenDepthStencil) g_fullscreenDepthStencil->Release();
     if (g_fullscreenRasterizer) g_fullscreenRasterizer->Release();
     rpeReleaseCapture();
+    rpeReleaseQuad();
     g_fullscreenVertexShader = nullptr;
     g_fullscreenSampler = nullptr;
     g_fullscreenBlend = nullptr;

@@ -1,5 +1,5 @@
 /// @description Load and normalize RPE extra.json videos and effects.
-// In front of oBG_1 so the background video cannot paint over the chart dim.
+// In front of oBG_1. Draw dims the illustration, then the video covers that dim.
 depth = DEPTH.BG - 2;
 videos = [];
 video_layers = [];
@@ -342,6 +342,7 @@ draw_attached_video = function(_index) {
 		gpu_set_scissor(scissor_x, scissor_y, max(1, scissor_r - scissor_x), max(1, scissor_b - scissor_y));
 	};
 	if (clip_w > 1 && clip_h > 1) {
+		chart_gpu_blend_commit();
 		ffvideos_ext_draw(_handle,
 			draw_x / room_width, draw_y / room_height,
 			(draw_x + draw_width) / room_width, (draw_y + draw_height) / room_height,
@@ -349,6 +350,7 @@ draw_attached_video = function(_index) {
 	};
 	chart_mask_scissor_set();
 	rpe_effect_grade_backdrop();
+	chart_gpu_blend_commit();
 };
 
 video_draw_fullscreen = function(_index) {
@@ -404,6 +406,7 @@ video_draw_fullscreen = function(_index) {
 	// covers the missing frame. Draw straight into the chart surface; the mask
 	// composite keeps only the viewport.
 	chart_mask_scissor_clear();
+	chart_gpu_blend_commit();
 	var video_draw_status = ffvideos_ext_draw(_handle,
 		draw_x / room_width,
 		draw_y / room_height,
@@ -412,6 +415,7 @@ video_draw_fullscreen = function(_index) {
 		alpha,
 		dim);
 	chart_mask_scissor_set();
+	chart_gpu_blend_commit();
 	if (video_draw_status < 0) {
 		if (!video.error_logged) {
 			print($"[FFVideos] Draw failed: status={status}, size={video_width}x{video_height}, error={ffvideos_ext_get_error(_handle)}");

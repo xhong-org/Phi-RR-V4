@@ -111,7 +111,7 @@ __a = sum_a;
 
 if (!rpe_events_test_logged && line_id == 0
         && variable_global_exists("pls_archive_test") && global.pls_archive_test) {
-    print($"[RPE Events][INIT] line=0 initialized={rpe_events_initialized} layers={_event_layer_count} cursors={array_length(events_count)} x={sum_x} y={sum_y} alpha={sum_a} rot={sum_r} speedSegments={array_length(rpe_speed_events)}");
+    print($"[RPE Events][INIT] line=0 initialized={rpe_events_initialized} layers={_event_layer_count} cursors={array_length(events_count)} x={sum_x} y={sum_y} alpha={sum_a} rot={sum_r} speedLayers={array_length(rpe_speed_events)}");
     rpe_events_test_logged = true;
 };
 

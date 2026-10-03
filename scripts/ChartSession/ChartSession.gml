@@ -151,6 +151,55 @@ function chart_hud_ready() {
         return false;
 }
 
+function chart_version_label() {
+	var _kind = "PGRVersion";
+	var _value = 0;
+	if (instance_exists(oRender_1) && variable_global_exists("game_1") && is_struct(game_1)) {
+		_kind = "RPEVersion";
+		_value = game_1.version;
+	} else if (instance_exists(oRender_2) && variable_global_exists("game_2") && is_struct(game_2)
+		&& variable_struct_exists(game_2, "chart") && is_struct(game_2.chart)) {
+		_kind = "PECVersion";
+		_value = game_2.chart.version;
+	} else if (variable_global_exists("game") && is_struct(game) && variable_struct_exists(game, "version")) {
+		_value = game.version;
+	};
+	return $"@{VerStr}[{ver_real()}] - Code By XTHX({_kind}->{_value})";
+}
+
+/// Stamp the build label onto the application surface after the chart blit.
+/// Shaders, lines, notes and hit effects are already in that image. The
+/// progress overlay is drawn after the encoder reads the surface.
+function chart_draw_recorded_version() {
+	if (!(variable_global_exists("render_mode") && global.render_mode)) then return;
+	if (!variable_global_exists("game") || !is_struct(game) || !asset_font_valid(game.font)) then return;
+	var _scale = variable_global_exists("global_scales") ? global_scales : 1;
+	if (!is_real(_scale) || _scale <= 0) then _scale = 1;
+	var _left = variable_global_exists("chart_view_left") ? chart_view_left : 0;
+	var _colour = draw_get_colour();
+	var _alpha = draw_get_alpha();
+	var _halign = draw_get_halign();
+	var _valign = draw_get_valign();
+	var _font = draw_get_font();
+	gpu_push_state();
+	shader_reset();
+	gpu_set_blendmode(bm_normal);
+	gpu_set_texfilter(true);
+	gpu_set_alphatestenable(false);
+	draw_set_alpha(1);
+	draw_set_colour(c_gray);
+	draw_set_font(game.font);
+	draw_set_halign(fa_left);
+	draw_set_valign(fa_center);
+	draw_text_transformed(_left + 5 * _scale, room_height - (10 * _scale), chart_version_label(), 0.3 * _scale, 0.3 * _scale, 0);
+	gpu_pop_state();
+	draw_set_colour(_colour);
+	draw_set_alpha(_alpha);
+	draw_set_halign(_halign);
+	draw_set_valign(_valign);
+	draw_set_font(_font);
+}
+
 function chart_fps_draw_allowed() {
         if (variable_global_exists("render_mode") && global.render_mode) then return false;
         if (instance_exists(oSettlement)) then return false;
@@ -615,6 +664,79 @@ function chart_in_path(relative_or_full) {
         if (!string_length(p)) then return "";
         var full = chart_path_is_absolute(p) ? chart_path_norm(p) : chart_path_join(InChartPath, p);
         return chart_file_readable_path(full);
+}
+
+/// RPE stores judge-line art in Pictures/. Texture may be "Pictures/Box.png"
+/// or only "Box.png". Root files (Algebra) stay at the chart directory.
+function chart_resolve_asset(relative_path) {
+        var relative = chart_path_norm(relative_path);
+        while (string_length(relative) > 0 && string_char_at(relative, 1) == "/") {
+                relative = string_delete(relative, 1, 1);
+        };
+        if (!string_length(relative) || string_lower(relative) == "line.png") then return "";
+        var file_name = chart_path_file_name(relative);
+        var candidates = [relative];
+        if (string_length(file_name)) {
+                array_add(candidates, "Pictures/" + file_name);
+                if (string_lower(file_name) != string_lower(relative)) then array_add(candidates, file_name);
+        };
+        for (var candidate_i = 0; candidate_i < array_length(candidates); candidate_i++) {
+                var full = chart_path_join(InChartPath, candidates[candidate_i]);
+                if (chart_file_exists_any(full) || file_exists(full)) then return chart_file_readable_path(full);
+                var backslash = string_replace_all(full, "/", "\\");
+                if (backslash != full && file_exists(backslash)) then return backslash;
+        };
+        if (!variable_global_exists("chart_session") || !is_struct(global.chart_session)) then return "";
+        var discovered = global.chart_session.files;
+        if (!is_struct(discovered) || !is_array(discovered.image)) then return "";
+        var want_relative = string_lower(relative);
+        var want_name = string_lower(file_name);
+        var name_hit = "";
+        var name_hits = 0;
+        for (var image_i = 0; image_i < array_length(discovered.image); image_i++) {
+                var found = chart_path_norm(discovered.image[image_i]);
+                if (!string_length(found)) then continue;
+                if (string_lower(chart_path_rel(InChartPath, found)) == want_relative
+                        && (chart_file_exists_any(found) || file_exists(found))) {
+                        return chart_file_readable_path(found);
+                };
+                if (string_length(want_name) && string_lower(chart_path_file_name(found)) == want_name) {
+                        name_hits++;
+                        name_hit = found;
+                };
+        };
+        if (name_hits == 1 && (chart_file_exists_any(name_hit) || file_exists(name_hit))) {
+                return chart_file_readable_path(name_hit);
+        };
+        return "";
+}
+
+/// sprite_add misses some sandbox paths unless imgnum and slash style both vary.
+function chart_sprite_add_file(path) {
+        if (!is_string(path) || !string_length(path)) then return -1;
+        var try_paths = [path, string_replace_all(path, "/", "\\")];
+        var seen = {};
+        for (var try_i = 0; try_i < array_length(try_paths); try_i++) {
+                var try_path = try_paths[try_i];
+                if (!string_length(try_path) || struct_exists(seen, try_path)) then continue;
+                seen[$ try_path] = true;
+                if (!file_exists(try_path) && !chart_file_exists_any(try_path)) then continue;
+                var added = sprite_add(try_path, 1, false, false, 0, 0);
+                if (!asset_sprite_valid(added)) then added = sprite_add(try_path, 0, false, false, 0, 0);
+                if (asset_sprite_valid(added)) then return added;
+        };
+        var cache_path = chart_gm_cache_dir() + "line_tex_" + md5_string_utf8(path) + chart_path_ext(path);
+        if (!file_exists(cache_path)) {
+                if (chart_use_native_files() && chart_native_exists(path)) then chart_native_copy(path, cache_path);
+                else if (!pls_is_html5() && file_exists(path)) then file_copy(path, cache_path);
+        };
+        if (file_exists(cache_path) || chart_file_exists_any(cache_path)) {
+                var readable = chart_file_readable_path(cache_path);
+                var cached = sprite_add(readable, 1, false, false, 0, 0);
+                if (!asset_sprite_valid(cached)) then cached = sprite_add(readable, 0, false, false, 0, 0);
+                if (asset_sprite_valid(cached)) then return cached;
+        };
+        return -1;
 }
 
 function chart_list_immediate_dirs(parent_path) {

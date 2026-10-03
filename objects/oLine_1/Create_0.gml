@@ -111,7 +111,9 @@ if (has_gif_events && is_string(image) && string_length(image)) {
 	if (!gif_cache_valid) {
 		var gif_frame_delays_raw = [];
 		var gif_frame_sprites = [];
-		var gif_last_sprite = sprite_add_gif(chart_file_readable_path(InChartPath + image), 0, 0, gif_frame_delays_raw, gif_frame_sprites);
+		var gif_path = chart_resolve_asset(image);
+		var gif_last_sprite = -1;
+		if (string_length(gif_path)) then gif_last_sprite = sprite_add_gif(gif_path, 0, 0, gif_frame_delays_raw, gif_frame_sprites);
 		if (array_length(gif_frame_sprites) <= 0 && sprite_exists(gif_last_sprite)) then array_add(gif_frame_sprites, gif_last_sprite);
 		var gif_frame_delays = [];
 		var gif_total_time = 0;
@@ -135,12 +137,12 @@ if (has_gif_events && is_string(image) && string_length(image)) {
 	if (is_struct(gif_data) && is_array(gif_data.frames) && array_length(gif_data.frames) > 0
 		&& sprite_exists(gif_data.frames[0])) then line_image = gif_data.frames[0];
 } else if (is_string(image) && string_length(image) && image != "line.png") {
-		var tex_path = chart_file_readable_path(InChartPath + image);
-        if (file_exists(tex_path) || chart_file_exists_any(InChartPath + image)) {
+		var tex_path = chart_resolve_asset(image);
+        if (string_length(tex_path)) {
                 if (variable_global_exists("game_1") && is_struct(game_1)) {
                         if (!struct_exists(game_1, "Texture") || !is_struct(game_1.Texture)) then game_1.Texture = {};
                         if (!struct_exists(game_1.Texture, image) || !sprite_exists(game_1.Texture[$ image])) {
-					var spr = sprite_add(tex_path, 0, false, false, 0, 0);
+					var spr = chart_sprite_add_file(tex_path);
 					if (sprite_exists(spr)) {
 						sprite_set_offset(spr, sprite_get_width(spr) / 2, sprite_get_height(spr) / 2);
                                         game_1.Texture[$ image] = spr;
@@ -151,6 +153,13 @@ if (has_gif_events && is_string(image) && string_length(image)) {
                         };
                 };
         };
+		if (line_image == line && variable_global_exists("game_1") && is_struct(game_1)) {
+			if (!struct_exists(game_1, "_texture_miss") || !is_struct(game_1._texture_miss)) then game_1._texture_miss = {};
+			if (!struct_exists(game_1._texture_miss, image)) {
+				game_1._texture_miss[$ image] = true;
+				print($"[RPE] Texture missing: {image} looked in chart root and Pictures/");
+			};
+		};
 };
 sprite_index = line_image;
 image_speed = 0;
@@ -257,31 +266,25 @@ rpe_eval_events = function(layer_index, event_name, default_value) {
         return tval;
 };
 
-// Linear speed segment: floor += elapsed * (v0 + v(t)) / 2 (Phira RPE < 170).
-rpe_event_floor_at = function(ev, t) {
-        var elapsed = max(0, real(t) - real(ev.startTime));
-        var v0 = real(ev.value);
-        var v1 = real(ev[$ "endValue"] ?? v0);
-        var duration = real(ev.endTime) - real(ev.startTime);
-        if (!is_finite(duration) || duration <= 0) {
-                return real(ev.floorPosition) + elapsed * v0;
+// RPEVersion < 170 stores a flat trapezoid table (floorPosition on each
+// segment). 170+ stores one integrated layer struct per speed layer.
+rpe_speed_floor_at = function(t) {
+        if (!is_array(rpe_speed_events) || array_length(rpe_speed_events) <= 0) then return 0;
+        var first_speed = rpe_speed_events[0];
+        if (is_struct(first_speed) && struct_exists(first_speed, "floorPosition")) {
+                return rpe_legacy_floor_at(rpe_speed_events, t);
         };
-        var u = min(1, elapsed / duration);
-        var vt = v0 + (v1 - v0) * u;
-        return real(ev.floorPosition) + elapsed * (v0 + vt) * 0.5;
+        var floor_sum = 0;
+        var layer_n = array_length(rpe_speed_events);
+        for (var layer_i = 0; layer_i < layer_n; layer_i++) {
+                floor_sum += rpe_layer_floor_at(rpe_speed_events[layer_i], t);
+        };
+        return floor_sum;
 };
 
-// Runtime uses the merged linear-speed table produced by the PCR parser chain.
 rpe_speed_floor = function() {
-        if (!is_array(rpe_speed_events) || array_length(rpe_speed_events) <= 0) then return 0;
         var t = (variable_instance_exists(id, "line_sec") ? line_sec : 0);
-        if (t < rpe_speed_events[0].startTime) then return 0;
-        var n = array_length(rpe_speed_events);
-        var idx = clamp(speed_event_index, 0, n - 1);
-        while (idx > 0 && t < rpe_speed_events[idx].startTime) idx--;
-        while (idx < n - 1 && t > rpe_speed_events[idx].endTime) idx++;
-        speed_event_index = idx;
-        return rpe_event_floor_at(rpe_speed_events[idx], t);
+        return rpe_speed_floor_at(t);
 };
 
 // ---- extended (special) events: single channel, not multi-layer ----
@@ -666,12 +669,7 @@ line_texture_use_judge_color = is_default_line
 
 // PCR calcFloorPosition over the same merged table used by runtime.
 rpe_floor_at_sec = function(sec) {
-        if (!is_array(rpe_speed_events) || array_length(rpe_speed_events) <= 0) then return 0;
-        if (sec < rpe_speed_events[0].startTime) then return 0;
-        var n = array_length(rpe_speed_events);
-        var idx = 0;
-        while (idx < n - 1 && sec > rpe_speed_events[idx].endTime) idx++;
-        return rpe_event_floor_at(rpe_speed_events[idx], sec);
+        return rpe_speed_floor_at(sec);
 };
 
 rpe_floor_at_beat = function(beat) {

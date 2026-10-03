@@ -4,8 +4,8 @@
 #macro func function
 #macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal { "windows": 40528, "android": 40521, "gxgames": 40526 } // 各平台版本号(独立)
-#macro VerStr "v.4.0.9"
+#macro VerReal { "windows": 40532, "android": 40521, "gxgames": 40526 } // 各平台版本号(独立)
+#macro VerStr "v.4.0.10r"
 
 function ver_real() {
 	var platform = "other";
@@ -24,29 +24,32 @@ function ver_real() {
 #macro BYD_COLOR_FUNC if(BYD_COLOR_MODE && PhiTime) then image_blend = (make_colour_hsv( (game.__time[1] * 50) % 255  , 255  , 255 ))
 
 
-/// @desc YYC-safe sprite validity: accepts numeric ids and modern asset refs
+/// @desc 资源检测函数(sprite)(ref && real)
+/// @param _id {Ref}
 function asset_sprite_valid(_id) {
-	if (is_undefined(_id)) then return false;
-	if (is_string(_id)) then return false;
+	if (is_undefined(_id)) then return (false);
+	if (is_string(_id)) then return (false);
 	// Failed sprite_add traditionally returns -1
-	if (is_real(_id) && _id < 0) then return false;
-	return sprite_exists(_id);
+	if (is_real(_id) && _id < 0) then return (false);
+	return (sprite_exists(_id));
 }
 
-/// @desc YYC-safe font validity
+/// @desc 资源检测函数(font)(ref && real)
+/// @param _id {Ref}
 function asset_font_valid(_id) {
-	if (is_undefined(_id)) then return false;
-	if (is_string(_id)) then return false;
-	if (is_real(_id) && _id < 0) then return false;
-	return font_exists(_id);
+	if (is_undefined(_id)) then return (false);
+	if (is_string(_id)) then return (false);
+	if (is_real(_id) && _id < 0) then return (false);
+	return (font_exists(_id));
 }
 
-/// @desc YYC-safe buffer validity: accepts numeric ids and modern buffer refs
+/// @desc buffer缓冲区检测函数(buffer)(ref && real)
+/// @param _id {Buffer ID}
 function asset_buffer_valid(_id) {
-	if (is_undefined(_id)) then return false;
-	if (is_string(_id)) then return false;
-	if (is_real(_id) && _id < 0) then return false;
-	return buffer_exists(_id);
+	if (is_undefined(_id)) then return (false);
+	if (is_string(_id)) then return (false);
+	if (is_real(_id) && _id < 0) then return (false);
+	return (buffer_exists(_id));
 }
 
 
@@ -58,6 +61,8 @@ if (os_browser == browser_not_a_browser) then gml_release_mode(true);
 //gml_pragma("forceinline");
 
 //string_format()
+
+/// @desc 图层深度 (未知) 
 // 憋憋枚举
 enum DEPTH {
 	DEBUG = -15000,
@@ -70,7 +75,16 @@ enum DEPTH {
 /// PhiZone z: higher values draw later. 1000 depth per unit keeps 1.5 and 2
 /// apart, and a line-id tie break cannot cross into the next layer.
 function chart_layer_depth(z) {
-	return -1000 * z;
+	return (-1000 * z);
+}
+
+/// VM rejects other_instance.depth = value as a read-only built-in.
+/// Setting it from inside the instance still works.
+function chart_set_instance_depth(_inst, _depth) {
+	if (!instance_exists(_inst)) then return;
+	with (_inst) {
+		depth = _depth;
+	};
 }
 
 /// RPE type 1 tap, 2 hold, 3 flick, 4 drag. Explicit zIndex wins.
@@ -83,6 +97,109 @@ function chart_note_layer_z(rpe_type, explicit_z = undefined) {
 	return priority + 2;
 }
 
+/// RPE LineData::update parent block, in view pixels, y still up.
+/// A child offset is scaled by view/1350 and view/900 before the father
+/// rotation. Rotating in chart space first opens a rectangle once the father
+/// turns and those two scales differ, which is every 16:9 playfield.
+/// Returns [x from view center, y up, rotation]. Unparented lines and fathers
+/// with rotation 0 match the previous chart-space fold.
+function rpe_line_view_pose(_line, _sx, _sy) {
+	var local_x = 0;
+	var local_y = 0;
+	var local_r = 0;
+	if (!instance_exists(_line)) then return [local_x, local_y, local_r];
+	if (variable_instance_exists(_line, "__raw_x") && is_real(_line.__raw_x)) then local_x = _line.__raw_x * _sx;
+	if (variable_instance_exists(_line, "__raw_y") && is_real(_line.__raw_y)) then local_y = _line.__raw_y * _sy;
+	if (variable_instance_exists(_line, "__raw_r") && is_real(_line.__raw_r)) then local_r = _line.__raw_r;
+	if (!variable_instance_exists(_line, "_father_chain") || !is_array(_line._father_chain)) {
+		_line._father_chain = [];
+	};
+	var chain = _line._father_chain;
+	if (array_length(chain) == 0 && is_real(_line.isFather) && _line.isFather >= 0
+			&& variable_global_exists("game_1") && is_struct(game_1) && is_array(game_1.line_list)) {
+		var lazy_parent = _line.isFather;
+		var lazy_guard = 0;
+		var line_list = game_1.line_list;
+		while (lazy_parent >= 0 && lazy_parent < array_length(line_list) && lazy_guard < 16) {
+			var lazy_line = line_list[lazy_parent];
+			if (!instance_exists(lazy_line)) then break;
+			array_add(chain, lazy_line);
+			lazy_parent = is_real(lazy_line.isFather) ? lazy_line.isFather : -1;
+			lazy_guard++;
+		};
+	};
+	if (array_length(chain) <= 0) then return [local_x, local_y, local_r];
+	var parent_x = 0;
+	var parent_y = 0;
+	var parent_r = 0;
+	var have_parent = false;
+	for (var ai = array_length(chain) - 1; ai >= 0; ai--) {
+		var ancestor = chain[ai];
+		if (!instance_exists(ancestor) || !variable_instance_exists(ancestor, "__raw_x")) {
+			have_parent = false;
+			break;
+		};
+		var ancestor_x = ancestor.__raw_x * _sx;
+		var ancestor_y = ancestor.__raw_y * _sy;
+		if (!have_parent) {
+			parent_x = ancestor_x;
+			parent_y = ancestor_y;
+			parent_r = ancestor.__raw_r;
+			have_parent = true;
+		} else {
+			var parent_cos = dcos(parent_r);
+			var parent_sin = dsin(parent_r);
+			parent_x += ancestor_x * parent_cos + ancestor_y * parent_sin;
+			parent_y += ancestor_y * parent_cos - ancestor_x * parent_sin;
+			parent_r = ancestor.__raw_r + (bool(ancestor.rotFatherLine) ? parent_r : 0);
+		};
+	};
+	if (!have_parent) then return [local_x, local_y, local_r];
+	var child_cos = dcos(parent_r);
+	var child_sin = dsin(parent_r);
+	var out_r = local_r;
+	if (bool(_line.rotFatherLine)) then out_r += parent_r;
+	return [
+		parent_x + local_x * child_cos + local_y * child_sin,
+		parent_y + local_y * child_cos - local_x * child_sin,
+		out_r
+	];
+}
+
+/// PhiEdit 1.7 EditMain::computeViewSize. Fit the chart aspect into 1350x900.
+function rpe_preview_size(_aspect) {
+	if (!is_real(_aspect) || !is_finite(_aspect) || _aspect <= 0) then _aspect = 16 / 9;
+	var preview_w = 1350;
+	var preview_h = 1350 / _aspect;
+	if (preview_h > 900) {
+		preview_h = 900;
+		preview_w = _aspect * 900;
+	};
+	return [preview_w, preview_h];
+}
+
+/// On-screen width and height of an RPE judge-line texture.
+/// Custom textures stay uniformly scaled by the playfield height/900.
+/// line.png follows LineView::apply: scaleX * 4000 and scaleY * 5 design
+/// points, editor zoom 1. Those points sit in the 1350x900 preview, then
+/// map onto the playfield by view/preview.
+function rpe_judge_line_pixel_size(is_default_line, scale_x, scale_y, sprite_w, sprite_h, view_w) {
+	var design_y = view_w / 1350;
+	if (variable_global_exists("chart_view_height") && is_real(chart_view_height) && chart_view_height > 0) {
+		design_y = chart_view_height / 900;
+	};
+	if (is_default_line) {
+		var aspect = 16 / 9;
+		if (variable_global_exists("chart_aspect_ratio") && is_real(chart_aspect_ratio) && is_finite(chart_aspect_ratio) && chart_aspect_ratio > 0) {
+			aspect = chart_aspect_ratio;
+		};
+		var preview = rpe_preview_size(aspect);
+		var view_h = design_y * 900;
+		return [scale_x * 4000 * (view_w / preview[0]), scale_y * 5 * (view_h / preview[1])];
+	};
+	return [sprite_w * scale_x * design_y, sprite_h * scale_y * design_y];
+}
+
 /// Pixel width of the judge line as Draw draws it. Used to clip an attached video.
 function chart_line_pixel_width(line_instance) {
 	if (!instance_exists(line_instance)) then return 0;
@@ -92,23 +209,20 @@ function chart_line_pixel_width(line_instance) {
 	};
 	var scale_x = real(line_instance.__scale_x);
 	if (!is_finite(scale_x)) then scale_x = 1;
+	var scale_y = real(line_instance.__scale_y);
+	if (!is_finite(scale_y)) then scale_y = 1;
 	var sprite = line_instance.sprite_index;
 	var sprite_w = max(1, sprite_get_width(sprite));
-	if (line_instance.is_default_line) {
-		if (!line_instance.has_text_events && !line_instance.is_attach_ui) then scale_x *= 0.5;
-		var line_length = 6;
-		if (variable_global_exists("game_1") && is_struct(game_1) && is_struct(game_1.chart_info)) {
-			var info_line_length = real(game_1.chart_info[$ "line_length"] ?? 6);
-			if (is_finite(info_line_length) && info_line_length > 0) then line_length = info_line_length;
+	var sprite_h = max(1, sprite_get_height(sprite));
+	if (!line_instance.is_default_line) {
+		var csv = chart_line_override(line_instance.line_id);
+		if (is_struct(csv)) {
+			var csv_scale = chart_line_csv_sprite_scale(csv, sprite);
+			return abs(csv_scale[0] * scale_x) * sprite_w;
 		};
-		return abs(scale_x * line_length * view_w);
 	};
-	var csv = chart_line_override(line_instance.line_id);
-	if (is_struct(csv)) {
-		var csv_scale = chart_line_csv_sprite_scale(csv, sprite);
-		return abs(csv_scale[0] * scale_x) * sprite_w;
-	};
-	return abs((view_w / 1350) * scale_x) * sprite_w;
+	var pixel_size = rpe_judge_line_pixel_size(line_instance.is_default_line, scale_x, scale_y, sprite_w, sprite_h, view_w);
+	return abs(pixel_size[0]);
 }
 
 /// PhiZone scaleOnNotes 2. Notes stay full size and are masked to the line's
@@ -1382,6 +1496,7 @@ function Phigros() constructor { // 仅仅结构
 
 		// GM 2024+/LTS may return asset refs from sprite_add (not reals).
 		// Do NOT require is_real(...); validate with sprite_exists via asset_sprite_valid.
+		// Backgroud 图像添加检验
 		var base_spr = -1;
 		var try_paths = [p];
 		array_add(try_paths, string_replace_all(p, "/", "\\"));
@@ -1398,10 +1513,14 @@ function Phigros() constructor { // 仅仅结构
 		if (!asset_sprite_valid(base_spr)) {
 			var fname = chart_path_file_name(p);
 			cache_path = chart_gm_cache_dir() + "bg_load_" + fname;
-			if (file_exists(cache_path)) then file_delete(cache_path);
+			
+			if (file_exists(cache_path)) then file_delete(cache_path); // 清理冲突名字图片缓存
+			
 			if (chart_use_native_files() && chart_native_exists(cache_path)) then chart_native_delete(cache_path);
+			
 			if (chart_use_native_files() && chart_native_exists(p)) then chart_native_copy(p, cache_path);
 			else if (!pls_is_html5()) then file_copy(p, cache_path);
+			
 			if (file_exists(cache_path) || (chart_use_native_files() && chart_native_exists(cache_path))) {
 				var sc = sprite_add(cache_path, 0, false, false, 0, 0);
 				if (asset_sprite_valid(sc)) then base_spr = sc;
@@ -3021,13 +3140,13 @@ function pec_reader_load(ctx, chart_path) {
 		};
 
 		switch (command) {
-			case "cv": if (array_length(tokens) >= 4) array_add(_l.speedEvents, { beat: number(tokens[2], 0), value: number(tokens[3], 0) / 7 }); break;
-			case "cp": if (array_length(tokens) >= 5) array_add(_l.moveEvents, { startBeat:number(tokens[2],0), endBeat:number(tokens[2],0), target:[number(tokens[3],0)/2048, 1-number(tokens[4],0)/1400], easing:1 }); break;
-			case "cm": if (array_length(tokens) >= 7) array_add(_l.moveEvents, { startBeat:number(tokens[2],0), endBeat:number(tokens[3],0), target:[number(tokens[4],0)/2048, 1-number(tokens[5],0)/1400], easing:number(tokens[6],1) }); break;
-			case "cd": if (array_length(tokens) >= 4) array_add(_l.rotateEvents, { startBeat:number(tokens[2],0), endBeat:number(tokens[2],0), target:-number(tokens[3],0), easing:1 }); break;
-			case "cr": if (array_length(tokens) >= 6) array_add(_l.rotateEvents, { startBeat:number(tokens[2],0), endBeat:number(tokens[3],0), target:-number(tokens[4],0), easing:number(tokens[5],1) }); break;
-			case "ca": if (array_length(tokens) >= 4) array_add(_l.alphaEvents, { startBeat:number(tokens[2],0), endBeat:number(tokens[2],0), target:number(tokens[3],0)/255, easing:1 }); break;
-			case "cf": if (array_length(tokens) >= 5) array_add(_l.alphaEvents, { startBeat:number(tokens[2],0), endBeat:number(tokens[3],0), target:number(tokens[4],0)/255, easing:1 }); break;
+			case "cv": if (array_length(tokens) >= 4) then array_add(_l.speedEvents, { beat: number(tokens[2], 0), value: number(tokens[3], 0) / 7 }); break;
+			case "cp": if (array_length(tokens) >= 5) then array_add(_l.moveEvents, { startBeat:number(tokens[2],0), endBeat:number(tokens[2],0), target:[number(tokens[3],0)/2048, 1-number(tokens[4],0)/1400], easing:1 }); break;
+			case "cm": if (array_length(tokens) >= 7) then array_add(_l.moveEvents, { startBeat:number(tokens[2],0), endBeat:number(tokens[3],0), target:[number(tokens[4],0)/2048, 1-number(tokens[5],0)/1400], easing:number(tokens[6],1) }); break;
+			case "cd": if (array_length(tokens) >= 4) then array_add(_l.rotateEvents, { startBeat:number(tokens[2],0), endBeat:number(tokens[2],0), target:-number(tokens[3],0), easing:1 }); break;
+			case "cr": if (array_length(tokens) >= 6) then array_add(_l.rotateEvents, { startBeat:number(tokens[2],0), endBeat:number(tokens[3],0), target:-number(tokens[4],0), easing:number(tokens[5],1) }); break;
+			case "ca": if (array_length(tokens) >= 4) then array_add(_l.alphaEvents, { startBeat:number(tokens[2],0), endBeat:number(tokens[2],0), target:number(tokens[3],0)/255, easing:1 }); break;
+			case "cf": if (array_length(tokens) >= 5) then array_add(_l.alphaEvents, { startBeat:number(tokens[2],0), endBeat:number(tokens[3],0), target:number(tokens[4],0)/255, easing:1 }); break;
 		};
 	};
 

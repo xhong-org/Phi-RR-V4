@@ -9,6 +9,7 @@ function process_mem_mb(bytes) {
 }
 
 /// Compact heaps and drop unused working-set pages for this process only.
+// 内存清理 , 好恐怖
 function process_mem_trim() {
 	if (!i_mem_native_ready()) then return false;
 	try { gc_collect(); } catch (gc_err) { delete(gc_err); };

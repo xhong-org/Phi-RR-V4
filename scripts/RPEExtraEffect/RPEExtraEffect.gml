@@ -383,9 +383,29 @@ function rpe_effect_preserve_frag_alpha(source) {
 	return rpe_effect_clip_output_coverage(source);
 }
 
-// Shaders such as patch mix toward vec4(0,0,0,1). Empty capture pixels then
-// become opaque and the composite blacks out the whole chart. Keep coverage
-// inside the unshaded sample.
+// Chart vignette uses uv*(1-uv). On a hit sprite those UVs are the atlas
+// rectangle, so the soft disc is shaded again. Fall off from the pixel instead.
+function rpe_effect_vignette_screen_falloff(source) {
+	if (!is_string(source)) then return source;
+	var shaped = string_pos("uv.yx", source) > 0;
+	if (!shaped) then return source;
+	if (string_pos("uniform vec2 screenSize", source) <= 0) {
+		source = "uniform vec2 screenSize;\n" + source;
+	};
+	source = string_replace_all(source, "uv * (1.0 - uv.yx)", "(_rpeVigUv * (1.0 - _rpeVigUv.yx))");
+	source = string_replace_all(source, "uv*(1.0-uv.yx)", "(_rpeVigUv*(1.0-_rpeVigUv.yx))");
+	var main_at = string_pos("void main", source);
+	if (main_at <= 0) then return source;
+	var brace_scan = string_pos("{", string_delete(source, 1, main_at - 1));
+	if (brace_scan <= 0) then return source;
+	var brace_at = main_at + brace_scan - 1;
+	return string_insert("vec2 _rpeVigUv=(screenSize.x>1.0)?(gl_FragCoord.xy/screenSize):uv;", source, brace_at + 1);
+}
+
+// Shaders such as patch and vignette mix toward an opaque colour. Empty capture
+// pixels then become opaque. Clamp coverage back to the unshaded pixel, but do
+// not scale RGB again: the sample is already premultiplied, and that scale
+// turns the soft hit disc into a dark shader blob.
 function rpe_effect_clip_output_coverage(source) {
 	if (!is_string(source)) then return source;
 	if (string_pos("gl_FragColor", source) <= 0 || string_pos("uv", source) <= 0) then return source;
@@ -396,7 +416,7 @@ function rpe_effect_clip_output_coverage(source) {
 	var brace_at = main_at + brace_scan - 1;
 	source = string_insert("vec4 _rpeFrag;", source, brace_at + 1);
 	source = string_replace_all(source, "gl_FragColor", "_rpeFrag");
-	var epilogue = "vec4 _rpeCover=texture2D(screenTexture,uv);float _rpeA=min(_rpeFrag.a,_rpeCover.a);float _rpeS=(_rpeFrag.a>0.001)?(_rpeA/_rpeFrag.a):0.0;gl_FragColor=vec4(_rpeFrag.rgb*_rpeS,_rpeA);";
+	var epilogue = "vec4 _rpeCover=texture2D(screenTexture,uv);float _rpeA=min(_rpeFrag.a,_rpeCover.a);vec3 _rpeRgb=(_rpeA>0.001)?_rpeFrag.rgb:vec3(0.0);gl_FragColor=vec4(_rpeRgb,_rpeA);";
 	var last = string_length(source);
 	while (last > 0 && string_char_at(source, last) != "}") last -= 1;
 	if (last <= 0) then return source;
@@ -742,13 +762,17 @@ void main() {
 precision mediump float;
 varying vec2 uv;
 uniform sampler2D screenTexture;
+uniform vec2 screenSize;
 uniform vec4 color;
 uniform float extend;
 uniform float radius;
 void main() {
-    vec2 value = uv * (1.0 - uv.yx);
-    float vig = pow(max(value.x * value.y * radius, 0.0), extend);
-    gl_FragColor = mix(color, texture2D(screenTexture, uv), vig);
+    vec4 src = texture2D(screenTexture, uv);
+    vec2 suv = (screenSize.x > 1.0) ? (gl_FragCoord.xy / screenSize) : uv;
+    vec2 value = suv * (1.0 - suv.yx);
+    float vig = clamp(pow(max(value.x * value.y * radius, 0.0), extend), 0.0, 1.0);
+    vec3 rgb = mix(color.rgb * src.a, src.rgb, vig);
+    gl_FragColor = vec4(rgb, src.a);
 }
 ";
 		case "customTint": return @"

@@ -1,7 +1,6 @@
 /// @description Apply parent transform + screen mapping after all lines evaluated
-// Parent transform uses RPE coordinate-space conversion (notes/rpe_parse).
+// RPE scales a child offset by view/1350 and view/900 before the father rotation.
 // End Step runs after every line finished writing __raw_* this frame.
-// Parent world position is resolved with a small stack (no nested function defs).
 
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active
 	&& !rpe_force_event_init) then exit;
@@ -11,72 +10,14 @@ var _transition_updates = instance_exists(oRender_1)
 if (variable_global_exists("game") && is_struct(game) && game.paused
 	&& !_transition_updates && !rpe_force_event_init) then exit;
 
-var out_x = __raw_x;
-var out_y = __raw_y;
-var out_r = __raw_r;
-
-if (!is_array(_father_chain)) then _father_chain = [];
-if (array_length(_father_chain) == 0 && is_real(isFather) && isFather >= 0
-        && variable_global_exists("game_1") && is_struct(game_1)
-        && is_array(game_1.line_list)) {
-    var _lazy_parent = isFather;
-    var _lazy_guard = 0;
-    while (_lazy_parent >= 0 && _lazy_parent < array_length(game_1.line_list)
-            && _lazy_guard < 16) {
-        var _lazy_line = game_1.line_list[_lazy_parent];
-        if (!instance_exists(_lazy_line)) then break;
-        array_add(_father_chain, _lazy_line);
-        _lazy_parent = is_real(_lazy_line.isFather) ? _lazy_line.isFather : -1;
-        _lazy_guard++;
-    };
-};
-
-if (is_array(_father_chain) && array_length(_father_chain) > 0) {
-                var chain = _father_chain;
-                var parent_world_x = 0;
-                var parent_world_y = 0;
-                var parent_world_r = 0;
-                var have_parent = false;
-
-                // Fold root -> immediate parent so nested lines use the same
-                // transform rules as the renderer's non-worker path.
-                for (var ai = array_length(chain) - 1; ai >= 0; ai--) {
-                        var ancestor = chain[ai];
-                        if (!instance_exists(ancestor) || !variable_instance_exists(ancestor, "__raw_x")) {
-                                have_parent = false;
-                                break;
-                        };
-                        if (!have_parent) {
-                                parent_world_x = ancestor.__raw_x;
-                                parent_world_y = ancestor.__raw_y;
-                                parent_world_r = ancestor.__raw_r;
-                                have_parent = true;
-                        } else {
-                                var parent_cos = dcos(parent_world_r);
-                                var parent_sin = dsin(parent_world_r);
-                                parent_world_x += ancestor.__raw_x * parent_cos + ancestor.__raw_y * parent_sin;
-                                parent_world_y += ancestor.__raw_y * parent_cos - ancestor.__raw_x * parent_sin;
-                                parent_world_r = ancestor.__raw_r
-                                        + (bool(ancestor.rotFatherLine) ? parent_world_r : 0);
-                        };
-                };
-
-                if (have_parent) {
-                        var parent_cos = dcos(parent_world_r);
-                        var parent_sin = dsin(parent_world_r);
-                        out_x = parent_world_x + __raw_x * parent_cos + __raw_y * parent_sin;
-                        out_y = parent_world_y + __raw_y * parent_cos - __raw_x * parent_sin;
-                        if (rotFatherLine) then out_r += parent_world_r;
-                };
-};
-
-// Map RPE coordinates into Phira's effective viewport. Narrow windows keep
-// their full height; only the horizontal area is limited by chart aspect.
+// Pose is already in view pixels. Height is the window height.
+// Only the horizontal area is limited by chart aspect.
 var chart_view_h = chart_view_height;
 var chart_view_w = chart_view_width;
-x = out_x * (chart_view_w / 1350) + chart_view_left + chart_view_w * 0.5;
-y = -out_y * (chart_view_h / 900) + chart_view_h * 0.5;
-image_angle = -out_r;
+var pose = rpe_line_view_pose(id, chart_view_w / 1350, chart_view_h / 900);
+x = pose[0] + chart_view_left + chart_view_w * 0.5;
+y = -pose[1] + chart_view_h * 0.5;
+image_angle = -pose[2];
 image_blend = __color;
 
 __x = x;

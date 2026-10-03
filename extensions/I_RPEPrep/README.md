@@ -1,6 +1,8 @@
 # I_RPEPrep
 
-Windows-only native preprocess for RPE judge-line speed events: split-fit in beat space, then BPM beat→second conversion and trapezoid floor.
+Windows-only native preprocess. The speed fitter still implements the old straight-line trapezoid. Playback no longer calls it: PhiEdit 1.7 integrates each speed layer with its easing (closed form for linear, 20-step Simpson otherwise) in `scripts/RPELinePrep/RPELinePrep.gml`.
+
+The DLL entry points remain for the previous fit. Do not turn `RPE_LINE_PREP_NATIVE` back on until the native integral matches that script.
 
 Disable without deleting the DLL:
 

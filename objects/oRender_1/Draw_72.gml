@@ -61,8 +61,10 @@ if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") &&
 	for (var worker_line_index = 0; worker_line_index < line_count; worker_line_index++) {
 		var worker_line = game_1.line_list[worker_line_index];
 		if (instance_exists(worker_line)) {
-			buffer_write(_rpe_worker_input, buffer_f64, real(worker_line.__raw_x));
-			buffer_write(_rpe_worker_input, buffer_f64, real(worker_line.__raw_y));
+			// Native resolver rotates then adds. Feed it view pixels so that
+			// matches RPE, which scales by view/1350 and view/900 first.
+			buffer_write(_rpe_worker_input, buffer_f64, real(worker_line.__raw_x) * worker_scale_x);
+			buffer_write(_rpe_worker_input, buffer_f64, real(worker_line.__raw_y) * worker_scale_y);
 			buffer_write(_rpe_worker_input, buffer_f64, real(worker_line.__raw_r));
 		} else {
 			buffer_write(_rpe_worker_input, buffer_f64, 0);
@@ -89,8 +91,8 @@ if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") &&
 			var result_world_y = buffer_read(_rpe_worker_output, buffer_f64);
 			var result_world_r = buffer_read(_rpe_worker_output, buffer_f64);
 			if (!instance_exists(result_child)) then continue;
-			result_child.x = result_world_x * worker_scale_x + worker_view_left + worker_half_width;
-			result_child.y = -result_world_y * worker_scale_y + worker_half_height;
+			result_child.x = result_world_x + worker_view_left + worker_half_width;
+			result_child.y = -result_world_y + worker_half_height;
 			result_child.image_angle = -result_world_r;
 			result_child.__x = result_child.x;
 			result_child.__y = result_child.y;
@@ -142,64 +144,11 @@ if (!worker_resolved) {
 		var child = game_1.line_list[line_index];
 		if (!instance_exists(child)) then continue;
 
-	var world_x = child.__raw_x;
-	var world_y = child.__raw_y;
-	var world_r = child.__raw_r;
-	var parent_id = child.isFather;
-
-	if (is_real(parent_id) && parent_id >= 0 && parent_id < line_count && parent_id != line_index) {
-		var chain = [];
-		var current_id = parent_id;
-		var guard = 0;
-		while (is_real(current_id) && current_id >= 0 && current_id < line_count && guard < line_count) {
-			array_add(chain, current_id);
-			var current_line = game_1.line_list[current_id];
-			if (!instance_exists(current_line)) then break;
-			var next_id = current_line.isFather;
-			if (!is_real(next_id) || next_id < 0 || next_id == current_id) then break;
-			current_id = next_id;
-			guard++;
-		};
-
-		var parent_world_x = 0;
-		var parent_world_y = 0;
-		var parent_world_r = 0;
-		var have_parent = false;
-		for (var chain_index = array_length(chain) - 1; chain_index >= 0; chain_index--) {
-			var ancestor = game_1.line_list[chain[chain_index]];
-			if (!instance_exists(ancestor)) {
-				have_parent = false;
-				break;
-			};
-			if (!have_parent) {
-				parent_world_x = ancestor.__raw_x;
-				parent_world_y = ancestor.__raw_y;
-				parent_world_r = ancestor.__raw_r;
-				have_parent = true;
-			} else {
-				var parent_cos = dcos(parent_world_r);
-				var parent_sin = dsin(parent_world_r);
-				var next_world_x = parent_world_x + ancestor.__raw_x * parent_cos + ancestor.__raw_y * parent_sin;
-				var next_world_y = parent_world_y + ancestor.__raw_y * parent_cos - ancestor.__raw_x * parent_sin;
-				parent_world_x = next_world_x;
-				parent_world_y = next_world_y;
-				parent_world_r = ancestor.__raw_r + (ancestor.rotFatherLine ? parent_world_r : 0);
-			};
-		};
-
-		if (have_parent) {
-			var child_parent_cos = dcos(parent_world_r);
-			var child_parent_sin = dsin(parent_world_r);
-			world_x = parent_world_x + child.__raw_x * child_parent_cos + child.__raw_y * child_parent_sin;
-			world_y = parent_world_y + child.__raw_y * child_parent_cos - child.__raw_x * child_parent_sin;
-			world_r = child.__raw_r + (child.rotFatherLine ? parent_world_r : 0);
-		};
-	};
-
-	child.x = world_x * worker_scale_x + worker_view_left + worker_half_width;
-	child.y = -world_y * worker_scale_y + worker_half_height;
-	child.image_angle = -world_r;
-	child.__x = child.x;
+		var pose = rpe_line_view_pose(child, worker_scale_x, worker_scale_y);
+		child.x = pose[0] + worker_view_left + worker_half_width;
+		child.y = -pose[1] + worker_half_height;
+		child.image_angle = -pose[2];
+		child.__x = child.x;
 	child.__y = child.y;
 	child.__r = child.image_angle;
 	child.__cos = dcos(child.image_angle);
