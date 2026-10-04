@@ -1,4 +1,5 @@
 /// @description Release chart-owned dynamic resources on room exit.
+official_blocks_reset();
 chart_clip_shutdown();
 if (variable_global_exists("chart_surface") && !is_undefined(chart_surface) && surface_exists(chart_surface)) then surface_free(chart_surface);
 if (variable_global_exists("chart_surface")) then chart_surface = -1;

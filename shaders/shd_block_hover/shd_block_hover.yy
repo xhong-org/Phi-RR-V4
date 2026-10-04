@@ -1,0 +1,12 @@
+{
+  "$GMShader":"",
+  "%Name":"shd_block_hover",
+  "name":"shd_block_hover",
+  "parent":{
+    "name":"Shaders",
+    "path":"folders/Shaders.yy",
+  },
+  "resourceType":"GMShader",
+  "resourceVersion":"2.0",
+  "type":1,
+}

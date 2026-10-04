@@ -357,6 +357,7 @@ function official_lines_finish() {
 	};
 	print("[C-Lines] Done.", owner.settings.enableDebug);
 	print("[C-Notes] Done.", owner.settings.enableDebug);
+	official_blocks_preload();
 	owner._chart_line_job = undefined;
 	chart_lines_freeze_object(oLine);
 }

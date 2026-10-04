@@ -54,6 +54,7 @@ function settings_catalog() {
 		{ key:"disableChartShader", comment:"禁用谱面 Shader(default:false)" },
 		{ key:"directGlslEs", comment:"Windows 直接编译 GLSL ES，不经 HLSL 翻译(default:false)" },
 		{ key:"disableChartVideo", comment:"禁用谱面视频(default:false)" },
+		{ key:"enableNoiseArea", comment:"是否启用噪区(default:true)" },
 		{ key:"TEST1", comment:"judge offset jitter test (default false)" }
 	];
 	return cat;
@@ -273,7 +274,7 @@ function settings_group_defs() {
 	static groups = [
 		{ id:"display", keys:["enableBlur", "enableSurface", "enableLineJudge", "showBG", "enableHitEffect", "enableNoteHightLight", "enableChartGUI", "aa_level", "useOldFX", "enableVsync"] },
 		{ id:"debug", keys:["enableFPS", "refreshFPSCount", "enableDebug", "preventWindowMoveFreeze", "enableRPEMulticore", "rpeWorkerMinLines", "rpeWorkerProfileFrames", "TEST1"] },
-		{ id:"chart", keys:["comboString", "userName", "enableAutoPlay", "enableComboScore", "judgeOffset", "enableAccJudgment", "notePreloadSeconds", "noteUniformScale", "disableChartShader", "directGlslEs", "disableChartVideo"] },
+		{ id:"chart", keys:["comboString", "userName", "enableAutoPlay", "enableComboScore", "judgeOffset", "enableAccJudgment", "notePreloadSeconds", "noteUniformScale", "disableChartShader", "directGlslEs", "disableChartVideo", "enableNoiseArea"] },
 		{ id:"deprecated", keys:["enableQuikyStart", "enableCanvasZoom", "enableDisplayLineID"] }
 	];
 	return groups;

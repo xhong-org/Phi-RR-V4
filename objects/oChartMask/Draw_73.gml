@@ -1,4 +1,5 @@
 /// @description Composite effective chart viewport.
+shader_reset();
 chart_mask_scissor_clear();
 // Fullscreen shaders (no PhiZone targetRange) must land on this surface before
 // the blit. Draw GUI is not used; the pause menu is drawn after this blit.
@@ -64,6 +65,7 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 	chart_draw_background(false);
 };
 gpu_set_blendmode_ext(bm_one, bm_zero);
+shader_reset();
 draw_set_colour(c_white);
 draw_set_alpha(1);
 // Always composite the chart viewport. Lines are longer than the 16:9 area;

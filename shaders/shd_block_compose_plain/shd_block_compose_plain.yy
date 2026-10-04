@@ -1,0 +1,12 @@
+{
+  "$GMShader":"",
+  "%Name":"shd_block_compose_plain",
+  "name":"shd_block_compose_plain",
+  "parent":{
+    "name":"Shaders",
+    "path":"folders/Shaders.yy",
+  },
+  "resourceType":"GMShader",
+  "resourceVersion":"2.0",
+  "type":1,
+}

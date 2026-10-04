@@ -1231,6 +1231,7 @@ function Phigros() constructor { // 仅仅结构
 		"disableChartShader" : false,			// 禁用谱面 Shader(default:false)
 		"directGlslEs" : false,					// Windows: compile chart GLSL ES directly (default:false)
 		"disableChartVideo" : false,			// 禁用谱面视频(default:false)
+		"enableNoiseArea" : true,				// 是否启用噪区(default:true)
 		"TEST1" : false							// judge offset jitter test (default false)
 	};
 

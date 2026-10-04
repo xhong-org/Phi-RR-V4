@@ -1,0 +1,12 @@
+{
+  "$GMShader":"",
+  "%Name":"shd_block_subtract_soft",
+  "name":"shd_block_subtract_soft",
+  "parent":{
+    "name":"Shaders",
+    "path":"folders/Shaders.yy",
+  },
+  "resourceType":"GMShader",
+  "resourceVersion":"2.0",
+  "type":1,
+}

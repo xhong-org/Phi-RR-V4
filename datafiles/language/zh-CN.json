@@ -135,6 +135,7 @@
       "disableChartShader": "禁用谱面 Shader",
       "directGlslEs": "直接编译 GLSL ES（Beta）",
       "disableChartVideo": "禁用谱面视频",
+      "enableNoiseArea": "是否启用噪区",
       "TEST1": "判定偏移抖动测试"
     },
     "loading": {

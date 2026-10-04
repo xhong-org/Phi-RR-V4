@@ -135,6 +135,7 @@
       "disableChartShader": "Disable chart shaders",
       "directGlslEs": "Compile GLSL ES directly (Beta)",
       "disableChartVideo": "Disable chart videos",
+      "enableNoiseArea": "Enable noise areas",
       "TEST1": "Judge offset jitter test"
     },
     "loading": {

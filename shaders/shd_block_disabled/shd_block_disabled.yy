@@ -1,0 +1,12 @@
+{
+  "$GMShader":"",
+  "%Name":"shd_block_disabled",
+  "name":"shd_block_disabled",
+  "parent":{
+    "name":"Shaders",
+    "path":"folders/Shaders.yy",
+  },
+  "resourceType":"GMShader",
+  "resourceVersion":"2.0",
+  "type":1,
+}

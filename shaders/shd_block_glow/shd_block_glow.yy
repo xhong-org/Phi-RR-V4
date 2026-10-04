@@ -1,0 +1,12 @@
+{
+  "$GMShader":"",
+  "%Name":"shd_block_glow",
+  "name":"shd_block_glow",
+  "parent":{
+    "name":"Shaders",
+    "path":"folders/Shaders.yy",
+  },
+  "resourceType":"GMShader",
+  "resourceVersion":"2.0",
+  "type":1,
+}

@@ -212,6 +212,7 @@ function chart_viewport_dim_draw() {
 }
 
 function chart_mask_side_dim_draw() {
+	shader_reset();
 	if (!instance_exists(oPlayTransition)) then return;
 	var _transition = instance_find(oPlayTransition, 0);
 	if (!variable_instance_exists(_transition, "end_cover_alpha")) then return;

@@ -1,4 +1,7 @@
 /// @description Start chart composition.
+// Drop a shader left on by the previous frame before the ending line,
+// notes, or this clear can be drawn through it.
+shader_reset();
 if (!application_surface_is_enabled() || !surface_exists(application_surface)) then exit;
 chart_view_refresh(room_width, room_height);
 if (!chart_mask_surface_ensure()) then exit;
