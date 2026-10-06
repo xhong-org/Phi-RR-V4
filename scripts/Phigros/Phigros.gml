@@ -4,8 +4,8 @@
 #macro func function
 #macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal { "windows": 40532, "android": 40521, "gxgames": 40526 } // 各平台版本号(独立)
-#macro VerStr "v.4.0.10r"
+#macro VerReal { "windows": 40534, "android": 40531, "gxgames": 40530 } // 各平台版本号(独立)
+#macro VerStr "v.4.0.10-release"
 
 function ver_real() {
 	var platform = "other";
@@ -178,26 +178,43 @@ function rpe_preview_size(_aspect) {
 	return [preview_w, preview_h];
 }
 
-/// On-screen width and height of an RPE judge-line texture.
-/// Custom textures stay uniformly scaled by the playfield height/900.
-/// line.png follows LineView::apply: scaleX * 4000 and scaleY * 5 design
-/// points, editor zoom 1. Those points sit in the 1350x900 preview, then
-/// map onto the playfield by view/preview.
-function rpe_judge_line_pixel_size(is_default_line, scale_x, scale_y, sprite_w, sprite_h, view_w) {
+/// line.png only. LineView::apply uses scaleX * 4000 and scaleY * 5 design
+/// points at editor zoom 1, independent of the texture's pixel size.
+/// Those points sit in the preview from computeViewSize, then map onto the
+/// playfield by view/preview.
+function rpe_default_line_pixel_size(scale_x, scale_y, view_w) {
 	var design_y = view_w / 1350;
 	if (variable_global_exists("chart_view_height") && is_real(chart_view_height) && chart_view_height > 0) {
 		design_y = chart_view_height / 900;
 	};
-	if (is_default_line) {
-		var aspect = 16 / 9;
-		if (variable_global_exists("chart_aspect_ratio") && is_real(chart_aspect_ratio) && is_finite(chart_aspect_ratio) && chart_aspect_ratio > 0) {
-			aspect = chart_aspect_ratio;
-		};
-		var preview = rpe_preview_size(aspect);
-		var view_h = design_y * 900;
-		return [scale_x * 4000 * (view_w / preview[0]), scale_y * 5 * (view_h / preview[1])];
+	var aspect = 16 / 9;
+	if (variable_global_exists("chart_aspect_ratio") && is_real(chart_aspect_ratio) && is_finite(chart_aspect_ratio) && chart_aspect_ratio > 0) {
+		aspect = chart_aspect_ratio;
 	};
-	return [sprite_w * scale_x * design_y, sprite_h * scale_y * design_y];
+	var preview = rpe_preview_size(aspect);
+	var view_h = design_y * 900;
+	return [scale_x * 4000 * (view_w / preview[0]), scale_y * 5 * (view_h / preview[1])];
+}
+
+/// Custom judge-line texture only (Texture != "line.png"), including GIF frames.
+/// LineView::apply sets scale to scaleX / shrink and scaleY / shrink. Playback
+/// shrink is 1, so the sprite is its pixel size times the line scale, in
+/// preview points. computeViewSize is that preview. The playfield shows the
+/// same 1350x900 chart space across view_w x view_h, so each axis maps by
+/// view/preview on its own.
+function rpe_custom_texture_pixel_size(scale_x, scale_y, sprite_w, sprite_h, view_w) {
+	var aspect = 16 / 9;
+	if (variable_global_exists("chart_aspect_ratio") && is_real(chart_aspect_ratio) && is_finite(chart_aspect_ratio) && chart_aspect_ratio > 0) {
+		aspect = chart_aspect_ratio;
+	};
+	var preview = rpe_preview_size(aspect);
+	var preview_w = preview[0];
+	var preview_h = preview[1];
+	var view_h = view_w * preview_h / preview_w;
+	if (variable_global_exists("chart_view_height") && is_real(chart_view_height) && chart_view_height > 0) {
+		view_h = chart_view_height;
+	};
+	return [sprite_w * scale_x * (view_w / preview_w), sprite_h * scale_y * (view_h / preview_h)];
 }
 
 /// Pixel width of the judge line as Draw draws it. Used to clip an attached video.
@@ -220,8 +237,10 @@ function chart_line_pixel_width(line_instance) {
 			var csv_scale = chart_line_csv_sprite_scale(csv, sprite);
 			return abs(csv_scale[0] * scale_x) * sprite_w;
 		};
+		var custom_px = rpe_custom_texture_pixel_size(scale_x, scale_y, sprite_w, sprite_h, view_w);
+		return abs(custom_px[0]);
 	};
-	var pixel_size = rpe_judge_line_pixel_size(line_instance.is_default_line, scale_x, scale_y, sprite_w, sprite_h, view_w);
+	var pixel_size = rpe_default_line_pixel_size(scale_x, scale_y, view_w);
 	return abs(pixel_size[0]);
 }
 

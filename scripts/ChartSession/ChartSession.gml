@@ -167,9 +167,10 @@ function chart_version_label() {
 	return $"@{VerStr}[{ver_real()}] - Code By XTHX({_kind}->{_value})";
 }
 
-/// Stamp the build label onto the application surface after the chart blit.
-/// Shaders, lines, notes and hit effects are already in that image. The
-/// progress overlay is drawn after the encoder reads the surface.
+/// Stamp the build label onto the current render target.
+/// Play mode draws it in Draw GUI, which is after the encoder read and lands
+/// on the progress overlay. Call this while the chart surface is bound, or
+/// after the last fullscreen shader, and flush before restoring GPU state.
 function chart_draw_recorded_version() {
 	if (!(variable_global_exists("render_mode") && global.render_mode)) then return;
 	if (!variable_global_exists("game") || !is_struct(game) || !asset_font_valid(game.font)) then return;
@@ -183,15 +184,33 @@ function chart_draw_recorded_version() {
 	var _font = draw_get_font();
 	gpu_push_state();
 	shader_reset();
+	gpu_set_blendenable(true);
 	gpu_set_blendmode(bm_normal);
 	gpu_set_texfilter(true);
+	gpu_set_texrepeat(false);
 	gpu_set_alphatestenable(false);
+	gpu_set_colourwriteenable(true, true, true, true);
+	gpu_set_ztestenable(false);
+	gpu_set_zwriteenable(false);
+	gpu_set_cullmode(cull_noculling);
+	var _bound = surface_get_target();
+	var _sw = room_width;
+	var _sh = room_height;
+	if (surface_exists(_bound)) {
+		_sw = surface_get_width(_bound);
+		_sh = surface_get_height(_bound);
+	} else if (surface_exists(application_surface)) {
+		_sw = surface_get_width(application_surface);
+		_sh = surface_get_height(application_surface);
+	};
+	gpu_set_scissor(0, 0, max(1, _sw), max(1, _sh));
 	draw_set_alpha(1);
 	draw_set_colour(c_gray);
 	draw_set_font(game.font);
 	draw_set_halign(fa_left);
 	draw_set_valign(fa_center);
 	draw_text_transformed(_left + 5 * _scale, room_height - (10 * _scale), chart_version_label(), 0.3 * _scale, 0.3 * _scale, 0);
+	pls_draw_flush();
 	gpu_pop_state();
 	draw_set_colour(_colour);
 	draw_set_alpha(_alpha);

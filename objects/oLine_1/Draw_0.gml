@@ -205,12 +205,12 @@ image_blend = __color;
 			sx = _csv_scale[0] * __scale_x;
 			sy = _csv_scale[1] * __scale_y;
 		} else {
-			var texture_px = rpe_judge_line_pixel_size(false, __scale_x, __scale_y, anchor_width, anchor_height, texture_view_w);
+			var texture_px = rpe_custom_texture_pixel_size(__scale_x, __scale_y, anchor_width, anchor_height, texture_view_w);
 			sx = texture_px[0] / anchor_width;
 			sy = texture_px[1] / anchor_height;
 		};
 	} else {
-		var line_px = rpe_judge_line_pixel_size(true, __scale_x, __scale_y, anchor_width, anchor_height, texture_view_w);
+		var line_px = rpe_default_line_pixel_size(__scale_x, __scale_y, texture_view_w);
 		sx = line_px[0] / anchor_width;
 		sy = line_px[1] / anchor_height;
 	};

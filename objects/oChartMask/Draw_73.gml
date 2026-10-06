@@ -34,6 +34,18 @@ if (target_active && surface_exists(surface_id) && instance_exists(oRPEEffect)
 	};
 };
 if (!target_active || !surface_exists(surface_id)) then exit;
+// oRender sits at depth -10999, so its Draw End runs after this -12000
+// unbind and would see chart_surface_active already cleared. Composite the
+// noise areas while the chart surface is still bound, then drop the scissor
+// the block pass leaves behind before the viewport blit.
+official_blocks_draw();
+chart_mask_scissor_clear();
+// Draw GUI paints the version after the encoder reads, so it only shows on
+// the progress overlay. Official has no later shader pass: put the label on
+// this surface so the viewport blit below carries it into the video.
+if (variable_global_exists("render_mode") && global.render_mode && !instance_exists(oRPEEffect)) {
+	chart_draw_recorded_version();
+}
 pls_draw_flush();
 surface_reset_target();
 target_active = false;

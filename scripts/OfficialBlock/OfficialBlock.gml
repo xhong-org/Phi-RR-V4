@@ -229,7 +229,10 @@ function official_block_rotate_vec(_x, _y, _radians) {
 }
 
 function official_block_sort_time(_a, _b) {
-	return _a.t - _b.t;
+	// array_sort truncates the comparator to an integer. A raw time delta
+	// below one second becomes 0, so those keyframes stay unordered and a
+	// later sample is treated as already finished.
+	return sign(_a.t - _b.t);
 }
 
 function official_block_read_move(_area) {
@@ -523,7 +526,13 @@ function official_block_pose(_block, _now, _aspect) {
 	var sy = 1;
 	var scales = _block.scale;
 	var scale_count = array_length(scales);
-	if (scale_count > 0) {
+	// FindCurrentEventIndex is -1 before the first key. An empty list stays at
+	// 1. A list that has not reached its first key stays at 0, so a lone (1,1)
+	// key at the hit does not draw the zone on the way there.
+	if (scale_count > 0 && _now < scales[0].t) {
+		sx = 0;
+		sy = 0;
+	} else if (scale_count > 0) {
 		sx = scales[0].x;
 		sy = scales[0].y;
 		for (var si = 0; si < scale_count; si++) {
@@ -546,7 +555,7 @@ function official_block_pose(_block, _now, _aspect) {
 	var angle = 0;
 	var rotates = _block.rotate;
 	var rotate_count = array_length(rotates);
-	if (rotate_count > 0) {
+	if (rotate_count > 0 && _now >= rotates[0].t) {
 		angle = rotates[0].r;
 		for (var ri = 0; ri < rotate_count; ri++) {
 			if (ri + 1 >= rotate_count) break;
@@ -564,7 +573,7 @@ function official_block_pose(_block, _now, _aspect) {
 	}
 	var moves = _block.move;
 	var move_count = array_length(moves);
-	if (move_count > 0) {
+	if (move_count > 0 && _now >= moves[0].t) {
 		var move_x = moves[0].x;
 		var move_y = moves[0].y;
 		for (var mi = 0; mi < move_count; mi++) {
@@ -885,7 +894,7 @@ function official_block_gpu_warm(_state) {
 	var shaders = [
 		shd_block_subtract, shd_block_subtract_soft, shd_block_compose, shd_block_compose_plain,
 		shd_block_glow, shd_block_disabled, shd_block_active, shd_block_active_ready,
-		shd_block_pack_mask, shd_block_pack_effect, shd_block_hover
+		shd_block_pack_mask, shd_block_pack_effect, shd_block_hover, shd_block_warp
 	];
 	var white = surface_get_texture(_state.white_surf);
 	var count = array_length(shaders);
@@ -930,8 +939,10 @@ function official_block_rt_ensure(_state, _w, _h) {
 	_state.eh = eh;
 	_state.sw = sw;
 	_state.sh = sh;
-	var widths = [bw, bw, bw, bw, bw, bw, bw, bw, bw, bw, bw, ew, ew, bw, bw, ew, sw, bw];
-	var heights = [bh, bh, bh, bh, bh, bh, bh, bh, bh, bh, bh, eh, eh, bh, bh, eh, sh, bh];
+	// Scene copy is full resolution. A 1:1 draw_surface matches the chart-grade
+	// blit; the active shader still snaps samples to 6 screen pixels.
+	var widths = [bw, bw, bw, bw, bw, bw, bw, bw, bw, bw, bw, ew, ew, bw, bw, ew, _w, bw];
+	var heights = [bh, bh, bh, bh, bh, bh, bh, bh, bh, bh, bh, eh, eh, bh, bh, eh, _h, bh];
 	for (var i = 0; i < BLOCK_RT_COUNT; i++) {
 		_state.rt[i] = surface_create(widths[i], heights[i]);
 		if (!surface_exists(_state.rt[i])) return false;
@@ -1123,24 +1134,29 @@ function official_block_pack(_state) {
 
 function official_block_copy_scene(_state, _chart) {
 	var dest = _state.rt[BLOCK_RT_SCENE];
-	if (!surface_exists(dest)) return;
+	if (!surface_exists(dest) || !surface_exists(_chart)) return;
 	var dest_w = surface_get_width(dest);
 	var dest_h = surface_get_height(dest);
-	var room_w = max(1, room_width);
-	var room_h = max(1, room_height);
+	var src_w = surface_get_width(_chart);
+	var src_h = surface_get_height(_chart);
+	// Same sequence as the chart grayscale copy. The view scissor is in
+	// full-frame pixels and would otherwise clip this target.
+	pls_draw_flush();
 	surface_set_target(dest);
-	draw_clear_alpha(c_black, 1);
+	gpu_set_scissor(0, 0, dest_w, dest_h);
+	gpu_set_colourwriteenable(true, true, true, true);
+	gpu_set_alphatestenable(false);
+	gpu_set_blendenable(true);
+	gpu_set_blendequation(bm_eq_add);
+	gpu_set_blendmode_ext(bm_one, bm_zero);
+	gpu_set_cullmode(cull_noculling);
 	shader_reset();
-	gpu_set_texfilter(true);
-	// Fit the playfield into this low-resolution target. The active shader
-	// then pixel-snaps and shifts it. UI is drawn later and stays sharp.
-	matrix_set(matrix_world, matrix_build(0, 0, 0, 0, 0, 0, dest_w / room_w, dest_h / room_h, 1));
-	chart_draw_background(false);
-	gpu_set_blendmode_ext(bm_src_alpha, bm_inv_src_alpha);
 	draw_set_colour(c_white);
 	draw_set_alpha(1);
-	draw_surface_stretched(_chart, 0, 0, room_w, room_h);
-	matrix_set(matrix_world, matrix_build_identity());
+	draw_clear_alpha(c_black, 1);
+	if (dest_w == src_w && dest_h == src_h) draw_surface(_chart, 0, 0);
+	else draw_surface_stretched(_chart, 0, 0, dest_w, dest_h);
+	pls_draw_flush();
 	surface_reset_target();
 }
 
@@ -1234,8 +1250,67 @@ function official_block_scissor(_cover, _margin, _w, _h) {
 	return true;
 }
 
-function official_block_present_quad(_state, _w, _h) {
-	draw_surface_stretched(_state.white_surf, 0, 0, _w, _h);
+function official_block_warp_present(_state, _w, _h, _now) {
+	if (!shader_is_compiled(shd_block_warp)) return;
+	if (!surface_exists(_state.rt[BLOCK_RT_SCENE])) return;
+	var scene_tex = surface_get_texture(_state.rt[BLOCK_RT_SCENE]);
+	var mask_tex = official_block_surf_tex(_state, BLOCK_RT_PACK_M);
+	var noise_tex = official_block_image(_state, _state.noise_spr);
+	if (scene_tex == -1 || mask_tex == -1 || noise_tex == -1) return;
+	shader_set(shd_block_warp);
+	var screen_handle = shader_get_uniform(shd_block_warp, "u_screen");
+	var scene_handle = shader_get_uniform(shd_block_warp, "u_scene");
+	var noise_uv_handle = shader_get_uniform(shd_block_warp, "u_noise_uv");
+	var fill_handle = shader_get_uniform(shd_block_warp, "u_fill");
+	var scene_uvs = texture_get_uvs(scene_tex);
+	var noise_uvs = texture_get_uvs(noise_tex);
+	// w is how long one red-speck arrangement stays put, in chart seconds.
+	if (screen_handle >= 0) shader_set_uniform_f(screen_handle, _w, _h, _now, 0.18);
+	if (scene_handle >= 0) shader_set_uniform_f(scene_handle, scene_uvs[0], scene_uvs[1], scene_uvs[2], scene_uvs[3]);
+	if (noise_uv_handle >= 0) shader_set_uniform_f(noise_uv_handle, noise_uvs[0], noise_uvs[1], noise_uvs[2], noise_uvs[3]);
+	if (fill_handle >= 0) shader_set_uniform_f(fill_handle, 0.713207483291626, 0.23549295961856842, 0.23549295961856842);
+	var mask_stage = shader_get_sampler_index(shd_block_warp, "u_mask");
+	var noise_stage = shader_get_sampler_index(shd_block_warp, "u_noise");
+	var edge_stage = shader_get_sampler_index(shd_block_warp, "u_edge");
+	var edge_tex = official_block_surf_tex(_state, BLOCK_RT_PACK_E);
+	if (mask_stage > 0) {
+		texture_set_stage(mask_stage, mask_tex);
+		gpu_set_texfilter_ext(mask_stage, false);
+		gpu_set_texrepeat_ext(mask_stage, false);
+	}
+	if (edge_stage > 0 && edge_tex != -1) {
+		texture_set_stage(edge_stage, edge_tex);
+		gpu_set_texfilter_ext(edge_stage, true);
+		gpu_set_texrepeat_ext(edge_stage, false);
+	}
+	if (noise_stage > 0) {
+		texture_set_stage(noise_stage, noise_tex);
+		gpu_set_texfilter_ext(noise_stage, true);
+		gpu_set_texrepeat_ext(noise_stage, true);
+	}
+	// Stage 0 is the chart copy. Set it after the other samplers so the white
+	// quad from the pass above cannot remain bound.
+	texture_set_stage(0, scene_tex);
+	gpu_set_texfilter(false);
+	gpu_set_texrepeat(false);
+	gpu_set_blendmode_ext(bm_one, bm_inv_src_alpha);
+	draw_set_colour(c_white);
+	draw_set_alpha(1);
+	draw_primitive_begin_texture(pr_trianglelist, scene_tex);
+	draw_vertex_texture(0, 0, 0, 0);
+	draw_vertex_texture(_w, 0, 1, 0);
+	draw_vertex_texture(_w, _h, 1, 1);
+	draw_vertex_texture(0, 0, 0, 0);
+	draw_vertex_texture(_w, _h, 1, 1);
+	draw_vertex_texture(0, _h, 0, 1);
+	draw_primitive_end();
+	shader_reset();
+}
+
+function official_block_present_quad(_state, _w, _h, _surface) {
+	var source = _state.white_surf;
+	if (is_real(_surface) && surface_exists(_surface)) source = _surface;
+	draw_surface_stretched(source, 0, 0, _w, _h);
 	shader_reset();
 }
 
@@ -1267,14 +1342,21 @@ function official_block_present(_state, _now, _w, _h) {
 			gpu_set_blendmode_ext(bm_one, bm_inv_src_alpha);
 			shader_set(active_shader);
 			official_block_active_uniforms(active_shader, _state, _now, _w, _h);
-			var scene_index = (_state.on_active || _state.hover_live) ? BLOCK_RT_SCENE : -1;
 			official_block_tex(active_shader, "_MaskRT", official_block_surf_tex(_state, BLOCK_RT_PACK_M), false, false);
 			official_block_tex(active_shader, "_EffectRT", official_block_surf_tex(_state, BLOCK_RT_PACK_E), false, false);
 			official_block_tex(active_shader, "_DisplaceMap", official_block_image(_state, _state.noise_spr), true, true);
 			official_block_tex(active_shader, "_SparkMap", official_block_image(_state, _state.spark_spr), true, true);
 			official_block_tex(active_shader, "_NoiseMap", official_block_image(_state, _state.grain_spr), true, true);
+			// The quad itself stays the 1x1 white surface so its UVs remain
+			// the 0..1 screen coordinates the mask was built for. Drawing the
+			// chart copy as that quad leaves gm_BaseTexture white, because
+			// texture_set_stage runs first. _SceneColor is a later sampler.
+			var scene_index = (active_shader == shd_block_active) ? BLOCK_RT_SCENE : -1;
 			official_block_tex(active_shader, "_SceneColor", official_block_surf_tex(_state, scene_index), false, false);
 			official_block_present_quad(_state, _w, _h);
+			// The material pass leaves the sharp chart visible inside the zone.
+			// Replace that interior with the pixel-snapped, displaced copy.
+			if (active_shader == shd_block_active) official_block_warp_present(_state, _w, _h, _now);
 			gpu_set_scissor(0, 0, _w, _h);
 		}
 	}

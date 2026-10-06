@@ -1,2 +1,2 @@
 /// @description Chart draw end.
-official_blocks_draw();
+// Noise areas are drawn by oChartMask before it unbinds the chart surface.

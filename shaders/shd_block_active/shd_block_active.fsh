@@ -63,6 +63,7 @@ uniform mediump sampler2D _DisplaceMap;
 uniform mediump sampler2D _SparkMap;
 uniform mediump sampler2D _SceneColor;
 
+
 uniform mediump sampler2D _NoiseMap;
 varying highp vec2 vs_TEXCOORD0;
 varying highp vec2 vs_TEXCOORD1;
