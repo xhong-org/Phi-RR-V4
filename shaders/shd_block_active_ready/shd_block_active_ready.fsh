@@ -62,8 +62,14 @@ uniform mediump sampler2D _EffectRT;
 uniform mediump sampler2D _DisplaceMap;
 uniform mediump sampler2D _SparkMap;
 uniform mediump sampler2D _SceneColor;
-
 uniform mediump sampler2D _NoiseMap;
+uniform vec4 _DisplaceMap_Rect;
+uniform vec4 _SparkMap_Rect;
+uniform vec4 _NoiseMap_Rect;
+
+vec2 block_repeat(vec4 rect, vec2 uv) {
+    return mix(rect.xy, rect.zw, fract(uv));
+}
 varying highp vec2 vs_TEXCOORD0;
 varying highp vec2 vs_TEXCOORD1;
 varying highp vec2 vs_TEXCOORD2;
@@ -183,8 +189,8 @@ void main()
         u_xlat33.xy = floor(u_xlat33.xy);
         u_xlat1.zw = u_xlat33.xy * u_xlat32.xx + u_xlat4.xx;
         u_xlat1 = u_xlat1 / _ScreenParams.xyxy;
-        u_xlat16_16 = texture2D(_DisplaceMap, u_xlat1.xy).x;
-        u_xlat16_1.x = texture2D(_DisplaceMap, u_xlat1.zw).x;
+        u_xlat16_16 = texture2D(_DisplaceMap, block_repeat(_DisplaceMap_Rect, u_xlat1.xy)).x;
+        u_xlat16_1.x = texture2D(_DisplaceMap, block_repeat(_DisplaceMap_Rect, u_xlat1.zw)).x;
         u_xlat16_35 = u_xlat16_16 + u_xlat16_1.x;
         u_xlat16_35 = u_xlat16_35 * 0.5;
         u_xlat16_51 = u_xlat16_16 + -0.5;
@@ -199,7 +205,7 @@ void main()
         u_xlat16.xy = u_xlat16.xy / _ScreenParams.xy;
         u_xlat16.xy = u_xlat1.xy * vec2(vec2(_DisplaceStrength, _DisplaceStrength)) + u_xlat16.xy;
         u_xlat33.xy = u_xlat1.xy * vec2(vec2(_SparkDisplaceIntensity, _SparkDisplaceIntensity)) + vs_TEXCOORD2.xy;
-        u_xlat16_33 = texture2D(_SparkMap, u_xlat33.xy).x;
+        u_xlat16_33 = texture2D(_SparkMap, block_repeat(_SparkMap_Rect, u_xlat33.xy)).x;
         u_xlat4.xyz = vec3(u_xlat16_33) * _SparkTint.xyz;
         u_xlat6.xyz = texture2D(_SceneColor, vs_TEXCOORD0.xy).xyz;
         u_xlatb16 = 0<0;
@@ -328,8 +334,8 @@ void main()
         u_xlat22.xy = floor(u_xlat22.xy);
         u_xlat1.xw = u_xlat22.xy * vec2(u_xlat49) + u_xlat6.xx;
         u_xlat1 = u_xlat1 / _ScreenParams.xxyy;
-        u_xlat16_32 = texture2D(_DisplaceMap, u_xlat1.yz).x;
-        u_xlat16_1.x = texture2D(_DisplaceMap, u_xlat1.xw).x;
+        u_xlat16_32 = texture2D(_DisplaceMap, block_repeat(_DisplaceMap_Rect, u_xlat1.yz)).x;
+        u_xlat16_1.x = texture2D(_DisplaceMap, block_repeat(_DisplaceMap_Rect, u_xlat1.xw)).x;
         u_xlat16_51 = u_xlat16_32 + -0.5;
         u_xlat16_5.x = u_xlat16_1.x + -0.5;
         u_xlat32.xy = u_xlat0.wx * u_xlat16_5.xx;
@@ -381,7 +387,7 @@ void main()
         u_xlat1.xw = (-u_xlat17.xy) + u_xlat1.xw;
         u_xlat1.xy = vec2(u_xlat48) * u_xlat1.xw + u_xlat17.xy;
         u_xlat1.xy = u_xlat1.xy * vec2(_NoiseEvoSpeed) + vs_TEXCOORD5.xy;
-        u_xlat16_1.xy = texture2D(_NoiseMap, u_xlat1.xy).xy;
+        u_xlat16_1.xy = texture2D(_NoiseMap, block_repeat(_NoiseMap_Rect, u_xlat1.xy)).xy;
         u_xlat1.xy = u_xlat16_1.xy + vec2(-0.5, -0.5);
         u_xlat48 = _NoiseRadius + (-_NoiseSmoothness);
         u_xlat33.x = _NoiseRadius + _NoiseSmoothness;

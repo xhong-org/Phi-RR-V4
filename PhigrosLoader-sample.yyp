@@ -59,10 +59,6 @@
   ],
   "ForcedPrefabProjectReferences":[],
   "IncludedFiles":[
-    {"$GMIncludedFile":"","%Name":"texture_15.png","CopyToMask":-1,"filePath":"datafiles/blockarea","name":"texture_15.png","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
-    {"$GMIncludedFile":"","%Name":"texture_17.png","CopyToMask":-1,"filePath":"datafiles/blockarea","name":"texture_17.png","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
-    {"$GMIncludedFile":"","%Name":"texture_30.png","CopyToMask":-1,"filePath":"datafiles/blockarea","name":"texture_30.png","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
-    {"$GMIncludedFile":"","%Name":"touch.png","CopyToMask":-1,"filePath":"datafiles/blockarea","name":"touch.png","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"gx_audio_boot.js","CopyToMask":-1,"filePath":"datafiles","name":"gx_audio_boot.js","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"gx_drop.js","CopyToMask":-1,"filePath":"datafiles","name":"gx_drop.js","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"gx_import.html","CopyToMask":-1,"filePath":"datafiles","name":"gx_import.html","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
@@ -257,6 +253,10 @@
     {"id":{"name":"snd_note_flick","path":"sounds/snd_note_flick/snd_note_flick.yy",},},
     {"id":{"name":"snd_note_tap","path":"sounds/snd_note_tap/snd_note_tap.yy",},},
     {"id":{"name":"snd_start","path":"sounds/snd_start/snd_start.yy",},},
+    {"id":{"name":"block_texture_15","path":"sprites/block_texture_15/block_texture_15.yy",},},
+    {"id":{"name":"block_texture_17","path":"sprites/block_texture_17/block_texture_17.yy",},},
+    {"id":{"name":"block_texture_30","path":"sprites/block_texture_30/block_texture_30.yy",},},
+    {"id":{"name":"block_touch","path":"sprites/block_touch/block_touch.yy",},},
     {"id":{"name":"effect","path":"sprites/effect/effect.yy",},},
     {"id":{"name":"line_2","path":"sprites/line_2/line_2.yy",},},
     {"id":{"name":"line","path":"sprites/line/line.yy",},},
@@ -294,5 +294,6 @@
   "TextureGroups":[
     {"$GMTextureGroup":"","%Name":"Default","autocrop":true,"border":2,"compressFormat":"bz2","customOptions":"","directory":"","groupParent":null,"isScaled":true,"loadType":"default","mipsToGenerate":0,"name":"Default","resourceType":"GMTextureGroup","resourceVersion":"2.0","targets":-1,},
     {"$GMTextureGroup":"","%Name":"DefaultNotes","autocrop":true,"border":2,"compressFormat":"bz2","customOptions":"","directory":"resource","groupParent":null,"isScaled":true,"loadType":"dynamicpages","mipsToGenerate":0,"name":"DefaultNotes","resourceType":"GMTextureGroup","resourceVersion":"2.0","targets":-1,},
+    {"$GMTextureGroup":"","%Name":"BlockAreaGroup","autocrop":false,"border":2,"compressFormat":"bz2","customOptions":"","directory":"resource","groupParent":null,"isScaled":false,"loadType":"dynamicpages","mipsToGenerate":0,"name":"BlockAreaGroup","resourceType":"GMTextureGroup","resourceVersion":"2.0","targets":-1,},
   ],
 }

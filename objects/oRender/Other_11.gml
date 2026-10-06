@@ -12,7 +12,7 @@ draw_set_halign(fa_middle);
 draw_set_valign(fa_center);
 
 draw_set_font(game.font);
-draw_text_transformed_colour(_chart_left + _chart_width / 2, 90 * global_scales, game.settings.comboString, 0.3 * global_scales, 0.3 * global_scales, 0, image_blend, image_blend, image_blend, image_blend, (combo >= 3) * ui_fade);
+draw_text_transformed_colour(_chart_left + _chart_width / 2, 90 * global_scales, chart_combo_caption(), 0.3 * global_scales, 0.3 * global_scales, 0, image_blend, image_blend, image_blend, image_blend, (combo >= 3) * ui_fade);
 draw_text_transformed_colour(_chart_left + _chart_width / 2, 60 * global_scales, string(combo), global_scales, global_scales, 0, image_blend, image_blend, image_blend, image_blend, (combo >= 3) * ui_fade);
 
 draw_set_halign(fa_left);

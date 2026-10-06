@@ -5,14 +5,21 @@ function display_playing() {
 
 function display_custom(aa, enable_vsync) {
 	if (pls_is_html5()) then return;
-	if (display_playing()) {
-		// Precise frame pacing for judgment. This busy-waits leftover time.
-		display_set_timing_method(tm_systemtiming);
-	} else {
-		display_set_timing_method(tm_sleep);
-		display_set_sleep_margin(1);
+	// display_reset is a desktop call. On Android it aborts the settings
+	// save script, so the panel never reaches instance_destroy.
+	var can_reset = (os_type != os_android && os_type != os_ios);
+	try {
+		if (display_playing()) {
+			// Precise frame pacing for judgment. This busy-waits leftover time.
+			display_set_timing_method(tm_systemtiming);
+		} else {
+			display_set_timing_method(tm_sleep);
+			display_set_sleep_margin(1);
+		};
+		if (can_reset) then display_reset(aa, enable_vsync);
+	} catch (display_err) {
+		delete(display_err);
 	};
-	display_reset(aa, enable_vsync);
 }
 
 /// Menu / loader: 60fps, sleep instead of spin, no MSAA.

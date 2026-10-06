@@ -774,7 +774,13 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 			uniform_key = "@glsl:gate.glsl";
 		};
 		if (pass_shader == -1 || !shader_is_compiled(pass_shader)) then continue;
-		if (source_surface != fx_sample) {
+		// A z-range capture is already unbound here. surface_copy of it comes
+		// back black after shader_reset, so glitch (Designant video 2, every
+		// 8 beats) replaces the notes with an empty layer. Sample the capture
+		// directly; it is not the current target.
+		var _sample_capture = surface_exists(input_override) && source_surface == input_override
+			&& surface_get_target() != source_surface;
+		if (!_sample_capture && source_surface != fx_sample) {
 			if (!effect_sample_upload(source_surface)) then continue;
 			source_surface = fx_sample;
 		};
@@ -816,11 +822,11 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 		draw_surface_part(source_surface, effect_left, 0, effect_width, effect_height, effect_left, 0);
 		// Submit while the intended shader and target are still active.
 		pls_draw_flush();
-		shader_reset();
 		if (_compose_parent) {
-			// One reset for the offscreen set above. The caller was already
-			// released, so a second reset would pop the frame under it.
+			// Unbind before shader_reset so the shaded notes stay on this surface.
+			// The caller was already released, so this one reset returns to it.
 			surface_reset_target();
+			shader_reset();
 			var _copied_full = _full_frame && surface_exists(effect_caller_target)
 				&& effect_gpu_copy_part(target_surface, effect_caller_target, effect_left, 0, effect_width, effect_height);
 			if (surface_exists(effect_caller_target)) {
@@ -831,8 +837,14 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 			if (_copied_full) {
 				_presented_direct = true;
 			} else {
-			var _over_ok = effect_upload_into(target_surface, 0);
-			if (_over_ok) {
+			// Draw the shaded surface itself. Copying it to fx_over is the same
+			// black readback that drops the captured notes.
+			var _present_surface = target_surface;
+			if (!_sample_capture) {
+				if (!effect_upload_into(target_surface, 0)) then _present_surface = -1;
+				else _present_surface = fx_over;
+			};
+			if (surface_exists(_present_surface)) {
 				// A fullscreen pass replaces the chart. Premul-over drops pixels
 				// whose alpha is 0, so the shade never shows. A layer pass must
 				// stay premul or it wipes notes outside the z range.
@@ -841,14 +853,16 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 				gpu_set_texfilter(false);
 				gpu_set_texrepeat(false);
 				gpu_set_tex_mip_enable(mip_off);
-				draw_surface_part(fx_over, effect_left, 0, effect_width, effect_height, effect_left, 0);
+				draw_surface_part(_present_surface, effect_left, 0, effect_width, effect_height, effect_left, 0);
 				pls_draw_flush();
 				_presented_direct = true;
 			};
 			};
 		} else if (_draw_on_parent) {
+			shader_reset();
 			_presented_direct = true;
 		} else {
+			shader_reset();
 			restore_caller_target();
 			effect_caller_pushed = surface_exists(effect_caller_target);
 			effect_left_caller_bound = effect_caller_pushed;

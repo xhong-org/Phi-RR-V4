@@ -8,7 +8,7 @@ var _transition_bar_alpha = (play_transition_active ? play_transition_bar_alpha 
 draw_set_font(game.font);
 draw_set_halign(fa_center);
 draw_set_valign(fa_center);
-draw_text_transformed_colour(chart_view_left + chart_view_width / 2, 90*global_scales, game.settings.comboString, 0.3*global_scales, 0.3*global_scales, 0, c_white, c_white, c_white, c_white, (combo>=3)*ui_alpha);
+draw_text_transformed_colour(chart_view_left + chart_view_width / 2, 90*global_scales, chart_combo_caption(), 0.3*global_scales, 0.3*global_scales, 0, c_white, c_white, c_white, c_white, (combo>=3)*ui_alpha);
 draw_text_transformed_colour(chart_view_left + chart_view_width / 2, 60*global_scales, string(combo), global_scales, global_scales, 0, c_white, c_white, c_white, c_white, (combo>=3)*ui_alpha);
 draw_set_halign(fa_left);
 draw_text_transformed_colour(chart_view_left + 40*global_scales, room_height-35*global_scales+_transition_name_y, game.folder_chart.name, font_scales*global_scales, font_scales*global_scales, 0, c_white, c_white, c_white, c_white, ui_alpha);

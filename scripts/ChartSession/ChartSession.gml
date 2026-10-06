@@ -35,7 +35,9 @@ function chart_session_default() { // 立正了
                 "error" : "",
                 "files" : undefined,
                 "detected_chart_path" : "",
-                "detected_chart_text" : ""
+                "detected_chart_text" : "",
+                "chart_md5" : "",
+                "chart_md5_path" : ""
         };
 }
 

@@ -67,6 +67,8 @@ function official_block_state_create() {
 			spark_spr: -1,
 			grain_spr: -1,
 			touch_spr: -1,
+			tex_held: false,
+			skipped: false,
 			surf_w: 0,
 			surf_h: 0,
 			bw: 1,
@@ -124,10 +126,10 @@ function official_blocks_reset() {
 	state.white_surf = -1;
 	state.blank_surf = -1;
 	state.cleared = false;
-	official_block_free_sprite(state, "noise_spr");
-	official_block_free_sprite(state, "spark_spr");
-	official_block_free_sprite(state, "grain_spr");
-	official_block_free_sprite(state, "touch_spr");
+	official_block_textures_release();
+	official_block_clear_sprites(state);
+	state.tex_held = false;
+	state.skipped = false;
 	var hovers = state.hovers;
 	for (var i = 0; i < array_length(hovers); i++) {
 		var hover = hovers[i];
@@ -156,10 +158,11 @@ function official_blocks_reset() {
 	shader_reset();
 }
 
-function official_block_free_sprite(_state, _field) {
-	var sprite = _state[$ _field];
-	if (sprite_exists(sprite)) sprite_delete(sprite);
-	_state[$ _field] = -1;
+function official_block_clear_sprites(_state) {
+	_state.noise_spr = -1;
+	_state.spark_spr = -1;
+	_state.grain_spr = -1;
+	_state.touch_spr = -1;
 }
 
 function official_block_free_rt(_state) {
@@ -232,7 +235,10 @@ function official_block_sort_time(_a, _b) {
 	// array_sort truncates the comparator to an integer. A raw time delta
 	// below one second becomes 0, so those keyframes stay unordered and a
 	// later sample is treated as already finished.
-	return sign(_a.t - _b.t);
+	// Equal times must keep file order. Phira's sort is stable, and a pair
+	// written as 0 then 75 degrees at one instant has to finish on 75.
+	if (_a.t != _b.t) return sign(_a.t - _b.t);
+	return sign(_a.ord - _b.ord);
 }
 
 function official_block_read_move(_area) {
@@ -256,7 +262,8 @@ function official_block_read_move(_area) {
 			x: pos_x,
 			y: pos_y,
 			ex: floor(real(item[$ "easeTypeX"] ?? 0)),
-			ey: floor(real(item[$ "easeTypeY"] ?? 0))
+			ey: floor(real(item[$ "easeTypeY"] ?? 0)),
+			ord: array_length(events)
 		});
 	}
 	if (array_length(events) > 1) array_sort(events, official_block_sort_time);
@@ -293,7 +300,8 @@ function official_block_read_scale(_area) {
 			ax: anchor_x,
 			ay: anchor_y,
 			ex: floor(real(item[$ "easeTypeX"] ?? 0)),
-			ey: floor(real(item[$ "easeTypeY"] ?? 0))
+			ey: floor(real(item[$ "easeTypeY"] ?? 0)),
+			ord: array_length(events)
 		});
 	}
 	if (array_length(events) > 1) array_sort(events, official_block_sort_time);
@@ -322,7 +330,8 @@ function official_block_read_rotate(_area) {
 			r: rotation,
 			ax: anchor_x,
 			ay: anchor_y,
-			ease: floor(real(item[$ "easeType"] ?? 0))
+			ease: floor(real(item[$ "easeType"] ?? 0)),
+			ord: array_length(events)
 		});
 	}
 	if (array_length(events) > 1) array_sort(events, official_block_sort_time);
@@ -387,49 +396,157 @@ function official_block_enabled() {
 	return bool(game.settings[$ "enableNoiseArea"] ?? true);
 }
 
+function official_block_textures_release() {
+	if (!texturegroup_exists("BlockAreaGroup")) return;
+	try {
+		var status = texturegroup_get_status("BlockAreaGroup");
+		if (status != texturegroup_status_unloaded) texturegroup_unload("BlockAreaGroup");
+	} catch (release_err) {
+		delete release_err;
+	}
+}
+
+function official_block_sprites_present() {
+	return sprite_exists(block_texture_15)
+		&& sprite_exists(block_texture_17)
+		&& sprite_exists(block_texture_30)
+		&& sprite_exists(block_touch);
+}
+
+function official_block_sprites_ready() {
+	var sprites = [block_texture_15, block_texture_17, block_texture_30, block_touch];
+	for (var i = 0; i < 4; i++) {
+		var tex = sprite_get_texture(sprites[i], 0);
+		if (is_undefined(tex) || (is_real(tex) && tex < 0)) return false;
+		if (!texture_is_ready(tex)) return false;
+	}
+	return true;
+}
+
+/// "ready", "pending", or "missing". A missing group must not stop chart playback.
+function official_block_textures_prepare(_state) {
+	if (!texturegroup_exists("BlockAreaGroup") || !official_block_sprites_present()) return "missing";
+	try {
+		var status = texturegroup_get_status("BlockAreaGroup");
+		if (status == texturegroup_status_unloaded) {
+			if (!_state.tex_held) {
+				texturegroup_load("BlockAreaGroup", true);
+				_state.tex_held = true;
+				status = texturegroup_get_status("BlockAreaGroup");
+			}
+			if (status == texturegroup_status_loading || status == texturegroup_status_unloaded) return "pending";
+		}
+		if (status == texturegroup_status_loading) return "pending";
+		if (status != texturegroup_status_loaded && status != texturegroup_status_fetched) return "missing";
+		_state.tex_held = true;
+		if (!official_block_sprites_ready()) {
+			texture_prefetch("BlockAreaGroup");
+			return "pending";
+		}
+		return "ready";
+	} catch (prepare_err) {
+		delete prepare_err;
+		return "missing";
+	}
+}
+
+function official_block_skip(_state) {
+	if (!_state.skipped) print("[R-Chart] BlockAreaGroup missing, noise areas skipped");
+	if (_state.tex_held) official_block_textures_release();
+	official_block_clear_sprites(_state);
+	_state.blocks = [];
+	_state.blocked_ids = [];
+	_state.touch_world = [];
+	_state.empty = true;
+	_state.ready = true;
+	_state.loaded_enabled = false;
+	_state.need_gpu = false;
+	_state.hover_live = false;
+	_state.tex_held = false;
+	_state.skipped = true;
+	_state.preloaded = true;
+}
+
+function official_block_disable(_state) {
+	if (_state.tex_held) official_block_textures_release();
+	official_block_clear_sprites(_state);
+	_state.blocks = [];
+	_state.blocked_ids = [];
+	_state.touch_world = [];
+	_state.empty = true;
+	_state.ready = true;
+	_state.loaded_enabled = false;
+	_state.need_gpu = false;
+	_state.hover_live = false;
+	_state.tex_held = false;
+	_state.skipped = false;
+	_state.preloaded = false;
+}
+
 function official_blocks_ensure() {
 	var state = official_block_state();
 	if (!official_block_enabled()) {
-		// Leave the chart JSON unread. Rendering also stays off.
-		state.blocks = [];
-		state.empty = true;
-		state.ready = true;
-		state.loaded_enabled = false;
-		state.need_gpu = false;
-		state.hover_live = false;
-		state.blocked_ids = [];
-		state.touch_world = [];
+		official_block_disable(state);
 		return state;
 	}
-	if (state.ready && state.loaded_enabled) return state;
-	state.loaded_enabled = true;
-	if (!variable_global_exists("game") || !is_struct(game) || !is_struct(game[$ "chart"])) return state;
-	state.blocks = official_blocks_build(game.chart);
+	if (state.skipped) return state;
+	if (state.ready && state.preloaded) return state;
+	if (!texturegroup_exists("BlockAreaGroup") || !official_block_sprites_present()) {
+		official_block_skip(state);
+		return state;
+	}
+	var phase = official_block_textures_prepare(state);
+	if (phase == "missing") {
+		official_block_skip(state);
+		return state;
+	}
+	if (phase != "ready") return state;
+	if (!state.loaded_enabled) {
+		if (!variable_global_exists("game") || !is_struct(game) || !is_struct(game[$ "chart"])) return state;
+		state.blocks = official_blocks_build(game.chart);
+		state.loaded_enabled = true;
+		state.empty = array_length(state.blocks) <= 0;
+		state.first_appear = infinity;
+		state.last_disappear = -infinity;
+		var blocks = state.blocks;
+		var count = array_length(blocks);
+		for (var i = 0; i < count; i++) {
+			state.first_appear = min(state.first_appear, blocks[i].appear);
+			state.last_disappear = max(state.last_disappear, blocks[i].disappear);
+		}
+		if (state.empty) {
+			official_block_textures_release();
+			official_block_clear_sprites(state);
+			state.tex_held = false;
+			state.ready = true;
+			state.preloaded = true;
+			return state;
+		}
+		state.noise_spr = block_texture_30;
+		state.spark_spr = block_texture_17;
+		state.grain_spr = block_texture_15;
+		state.touch_spr = block_touch;
+		if (is_struct(game[$ "settings"]) && bool(game.settings[$ "enableDebug"] ?? false)) {
+			print($"[R-Chart] blockAreaList {count}");
+		}
+	}
+	if (!state.preloaded) {
+		official_block_compile(shd_block_subtract);
+		official_block_compile(shd_block_subtract_soft);
+		official_block_compile(shd_block_compose);
+		official_block_compile(shd_block_compose_plain);
+		official_block_compile(shd_block_glow);
+		official_block_compile(shd_block_disabled);
+		official_block_compile(shd_block_active);
+		official_block_compile(shd_block_active_ready);
+		official_block_compile(shd_block_pack_mask);
+		official_block_compile(shd_block_pack_effect);
+		official_block_compile(shd_block_hover);
+		official_block_refresh_ok(state);
+		state.preloaded = true;
+	}
 	state.ready = true;
-	state.empty = array_length(state.blocks) <= 0;
-	state.first_appear = infinity;
-	state.last_disappear = -infinity;
-	var blocks = state.blocks;
-	var count = array_length(blocks);
-	for (var i = 0; i < count; i++) {
-		state.first_appear = min(state.first_appear, blocks[i].appear);
-		state.last_disappear = max(state.last_disappear, blocks[i].disappear);
-	}
-	if (is_struct(game[$ "settings"]) && bool(game.settings[$ "enableDebug"] ?? false)) {
-		print($"[R-Chart] blockAreaList {count}");
-	}
 	return state;
-}
-
-function official_block_load_sprite(_file) {
-	var path = working_directory + "blockarea/" + _file;
-	if (!file_exists(path)) {
-		print($"[R-Chart] block texture missing {path}");
-		return -1;
-	}
-	var sprite = sprite_add(path, 1, false, false, 0, 0);
-	if (sprite_exists(sprite)) texture_prefetch(sprite_get_texture(sprite, 0));
-	return sprite;
 }
 
 function official_block_compile(_shader) {
@@ -459,30 +576,7 @@ function official_block_refresh_ok(_state) {
 }
 
 function official_blocks_preload() {
-	var state = official_blocks_ensure();
-	if (!official_block_enabled()) return;
-	if (!state.ready || state.preloaded) return;
-	if (state.empty) {
-		state.preloaded = true;
-		return;
-	}
-	state.noise_spr = official_block_load_sprite("texture_30.png");
-	state.spark_spr = official_block_load_sprite("texture_17.png");
-	state.grain_spr = official_block_load_sprite("texture_15.png");
-	state.touch_spr = official_block_load_sprite("touch.png");
-	official_block_compile(shd_block_subtract);
-	official_block_compile(shd_block_subtract_soft);
-	official_block_compile(shd_block_compose);
-	official_block_compile(shd_block_compose_plain);
-	official_block_compile(shd_block_glow);
-	official_block_compile(shd_block_disabled);
-	official_block_compile(shd_block_active);
-	official_block_compile(shd_block_active_ready);
-	official_block_compile(shd_block_pack_mask);
-	official_block_compile(shd_block_pack_effect);
-	official_block_compile(shd_block_hover);
-	official_block_refresh_ok(state);
-	state.preloaded = true;
+	official_blocks_ensure();
 }
 
 function official_block_aspect() {
@@ -526,13 +620,10 @@ function official_block_pose(_block, _now, _aspect) {
 	var sy = 1;
 	var scales = _block.scale;
 	var scale_count = array_length(scales);
-	// FindCurrentEventIndex is -1 before the first key. An empty list stays at
-	// 1. A list that has not reached its first key stays at 0, so a lone (1,1)
-	// key at the hit does not draw the zone on the way there.
-	if (scale_count > 0 && _now < scales[0].t) {
-		sx = 0;
-		sy = 0;
-	} else if (scale_count > 0) {
+	// Phira holds the first key for the whole time before it, including scale.
+	// An empty list stays at 1. Zeroing that first key hid the zone and left
+	// the later anchor chain starting from the wrong size.
+	if (scale_count > 0) {
 		sx = scales[0].x;
 		sy = scales[0].y;
 		for (var si = 0; si < scale_count; si++) {
@@ -555,7 +646,7 @@ function official_block_pose(_block, _now, _aspect) {
 	var angle = 0;
 	var rotates = _block.rotate;
 	var rotate_count = array_length(rotates);
-	if (rotate_count > 0 && _now >= rotates[0].t) {
+	if (rotate_count > 0) {
 		angle = rotates[0].r;
 		for (var ri = 0; ri < rotate_count; ri++) {
 			if (ri + 1 >= rotate_count) break;
@@ -573,7 +664,7 @@ function official_block_pose(_block, _now, _aspect) {
 	}
 	var moves = _block.move;
 	var move_count = array_length(moves);
-	if (move_count > 0 && _now >= moves[0].t) {
+	if (move_count > 0) {
 		var move_x = moves[0].x;
 		var move_y = moves[0].y;
 		for (var mi = 0; mi < move_count; mi++) {
@@ -848,6 +939,18 @@ function official_block_tex(_shader, _name, _texture, _linear, _repeat) {
 	gpu_set_texrepeat_ext(stage, _repeat);
 }
 
+/// Packed BlockAreaGroup pages repeat inside one sprite, not across the atlas.
+function official_block_map_rect(_shader, _name, _texture) {
+	if (_texture == -1) {
+		official_block_u4(_shader, _name, 0, 0, 1, 1);
+		return;
+	}
+	var uvs = texture_get_uvs(_texture);
+	var pad_x = texture_get_texel_width(_texture) * 0.5;
+	var pad_y = texture_get_texel_height(_texture) * 0.5;
+	official_block_u4(_shader, _name, uvs[0] + pad_x, uvs[1] + pad_y, uvs[2] - pad_x, uvs[3] - pad_y);
+}
+
 function official_block_image(_state, _sprite) {
 	if (sprite_exists(_sprite)) return sprite_get_texture(_sprite, 0);
 	if (surface_exists(_state.white_surf)) return surface_get_texture(_state.white_surf);
@@ -1034,7 +1137,9 @@ function official_block_compose_active(_state, _now) {
 	var dest = _state.rt[BLOCK_RT_ACTIVE_C];
 	official_block_fullscreen_begin(dest, shader);
 	official_block_compose_uniforms(shader, _now);
-	official_block_tex(shader, "_DisplaceMap", official_block_image(_state, _state.noise_spr), true, true);
+	var displace_tex = official_block_image(_state, _state.noise_spr);
+	official_block_tex(shader, "_DisplaceMap", displace_tex, true, false);
+	official_block_map_rect(shader, "_DisplaceMap_Rect", displace_tex);
 	official_block_tex(shader, "_NormalBlockRT", official_block_surf_tex(_state, _state.norm_active ? BLOCK_RT_ACTIVE_N : -1), false, false);
 	official_block_tex(shader, "_SubtractBlockRT", official_block_surf_tex(_state, _state.sub_active ? BLOCK_RT_ACTIVE_HP : -1), false, false);
 	official_block_fullscreen_end(_state, dest);
@@ -1256,22 +1361,38 @@ function official_block_warp_present(_state, _w, _h, _now) {
 	var scene_tex = surface_get_texture(_state.rt[BLOCK_RT_SCENE]);
 	var mask_tex = official_block_surf_tex(_state, BLOCK_RT_PACK_M);
 	var noise_tex = official_block_image(_state, _state.noise_spr);
-	if (scene_tex == -1 || mask_tex == -1 || noise_tex == -1) return;
+	var spark_tex = -1;
+	var spark_w = 1;
+	var spark_h = 1;
+	if (sprite_exists(_state.spark_spr)) {
+		spark_tex = sprite_get_texture(_state.spark_spr, 0);
+		spark_w = max(1, sprite_get_width(_state.spark_spr));
+		spark_h = max(1, sprite_get_height(_state.spark_spr));
+	} else if (surface_exists(_state.blank_surf)) {
+		spark_tex = surface_get_texture(_state.blank_surf);
+	}
+	if (scene_tex == -1 || mask_tex == -1 || noise_tex == -1 || spark_tex == -1) return;
 	shader_set(shd_block_warp);
 	var screen_handle = shader_get_uniform(shd_block_warp, "u_screen");
 	var scene_handle = shader_get_uniform(shd_block_warp, "u_scene");
 	var noise_uv_handle = shader_get_uniform(shd_block_warp, "u_noise_uv");
+	var spark_uv_handle = shader_get_uniform(shd_block_warp, "u_spark_uv");
+	var spark_px_handle = shader_get_uniform(shd_block_warp, "u_spark_px");
 	var fill_handle = shader_get_uniform(shd_block_warp, "u_fill");
 	var scene_uvs = texture_get_uvs(scene_tex);
 	var noise_uvs = texture_get_uvs(noise_tex);
-	// w is how long one red-speck arrangement stays put, in chart seconds.
+	var spark_uvs = texture_get_uvs(spark_tex);
+	// w is how long one texture_17 arrangement stays put, in chart seconds.
 	if (screen_handle >= 0) shader_set_uniform_f(screen_handle, _w, _h, _now, 0.18);
 	if (scene_handle >= 0) shader_set_uniform_f(scene_handle, scene_uvs[0], scene_uvs[1], scene_uvs[2], scene_uvs[3]);
 	if (noise_uv_handle >= 0) shader_set_uniform_f(noise_uv_handle, noise_uvs[0], noise_uvs[1], noise_uvs[2], noise_uvs[3]);
+	if (spark_uv_handle >= 0) shader_set_uniform_f(spark_uv_handle, spark_uvs[0], spark_uvs[1], spark_uvs[2], spark_uvs[3]);
+	if (spark_px_handle >= 0) shader_set_uniform_f(spark_px_handle, spark_w, spark_h);
 	if (fill_handle >= 0) shader_set_uniform_f(fill_handle, 0.713207483291626, 0.23549295961856842, 0.23549295961856842);
 	var mask_stage = shader_get_sampler_index(shd_block_warp, "u_mask");
 	var noise_stage = shader_get_sampler_index(shd_block_warp, "u_noise");
 	var edge_stage = shader_get_sampler_index(shd_block_warp, "u_edge");
+	var spark_stage = shader_get_sampler_index(shd_block_warp, "u_spark");
 	var edge_tex = official_block_surf_tex(_state, BLOCK_RT_PACK_E);
 	if (mask_stage > 0) {
 		texture_set_stage(mask_stage, mask_tex);
@@ -1287,6 +1408,11 @@ function official_block_warp_present(_state, _w, _h, _now) {
 		texture_set_stage(noise_stage, noise_tex);
 		gpu_set_texfilter_ext(noise_stage, true);
 		gpu_set_texrepeat_ext(noise_stage, true);
+	}
+	if (spark_stage > 0) {
+		texture_set_stage(spark_stage, spark_tex);
+		gpu_set_texfilter_ext(spark_stage, false);
+		gpu_set_texrepeat_ext(spark_stage, false);
 	}
 	// Stage 0 is the chart copy. Set it after the other samplers so the white
 	// quad from the pass above cannot remain bound.
@@ -1315,6 +1441,9 @@ function official_block_present_quad(_state, _w, _h, _surface) {
 }
 
 function official_block_present(_state, _now, _w, _h) {
+	var displace_tex = official_block_image(_state, _state.noise_spr);
+	var spark_tex = official_block_image(_state, _state.spark_spr);
+	var grain_tex = official_block_image(_state, _state.grain_spr);
 	gpu_set_alphatestenable(false);
 	draw_set_colour(c_white);
 	draw_set_alpha(1);
@@ -1328,8 +1457,10 @@ function official_block_present(_state, _now, _w, _h) {
 			shader_set(shader);
 			official_block_disabled_uniforms(shader, _now);
 			official_block_tex(shader, "_ComposeRT", official_block_surf_tex(_state, compose), false, false);
-			official_block_tex(shader, "_DisplaceMap", official_block_image(_state, _state.noise_spr), true, true);
-			official_block_tex(shader, "_SparkMap", official_block_image(_state, _state.spark_spr), true, true);
+			official_block_tex(shader, "_DisplaceMap", displace_tex, true, false);
+			official_block_map_rect(shader, "_DisplaceMap_Rect", displace_tex);
+			official_block_tex(shader, "_SparkMap", spark_tex, true, false);
+			official_block_map_rect(shader, "_SparkMap_Rect", spark_tex);
 			official_block_present_quad(_state, _w, _h);
 		}
 		gpu_set_scissor(0, 0, _w, _h);
@@ -1344,9 +1475,12 @@ function official_block_present(_state, _now, _w, _h) {
 			official_block_active_uniforms(active_shader, _state, _now, _w, _h);
 			official_block_tex(active_shader, "_MaskRT", official_block_surf_tex(_state, BLOCK_RT_PACK_M), false, false);
 			official_block_tex(active_shader, "_EffectRT", official_block_surf_tex(_state, BLOCK_RT_PACK_E), false, false);
-			official_block_tex(active_shader, "_DisplaceMap", official_block_image(_state, _state.noise_spr), true, true);
-			official_block_tex(active_shader, "_SparkMap", official_block_image(_state, _state.spark_spr), true, true);
-			official_block_tex(active_shader, "_NoiseMap", official_block_image(_state, _state.grain_spr), true, true);
+			official_block_tex(active_shader, "_DisplaceMap", displace_tex, true, false);
+			official_block_map_rect(active_shader, "_DisplaceMap_Rect", displace_tex);
+			official_block_tex(active_shader, "_SparkMap", spark_tex, true, false);
+			official_block_map_rect(active_shader, "_SparkMap_Rect", spark_tex);
+			official_block_tex(active_shader, "_NoiseMap", grain_tex, true, false);
+			official_block_map_rect(active_shader, "_NoiseMap_Rect", grain_tex);
 			// The quad itself stays the 1x1 white surface so its UVs remain
 			// the 0..1 screen coordinates the mask was built for. Drawing the
 			// chart copy as that quad leaves gm_BaseTexture white, because
@@ -1406,8 +1540,7 @@ function official_blocks_draw() {
 		return;
 	}
 	var state = official_blocks_ensure();
-	if (!official_block_enabled() || !state.ready || state.empty) return;
-	if (!state.preloaded) official_blocks_preload();
+	if (state.skipped || !official_block_enabled() || !state.ready || state.empty || !state.preloaded) return;
 	var loading = variable_global_exists("loading_animation_active") && global.loading_animation_active;
 	var wants = false;
 	var now = 0;

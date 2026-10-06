@@ -55,3 +55,7 @@ var is_out_line = true;
 if (time_before) then is_out_line = (line_floor <= maximum_visual_length);
 // PCR official holds with speed 0 or no duration are parsed with alpha 0.
 canDraw = (self.speed != 0 && hold_time_length > 0 && is_out_line && hold_length > 0);
+// Phira forces hold speed to +1 and hides the hold before its head time when the
+// head is already on the back side. A negative line speed used to keep the body
+// drawn past the line until the strike.
+if (time_before && (yOffset - line_floor) <= -0.001) then canDraw = false;

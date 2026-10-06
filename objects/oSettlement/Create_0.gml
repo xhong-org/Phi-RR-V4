@@ -34,6 +34,7 @@ box_alpha = [0, 0, 0];
 score_show = 0;
 best_show = 0;
 delta_show = 0;
+gap_show = 0;
 rank_alpha = 0;
 rank_scale = 2;
 rank_started = false;
@@ -60,6 +61,9 @@ user_name = "";
 score_value = 0;
 best_prev = 0;
 score_delta = 0;
+score_gap = 0;
+score_autoplay = false;
+score_is_best = false;
 perfect_count = 0;
 good_count = 0;
 bad_count = 0;
@@ -134,30 +138,13 @@ function settlement_ending_index(_level) {
 	return chart_ending_index(_level);
 }
 
-function settlement_record_key() {
-	var n = "";
-	var l = "";
-	if (variable_global_exists("game") && is_struct(game) && is_struct(game.folder_chart)) {
-		n = string(game.folder_chart.name ?? "");
-		l = string(game.folder_chart.level ?? "");
-	};
-	return string_replace_all($"{n}|{l}", "=", "_");
-}
-
 function settlement_best_read() {
-	var key = settlement_record_key();
-	ini_open(settings_ini_path());
-	var v = ini_read_real("Records", key, 0);
-	ini_close();
-	if (!is_finite(v) || v < 0) then v = 0;
-	return v;
+	return chart_score_get(chart_score_md5());
 }
 
 function settlement_best_write(_score) {
-	var key = settlement_record_key();
-	ini_open(settings_ini_path());
-	ini_write_real("Records", key, max(0, _score));
-	ini_close();
+	if (chart_autoplay_active()) then return;
+	chart_score_set(chart_score_md5(), _score);
 }
 
 function settlement_refresh_layout() {
@@ -353,9 +340,12 @@ if (variable_global_exists("phi_state_list") && is_struct(phi_state_list)) {
 	max_combo = real(phi_state_list.max_hitcombo ?? 0);
 	acc_value = real(phi_state_list.acc ?? 0);
 };
+score_autoplay = chart_autoplay_active();
 best_prev = settlement_best_read();
-if (score_value > best_prev) then settlement_best_write(score_value);
+score_is_best = (!score_autoplay && score_value > best_prev);
+score_gap = max(0, best_prev - score_value);
 score_delta = max(0, score_value - best_prev);
+if (score_is_best) then settlement_best_write(score_value);
 
 var bg_path = "";
 if (variable_global_exists("game") && is_struct(game) && is_struct(game.folder_chart)

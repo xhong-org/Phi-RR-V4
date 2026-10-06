@@ -73,7 +73,7 @@ draw_set_font(game.font);
 // combo number + combo string
 draw_set_halign(fa_middle);
 draw_set_valign(fa_center);
-draw_text_transformed_colour(u_combo[0], u_combo[1], game.settings.comboString, u_combo[5], u_combo[6], u_combo[4], u_combo[2], u_combo[2], u_combo[2], u_combo[2], (combo >= 3 ? u_combo[3] : 0));
+draw_text_transformed_colour(u_combo[0], u_combo[1], chart_combo_caption(), u_combo[5], u_combo[6], u_combo[4], u_combo[2], u_combo[2], u_combo[2], u_combo[2], (combo >= 3 ? u_combo[3] : 0));
 draw_text_transformed_colour(u_combo_num[0], u_combo_num[1], string(combo), u_combo_num[5], u_combo_num[6], u_combo_num[4], u_combo_num[2], u_combo_num[2], u_combo_num[2], u_combo_num[2], (combo >= 3 ? u_combo_num[3] : 0));
 
 // chart name
@@ -108,24 +108,37 @@ draw_text_transformed_colour(u_score[0], u_score[1], score_text, u_score[5], u_s
 draw_sprite_ext(spr_pause, 0, u_pause[0], u_pause[1], u_pause[5], u_pause[6], u_pause[4], u_pause[2], u_pause[3]);
 
 // progress bar
+// Phira draws a judge line at length 6, so scale 1 is six screens wide and
+// charters put the bar line at about 1/6 to make that line one screen wide
+// (Algebra is 0.1667). This bar is already one screen at scale 1. Multiplying
+// by the raw line scale turns that into a sub-pixel hairline on most bound
+// charts. Map through the line length and do not grow past the screen.
 var _mlen = 0;
 if (instance_exists(oMedia)) then _mlen = real(oMedia.length);
 var val = (_mlen > 0 ? clamp(game.__time[4] / _mlen, 0, 1) : 0);
 var bar_x = u_bar[0];
 var bar_y = u_bar[1];
 var bar_angle = u_bar[4];
-var bar_scale_x = u_bar[5];
-var bar_scale_y = u_bar[6];
+var _bar_raw_x = real(u_bar[5]);
+var _bar_raw_y = real(u_bar[6]);
+if (!is_finite(_bar_raw_x)) then _bar_raw_x = 1;
+if (!is_finite(_bar_raw_y)) then _bar_raw_y = 1;
+var bar_scale_x = clamp(_bar_raw_x * 6, 0, 1);
+var bar_scale_y = clamp(_bar_raw_y * 6, 0, 1);
 var bar_progress_length = chart_view_width * bar_scale_x * val;
 var marker_local_x = bar_progress_length - sprite_get_width(spr_pixel_2) * bar_scale_x;
 var marker_x = bar_x + marker_local_x * dcos(bar_angle);
 var marker_y = bar_y - marker_local_x * dsin(bar_angle);
+// The track stays the dim half of the bound colour. White (no colour event)
+// stays gray. A line colour event tints the track the same way as the head.
+var _bar_colour = u_bar[2];
+var _bar_track = merge_color(c_black, _bar_colour, 0.5);
 
 draw_sprite_ext(
 	spr_pixel_2, 0, bar_x, bar_y,
 	(chart_view_width / sprite_get_width(spr_pixel_2)) * bar_scale_x * val,
 	4 * global_scales * bar_scale_y,
-	bar_angle, c_gray, u_bar[3]
+	bar_angle, _bar_track, u_bar[3]
 );
 draw_sprite_ext(
 	spr_pixel_2, 0, marker_x, marker_y,

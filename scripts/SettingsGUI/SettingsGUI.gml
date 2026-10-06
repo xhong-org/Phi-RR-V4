@@ -426,8 +426,16 @@ function settings_gui_commit_to_store(_include_deprecated) {
 	};
 	settings_clamp_store(dest);
 	settings_clamp_store(editing);
-	settings_save_store(dest);
-	settings_apply_live(undefined);
+	try {
+		settings_save_store(dest);
+	} catch (save_err) {
+		delete(save_err);
+	};
+	try {
+		settings_apply_live(undefined);
+	} catch (apply_err) {
+		delete(apply_err);
+	};
 	draft_saved = settings_clone(dest);
 	settings_gui_close();
 }
@@ -787,14 +795,25 @@ function settings_gui_blocking() {
 
 function settings_gui_open() {
 	if (instance_exists(oSettings) || instance_exists(oFilePicker)) then return;
+	// The tap that closes the panel is still a press on the next step. The
+	// menu button sits under that same finger on a phone, which would open
+	// the panel again before the finger lifts.
+	if (variable_global_exists("settings_closed_at") && is_real(global.settings_closed_at)) {
+		if (current_time - global.settings_closed_at < 400) then return;
+	};
 	instance_create_depth(0, 0, -2000000, oSettings);
 }
 
 function settings_gui_close() {
-	skin_import_cancel();
-	skin_preview_unload();
-	if (instance_exists(oSettings)) then with (oSettings) {
-		settings_skin_preview_surface_free();
+	global.settings_closed_at = current_time;
+	if (!instance_exists(oSettings)) then return;
+	with (oSettings) {
+		try { skin_import_cancel(); } catch (cancel_err) { delete(cancel_err); };
+		try { skin_preview_unload(); } catch (unload_err) { delete(unload_err); };
+		try { settings_skin_preview_surface_free(); } catch (surf_err) { delete(surf_err); };
+		if (os_type == os_android) {
+			try { keyboard_virtual_hide(); } catch (hide_err) { delete(hide_err); };
+		};
 		instance_destroy();
 	};
 }
@@ -1019,6 +1038,7 @@ function settings_gui_init() {
 	drag_start_scroll = 0;
 	editing_key = "";
 	hover_save = false;
+	ignore_release = (os_type == os_android);
 	hover_discard = false;
 	hover_action = false;
 	group_open = { display:false, debug:false, chart:false, deprecated:false };
@@ -1140,12 +1160,56 @@ function settings_gui_refresh_hits() {
 	};
 }
 
+function settings_gui_pointer() {
+	var px = mouse_x;
+	var py = mouse_y;
+	var pressed = mouse_check_button_pressed(mb_left);
+	var released = mouse_check_button_released(mb_left);
+	var held = mouse_check_button(mb_left);
+	if (os_type != os_android) {
+		return { x: px, y: py, pressed: pressed, released: released, held: held };
+	};
+	// mouse_x stays on the finger that opened the panel. A later tap is
+	// another touch index, so Save / Discard never see it.
+	pressed = false;
+	released = false;
+	held = false;
+	var found = false;
+	for (var device = 0; device < 4; device++) {
+		var edge = device_mouse_check_button_pressed(device, mb_left);
+		var up = device_mouse_check_button_released(device, mb_left);
+		var down = device_mouse_check_button(device, mb_left);
+		if (!edge && !up && !down) then continue;
+		if (!found || edge) {
+			px = device_mouse_x(device);
+			py = device_mouse_y(device);
+			found = true;
+		};
+		if (edge) then pressed = true;
+		if (up) then released = true;
+		if (down) then held = true;
+	};
+	if (!found) {
+		px = mouse_x;
+		py = mouse_y;
+		pressed = mouse_check_button_pressed(mb_left);
+		released = mouse_check_button_released(mb_left);
+		held = mouse_check_button(mb_left);
+	};
+	return { x: px, y: py, pressed: pressed, released: released, held: held };
+}
+
 function settings_gui_step() {
 	var scale_now = variable_global_exists("global_scales") ? global_scales : 1.0;
 	if (layout_w != room_width || layout_h != room_height || layout_s != scale_now) {
 		settings_gui_layout();
 	};
-	if (!armed && !mouse_check_button(mb_left)) then armed = true;
+	var pointer = settings_gui_pointer();
+	if (!armed) {
+		// Android can leave mb_left held after the finger lifts. Waiting for
+		// that release never arms the panel, so neither close button runs.
+		if (os_type == os_android || !pointer.held) then armed = true;
+	};
 	if (instance_exists(oFilePicker)) then exit;
 	skin_import_poll();
 	if (is_string(skin_import_path ?? "") && string_length(skin_import_path)) {
@@ -1193,8 +1257,8 @@ function settings_gui_step() {
 		exit;
 	};
 
-	var mx = mouse_x;
-	var my = mouse_y;
+	var mx = pointer.x;
+	var my = pointer.y;
 	settings_gui_action_layout();
 	hover_save = point_in_rectangle(mx, my, save_x, save_y, save_x + save_w, save_y + save_h);
 	hover_discard = point_in_rectangle(mx, my, discard_x, discard_y, discard_x + discard_w, discard_y + discard_h);
@@ -1212,24 +1276,39 @@ function settings_gui_step() {
 	var in_list = (tab == 2)
 		? point_in_rectangle(mx, my, list_x, list_y, list_x + skin_list_w, list_y + skin_list_h)
 		: point_in_rectangle(mx, my, list_x, list_y, list_x + list_w, list_y + list_h);
-	if (mouse_check_button_pressed(mb_left) && in_list) {
-		dragging = true;
-		drag_moved = false;
-		drag_start_y = my;
-		drag_start_scroll = scroll;
+	if (pointer.pressed) {
+		if (in_list) {
+			dragging = true;
+			drag_moved = false;
+			drag_start_y = my;
+			drag_start_scroll = scroll;
+		} else {
+			// A list drag used to stay "moved" and swallow the next Save tap.
+			dragging = false;
+			drag_moved = false;
+		};
 	};
-	if (dragging && mouse_check_button(mb_left)) {
+	if (dragging && pointer.held) {
 		var dy = drag_start_y - my;
 		if (abs(dy) > max(8, 10 * layout_s)) then drag_moved = true;
 		if (drag_moved) {
 			scroll = clamp(drag_start_scroll + dy / row_h, 0, max_scroll);
 		};
 	};
-	if (!mouse_check_button(mb_left)) then dragging = false;
+	if (!pointer.held) then dragging = false;
 
 	settings_gui_refresh_hits();
 
-	if (!armed || !mouse_check_button_pressed(mb_left)) then exit;
+	// Android reports the tap position on release. The press frame still has
+	// the previous finger's coordinates, so the header buttons miss.
+	// The finger-up that opened the panel is not a click on Save or Discard.
+	if (ignore_release) {
+		if (pointer.released || !pointer.held) then ignore_release = false;
+		if (pointer.released) then exit;
+	};
+	var activate = pointer.pressed;
+	if (os_type == os_android) then activate = pointer.released;
+	if (!armed || !activate) then exit;
 	if (drag_moved) then exit;
 
 	if (hover_save) {

@@ -58,6 +58,11 @@ if (variable_instance_exists(id, "effect_boundary_role")) {
 		};
 	} else if (_boundary_state.active && surface_exists(_boundary_state.surface)) {
 		pls_draw_flush();
+		// Unbind before shader_reset. Resetting while this capture is still the
+		// target drops the notes that were flushed into it (video 2 glitch).
+		var _boundary_parent = _boundary_state.caller;
+		surface_reset_target();
+		shader_reset();
 		// One reset for the set in the start sentinel.
 		if (_boundary_state.capture_pushed && instance_exists(effect_boundary_controller)) {
 			var _capture_stack = effect_boundary_controller.effect_capture_stack;
@@ -71,9 +76,6 @@ if (variable_instance_exists(id, "effect_boundary_role")) {
 			};
 			_boundary_state.capture_pushed = false;
 		};
-		var _boundary_parent = _boundary_state.caller;
-		shader_reset();
-		surface_reset_target();
 		var _layer_fast = "heavy";
 		if (instance_exists(effect_boundary_controller)) {
 			_layer_fast = rpe_effect_layer_fast(effect_boundary_effects, effect_boundary_controller.chart_time);
@@ -101,7 +103,15 @@ if (variable_instance_exists(id, "effect_boundary_role")) {
 				};
 				draw_surface_ext(_boundary_state.surface, 0, 0, 1, 1, 0, make_colour_rgb(_lum_byte, _lum_byte, _lum_byte), 1 - _fast_invis);
 				pls_draw_flush();
-				if (_blit_graded) then shader_reset();
+				if (_blit_graded) {
+					// shader_reset on a still-bound outer capture (video 2 glitch
+					// around this grayscale band) drops the notes just blitted.
+					var _graded_target = surface_get_target();
+					var _graded_capture = surface_exists(_graded_target) && _graded_target != application_surface;
+					if (_graded_capture) then surface_reset_target();
+					shader_reset();
+					if (_graded_capture) then surface_set_target(_graded_target);
+				};
 			};
 			if (instance_exists(effect_boundary_controller)) {
 				var _grade_key = $"layer-blit@{_layer_fast[0]}@{_layer_fast[1]}@{_layer_fast[2]}";

@@ -50,16 +50,15 @@ draw_set_alpha(a0);
 var score_tx = score_x + 28 * s;
 draw_text_transformed(score_tx, score_bottom - score_h * 0.50, ScoreSystemPad(score_show), 0.72 * s, 0.72 * s, 0);
 draw_set_alpha(a0 * 0.85);
-var rec_label = "NEW BEST";
-if (variable_global_exists("render_mode") && global.render_mode) {
-	rec_label = "RECORDER";
-} else if (variable_global_exists("game") && is_struct(game) && is_struct(game.settings)
-	&& bool(game.settings.enableAutoPlay ?? true)) {
-	rec_label = "AUTOPLAY";
+var rec_line = "";
+if (score_autoplay) {
+	rec_line = "AUTOPLAY";
+} else if (score_is_best) {
+	rec_line = "NEW BEST " + ScoreSystemPad(score_show);
+} else {
+	rec_line = "BEST " + ScoreSystemPad(best_show) + " -" + ScoreSystemPad(gap_show);
 };
-draw_text_transformed(score_tx, score_bottom - score_h * 0.22,
-	$"{rec_label}  {ScoreSystemPad(best_show)}  +{ScoreSystemPad(delta_show)}",
-	0.22 * s, 0.22 * s, 0);
+draw_text_transformed(score_tx, score_bottom - score_h * 0.22, rec_line, 0.22 * s, 0.22 * s, 0);
 
 if (asset_sprite_valid(rank_sprite) && rank_alpha > 0) {
 	draw_sprite_ext(rank_sprite, 0, rank_cx, rank_cy, rank_base_scale * rank_scale, rank_base_scale * rank_scale, 0, c_white, rank_alpha);

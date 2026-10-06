@@ -11,6 +11,12 @@ uniform 	mediump vec4 _DisplaceDirection;
 uniform mediump sampler2D _ComposeRT;
 uniform mediump sampler2D _DisplaceMap;
 uniform mediump sampler2D _SparkMap;
+uniform vec4 _DisplaceMap_Rect;
+uniform vec4 _SparkMap_Rect;
+
+vec2 block_repeat(vec4 rect, vec2 uv) {
+    return mix(rect.xy, rect.zw, fract(uv));
+}
 varying highp vec2 vs_TEXCOORD0;
 varying highp vec2 vs_TEXCOORD2;
 varying highp vec2 vs_TEXCOORD3;
@@ -39,8 +45,8 @@ void main()
     u_xlat2.xyw = u_xlat4.xxx * u_xlat16_1.xyx;
     u_xlat2.z = u_xlat4.x * (-u_xlat16_1.y);
     u_xlat2 = u_xlat2 + vs_TEXCOORD2.xyxy;
-    u_xlat16_4 = texture2D(_DisplaceMap, u_xlat2.zw).x;
-    u_xlat16_8 = texture2D(_DisplaceMap, u_xlat2.xy).x;
+    u_xlat16_4 = texture2D(_DisplaceMap, block_repeat(_DisplaceMap_Rect, u_xlat2.zw)).x;
+    u_xlat16_8 = texture2D(_DisplaceMap, block_repeat(_DisplaceMap_Rect, u_xlat2.xy)).x;
     u_xlat16_9 = u_xlat16_4 + -0.5;
     u_xlat16_13 = u_xlat16_4 + u_xlat16_8;
     u_xlat16_3 = u_xlat16_8 + -0.5;
@@ -49,7 +55,7 @@ void main()
     u_xlat2.y = u_xlat16_9 * u_xlat16_1.x;
     u_xlat4.xy = u_xlat16_1.xy * vec2(u_xlat16_3) + u_xlat2.xy;
     u_xlat4.xy = u_xlat4.xy * vec2(_SparkDisplaceIntensity) + vs_TEXCOORD3.xy;
-    u_xlat16_4 = texture2D(_SparkMap, u_xlat4.xy).x;
+    u_xlat16_4 = texture2D(_SparkMap, block_repeat(_SparkMap_Rect, u_xlat4.xy)).x;
     u_xlat4.xyz = vec3(u_xlat16_4) * _SparkTint.xyz;
     u_xlat4.xyz = vec3(u_xlat16_13) * u_xlat4.xyz;
     u_xlat16_1.xyz = _FillColor.xyz * vec3(_FillOpacity);
