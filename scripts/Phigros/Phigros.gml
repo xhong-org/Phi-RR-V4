@@ -1468,6 +1468,9 @@ function Phigros() constructor { // 仅仅结构
 			});
 		};
 		print("[S-Sort] Done." , game.settings.enableDebug);
+		
+		var ok = (game.PhiTool.FitEventsTrack());
+		if(ok) then game.PhiTool.ExportRPE(InChartPath + "RPE170.json");
 	});
 	
 	///@desc 背景应用
@@ -1944,9 +1947,37 @@ function Phigros() constructor { // 仅仅结构
 			return(true);
 		}),
 		
-		///@desc  文本
+		///@desc 把官谱里被切成线性段的判定线事件拟合成 RPE 缓动，生成 RPE 谱。
+		/// 不改 game.chart，也不改官方播放器上的 PGRVersion 标签。
 		FitEventsTrack : (function(){
-				
+			if (!variable_global_exists("game") || !is_struct(game) || !is_struct(game[$ "chart"])) then return false;
+			var built = phi_official_to_rpe(game.chart);
+			if (!is_struct(built)) then return false;
+			self.rpeStats = built[$ "stats"];
+			variable_struct_remove(built, "stats");
+			self.rpeChart = built;
+			var stats = self.rpeStats;
+			if (is_struct(stats)) {
+				show_debug_message($"[PhiTool] Official slices {stats.rawEvents} -> RPE events {stats.outEvents}, eased {stats.easedEvents}. META.RPEVersion=170, label PGRVersion={stats.pgrVersion}.");
+			};
+			return true;
+		}),
+
+		///@desc 导出 RPE（META.RPEVersion = 170）。路径为空时写到当前谱面目录的 Chart_RPE.json。
+		ExportRPE : (function(path = ""){
+			if (!self.FitEventsTrack()) then return false;
+			if (!is_string(path) || !string_length(path)) {
+				var root = working_directory;
+				if (variable_global_exists("InChartPath") && is_string(InChartPath) && string_length(InChartPath)) then root = InChartPath;
+				path = chart_path_join(root, "Chart_RPE.json");
+			};
+			var js_str = json_stringify(self.rpeChart, true);
+			var buff = buffer_create(string_byte_length(js_str), buffer_grow, 1);
+			buffer_write(buff, buffer_string, js_str);
+			buffer_save(buff, path);
+			buffer_delete(buff);
+			show_debug_message($"[PhiTool] Wrote RPE chart: {path}");
+			return true;
 		})
 	};
 	
@@ -1956,12 +1987,455 @@ function Phigros() constructor { // 仅仅结构
 		official_lines_begin();
 		while (!official_lines_pump(0)) {};
 		official_lines_finish();
+		
 	});
 	
 	
 	print($"[Initional] Done." , self.settings.enableDebug);
 	//});
 };
+
+/// Official time is 1/32 beat at the line BPM. RPE beats follow BPMList.
+function phi_tick_to_beats(tick, line_bpm, chart_bpm) {
+	var line_rate = real(line_bpm);
+	var chart_rate = real(chart_bpm);
+	if (!(line_rate > 0)) then line_rate = chart_rate;
+	if (!(chart_rate > 0)) then chart_rate = 120;
+	if (!(line_rate > 0)) then line_rate = chart_rate;
+	return real(tick) * chart_rate / line_rate / 32;
+}
+
+function phi_beats_to_array(beats) {
+	var value = real(beats);
+	if (!is_finite(value)) then value = 0;
+	var bar = floor(value);
+	var num = round((value - bar) * 32);
+	if (num >= 32) {
+		bar += 1;
+		num = 0;
+	};
+	if (num < 0) then num = 0;
+	return [bar, num, 32];
+}
+
+function phi_official_event_cmp(a, b) {
+	var start_delta = real(a.startTime) - real(b.startTime);
+	if (start_delta != 0) then return start_delta;
+	return real(a.endTime) - real(b.endTime);
+}
+
+function phi_event_start_value(ev, channel) {
+	if (channel == 1) then return real(ev[$ "start2"] ?? 0);
+	if (is_real(ev[$ "start"])) then return real(ev.start);
+	return real(ev[$ "value"] ?? 0);
+}
+
+function phi_event_end_value(ev, channel) {
+	if (channel == 1) then return real(ev[$ "end2"] ?? ev[$ "start2"] ?? 0);
+	if (is_real(ev[$ "end"])) then return real(ev[$ "end"]);
+	return real(ev[$ "value"] ?? phi_event_start_value(ev, channel));
+}
+
+/// Max distance from the baked samples to one RPE easing. Type ids match rpe_ease_value.
+function phi_fit_error(times, values, i0, i1, ease_type) {
+	var t0 = times[i0];
+	var t1 = times[i1];
+	var v0 = values[i0];
+	var v1 = values[i1];
+	var span = t1 - t0;
+	var count = i1 - i0;
+	if (span <= 0.000000001) {
+		var flat = 0;
+		for (var flat_i = i0; flat_i <= i1; flat_i++) {
+			var flat_d = abs(values[flat_i] - v1);
+			if (flat_d > flat) then flat = flat_d;
+		};
+		return flat;
+	};
+	var amp = v1 - v0;
+	var step = 1;
+	if (count > 48) then step = max(1, floor(count / 36));
+	var err = 0;
+	for (var sample_i = i0; sample_i <= i1; sample_i += step) {
+		var p = (times[sample_i] - t0) / span;
+		if (p < 0) then p = 0;
+		if (p > 1) then p = 1;
+		var pred = v0 + amp * rpe_ease_value(ease_type, p);
+		var delta = abs(pred - values[sample_i]);
+		if (delta > err) then err = delta;
+	};
+	var end_delta = abs((v0 + amp * rpe_ease_value(ease_type, 1)) - v1);
+	if (end_delta > err) then err = end_delta;
+	return err;
+}
+
+function phi_choose_ease(times, values, i0, i1) {
+	var scale = abs(values[i1] - values[i0]);
+	if (scale < 0.000001) then scale = 0.000001;
+	var tol = (scale < 0.001) ? 0.001 : max(0.0001, 0.004 * scale);
+	var linear_err = phi_fit_error(times, values, i0, i1, 1);
+	if (linear_err <= max(0.0001, 0.0002 * scale)) {
+		return { ease: 1, err: linear_err, ok: true };
+	};
+	var best_err = linear_err;
+	var best_type = 1;
+	for (var ease_type = 2; ease_type <= 29; ease_type++) {
+		var err = phi_fit_error(times, values, i0, i1, ease_type);
+		if (err < best_err) {
+			best_err = err;
+			best_type = ease_type;
+		};
+	};
+	if (scale < 0.001 && best_type != 1 && best_err > 0.0001) {
+		return { ease: 1, err: linear_err, ok: (linear_err <= tol) };
+	};
+	return { ease: best_type, err: best_err, ok: (best_err <= tol) };
+}
+
+/// Ease-out slices often land on the end value one tick early. Keep that tick out of the fit.
+function phi_trim_end(values, i0, i1) {
+	if (i1 - i0 < 2) then return i1;
+	var final_v = values[i1];
+	var i = i1;
+	while (i > i0 + 1 && abs(values[i - 1] - final_v) <= 0.00001) i--;
+	return i;
+}
+
+function phi_extrema_cuts(values, i0, i1) {
+	var cuts = [i0];
+	var prev_sign = 0;
+	for (var i = i0 + 1; i <= i1; i++) {
+		var dv = values[i] - values[i - 1];
+		if (abs(dv) <= 0.0000001) then continue;
+		var slope_dir = (dv > 0) ? 1 : -1;
+		if (prev_sign != 0 && slope_dir != prev_sign) {
+			var cut = i - 1;
+			if (cuts[array_length(cuts) - 1] != cut) then array_push(cuts, cut);
+		};
+		prev_sign = slope_dir;
+	};
+	if (cuts[array_length(cuts) - 1] != i1) then array_push(cuts, i1);
+	return cuts;
+}
+
+function phi_fit_piece(times, values, i0, i1, depth) {
+	var out = [];
+	if (i1 <= i0) then return out;
+	var trimmed = phi_trim_end(values, i0, i1);
+	var has_tail = (times[trimmed] < times[i1] - 0.000001);
+	if (trimmed <= i0) {
+		if (has_tail) then array_push(out, { t0: times[i0], t1: times[i1], v0: values[i0], v1: values[i1], ease: 1 });
+		return out;
+	};
+	if (trimmed - i0 <= 1) {
+		array_push(out, { t0: times[i0], t1: times[trimmed], v0: values[i0], v1: values[trimmed], ease: 1 });
+		if (has_tail) then array_push(out, { t0: times[trimmed], t1: times[i1], v0: values[trimmed], v1: values[i1], ease: 1 });
+		return out;
+	};
+	var choice = phi_choose_ease(times, values, i0, trimmed);
+	if (choice.ok) {
+		array_push(out, { t0: times[i0], t1: times[trimmed], v0: values[i0], v1: values[trimmed], ease: choice.ease });
+		if (has_tail) then array_push(out, { t0: times[trimmed], t1: times[i1], v0: values[trimmed], v1: values[i1], ease: 1 });
+		return out;
+	};
+	var cuts = phi_extrema_cuts(values, i0, trimmed);
+	if (array_length(cuts) >= 3 && depth < 3) {
+		for (var cut_i = 0; cut_i < array_length(cuts) - 1; cut_i++) {
+			var part = phi_fit_piece(times, values, cuts[cut_i], cuts[cut_i + 1], depth + 1);
+			for (var part_i = 0; part_i < array_length(part); part_i++) array_push(out, part[part_i]);
+		};
+		if (has_tail) then array_push(out, { t0: times[trimmed], t1: times[i1], v0: values[trimmed], v1: values[i1], ease: 1 });
+		return out;
+	};
+	for (var seg_i = i0; seg_i < trimmed; seg_i++) {
+		array_push(out, { t0: times[seg_i], t1: times[seg_i + 1], v0: values[seg_i], v1: values[seg_i + 1], ease: 1 });
+	};
+	if (has_tail) then array_push(out, { t0: times[trimmed], t1: times[i1], v0: values[trimmed], v1: values[i1], ease: 1 });
+	return out;
+}
+
+function phi_merge_linear(events) {
+	var out = [];
+	for (var i = 0; i < array_length(events); i++) {
+		var ev = events[i];
+		var count = array_length(out);
+		if (count > 0) {
+			var prev = out[count - 1];
+			if (prev.ease == 1 && ev.ease == 1 && abs(ev.t0 - prev.t1) <= 0.001 && abs(ev.v0 - prev.v1) <= 0.001) {
+				var dt0 = prev.t1 - prev.t0;
+				var dt1 = ev.t1 - ev.t0;
+				var same = false;
+				if (dt0 <= 0.000001 && dt1 <= 0.000001) {
+					same = (abs(ev.v1 - prev.v1) <= 0.001);
+				} else if (dt0 > 0.000001 && dt1 > 0.000001) {
+					var slope0 = (prev.v1 - prev.v0) / dt0;
+					var slope1 = (ev.v1 - ev.v0) / dt1;
+					same = (abs(slope0 - slope1) <= max(0.0001, 0.001 * max(abs(slope0), 0.000001)));
+				};
+				if (same) {
+					prev.t1 = ev.t1;
+					prev.v1 = ev.v1;
+					continue;
+				};
+			};
+		};
+		array_push(out, { t0: ev.t0, t1: ev.t1, v0: ev.v0, v1: ev.v1, ease: ev.ease });
+	};
+	return out;
+}
+
+/// channel 0 reads start/end. channel 1 reads start2/end2. Speed events are not passed here.
+function phi_fit_channel(events, channel) {
+	var fitted = [];
+	if (!is_array(events)) then return fitted;
+	var evs = [];
+	for (var copy_i = 0; copy_i < array_length(events); copy_i++) {
+		var src = events[copy_i];
+		if (!is_struct(src) || !is_real(src[$ "startTime"]) || !is_real(src[$ "endTime"])) then continue;
+		array_push(evs, src);
+	};
+	if (array_length(evs) <= 0) then return fitted;
+	array_sort(evs, phi_official_event_cmp);
+	var n = array_length(evs);
+	var index = 0;
+	while (index < n) {
+		var head = evs[index];
+		var head_dt = head.endTime - head.startTime;
+		if (head_dt > 8 || head_dt <= 0) {
+			array_push(fitted, {
+				t0: head.startTime, t1: head.endTime,
+				v0: phi_event_start_value(head, channel),
+				v1: phi_event_end_value(head, channel),
+				ease: 1
+			});
+			index++;
+			continue;
+		};
+		var end_index = index + 1;
+		var primary_dt = head_dt;
+		while (end_index < n) {
+			var seg = evs[end_index];
+			var prev = evs[end_index - 1];
+			var seg_dt = seg.endTime - seg.startTime;
+			if (abs(seg.startTime - prev.endTime) > 0.001) then break;
+			if (abs(phi_event_start_value(seg, channel) - phi_event_end_value(prev, channel)) > 0.001) then break;
+			if (seg_dt > 8 || seg_dt <= 0) then break;
+			if (abs(seg_dt - primary_dt) > 0.001 && end_index + 1 < n) {
+				var next_seg = evs[end_index + 1];
+				var next_dt = next_seg.endTime - next_seg.startTime;
+				if (abs(next_seg.startTime - seg.endTime) <= 0.001
+					&& abs(phi_event_start_value(next_seg, channel) - phi_event_end_value(seg, channel)) <= 0.001
+					&& abs(next_dt - seg_dt) <= 0.001) then break;
+			};
+			end_index++;
+		};
+		var times = [head.startTime];
+		var values = [phi_event_start_value(head, channel)];
+		for (var build_i = index; build_i < end_index; build_i++) {
+			array_push(times, evs[build_i].endTime);
+			array_push(values, phi_event_end_value(evs[build_i], channel));
+		};
+		var part = phi_fit_piece(times, values, 0, array_length(times) - 1, 0);
+		for (var part_i = 0; part_i < array_length(part); part_i++) array_push(fitted, part[part_i]);
+		index = end_index;
+	};
+	return phi_merge_linear(fitted);
+}
+
+function phi_scale_events(fitted, kind, line_bpm, chart_bpm) {
+	var out = [];
+	for (var i = 0; i < array_length(fitted); i++) {
+		var ev = fitted[i];
+		var v0 = ev.v0;
+		var v1 = ev.v1;
+		if (kind == "x") {
+			v0 = (ev.v0 - 0.5) * 1350;
+			v1 = (ev.v1 - 0.5) * 1350;
+		} else if (kind == "y") {
+			v0 = (ev.v0 - 0.5) * 900;
+			v1 = (ev.v1 - 0.5) * 900;
+		} else if (kind == "r") {
+			v0 = -ev.v0;
+			v1 = -ev.v1;
+		} else if (kind == "a") {
+			v0 = ev.v0 * 255;
+			v1 = ev.v1 * 255;
+		} else if (kind == "s") {
+			v0 = ev.v0 * 4.5;
+			v1 = ev.v1 * 4.5;
+		};
+		array_push(out, {
+			startTime: phi_beats_to_array(phi_tick_to_beats(ev.t0, line_bpm, chart_bpm)),
+			endTime: phi_beats_to_array(phi_tick_to_beats(ev.t1, line_bpm, chart_bpm)),
+			"start": v0,
+			"end": v1,
+			easingType: ev.ease,
+			easingLeft: 0,
+			easingRight: 1
+		});
+	};
+	return out;
+}
+
+function phi_convert_speed(events, line_bpm, chart_bpm) {
+	var out = [];
+	if (!is_array(events)) then return out;
+	var evs = [];
+	for (var i = 0; i < array_length(events); i++) {
+		var src = events[i];
+		if (!is_struct(src) || !is_real(src[$ "startTime"]) || !is_real(src[$ "endTime"])) then continue;
+		array_push(evs, src);
+	};
+	array_sort(evs, phi_official_event_cmp);
+	for (var speed_i = 0; speed_i < array_length(evs); speed_i++) {
+		var ev = evs[speed_i];
+		var _speed = real(ev[$ "value"] ?? ev[$ "start"] ?? 0) * 4.5;
+		array_push(out, {
+			startTime: phi_beats_to_array(phi_tick_to_beats(ev.startTime, line_bpm, chart_bpm)),
+			endTime: phi_beats_to_array(phi_tick_to_beats(ev.endTime, line_bpm, chart_bpm)),
+			"start": _speed,
+			"end": _speed,
+			easingType: 1,
+			easingLeft: 0,
+			easingRight: 1
+		});
+	};
+	return out;
+}
+
+function phi_push_official_notes(notes, list, above, line_bpm, chart_bpm) {
+	if (!is_array(list)) then return;
+	for (var i = 0; i < array_length(list); i++) {
+		var note = list[i];
+		if (!is_struct(note)) then continue;
+		var off_type = floor(real(note[$ "type"] ?? 1));
+		var rpe_type = 1;
+		if (off_type == 2) then rpe_type = 4;
+		else if (off_type == 3) then rpe_type = 2;
+		else if (off_type == 4) then rpe_type = 3;
+		var start_tick = real(note[$ "time"] ?? 0);
+		var hold_tick = 0;
+		if (off_type == 3) then hold_tick = max(0, floor(real(note[$ "holdTime"] ?? 0)));
+		array_push(notes, {
+			type: rpe_type,
+			startTime: phi_beats_to_array(phi_tick_to_beats(start_tick, line_bpm, chart_bpm)),
+			endTime: phi_beats_to_array(phi_tick_to_beats(start_tick + hold_tick, line_bpm, chart_bpm)),
+			positionX: real(note[$ "positionX"] ?? 0) * 75.375,
+			above: above,
+			isFake: 0,
+			speed: real(note[$ "speed"] ?? 1),
+			size: 1,
+			yOffset: 0,
+			visibleTime: 999999,
+			alpha: 255
+		});
+	};
+}
+
+function phi_count_eased(events) {
+	var eased = 0;
+	for (var i = 0; i < array_length(events); i++) {
+		if (events[i].ease != 1) then eased++;
+	};
+	return eased;
+}
+
+/// Bake-slice move / rotate / alpha back into RPE easings. Speed stays linear.
+/// META.RPEVersion is 170 so playback uses the 1.7 speed integral. META.PGRVersion
+/// keeps the official format version for the label under the build number.
+function phi_official_to_rpe(chart) {
+	if (!is_struct(chart) || !is_array(chart[$ "judgeLineList"])) then return undefined;
+	var lines = chart.judgeLineList;
+	var chart_bpm = 120;
+	for (var bpm_i = 0; bpm_i < array_length(lines); bpm_i++) {
+		var line_bpm_probe = real(lines[bpm_i][$ "bpm"] ?? 0);
+		if (line_bpm_probe > 0) {
+			chart_bpm = line_bpm_probe;
+			break;
+		};
+	};
+	var judge = [];
+	var raw_events = 0;
+	var out_events = 0;
+	var eased_events = 0;
+	for (var line_i = 0; line_i < array_length(lines); line_i++) {
+		var _line = lines[line_i];
+		if (!is_struct(_line)) then continue;
+		var line_bpm = real(_line[$ "bpm"] ?? chart_bpm);
+		if (!(line_bpm > 0)) then line_bpm = chart_bpm;
+		var move_src = _line[$ "judgeLineMoveEvents"] ?? [];
+		var rotate_src = _line[$ "judgeLineRotateEvents"] ?? [];
+		var alpha_src = _line[$ "judgeLineDisappearEvents"] ?? [];
+		var speed_src = _line[$ "speedEvents"] ?? [];
+		if (!is_array(move_src)) then move_src = [];
+		if (!is_array(rotate_src)) then rotate_src = [];
+		if (!is_array(alpha_src)) then alpha_src = [];
+		if (!is_array(speed_src)) then speed_src = [];
+		raw_events += array_length(move_src) + array_length(rotate_src) + array_length(alpha_src) + array_length(speed_src);
+		var move_x = phi_fit_channel(move_src, 0);
+		var move_y = phi_fit_channel(move_src, 1);
+		var rotate = phi_fit_channel(rotate_src, 0);
+		var alpha = phi_fit_channel(alpha_src, 0);
+		var _speed = phi_convert_speed(speed_src, line_bpm, chart_bpm);
+		eased_events += phi_count_eased(move_x) + phi_count_eased(move_y) + phi_count_eased(rotate) + phi_count_eased(alpha);
+		out_events += array_length(move_x) + array_length(move_y) + array_length(rotate) + array_length(alpha) + array_length(_speed);
+		var notes = [];
+		phi_push_official_notes(notes, _line[$ "notesAbove"], 1, line_bpm, chart_bpm);
+		phi_push_official_notes(notes, _line[$ "notesBelow"], 0, line_bpm, chart_bpm);
+		array_push(judge, {
+			bpm: line_bpm,
+			notes: notes,
+			numOfNotes: array_length(notes),
+			eventLayers: [{
+				speedEvents: _speed,
+				moveXEvents: phi_scale_events(move_x, "x", line_bpm, chart_bpm),
+				moveYEvents: phi_scale_events(move_y, "y", line_bpm, chart_bpm),
+				rotateEvents: phi_scale_events(rotate, "r", line_bpm, chart_bpm),
+				alphaEvents: phi_scale_events(alpha, "a", line_bpm, chart_bpm)
+			}],
+			Texture: "line.png",
+			isCover: 1,
+			father: -1,
+			zOrder: 0
+		});
+	};
+	var chart_name = "";
+	var chart_level = "";
+	var chart_song = "";
+	var chart_bg = "";
+	var chart_composer = "";
+	var chart_charter = "";
+	if (variable_global_exists("game") && is_struct(game) && is_struct(game[$ "folder_chart"])) {
+		chart_name = string(game.folder_chart[$ "name"] ?? "");
+		chart_level = string(game.folder_chart[$ "level"] ?? "");
+		chart_song = string(game.folder_chart[$ "music"] ?? "");
+		chart_bg = string(game.folder_chart[$ "bg"] ?? "");
+	};
+	if (variable_global_exists("chart_session") && is_struct(global.chart_session)) {
+		if (!string_length(chart_name)) then chart_name = string(global.chart_session[$ "name"] ?? "");
+		if (!string_length(chart_level)) then chart_level = string(global.chart_session[$ "level"] ?? "");
+		chart_composer = string(global.chart_session[$ "composer"] ?? "");
+		chart_charter = string(global.chart_session[$ "charter"] ?? "");
+	};
+	var pgr_version = real(chart[$ "formatVersion"] ?? 0);
+	return {
+		META: {
+			RPEVersion: 170,
+			PGRVersion: pgr_version,
+			offset: real(chart[$ "offset"] ?? 0) * 1000,
+			name: chart_name,
+			level: chart_level,
+			song: chart_song,
+			background: chart_bg,
+			composer: chart_composer,
+			charter: chart_charter,
+			id: ""
+		},
+		BPMList: [{ bpm: chart_bpm, startTime: [0, 0, 1] }],
+		judgeLineList: judge,
+		stats: { rawEvents: raw_events, outEvents: out_events, easedEvents: eased_events, pgrVersion: pgr_version }
+	};
+}
 
 function rpe_read_info_number(root_path, key_name, fallback) {
 	var root = chart_path_norm(root_path);
@@ -2360,7 +2834,13 @@ function RPE() constructor{
 		self.chart = parsed_chart;
 		self._bpm_timeline = undefined; // rebuild multi-BPM map for this chart
 		var meta = self.chart.META;
+		// Speed integration follows RPEVersion. A chart converted from an official
+		// file also keeps PGRVersion so the label under the build number stays
+		// PGRVersion instead of being rewritten as RPEVersion.
 		self.version = real(meta[$ "RPEVersion"] ?? 0);
+		self.pgr_version = undefined;
+		var pgr_raw = meta[$ "PGRVersion"];
+		if (is_real(pgr_raw) || is_int64(pgr_raw) || is_int32(pgr_raw)) then self.pgr_version = real(pgr_raw);
 		print($"RPEVersion: {self.version}" , game.settings.enableDebug);
 		
 		self.chart_info.name = string(meta[$ "name"] ?? "");

@@ -157,8 +157,13 @@ function chart_version_label() {
 	var _kind = "PGRVersion";
 	var _value = 0;
 	if (instance_exists(oRender_1) && variable_global_exists("game_1") && is_struct(game_1)) {
-		_kind = "RPEVersion";
-		_value = game_1.version;
+		if (is_real(game_1[$ "pgr_version"])) {
+			_kind = "PGRVersion";
+			_value = game_1.pgr_version;
+		} else {
+			_kind = "RPEVersion";
+			_value = game_1.version;
+		};
 	} else if (instance_exists(oRender_2) && variable_global_exists("game_2") && is_struct(game_2)
 		&& variable_struct_exists(game_2, "chart") && is_struct(game_2.chart)) {
 		_kind = "PECVersion";
