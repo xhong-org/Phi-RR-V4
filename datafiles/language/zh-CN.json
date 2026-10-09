@@ -1,6 +1,6 @@
 {
   "name": "简体中文",
-  "version": "1.0.5",
+  "version": "1.0.9",
   "author": "XTHX_FORM",
   "objects": {
     "common": {
@@ -20,10 +20,24 @@
       "subtitle": "Phigros谱面模拟器",
       "openPackage": "打开谱面",
       "loadSample": "加载示例谱面",
-      "renderPlaceholder": "X X XXX",
+      "renderPlaceholder": "工具",
       "statusSelect": "选择自制谱面，或加载内置谱面。",
       "detailSupported": "支持：官谱 / RPE / PEC  |  包格式：.zip / .pez",
-      "hintKeys": "O：打开谱面    S：内置谱面    X：X X XXX",
+      "hintKeys": "O：打开谱面    S：内置谱面    X：渲染",
+      "toolsTitle": "工具",
+      "toolsExport": "导出官谱为 RPE",
+      "toolsExportPec": "导出 PEC 为 RPE",
+      "toolsClose": "关闭",
+      "toolsPick": "谱面包|*.zip;*.pez|所有文件|*.*",
+      "toolsDone": "已保存 {0}",
+      "toolsFail": "转换失败。需要包含官谱的 .zip / .pez。",
+      "toolsFailPec": "转换失败。需要包含 PEC 的 .zip / .pez。",
+      "toolsNoPec": "包里没有 PEC 谱面。",
+      "toolsPecRead": "无法读取 PEC 谱面。",
+      "toolsConvert": "谱面转换失败。",
+      "toolsSaveTitle": "保存转换后的谱面包",
+      "toolsSaveZip": "ZIP|*.zip",
+      "toolsSavePez": "PEZ|*.pez",
       "hintTap": "点按按钮继续",
       "noFile": "未选择文件。",
       "cancelled": "已取消。",
@@ -136,6 +150,8 @@
       "directGlslEs": "直接编译 GLSL ES（Beta）",
       "disableChartVideo": "禁用谱面视频",
       "enableNoiseArea": "是否启用噪区",
+      "enableNoiseAreaFine": "是否开启噪区精细",
+      "reduceNoiseAreaWave": "减少噪区起伏幅度",
       "TEST1": "判定偏移抖动测试"
     },
     "loading": {

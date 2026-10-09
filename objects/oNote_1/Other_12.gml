@@ -6,7 +6,25 @@ if (!instance_exists(_line)) { canDraw = false; exit; };
 var line_floor = real(_line.__value[0]);
 var time_before = (_now_seconds < start_sec);
 _position_floor_delta = floorPosition - line_floor;
-_control_position_speed = note_speed * _position_floor_delta;
+// Official speed-0 holds still fall at 1x until the head reaches the line.
+// Chart speed 0 is the marker; it is not a visual multiplier.
+var chart_speed = note_speed;
+var visual_speed = chart_speed;
+if (abs(chart_speed) <= 0.0000001) then visual_speed = 1;
+_control_position_speed = visual_speed * _position_floor_delta;
+// Reached or crossed the judge line before the hit: hide immediately.
+// A speed-0 hold stays hidden after that, instead of travelling past the line
+// until the screen cull.
+if (time_before && _position_floor_delta * visual_speed <= -0.001) {
+	canDraw = false;
+	image_alpha = 0;
+	exit;
+};
+if (abs(chart_speed) <= 0.0000001 && _position_floor_delta <= 0.001) {
+	canDraw = false;
+	image_alpha = 0;
+	exit;
+};
 
 if (time_before) {
 	// Phira: hold head and body both live in speed-scaled floor space.
@@ -65,7 +83,7 @@ var length_floor = hold_length_floor;
 if (length_floor == 0) then length_floor = (endFloorPosition - floorPosition);
 // Phira hold geometry: head/tail are speed * y_control * floor, so the body
 // length is the same scale times (tailFloor - headFloor).
-var base_length = notes_h * note_speed * control_y * uniform_factor;
+var base_length = notes_h * visual_speed * control_y * uniform_factor;
 
 var _skin_hold = skin_active() ? skin_hold_parts(hl) : undefined;
 var _use_compact = compactHold || (is_struct(_skin_hold) && bool(_skin_hold.compact));

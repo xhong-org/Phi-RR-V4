@@ -1,6 +1,6 @@
 {
   "name": "English",
-  "version": "1.0.5",
+  "version": "1.0.9",
   "author": "XTHX_FORM",
   "objects": {
     "common": {
@@ -20,10 +20,24 @@
       "subtitle": "Custom Chart Loader",
       "openPackage": "Open Chart Package",
       "loadSample": "Load Sample Chart",
-      "renderPlaceholder": "X X XXX",
+      "renderPlaceholder": "Tools",
       "statusSelect": "Select a custom chart package or load the bundled sample.",
       "detailSupported": "Supported: Official / RPE / PEC  |  package: .zip / .pez",
-      "hintKeys": "O: Open package    S: Sample chart    X: X X XXX",
+      "hintKeys": "O: Open package    S: Sample chart    X: Render",
+      "toolsTitle": "Tools",
+      "toolsExport": "Export official chart to RPE",
+      "toolsExportPec": "Export PEC chart to RPE",
+      "toolsClose": "Close",
+      "toolsPick": "Chart package|*.zip;*.pez|All files|*.*",
+      "toolsDone": "Saved {0}",
+      "toolsFail": "Conversion failed. Choose a .zip / .pez that contains an official chart.",
+      "toolsFailPec": "Conversion failed. Choose a .zip / .pez that contains a PEC chart.",
+      "toolsNoPec": "No PEC chart was found in the package.",
+      "toolsPecRead": "The PEC chart could not be read.",
+      "toolsConvert": "Chart conversion failed.",
+      "toolsSaveTitle": "Save converted package",
+      "toolsSaveZip": "ZIP|*.zip",
+      "toolsSavePez": "PEZ|*.pez",
       "hintTap": "Tap a button to continue",
       "noFile": "No file selected.",
       "cancelled": "Cancelled.",
@@ -136,6 +150,8 @@
       "directGlslEs": "Compile GLSL ES directly (Beta)",
       "disableChartVideo": "Disable chart videos",
       "enableNoiseArea": "Enable noise areas",
+      "enableNoiseAreaFine": "Enable fine noise areas",
+      "reduceNoiseAreaWave": "Reduce noise-area wave",
       "TEST1": "Judge offset jitter test"
     },
     "loading": {

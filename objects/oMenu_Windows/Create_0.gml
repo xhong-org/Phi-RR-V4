@@ -17,6 +17,14 @@ hover_open = false;
 hover_sample = false;
 hover_render = false;
 hover_settings = false;
+tools_open = false;
+tools_status = "";
+hover_tools_export = false;
+hover_tools_pec = false;
+hover_tools_close = false;
+tools_export_box = { x: 0, y: 0, w: 1, h: 1 };
+tools_pec_box = { x: 0, y: 0, w: 1, h: 1 };
+tools_close_box = { x: 0, y: 0, w: 1, h: 1 };
 
 // Layout cache. Rebuild when room size or global_scales changes.
 layout_w = -1;

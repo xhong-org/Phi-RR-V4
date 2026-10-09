@@ -71,6 +71,7 @@ function official_block_state_create() {
 			skipped: false,
 			surf_w: 0,
 			surf_h: 0,
+			fine: false,
 			bw: 1,
 			bh: 1,
 			ew: 1,
@@ -79,6 +80,18 @@ function official_block_state_create() {
 			sh: 1,
 			first_appear: 0,
 			last_disappear: 0,
+			tint_r: 1,
+			tint_g: 0,
+			tint_b: 0,
+			tint_set: false,
+			bucket_dt: 0.25,
+			bucket_lists: undefined,
+			bucket_ends: undefined,
+			scan_sorted: false,
+			scan_active: undefined,
+			scan_active_n: 0,
+			scan_cursor: 0,
+			scan_now: -infinity,
 			cover_active: official_block_cover_new(),
 			cover_disabled: official_block_cover_new()
 	};
@@ -155,6 +168,17 @@ function official_blocks_reset() {
 	state.warned = false;
 	state.first_appear = 0;
 	state.last_disappear = 0;
+	state.tint_r = 1;
+	state.tint_g = 0;
+	state.tint_b = 0;
+	state.tint_set = false;
+	state.bucket_lists = undefined;
+	state.bucket_ends = undefined;
+	state.scan_sorted = false;
+	state.scan_active = undefined;
+	state.scan_active_n = 0;
+	state.scan_cursor = 0;
+	state.scan_now = -infinity;
 	shader_reset();
 }
 
@@ -338,6 +362,91 @@ function official_block_read_rotate(_area) {
 	return events;
 }
 
+function official_block_hex_value(_text) {
+	var len = string_length(_text);
+	var value = 0;
+	for (var i = 1; i <= len; i++) {
+		var c = ord(string_char_at(_text, i));
+		var n = -1;
+		if (c >= 48 && c <= 57) n = c - 48;
+		else if (c >= 65 && c <= 70) n = c - 55;
+		else if (c >= 97 && c <= 102) n = c - 87;
+		if (n < 0) return -1;
+		value = value * 16 + n;
+	}
+	return value;
+}
+
+function official_block_unit_trio(_r, _g, _b) {
+	if (is_string(_r)) _r = real(_r);
+	if (is_string(_g)) _g = real(_g);
+	if (is_string(_b)) _b = real(_b);
+	if (!is_real(_r) || !is_real(_g) || !is_real(_b)) return undefined;
+	if (!is_finite(_r) || !is_finite(_g) || !is_finite(_b)) return undefined;
+	if (_r > 1 || _g > 1 || _b > 1) {
+		_r /= 255;
+		_g /= 255;
+		_b /= 255;
+	}
+	return [clamp(_r, 0, 1), clamp(_g, 0, 1), clamp(_b, 0, 1)];
+}
+
+/// Missing or unreadable color is red, so official charts without the field keep the current material.
+function official_block_read_color(_area) {
+	var color = _area[$ "color"];
+	if (is_undefined(color)) color = _area[$ "colour"];
+	if (is_string(color)) {
+		var text = string_replace_all(color, " ", "");
+		var lower = string_lower(text);
+		if (string_length(lower) >= 4 && string_copy(lower, 1, 4) == "rgb(") {
+			var body = string_copy(text, 5, string_length(text) - 5);
+			body = string_replace_all(body, ")", "");
+			var parts = string_split(body, ",");
+			if (array_length(parts) >= 3) {
+				var rgb_text = official_block_unit_trio(parts[0], parts[1], parts[2]);
+				if (is_array(rgb_text)) return rgb_text;
+			}
+		}
+		if (string_length(text) > 0 && string_char_at(text, 1) == "#") text = string_copy(text, 2, string_length(text) - 1);
+		var len = string_length(text);
+		if (len == 3 || len == 4) {
+			var rs = official_block_hex_value(string_char_at(text, 1));
+			var gs = official_block_hex_value(string_char_at(text, 2));
+			var bs = official_block_hex_value(string_char_at(text, 3));
+			if (rs >= 0 && gs >= 0 && bs >= 0) return [rs / 15, gs / 15, bs / 15];
+		} else if (len == 6 || len == 8) {
+			var rb = official_block_hex_value(string_copy(text, 1, 2));
+			var gb = official_block_hex_value(string_copy(text, 3, 2));
+			var bb = official_block_hex_value(string_copy(text, 5, 2));
+			if (rb >= 0 && gb >= 0 && bb >= 0) return [rb / 255, gb / 255, bb / 255];
+		}
+		return [1, 0, 0];
+	}
+	if (is_array(color) && array_length(color) >= 3) {
+		var rgb_array = official_block_unit_trio(color[0], color[1], color[2]);
+		if (is_array(rgb_array)) return rgb_array;
+		return [1, 0, 0];
+	}
+	if (is_struct(color)) {
+		var cr = color[$ "r"];
+		var cg = color[$ "g"];
+		var cb = color[$ "b"];
+		if (is_undefined(cr)) cr = color[$ "x"];
+		if (is_undefined(cg)) cg = color[$ "y"];
+		if (is_undefined(cb)) cb = color[$ "z"];
+		var rgb_struct = official_block_unit_trio(cr, cg, cb);
+		if (is_array(rgb_struct)) return rgb_struct;
+	}
+	return [1, 0, 0];
+}
+
+/// The built-in material is a red plus a white lift. Recoloring keeps that lift, so pure red is unchanged.
+function official_block_shift_color(_r, _g, _b, _cr, _cg, _cb) {
+	var white = min(_g, _b);
+	var pure = _r - white;
+	return [_cr * pure + white, _cg * pure + white, _cb * pure + white];
+}
+
 function official_blocks_build(_chart) {
 	var source = _chart[$ "blockAreaList"];
 	if (!is_array(source)) source = _chart[$ "block_area_list"];
@@ -364,12 +473,17 @@ function official_blocks_build(_chart) {
 		enable = max(enable, appear);
 		disable = max(disable, enable);
 		disappear = max(disappear, disable);
+		var rgb = official_block_read_color(area);
 		array_push(blocks, {
 			subtract: bool(area[$ "isSubtract"] ?? false),
 			appear: appear,
 			enable: enable,
 			disable: disable,
 			disappear: disappear,
+			cr: rgb[0],
+			cg: rgb[1],
+			cb: rgb[2],
+			ord: array_length(blocks),
 			x0: left_x,
 			y0: left_y,
 			x1: right_x,
@@ -394,6 +508,18 @@ function official_blocks_build(_chart) {
 function official_block_enabled() {
 	if (!variable_global_exists("game") || !is_struct(game) || !is_struct(game.settings)) return true;
 	return bool(game.settings[$ "enableNoiseArea"] ?? true);
+}
+
+function official_block_fine() {
+	if (!variable_global_exists("game") || !is_struct(game) || !is_struct(game.settings)) return false;
+	return bool(game.settings[$ "enableNoiseAreaFine"] ?? false);
+}
+
+/// 1 keeps the authored travel of the noise-area edge. The reduced value is
+/// about one sixth on both axes. Interior pixel warp is unchanged.
+function official_block_edge_wave() {
+	if (!variable_global_exists("game") || !is_struct(game) || !is_struct(game.settings)) return 1;
+	return bool(game.settings[$ "reduceNoiseAreaWave"] ?? false) ? 0.15 : 1;
 }
 
 function official_block_textures_release() {
@@ -504,6 +630,7 @@ function official_blocks_ensure() {
 	if (!state.loaded_enabled) {
 		if (!variable_global_exists("game") || !is_struct(game) || !is_struct(game[$ "chart"])) return state;
 		state.blocks = official_blocks_build(game.chart);
+		official_block_index(state);
 		state.loaded_enabled = true;
 		state.empty = array_length(state.blocks) <= 0;
 		state.first_appear = infinity;
@@ -685,10 +812,37 @@ function official_block_pose(_block, _now, _aspect) {
 	return [cx, cy, abs((hi[0] - lo[0]) * sx), abs((hi[1] - lo[1]) * sy), angle * pi / 180];
 }
 
-function official_block_hide(_state) {
+function official_block_sort_appear(_a, _b) {
+	if (_a.appear != _b.appear) return sign(_a.appear - _b.appear);
+	return sign(_a.ord - _b.ord);
+}
+
+function official_block_index(_state) {
 	var blocks = _state.blocks;
 	var count = array_length(blocks);
-	for (var i = 0; i < count; i++) blocks[i].on = false;
+	_state.bucket_lists = undefined;
+	_state.bucket_ends = undefined;
+	_state.scan_sorted = false;
+	_state.scan_active = undefined;
+	_state.scan_active_n = 0;
+	_state.scan_cursor = 0;
+	_state.scan_now = -infinity;
+	if (count < 400) return;
+	array_sort(blocks, official_block_sort_appear);
+	_state.scan_sorted = true;
+	_state.scan_active = array_create(4096, 0);
+}
+
+function official_block_hide(_state) {
+	var blocks = _state.blocks;
+	if (is_array(_state.scan_active)) {
+		var active = _state.scan_active;
+		var live = _state.scan_active_n;
+		for (var i = 0; i < live; i++) blocks[active[i]].on = false;
+	} else {
+		var count = array_length(blocks);
+		for (var j = 0; j < count; j++) blocks[j].on = false;
+	}
 	_state.on_active = false;
 	_state.on_ready = false;
 	_state.on_disabled = false;
@@ -703,60 +857,117 @@ function official_block_hide(_state) {
 	official_block_cover_clear(_state.cover_disabled);
 }
 
+function official_block_activate(_state, _block, _now, _aspect, _half) {
+	if (_now < _block.appear || _now >= _block.disappear) return;
+	var phase = 2;
+	if (_now >= _block.enable && _now < _block.disable) phase = 0;
+	else if (_now + 0.5 >= _block.enable && _now < _block.enable) phase = 1;
+	var fade = 1;
+	if (phase == 2 && _now < _block.enable) fade = clamp((_now - _block.appear) / 0.5, 0, 1);
+	var pose = official_block_pose(_block, _now, _aspect);
+	if (!is_finite(pose[0]) || !is_finite(pose[1]) || pose[2] < 0.0001 || pose[3] < 0.0001) return;
+	var corners = _block.corners;
+	var finite = true;
+	for (var corner = 0; corner < 4; corner++) {
+		var local = official_block_rotate_vec(_half[corner][0] * pose[2], _half[corner][1] * pose[3], pose[4]);
+		var room_point = official_block_world_to_room(pose[0] + local[0], pose[1] + local[1], _aspect);
+		if (!is_finite(room_point[0]) || !is_finite(room_point[1])) {
+			finite = false;
+			break;
+		}
+		corners[corner * 2] = room_point[0];
+		corners[corner * 2 + 1] = room_point[1];
+	}
+	if (!finite) return;
+	_block.on = true;
+	_block.phase = phase;
+	_block.fade = fade;
+	_block.cx = pose[0];
+	_block.cy = pose[1];
+	_block.sx = pose[2];
+	_block.sy = pose[3];
+	_block.ang = pose[4];
+	if (!_state.tint_set) {
+		_state.tint_r = _block.cr;
+		_state.tint_g = _block.cg;
+		_state.tint_b = _block.cb;
+		_state.tint_set = true;
+	}
+	var cover = (phase == 2) ? _state.cover_disabled : _state.cover_active;
+	official_block_cover_add(cover, corners[0], corners[1]);
+	official_block_cover_add(cover, corners[2], corners[3]);
+	official_block_cover_add(cover, corners[4], corners[5]);
+	official_block_cover_add(cover, corners[6], corners[7]);
+	if (phase == 0) {
+		_state.on_active = true;
+		if (_block.subtract) _state.sub_active = true;
+		else _state.norm_active = true;
+	} else if (phase == 1) {
+		_state.on_ready = true;
+		if (_block.subtract) _state.sub_ready = true;
+		else _state.norm_ready = true;
+	} else {
+		_state.on_disabled = true;
+		if (_block.subtract) _state.sub_disabled = true;
+		else _state.norm_disabled = true;
+	}
+}
+
 function official_block_gather(_state, _now, _aspect) {
 	official_block_hide(_state);
+	_state.tint_r = 1;
+	_state.tint_g = 0;
+	_state.tint_b = 0;
+	_state.tint_set = false;
 	var blocks = _state.blocks;
 	var count = array_length(blocks);
 	var half = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]];
-	for (var i = 0; i < count; i++) {
-		var block = blocks[i];
-		if (_now < block.appear || _now >= block.disappear) continue;
-		var phase = 2;
-		if (_now >= block.enable && _now < block.disable) phase = 0;
-		else if (_now + 0.5 >= block.enable && _now < block.enable) phase = 1;
-		var fade = 1;
-		if (phase == 2 && _now < block.enable) fade = clamp((_now - block.appear) / 0.5, 0, 1);
-		var pose = official_block_pose(block, _now, _aspect);
-		if (!is_finite(pose[0]) || !is_finite(pose[1]) || pose[2] < 0.0001 || pose[3] < 0.0001) continue;
-		var corners = block.corners;
-		var finite = true;
-		for (var corner = 0; corner < 4; corner++) {
-			var local = official_block_rotate_vec(half[corner][0] * pose[2], half[corner][1] * pose[3], pose[4]);
-			var room_point = official_block_world_to_room(pose[0] + local[0], pose[1] + local[1], _aspect);
-			if (!is_finite(room_point[0]) || !is_finite(room_point[1])) {
-				finite = false;
-				break;
+	if (_state.scan_sorted) {
+		if (_now < _state.scan_now) {
+			_state.scan_cursor = 0;
+			_state.scan_active_n = 0;
+		}
+		_state.scan_now = _now;
+		var active = _state.scan_active;
+		var live = _state.scan_active_n;
+		var cursor = _state.scan_cursor;
+		while (cursor < count && blocks[cursor].appear <= _now) {
+			if (live >= array_length(active)) {
+				array_push(active, cursor);
+			} else {
+				active[live] = cursor;
 			}
-			corners[corner * 2] = room_point[0];
-			corners[corner * 2 + 1] = room_point[1];
+			live++;
+			cursor++;
 		}
-		if (!finite) continue;
-		block.on = true;
-		block.phase = phase;
-		block.fade = fade;
-		block.cx = pose[0];
-		block.cy = pose[1];
-		block.sx = pose[2];
-		block.sy = pose[3];
-		block.ang = pose[4];
-		var cover = (phase == 2) ? _state.cover_disabled : _state.cover_active;
-		official_block_cover_add(cover, corners[0], corners[1]);
-		official_block_cover_add(cover, corners[2], corners[3]);
-		official_block_cover_add(cover, corners[4], corners[5]);
-		official_block_cover_add(cover, corners[6], corners[7]);
-		if (phase == 0) {
-			_state.on_active = true;
-			if (block.subtract) _state.sub_active = true;
-			else _state.norm_active = true;
-		} else if (phase == 1) {
-			_state.on_ready = true;
-			if (block.subtract) _state.sub_ready = true;
-			else _state.norm_ready = true;
-		} else {
-			_state.on_disabled = true;
-			if (block.subtract) _state.sub_disabled = true;
-			else _state.norm_disabled = true;
+		_state.scan_cursor = cursor;
+		var write = 0;
+		for (var si = 0; si < live; si++) {
+			var idx = active[si];
+			var block = blocks[idx];
+			if (block.disappear <= _now) continue;
+			active[write] = idx;
+			write++;
+			official_block_activate(_state, block, _now, _aspect, half);
 		}
+		_state.scan_active_n = write;
+	} else if (is_array(_state.bucket_lists)) {
+		var dt = _state.bucket_dt;
+		var lists = _state.bucket_lists;
+		var ends = _state.bucket_ends;
+		var bucket_count = array_length(lists);
+		var last_bucket = floor(_now / dt);
+		if (last_bucket >= bucket_count) last_bucket = bucket_count - 1;
+		for (var bucket = 0; bucket <= last_bucket; bucket++) {
+			if (bucket * dt > _now) break;
+			if (ends[bucket] <= _now) continue;
+			var list = lists[bucket];
+			if (!is_array(list)) continue;
+			var list_count = array_length(list);
+			for (var li = 0; li < list_count; li++) official_block_activate(_state, blocks[list[li]], _now, _aspect, half);
+		}
+	} else {
+		for (var i = 0; i < count; i++) official_block_activate(_state, blocks[i], _now, _aspect, half);
 	}
 	_state.need_gpu = _state.on_active || _state.on_ready || _state.on_disabled;
 }
@@ -1008,7 +1219,7 @@ function official_block_gpu_warm(_state) {
 		draw_clear_alpha(c_black, 0);
 		shader_set(shader);
 		if (shader == shd_block_active || shader == shd_block_active_ready) official_block_active_uniforms(shader, _state, 0, 2, 2);
-		else if (shader == shd_block_disabled) official_block_disabled_uniforms(shader, 0);
+		else if (shader == shd_block_disabled) official_block_disabled_uniforms(shader, _state, 0);
 		else if (shader == shd_block_compose) official_block_compose_uniforms(shader, 0);
 		else if (shader == shd_block_glow) official_block_u4(shader, "_DilateTexelSize", 0.5, 0.5, 2, 2);
 		else if (shader == shd_block_subtract || shader == shd_block_subtract_soft) {
@@ -1028,14 +1239,20 @@ function official_block_gpu_warm(_state) {
 }
 
 function official_block_rt_ensure(_state, _w, _h) {
-	if (_state.surf_w == _w && _state.surf_h == _h && surface_exists(_state.rt[0])) return true;
+	var fine = official_block_fine();
+	if (_state.surf_w == _w && _state.surf_h == _h && bool(_state.fine) == fine && surface_exists(_state.rt[0])) return true;
 	official_block_free_rt(_state);
-	var bw = max(1, _w div 8);
-	var bh = max(1, _h div 8);
-	var ew = max(1, bw * 2);
-	var eh = max(1, bh * 2);
+	// Default masks are one texel per eight screen pixels, so the outer squares
+	// are coarse. Fine mode uses two screen pixels. The effect buffer stays at
+	// that same size; the glow step below keeps the old four-pixel ring.
+	var grid = fine ? 2 : 8;
+	var bw = max(1, _w div grid);
+	var bh = max(1, _h div grid);
+	var ew = fine ? bw : max(1, bw * 2);
+	var eh = fine ? bh : max(1, bh * 2);
 	var sw = max(1, _w div 6);
 	var sh = max(1, _h div 6);
+	_state.fine = fine;
 	_state.bw = bw;
 	_state.bh = bh;
 	_state.ew = ew;
@@ -1043,7 +1260,8 @@ function official_block_rt_ensure(_state, _w, _h) {
 	_state.sw = sw;
 	_state.sh = sh;
 	// Scene copy is full resolution. A 1:1 draw_surface matches the chart-grade
-	// blit; the active shader still snaps samples to 6 screen pixels.
+	// blit; the active shader still snaps samples to six screen pixels, or two
+	// when fine mode is on.
 	var widths = [bw, bw, bw, bw, bw, bw, bw, bw, bw, bw, bw, ew, ew, bw, bw, ew, _w, bw];
 	var heights = [bh, bh, bh, bh, bh, bh, bh, bh, bh, bh, bh, eh, eh, bh, bh, eh, _h, bh];
 	for (var i = 0; i < BLOCK_RT_COUNT; i++) {
@@ -1128,6 +1346,7 @@ function official_block_compose_uniforms(_shader, _now) {
 	official_block_u4(_shader, "_BlockTime", _now / 20, _now, _now * 2, _now * 3);
 	official_block_u1(_shader, "_DisplaceSpeed", 2.5899999141693115);
 	official_block_u1(_shader, "_DisplaceStrength", 0.10000000149011612);
+	official_block_u1(_shader, "_EdgeWave", official_block_edge_wave());
 	official_block_u4(_shader, "_DisplaceDirection", 0.5, 0.5, 0, 0);
 	official_block_u4(_shader, "_DisplaceMap_ST", 2.130000114440918, 1.0199999809265137, 0, 0);
 }
@@ -1160,11 +1379,17 @@ function official_block_glow(_state) {
 	var source = BLOCK_RT_ACTIVE_C;
 	var ew = _state.ew;
 	var eh = _state.eh;
+	var step_x = 1 / ew;
+	var step_y = 1 / eh;
+	if (_state.fine) {
+		step_x = 4 / max(1, _state.surf_w);
+		step_y = 4 / max(1, _state.surf_h);
+	}
 	for (var pass = 0; pass < 5; pass++) {
 		var dest_index = (pass mod 2) == 0 ? BLOCK_RT_GLOW0 : BLOCK_RT_GLOW1;
 		var dest = _state.rt[dest_index];
 		official_block_fullscreen_begin(dest, shader);
-		official_block_u4(shader, "_DilateTexelSize", 1 / ew, 1 / eh, ew, eh);
+		official_block_u4(shader, "_DilateTexelSize", step_x, step_y, ew, eh);
 		official_block_u1(shader, "_PassWeight", weights[pass]);
 		official_block_u1(shader, "_GlowFirstPass", pass == 0 ? 1 : 0);
 		official_block_tex(shader, "_MainTex", official_block_surf_tex(_state, source), false, false);
@@ -1265,11 +1490,16 @@ function official_block_copy_scene(_state, _chart) {
 	surface_reset_target();
 }
 
-function official_block_disabled_uniforms(_shader, _now) {
+function official_block_disabled_uniforms(_shader, _state, _now) {
+	var cr = _state.tint_r;
+	var cg = _state.tint_g;
+	var cb = _state.tint_b;
+	var fill = official_block_shift_color(0.4970000088214874, 0.13766898214817047, 0.13766898214817047, cr, cg, cb);
+	var spark = official_block_shift_color(0.31132078170776367, 0.07783019542694092, 0.07783019542694092, cr, cg, cb);
 	official_block_u4(_shader, "_BlockTime", _now / 20, _now, _now * 2, _now * 3);
-	official_block_u4(_shader, "_FillColor", 0.4970000088214874, 0.13766898214817047, 0.13766898214817047, 1);
+	official_block_u4(_shader, "_FillColor", fill[0], fill[1], fill[2], 1);
 	official_block_u1(_shader, "_FillOpacity", 0.4000000059604645);
-	official_block_u3(_shader, "_SparkTint", 0.31132078170776367, 0.07783019542694092, 0.07783019542694092);
+	official_block_u3(_shader, "_SparkTint", spark[0], spark[1], spark[2]);
 	official_block_u1(_shader, "_SparkMapOpacity", 3.5);
 	official_block_u1(_shader, "_SparkDisplaceIntensity", 2.2899999618530273);
 	official_block_u1(_shader, "_DisplaceSpeed", 0.30000001192092896);
@@ -1279,17 +1509,24 @@ function official_block_disabled_uniforms(_shader, _now) {
 }
 
 function official_block_active_uniforms(_shader, _state, _now, _w, _h) {
+	var cr = _state.tint_r;
+	var cg = _state.tint_g;
+	var cb = _state.tint_b;
+	var edge = official_block_shift_color(1, 0.3301885724067688, 0.3301885724067688, cr, cg, cb);
+	var fill = official_block_shift_color(0.713207483291626, 0.23549295961856842, 0.23549295961856842, cr, cg, cb);
+	var glow = official_block_shift_color(1, 0.17924517393112183, 0.17924517393112183, cr, cg, cb);
+	var spark = official_block_shift_color(1, 0.28490567207336426, 0.28490567207336426, cr, cg, cb);
 	official_block_u4(_shader, "_BlockTime", _now / 20, _now, _now * 2, _now * 3);
 	official_block_u4(_shader, "_ScreenParams", _w, _h, 1 + 1 / _w, 1 + 1 / _h);
 	official_block_u4(_shader, "_EffectRT_TexelSize", 1 / _state.ew, 1 / _state.eh, _state.ew, _state.eh);
-	official_block_u4(_shader, "_EdgeColor", 1, 0.3301885724067688, 0.3301885724067688, 1);
+	official_block_u4(_shader, "_EdgeColor", edge[0], edge[1], edge[2], 1);
 	official_block_u1(_shader, "_EdgeOpacity", 0.800000011920929);
-	official_block_u4(_shader, "_FillColor", 0.713207483291626, 0.23549295961856842, 0.23549295961856842, 1);
+	official_block_u4(_shader, "_FillColor", fill[0], fill[1], fill[2], 1);
 	official_block_u1(_shader, "_FillStrength", 0.6669999957084656);
 	official_block_u1(_shader, "_FillOpacity", 0.6669999957084656);
-	official_block_u4(_shader, "_GlowColor", 1, 0.17924517393112183, 0.17924517393112183, 1);
+	official_block_u4(_shader, "_GlowColor", glow[0], glow[1], glow[2], 1);
 	official_block_u1(_shader, "_GlowIntensity", 0.800000011920929);
-	official_block_u3(_shader, "_SparkTint", 1, 0.28490567207336426, 0.28490567207336426);
+	official_block_u3(_shader, "_SparkTint", spark[0], spark[1], spark[2]);
 	official_block_u1(_shader, "_SparkMapOpacity", 5.690000057220459);
 	official_block_u1(_shader, "_SparkHueShiftAmount", 0.20000000298023224);
 	official_block_u1(_shader, "_SparkDisplaceIntensity", 2.390000104904175);
@@ -1301,14 +1538,14 @@ function official_block_active_uniforms(_shader, _state, _now, _w, _h) {
 	official_block_u1(_shader, "_TouchPosRadius", 0.5);
 	official_block_u1(_shader, "_TouchPosSDFSmoothness", 0.4699999988079071);
 	official_block_u1(_shader, "_TouchPosSDFFalloff", 0.4099999964237213);
-	official_block_u1(_shader, "_BackgroundPixelScale", 6);
+	official_block_u1(_shader, "_BackgroundPixelScale", official_block_fine() ? 2 : 6);
 	official_block_u1(_shader, "_ShineSpeed", 37.900001525878906);
 	official_block_u1(_shader, "_ShineBrightness", 0.11999999731779099);
 	official_block_u4(_shader, "_ShineColor", 1, 1, 1, 1);
 	official_block_u1(_shader, "_TouchDisplaceSpeed", 2.9000000953674316);
 	official_block_u1(_shader, "_TouchDisplaceStrength", 0.07999999821186066);
 	official_block_u4(_shader, "_TouchDisplaceDirection", 1, 1, 0, 0);
-	official_block_u4(_shader, "_NoiseTint", 1, 0, 0, 1);
+	official_block_u4(_shader, "_NoiseTint", cr, cg, cb, 1);
 	official_block_u1(_shader, "_NoiseEvoSpeed", 0.029999999329447746);
 	official_block_u1(_shader, "_NoiseDirChangeSpeed", 60);
 	official_block_u1(_shader, "_NoiseDisplaceStrength", 1);
@@ -1318,7 +1555,7 @@ function official_block_active_uniforms(_shader, _state, _now, _w, _h) {
 	official_block_u1(_shader, "_SDFFalloff", 0.3400000035762787);
 	official_block_u1(_shader, "_SDFSmoothness", 0.6299999952316284);
 	official_block_u1(_shader, "_SDFMoveSpeed", 9.300000190734863);
-	official_block_u4(_shader, "_TouchGlowColor", 1, 0, 0, 1);
+	official_block_u4(_shader, "_TouchGlowColor", cr, cg, cb, 1);
 	official_block_u1(_shader, "_TouchBackgroundPixelScale", 8);
 	official_block_u4(_shader, "_DisplaceMap_ST", 0.800000011920929, 0.30000001192092896, 0, 0);
 	official_block_u4(_shader, "_SparkMap_ST", 3, 1.2000000476837158, 0, 0);
@@ -1384,6 +1621,8 @@ function official_block_warp_present(_state, _w, _h, _now) {
 	var spark_uvs = texture_get_uvs(spark_tex);
 	// w is how long one texture_17 arrangement stays put, in chart seconds.
 	if (screen_handle >= 0) shader_set_uniform_f(screen_handle, _w, _h, _now, 0.18);
+	var fine_handle = shader_get_uniform(shd_block_warp, "u_fine");
+	if (fine_handle >= 0) shader_set_uniform_f(fine_handle, official_block_fine() ? 1 : 0);
 	if (scene_handle >= 0) shader_set_uniform_f(scene_handle, scene_uvs[0], scene_uvs[1], scene_uvs[2], scene_uvs[3]);
 	if (noise_uv_handle >= 0) shader_set_uniform_f(noise_uv_handle, noise_uvs[0], noise_uvs[1], noise_uvs[2], noise_uvs[3]);
 	if (spark_uv_handle >= 0) shader_set_uniform_f(spark_uv_handle, spark_uvs[0], spark_uvs[1], spark_uvs[2], spark_uvs[3]);
@@ -1433,9 +1672,9 @@ function official_block_warp_present(_state, _w, _h, _now) {
 	shader_reset();
 }
 
-function official_block_present_quad(_state, _w, _h, _surface) {
+function official_block_present_quad(_state, _w, _h, _surface = undefined) {
 	var source = _state.white_surf;
-	if (is_real(_surface) && surface_exists(_surface)) source = _surface;
+	if (is_real(_surface) && surface_exists(_surface)) then source = _surface;
 	draw_surface_stretched(source, 0, 0, _w, _h);
 	shader_reset();
 }
@@ -1455,7 +1694,7 @@ function official_block_present(_state, _now, _w, _h) {
 		if (compose >= 0) {
 			gpu_set_blendmode_ext(bm_one, bm_one);
 			shader_set(shader);
-			official_block_disabled_uniforms(shader, _now);
+			official_block_disabled_uniforms(shader, _state, _now);
 			official_block_tex(shader, "_ComposeRT", official_block_surf_tex(_state, compose), false, false);
 			official_block_tex(shader, "_DisplaceMap", displace_tex, true, false);
 			official_block_map_rect(shader, "_DisplaceMap_Rect", displace_tex);

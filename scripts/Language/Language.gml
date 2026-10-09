@@ -185,6 +185,68 @@ function lang_apply(_id) {
 	global.pls_lang.field_labels = {};
 }
 
+function lang_retranslate_static(_text, _keys) {
+	if (!is_string(_text) || !string_length(_text) || !is_array(_keys)) then return _text;
+	lang_ensure();
+	var packs = global.pls_lang.packs;
+	if (!is_array(packs)) then return _text;
+	for (var k = 0; k < array_length(_keys); k++) {
+		var key = _keys[k];
+		for (var i = 0; i < array_length(packs); i++) {
+			var pack = packs[i];
+			if (!is_struct(pack)) then continue;
+			var v = lang_lookup(pack.objects, key);
+			if (is_string(v) && v == _text) then return lang(key);
+		};
+	};
+	return _text;
+}
+
+function lang_refresh_menu_status() {
+	var status_keys = [
+		"menu.statusSelect", "menu.cancelled", "menu.openFailed", "android.waitingPicker",
+		"gx.statusClick", "gx.statusClickOrApi", "gx.statusClickApiOff", "gx.statusConnecting",
+		"gx.fileProtocolStatus", "gx.downloadingUrl", "gx.openedBrowse", "gx.statusApiOffStillClick",
+		"gx.statusPopup", "gx.statusReading", "gx.uploadFailed"
+	];
+	var detail_keys = [
+		"menu.detailSupported", "menu.noFile", "android.pickDetail", "android.pickerUnavailable", "android.pickerFailed",
+		"gx.detailRemote", "gx.detailApi", "gx.runServer", "gx.apiNoResponse"
+	];
+	var error_keys = [
+		"menu.noFile", "android.pickerUnavailable", "android.pickerFailed",
+		"gx.fileProtocol", "gx.notConnected", "gx.readFailed", "gx.writeFailed", "gx.notZip",
+		"gx.urlFailed", "gx.downloadMissing"
+	];
+	if (variable_instance_exists(id, "status_text")) then status_text = lang_retranslate_static(status_text, status_keys);
+	if (variable_instance_exists(id, "detail_text")) then detail_text = lang_retranslate_static(detail_text, detail_keys);
+	if (variable_instance_exists(id, "last_error")) then last_error = lang_retranslate_static(last_error, error_keys);
+	var picking_now = variable_instance_exists(id, "picking") && picking;
+	var busy_now = variable_instance_exists(id, "busy") && busy;
+	var has_error = variable_instance_exists(id, "last_error") && string_length(last_error);
+	if (!picking_now && !busy_now && !has_error) {
+		if (object_index == oMenu_GX) {
+			if (pls_is_gx_remote()) {
+				status_text = (variable_instance_exists(id, "drop_panel_open") && drop_panel_open) ? lang("gx.statusPopup") : lang("gx.statusClick");
+				detail_text = lang("gx.detailRemote");
+			} else if (variable_instance_exists(id, "drop_panel_open") && drop_panel_open) {
+				status_text = lang("gx.statusPopup");
+			} else if (variable_instance_exists(id, "health_id") && health_id >= 0) {
+				status_text = lang("gx.statusConnecting");
+				detail_text = lang("gx.detailApi");
+			} else if (variable_instance_exists(id, "api_online") && api_online) {
+				status_text = lang("gx.statusClickOrApi");
+				detail_text = langf("gx.connected", gx_fs_api_base());
+			} else {
+				status_text = lang("gx.statusClickApiOff");
+			};
+		} else {
+			status_text = lang("menu.statusSelect");
+			detail_text = lang("menu.detailSupported");
+		};
+	};
+}
+
 function lang_refresh_ui() {
 	if (instance_exists(oMenu_Windows)) {
 		with (oMenu_Windows) {
@@ -193,6 +255,7 @@ function lang_refresh_ui() {
 			if (is_struct(btn_render)) then btn_render.label = lang("menu.renderPlaceholder");
 			settings_menu_button_layout();
 			window_set_caption(GAME_NAME + " - " + lang("common.menu"));
+			lang_refresh_menu_status();
 		};
 	};
 	if (instance_exists(oMenu_Android)) {
@@ -200,17 +263,14 @@ function lang_refresh_ui() {
 			if (is_struct(btn_open)) then btn_open.label = lang("menu.openPackage");
 			if (is_struct(btn_sample)) then btn_sample.label = lang("menu.loadSample");
 			settings_menu_button_layout();
+			lang_refresh_menu_status();
 		};
 	};
 	if (instance_exists(oMenu_GX)) {
 		with (oMenu_GX) {
 			settings_menu_button_layout();
 			window_set_caption(GAME_NAME + " - " + lang("common.menu"));
-			if (!variable_instance_exists(id, "last_error") || !string_length(last_error)) {
-				if (pls_is_gx_remote()) then status_text = lang("gx.statusClick");
-				else if (variable_instance_exists(id, "api_online") && api_online) then status_text = lang("gx.statusClickOrApi");
-				else status_text = lang("gx.statusClickApiOff");
-			};
+			lang_refresh_menu_status();
 		};
 	};
 	if (instance_exists(oSettings)) {
@@ -330,6 +390,9 @@ function lang_required_keys() {
 		"common.settings", "common.cancel", "common.open", "common.menu", "common.loading",
 		"menu.subtitle", "menu.openPackage", "menu.loadSample", "menu.renderPlaceholder",
 		"menu.statusSelect", "menu.detailSupported", "menu.hintKeys", "menu.hintTap",
+		"menu.toolsTitle", "menu.toolsExport", "menu.toolsExportPec", "menu.toolsClose", "menu.toolsPick", "menu.toolsDone", "menu.toolsFail", "menu.toolsFailPec",
+		"menu.toolsNoPec", "menu.toolsPecRead", "menu.toolsConvert",
+		"menu.toolsSaveTitle", "menu.toolsSaveZip", "menu.toolsSavePez",
 		"menu.noFile", "menu.cancelled", "menu.openFailed", "menu.filterChart",
 		"android.waitingPicker", "android.pickDetail", "android.pickerUnavailable", "android.pickerFailed",
 		"gx.clickPick", "gx.browseApi", "gx.apiOffline", "gx.statusClick", "gx.statusClickOrApi",
@@ -352,7 +415,7 @@ function lang_required_keys() {
 		"fields.useOldFX", "fields.enableComboScore", "fields.enableAutoPlay", "fields.judgeOffset", "fields.enableAccJudgment",
 		"fields.preventWindowMoveFreeze", "fields.enableRPEMulticore", "fields.rpeWorkerMinLines",
 		"fields.rpeWorkerProfileFrames", "fields.noteUniformScale", "fields.notePreloadSeconds",
-		"fields.disableChartShader", "fields.directGlslEs", "fields.disableChartVideo", "fields.TEST1",
+		"fields.disableChartShader", "fields.directGlslEs", "fields.disableChartVideo", "fields.enableNoiseAreaFine", "fields.reduceNoiseAreaWave", "fields.TEST1",
 		"loading.title", "loading.preparing", "loading.noSource", "loading.backToMenu", "loading.queued",
 		"loading.resolving", "loading.sample", "loading.extracting", "loading.scanning", "loading.failed",
 		"loading.unsupportedChart", "loading.formatDetected", "loading.preparingRoom", "loading.unsupportedFormat",

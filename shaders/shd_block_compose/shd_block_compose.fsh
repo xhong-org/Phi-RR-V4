@@ -3,6 +3,7 @@ precision highp int;
 uniform 	vec4 _BlockTime;
 uniform 	mediump float _DisplaceSpeed;
 uniform 	mediump float _DisplaceStrength;
+uniform 	float _EdgeWave;
 uniform 	mediump vec4 _DisplaceDirection;
 uniform mediump sampler2D _DisplaceMap;
 uniform vec4 _DisplaceMap_Rect;
@@ -39,7 +40,9 @@ void main()
     u_xlat1.x = u_xlat16_6 * (-u_xlat16_0.y);
     u_xlat1.y = u_xlat16_6 * u_xlat16_0.x;
     u_xlat1.xy = u_xlat16_0.xy * vec2(u_xlat16_4) + u_xlat1.xy;
-    u_xlat1.xy = u_xlat1.xy * vec2(vec2(_DisplaceStrength, _DisplaceStrength)) + vs_TEXCOORD0.xy;
+    // Scales only this mask lookup. An unset uniform stays at the authored travel.
+    float edge_wave = _EdgeWave > 0.0 ? _EdgeWave : 1.0;
+    u_xlat1.xy = u_xlat1.xy * vec2(_DisplaceStrength * edge_wave) + vs_TEXCOORD0.xy;
     u_xlat16_5 = texture2D(_NormalBlockRT, u_xlat1.xy).x;
     u_xlat16_1 = texture2D(_SubtractBlockRT, u_xlat1.xy).x;
     u_xlat16_0.x = (-u_xlat16_5) + u_xlat16_1;

@@ -150,15 +150,17 @@ function settlement_best_write(_score) {
 function settlement_refresh_layout() {
 	var s = variable_global_exists("global_scales") ? global_scales : 1;
 	if (!is_real(s) || s <= 0) then s = 1;
-	var left = variable_global_exists("chart_view_left") ? chart_view_left : 0;
-	var vw = variable_global_exists("chart_view_width") ? chart_view_width : room_width;
-	if (!is_real(vw) || vw <= 0) then vw = room_width;
+	// The ending draws over the whole window after the aspect mask is released.
+	// chart_view_left / chart_view_width follow that mask, so anchoring here
+	// slides the score column whenever the chart aspect changes.
+	var vw = room_width;
+	if (!is_real(vw) || vw <= 0) then vw = 1366;
 	illus_half = 210 * s;
-	illus_rest_cx = left + 300 * s;
+	illus_rest_cx = 300 * s;
 	illus_rest_cy = 390 * s;
 	score_w = 560 * s;
 	score_h = 150 * s;
-	score_rest_x = left + 620 * s;
+	score_rest_x = 620 * s;
 	score_bottom = 360 * s;
 	combo_w = score_w;
 	combo_h = 100 * s;

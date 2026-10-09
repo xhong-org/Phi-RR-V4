@@ -10,6 +10,7 @@ uniform vec4 u_noise_uv;
 uniform vec4 u_spark_uv;
 uniform vec2 u_spark_px;
 uniform vec3 u_fill;
+uniform float u_fine;
 
 vec2 warp_repeat(vec4 rect, vec2 logical) {
 	return mix(rect.xy, rect.zw, fract(logical));
@@ -18,10 +19,12 @@ vec2 warp_repeat(vec4 rect, vec2 logical) {
 void main() {
 	vec2 uv = v_uv;
 	vec2 screen = max(u_screen.xy, vec2(1.0));
-	// Six surface pixels. A larger chart surface makes each cell a smaller
-	// fraction of the zone. The mask quad still decides the covered area.
-	float pixel = 6.0;
+	// Six surface pixels by default. Fine mode uses two, and reads the mask on
+	// that grid so each outer square stays whole instead of being cut.
+	float fine = u_fine > 0.5 ? 1.0 : 0.0;
+	float pixel = mix(6.0, 2.0, fine);
 	vec2 snapped = (floor(uv * screen / pixel) + 0.5) * pixel / screen;
+	vec2 cover = mix(uv, snapped, fine);
 	// Official wobble is 0.15 UV. This pass uses half of that.
 	float travel = u_screen.z / 20.0 * 1.5;
 	vec2 dir = vec2(0.70710678, 0.70710678);
@@ -34,8 +37,8 @@ void main() {
 	// Stay inside this surface. Raw 0..1 reads neighbouring sprites on the page.
 	vec2 scene_uv = mix(u_scene.xy, u_scene.zw, displaced);
 	vec3 scene = texture2D(gm_BaseTexture, scene_uv).rgb;
-	float mask = texture2D(u_mask, uv).r;
-	vec2 edge_sample = texture2D(u_edge, uv).rg;
+	float mask = texture2D(u_mask, cover).r;
+	vec2 edge_sample = texture2D(u_edge, cover).rg;
 	float rim = clamp(max(edge_sample.r, edge_sample.g), 0.0, 1.0);
 	float outside = 1.0 - clamp(mask, 0.0, 1.0);
 	float rim_a = rim * outside * 0.38;

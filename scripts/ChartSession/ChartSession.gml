@@ -157,13 +157,8 @@ function chart_version_label() {
 	var _kind = "PGRVersion";
 	var _value = 0;
 	if (instance_exists(oRender_1) && variable_global_exists("game_1") && is_struct(game_1)) {
-		if (is_real(game_1[$ "pgr_version"])) {
-			_kind = "PGRVersion";
-			_value = game_1.pgr_version;
-		} else {
-			_kind = "RPEVersion";
-			_value = game_1.version;
-		};
+		_kind = "RPEVersion";
+		_value = game_1.version;
 	} else if (instance_exists(oRender_2) && variable_global_exists("game_2") && is_struct(game_2)
 		&& variable_struct_exists(game_2, "chart") && is_struct(game_2.chart)) {
 		_kind = "PECVersion";
@@ -1288,6 +1283,79 @@ function chart_cache_detected_text(path, text) {
         session.detected_chart_text = text;
 }
 
+/// Head and tail are searched together. RPE charts often put META after judgeLineList.
+function chart_probe_format_text(text) {
+        if (!is_string(text) || !string_length(text)) then return CHART_FORMAT.UNKNOWN;
+        var has_rpe = (string_pos("\"RPEVersion\"", text) > 0);
+        var has_meta = (string_pos("\"META\"", text) > 0);
+        var has_bpm = (string_pos("\"BPMList\"", text) > 0);
+        var has_layers = (string_pos("\"eventLayers\"", text) > 0);
+        var has_fmt = (string_pos("\"formatVersion\"", text) > 0);
+        var has_lines = (string_pos("\"judgeLineList\"", text) > 0);
+        var has_move = (string_pos("\"judgeLineMoveEvents\"", text) > 0);
+        if (has_rpe) then return CHART_FORMAT.RPE;
+        if (has_meta && (has_bpm || has_layers)) then return CHART_FORMAT.RPE;
+        if (has_layers && (has_bpm || has_lines) && !has_fmt && !has_move) then return CHART_FORMAT.RPE;
+        if (has_fmt && (has_lines || has_move)) then return CHART_FORMAT.OFFICIAL;
+        var lower = string_lower(text);
+        if (string_pos("\nbp ", lower) > 0 || string_pos("\nn1 ", lower) > 0 || string_pos("\nn2 ", lower) > 0 || string_pos("\ncv ", lower) > 0
+                || string_pos("bp ", lower) == 1 || string_pos("n1 ", lower) == 1) {
+                return CHART_FORMAT.PEC;
+        };
+        return CHART_FORMAT.UNKNOWN;
+}
+
+function chart_read_text_tail(path, max_chars = 16000) {
+        if (!is_string(path) || !string_length(path)) then return "";
+        var max_bytes = max(8, max_chars * 4);
+        if (pls_is_gxgames()) then return gx_fs_chart_tail(path, max_chars);
+        if (chart_use_native_files() && chart_native_exists(path)) {
+                var native_size = chart_native_size(path);
+                if (is_real(native_size) && native_size > 0) {
+                        var native_start = max(0, native_size - max_bytes);
+                        var native_buf = android_files_read_buffer(path, native_start, native_size - native_start);
+                        if (asset_buffer_valid(native_buf)) {
+                                var native_n = buffer_get_size(native_buf);
+                                var native_text = chart_buffer_slice_to_text(native_buf, 0, native_n);
+                                buffer_delete(native_buf);
+                                native_text = chart_text_strip_bom(is_string(native_text) ? native_text : "");
+                                if (max_chars > 0 && string_length(native_text) > max_chars) {
+                                        native_text = string_copy(native_text, string_length(native_text) - max_chars + 1, max_chars);
+                                };
+                                return native_text;
+                        };
+                };
+        };
+        if (!file_exists(path)) then return "";
+        var buff = -1;
+        try { buff = buffer_load(path); } catch (tail_error) { delete(tail_error); buff = -1; };
+        if (!asset_buffer_valid(buff)) then return "";
+        var size = buffer_get_size(buff);
+        var from = max(0, size - max_bytes);
+        var b0 = (size > 0) ? buffer_peek(buff, 0, buffer_u8) : 0;
+        var b1 = (size > 1) ? buffer_peek(buff, 1, buffer_u8) : 0;
+        var text = "";
+        if (size >= 2 && b0 == 0xFF && b1 == 0xFE) {
+                if (from < 2) then from = 2;
+                if ((from mod 2) != 0) then from += 1;
+                text = chart_buffer_utf16_to_text(buff, from, max(0, size - from), false);
+        } else if (size >= 2 && b0 == 0xFE && b1 == 0xFF) {
+                if (from < 2) then from = 2;
+                if ((from mod 2) != 0) then from += 1;
+                text = chart_buffer_utf16_to_text(buff, from, max(0, size - from), true);
+        } else {
+                var b2 = (size > 2) ? buffer_peek(buff, 2, buffer_u8) : 0;
+                if (size >= 3 && b0 == 0xEF && b1 == 0xBB && b2 == 0xBF && from < 3) then from = 3;
+                text = chart_buffer_slice_to_text(buff, from, max(0, size - from));
+        };
+        buffer_delete(buff);
+        text = chart_text_strip_bom(is_string(text) ? text : "");
+        if (max_chars > 0 && string_length(text) > max_chars) {
+                text = string_copy(text, string_length(text) - max_chars + 1, max_chars);
+        };
+        return text;
+}
+
 function chart_detect_format(chart_path) {
         if (!chart_file_exists_any(chart_path)) then return CHART_FORMAT.UNKNOWN;
         var ext = chart_path_ext(chart_path);
@@ -1297,29 +1365,20 @@ function chart_detect_format(chart_path) {
                 var text = "";
                 if (pls_is_gxgames()) then text = gx_fs_chart_head(chart_path);
                 if (!string_length(text)) then text = chart_read_text_file(chart_path, 16000);
-                if (pls_is_gxgames() && (string_pos("\"RPEVersion\"", text) <= 0) && (string_pos("\"BPMList\"", text) <= 0)) {
+                if (pls_is_gxgames() && (string_pos("\"RPEVersion\"", text) <= 0) && (string_pos("\"BPMList\"", text) <= 0)
+                        && (string_pos("\"META\"", text) <= 0) && (string_pos("\"eventLayers\"", text) <= 0)
+                        && (string_pos("\"formatVersion\"", text) <= 0)) {
                         var js_head = gx_fs_chart_head(chart_path);
                         if (string_length(js_head) > string_length(text)) then text = js_head;
                 };
                 if (!string_length(text)) then return CHART_FORMAT.UNKNOWN;
 
-                if (string_pos("\"RPEVersion\"", text) > 0
-                        || (string_pos("\"META\"", text) > 0 && string_pos("\"BPMList\"", text) > 0)) {
-                        return CHART_FORMAT.RPE;
+                var found = chart_probe_format_text(text);
+                if (found == CHART_FORMAT.UNKNOWN) {
+                        var tail = chart_read_text_tail(chart_path, 16000);
+                        if (string_length(tail)) then found = chart_probe_format_text(text + "\n" + tail);
                 };
-
-				if (string_pos("\"formatVersion\"", text) > 0 && string_pos("\"judgeLineList\"", text) > 0) {
-					return CHART_FORMAT.OFFICIAL;
-				};
-
-                if (string_pos("\"META\"", text) > 0 && string_pos("eventLayers", text) > 0) {
-                        return CHART_FORMAT.RPE;
-                };
-
-                var lower = string_lower(text);
-                if (string_pos("\nbp ", lower) > 0 || string_pos("\nn1 ", lower) > 0 || string_pos("\nn2 ", lower) > 0 || string_pos("\ncv ", lower) > 0) {
-                        return CHART_FORMAT.PEC;
-                };
+                if (found != CHART_FORMAT.UNKNOWN) then return found;
 
                 try {
                         var parsed = json_parse(text);
@@ -1327,10 +1386,10 @@ function chart_detect_format(chart_path) {
                                 if (struct_exists(parsed, "META") && is_struct(parsed.META) && struct_exists(parsed.META, "RPEVersion")) {
                                         return CHART_FORMAT.RPE;
                                 };
-						if (struct_exists(parsed, "formatVersion") && is_real(parsed.formatVersion)
-							&& real(parsed.formatVersion) == floor(real(parsed.formatVersion))
-							&& real(parsed.formatVersion) >= 1 && real(parsed.formatVersion) <= 3
-							&& is_array(parsed[$ "judgeLineList"])) {
+                                if (struct_exists(parsed, "formatVersion") && is_real(parsed.formatVersion)
+                                        && real(parsed.formatVersion) == floor(real(parsed.formatVersion))
+                                        && real(parsed.formatVersion) >= 1 && real(parsed.formatVersion) <= 3
+                                        && is_array(parsed[$ "judgeLineList"])) {
                                         return CHART_FORMAT.OFFICIAL;
                                 };
                         };
@@ -1341,6 +1400,8 @@ function chart_detect_format(chart_path) {
 
         var head = string_lower(chart_read_text_file(chart_path, 4000));
         if (string_pos("bp ", head) > 0 || string_pos("n1 ", head) > 0) then return CHART_FORMAT.PEC;
+        var tail_pec = string_lower(chart_read_text_tail(chart_path, 4000));
+        if (string_pos("bp ", tail_pec) > 0 || string_pos("n1 ", tail_pec) > 0) then return CHART_FORMAT.PEC;
         return CHART_FORMAT.UNKNOWN;
 }
 

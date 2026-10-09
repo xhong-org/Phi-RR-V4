@@ -94,3 +94,6 @@ gm-options.json
 # Keep runtime extension binaries and bundled third-party archives tracked.
 !extensions/**/*.dll
 !extensions/**/*.zip
+
+# Other
+/charts/

@@ -53,9 +53,14 @@ if (is_out) {
 image_angle = (-180 * (!isAbove) + rotation);
 var is_out_line = true;
 if (time_before) then is_out_line = (line_floor <= maximum_visual_length);
-// PCR official holds with speed 0 or no duration are parsed with alpha 0.
-canDraw = (self.speed != 0 && hold_time_length > 0 && is_out_line && hold_length > 0);
-// Phira forces hold speed to +1 and hides the hold before its head time when the
-// head is already on the back side. A negative line speed used to keep the body
-// drawn past the line until the strike.
-if (time_before && (yOffset - line_floor) <= -0.001) then canDraw = false;
+var head_delta = (yOffset - line_floor);
+var speed_zero = (abs(self.speed) <= 0.0000001);
+// Speed 0 holds stay visible while the head is still in front of the line.
+// The moment the head reaches the line they disappear, even if the hit time
+// has not arrived. Other unhit holds also stop once the head is past the line.
+canDraw = (hold_time_length > 0 && is_out_line && hold_length > 0);
+if (speed_zero) {
+	if (head_delta <= 0.001) then canDraw = false;
+} else if (time_before && head_delta <= -0.001) {
+	canDraw = false;
+};

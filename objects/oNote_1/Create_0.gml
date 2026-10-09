@@ -215,10 +215,16 @@ rpe_note_apply_visibility = function() {
 
 	var note_a = alpha;
 	if (variable_instance_exists(id, "isMiss") && isMiss) then note_a *= 0.5;
+	// Speed 0 holds used to be exported with alpha 0. They stay visible until the
+	// head reaches the judge line; Other_12 hides them at that point.
+	var speed_zero_hold = _is_hold && abs(note_speed) <= 0.0000001 && hold_length_floor > 0.0000001;
 	if (note_a <= 0) {
-		canDraw = false;
-		image_alpha = 0;
-		return false;
+		if (!speed_zero_hold) {
+			canDraw = false;
+			image_alpha = 0;
+			return false;
+		};
+		note_a = 1;
 	};
 
 	var sec_to_hit = start_sec - _now_seconds;

@@ -145,6 +145,58 @@ function gx_fs_chart_head(path) {
         return is_string(head) ? head : "";
 }
 
+/// Last bytes of a chart. Format detection only reads the head, so a META
+/// object written after judgeLineList is invisible unless the tail is checked too.
+function gx_fs_chart_tail(path, max_chars = 16000) {
+        if (!pls_is_gxgames() || !is_string(path) || !string_length(path)) then return "";
+        var size = gx_file_ui_cmd("pls-f:fopen\t" + gx_path_clean(path));
+        if (!(is_real(size) && size > 0)) {
+                var name = chart_path_file_name(path);
+                if (string_length(name)) {
+                        size = gx_file_ui_cmd("pls-f:fopen\t" + name);
+                        if (!(is_real(size) && size > 0)) then size = gx_file_ui_cmd("pls-f:fopen\t/tmp/pls/track/" + name);
+                        if (!(is_real(size) && size > 0)) then size = gx_file_ui_cmd("pls-f:fopen\t/_savedata/track/" + name);
+                };
+        };
+        if (!(is_real(size) && size > 0)) then return "";
+        var max_bytes = max(8, max_chars * 4);
+        var take = min(size, max_bytes);
+        var start = size - take;
+        var buf = buffer_create(take, buffer_fixed, 1);
+        var off = 0;
+        var chunk = 16384;
+        while (off < take) {
+                var n = min(chunk, take - off);
+                var b64 = "";
+                try { b64 = string(i_gx_drop_chunk(start + off, n)); } catch (chunk_error) { delete(chunk_error); b64 = ""; };
+                if (!is_string(b64) || !string_length(b64)) {
+                        buffer_delete(buf);
+                        return "";
+                };
+                var piece = buffer_base64_decode(b64);
+                if (!buffer_exists(piece)) {
+                        buffer_delete(buf);
+                        return "";
+                };
+                var piece_size = buffer_get_size(piece);
+                if (piece_size <= 0) {
+                        buffer_delete(piece);
+                        buffer_delete(buf);
+                        return "";
+                };
+                buffer_copy(piece, 0, min(piece_size, take - off), buf, off);
+                buffer_delete(piece);
+                off += piece_size;
+        };
+        var text = chart_buffer_slice_to_text(buf, 0, take);
+        buffer_delete(buf);
+        if (!is_string(text)) then return "";
+        if (max_chars > 0 && string_length(text) > max_chars) {
+                text = string_copy(text, string_length(text) - max_chars + 1, max_chars);
+        };
+        return text;
+}
+
 function gx_fs_materialize_extract(track_path) {
         if (!pls_is_gxgames() || !is_string(track_path) || !string_length(track_path)) then return 0;
         var listed = gx_fs_list_files(track_path);
