@@ -956,20 +956,20 @@ function gx_file_picker_roots() {
         var roots = [];
         var downloads = gx_file_picker_download_dir();
         if (string_length(downloads)) {
-                array_push(roots, { name: "Downloads", path: downloads });
+                array_add(roots, { name: "Downloads", path: downloads });
         };
         var save_dir = chart_path_norm(game_save_id);
         if (string_length(save_dir)) {
-                array_push(roots, { name: "Save Data", path: save_dir });
+                array_add(roots, { name: "Save Data", path: save_dir });
         };
-        array_push(roots, { name: lang("picker.gameFiles", "Game Files"), path: chart_path_norm(working_directory) });
+        array_add(roots, { name: lang("picker.gameFiles", "Game Files"), path: chart_path_norm(working_directory) });
         var sample = chart_path_norm(working_directory + "chart/");
         if (directory_exists(sample)) {
-                array_push(roots, { name: "Sample", path: sample });
+                array_add(roots, { name: "Sample", path: sample });
         };
         var bundled = chart_path_norm(working_directory + "charts/");
         if (directory_exists(bundled)) {
-                array_push(roots, { name: "Bundled", path: bundled });
+                array_add(roots, { name: "Bundled", path: bundled });
         };
         return roots;
 }
@@ -1047,7 +1047,7 @@ function gx_file_picker_list(dir_path) {
                                 var full = chart_path_join(dir, found);
                                 if (directory_exists(full)) {
                                         seen[$ found] = true;
-                                        array_push(items, { name: found, path: full, is_dir: true });
+                                        array_add(items, { name: found, path: full, is_dir: true });
                                 };
                         };
                         found = file_find_next();
@@ -1065,10 +1065,10 @@ function gx_file_picker_list(dir_path) {
                                 var full_file = chart_path_join(dir, found_file);
                                 if (directory_exists(full_file)) {
                                         seen[$ found_file] = true;
-                                        array_push(items, { name: found_file, path: full_file, is_dir: true });
+                                        array_add(items, { name: found_file, path: full_file, is_dir: true });
                                 } else if (file_exists(full_file) && gx_file_picker_is_package(full_file)) {
                                         seen[$ found_file] = true;
-                                        array_push(items, { name: found_file, path: full_file, is_dir: false });
+                                        array_add(items, { name: found_file, path: full_file, is_dir: false });
                                 };
                         };
                         found_file = file_find_next();
@@ -1134,7 +1134,7 @@ function gx_fp_only_drives(list) {
                 if (!string_length(letter)) then letter = string_upper(string_char_at(string(e[$ "name"] ?? " "), 1));
                 if (!string_length(letter) || struct_exists(seen, letter)) then continue;
                 seen[$ letter] = true;
-                array_push(out, { name: letter + ":", path: letter + ":\\" });
+                array_add(out, { name: letter + ":", path: letter + ":\\" });
         };
         return out;
 }
@@ -1196,7 +1196,7 @@ function gx_fp_goto_root(root_path) {
 function gx_fp_go_back() {
         if (!gx_fp_history_can_back()) then return;
         if (!is_array(nav_future)) then nav_future = [];
-        array_push(nav_future, current_dir);
+        array_add(nav_future, current_dir);
         var prev = nav_history[array_length(nav_history) - 1];
         array_delete(nav_history, array_length(nav_history) - 1, 1);
         gx_fp_set_directory(prev, true);
@@ -1205,7 +1205,7 @@ function gx_fp_go_back() {
 function gx_fp_go_forward() {
         if (!gx_fp_history_can_fwd()) then return;
         if (!is_array(nav_history)) then nav_history = [];
-        array_push(nav_history, current_dir);
+        array_add(nav_history, current_dir);
         var next = nav_future[array_length(nav_future) - 1];
         array_delete(nav_future, array_length(nav_future) - 1, 1);
         gx_fp_set_directory(next, true);
@@ -1244,7 +1244,7 @@ function gx_fp_layout() {
         for (var i = 0; i < n; i++) {
                 var col = i mod per_row;
                 var row = i div per_row;
-                array_push(root_rects, {
+                array_add(root_rects, {
                         label: roots[i].name,
                         path: roots[i].path,
                         x: inner_x + col * (root_w + gap),
@@ -1298,7 +1298,7 @@ function gx_fp_set_directory(dir_path, from_history = false) {
         if (!from_history) {
                 if (variable_instance_exists(id, "current_dir") && string_length(current_dir) && current_dir != dest) {
                         if (!is_array(nav_history)) then nav_history = [];
-                        array_push(nav_history, current_dir);
+                        array_add(nav_history, current_dir);
                         if (array_length(nav_history) > 64) then array_delete(nav_history, 0, array_length(nav_history) - 64);
                         nav_future = [];
                 };
@@ -2208,9 +2208,9 @@ function gx_pcm_sidecar_path(audio_path) {
 
 function gx_media_try_local_pcm(inst, audio_path) {
         var tries = [];
-        array_push(tries, gx_pcm_sidecar_path(audio_path));
+        array_add(tries, gx_pcm_sidecar_path(audio_path));
         var host = gx_media_host_path_for(audio_path);
-        if (string_length(host)) then array_push(tries, gx_pcm_sidecar_path(host));
+        if (string_length(host)) then array_add(tries, gx_pcm_sidecar_path(host));
         for (var i = 0; i < array_length(tries); i++) {
                 var sidecar = tries[i];
                 if (!string_length(sidecar) || !file_exists(sidecar)) then continue;

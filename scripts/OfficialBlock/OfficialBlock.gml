@@ -281,7 +281,7 @@ function official_block_read_move(_area) {
 			pos_y = real(end_position[$ "y"] ?? 0);
 		}
 		if (!is_finite(real(item[$ "time"] ?? 0)) || !is_finite(pos_x) || !is_finite(pos_y)) continue;
-		array_push(events, {
+		array_add(events, {
 			t: real(item[$ "time"] ?? 0),
 			x: pos_x,
 			y: pos_y,
@@ -317,7 +317,7 @@ function official_block_read_scale(_area) {
 			scale_y = real(scale[$ "y"] ?? 0);
 		}
 		if (!is_finite(real(item[$ "time"] ?? 0)) || !is_finite(scale_x) || !is_finite(scale_y)) continue;
-		array_push(events, {
+		array_add(events, {
 			t: real(item[$ "time"] ?? 0),
 			x: scale_x,
 			y: scale_y,
@@ -349,7 +349,7 @@ function official_block_read_rotate(_area) {
 		}
 		var rotation = real(item[$ "rotation"] ?? 0);
 		if (!is_finite(real(item[$ "time"] ?? 0)) || !is_finite(rotation)) continue;
-		array_push(events, {
+		array_add(events, {
 			t: real(item[$ "time"] ?? 0),
 			r: rotation,
 			ax: anchor_x,
@@ -474,7 +474,7 @@ function official_blocks_build(_chart) {
 		disable = max(disable, enable);
 		disappear = max(disappear, disable);
 		var rgb = official_block_read_color(area);
-		array_push(blocks, {
+		array_add(blocks, {
 			subtract: bool(area[$ "isSubtract"] ?? false),
 			appear: appear,
 			enable: enable,
@@ -933,7 +933,7 @@ function official_block_gather(_state, _now, _aspect) {
 		var cursor = _state.scan_cursor;
 		while (cursor < count && blocks[cursor].appear <= _now) {
 			if (live >= array_length(active)) {
-				array_push(active, cursor);
+				array_add(active, cursor);
 			} else {
 				active[live] = cursor;
 			}
@@ -1040,7 +1040,7 @@ function official_block_input(_state, _aspect, _dt) {
 	for (var device = 0; device < 4; device++) {
 		if (!device_mouse_check_button(device, mb_left)) continue;
 		var world = official_block_pixel_to_world(device_mouse_x(device), device_mouse_y(device), _aspect);
-		array_push(touches, { id: device, x: world[0], y: world[1] });
+		array_add(touches, { id: device, x: world[0], y: world[1] });
 	}
 	var still = [];
 	var worlds = [];
@@ -1051,8 +1051,8 @@ function official_block_input(_state, _aspect, _dt) {
 		var touch = touches[t];
 		var blocked = official_block_has_id(_state.blocked_ids, touch.id) || official_block_hits(_state, touch.x, touch.y);
 		if (!blocked) continue;
-		array_push(still, touch.id);
-		array_push(worlds, [touch.x, touch.y]);
+		array_add(still, touch.id);
+		array_add(worlds, [touch.x, touch.y]);
 		var slot = -1;
 		for (var h = 0; h < 10; h++) {
 			if (hovers[h].id == touch.id) {

@@ -39,7 +39,7 @@ function gx_fs_parse_entry_list(raw) {
         for (var i = 0; i < array_length(raw); i++) {
                 var e = raw[i];
                 if (!is_struct(e)) then continue;
-                array_push(items, {
+                array_add(items, {
                         name: string(e[$ "name"] ?? ""),
                         path: string(e[$ "path"] ?? ""),
                         is_dir: bool(e[$ "is_dir"] ?? false)
@@ -243,9 +243,9 @@ function gx_fs_save_bytes_json(raw, dest) {
                 buffer_delete(buf);
                 if (!file_exists(dest)) {
                         var tries = [];
-                        array_push(tries, gx_path_clean(chart_path_join(chart_path_dir(dest), gx_file_picker_safe_name(chart_path_file_name(dest)))));
+                        array_add(tries, gx_path_clean(chart_path_join(chart_path_dir(dest), gx_file_picker_safe_name(chart_path_file_name(dest)))));
                         if (variable_instance_exists(id, "download_path") && string_length(download_path)) {
-                                array_push(tries, gx_path_clean(chart_path_join(download_path, gx_file_picker_safe_name(chart_path_file_name(dest)))));
+                                array_add(tries, gx_path_clean(chart_path_join(download_path, gx_file_picker_safe_name(chart_path_file_name(dest)))));
                         };
                         for (var ti = 0; ti < array_length(tries); ti++) {
                                 var fallback = tries[ti];
@@ -290,7 +290,7 @@ function gx_fs_parse_unpack(result_text) {
                                 var rel = gx_fs_safe_rel(e[$ "rel"] ?? "");
                                 var src = string(e[$ "path"] ?? "");
                                 if (!string_length(rel) || !string_length(src)) then continue;
-                                array_push(files, {
+                                array_add(files, {
                                         rel: rel,
                                         path: src,
                                         size: real(e[$ "size"] ?? 0),

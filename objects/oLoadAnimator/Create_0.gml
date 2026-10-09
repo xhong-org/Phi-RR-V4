@@ -50,11 +50,11 @@ if (file_exists(_tips_path)) {
     var _tips_file = file_text_open_read(_tips_path);
     while (!file_text_eof(_tips_file)) {
         var _tip = string_trim(file_text_readln(_tips_file));
-        if (string_length(_tip) > 0) then array_push(tips, _tip);
+        if (string_length(_tip) > 0) then array_add(tips, _tip);
     };
     file_text_close(_tips_file);
 };
-if (array_length(tips) == 0) then array_push(tips, lang("loadAnim.tipsFallback"));
+if (array_length(tips) == 0) then array_add(tips, lang("loadAnim.tipsFallback"));
 tip_index = irandom(array_length(tips) - 1);
 
 ui_font = pls_ui_font_add(35, false, false, -infinity, infinity, false);

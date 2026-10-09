@@ -22,6 +22,7 @@ tools_status = "";
 hover_tools_export = false;
 hover_tools_pec = false;
 hover_tools_close = false;
+tools_hover = -1;
 tools_export_box = { x: 0, y: 0, w: 1, h: 1 };
 tools_pec_box = { x: 0, y: 0, w: 1, h: 1 };
 tools_close_box = { x: 0, y: 0, w: 1, h: 1 };

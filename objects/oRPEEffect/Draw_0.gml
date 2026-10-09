@@ -42,7 +42,7 @@ if (variable_instance_exists(id, "effect_boundary_role")) {
 					_capture_stack = [];
 					effect_boundary_controller.effect_capture_stack = _capture_stack;
 				};
-				array_push(_capture_stack, _boundary_state.surface);
+				array_add(_capture_stack, _boundary_state.surface);
 				_boundary_state.capture_pushed = true;
 			};
 			_boundary_state.caller = _capture_parent;

@@ -258,14 +258,14 @@ function settings_list(_deprecated) {
 		for (var i = 0; i < array_length(cat); i++) {
 			var item = cat[i];
 			seen[$ item.key] = true;
-			array_push(lists[settings_comment_is_deprecated(item.comment) ? 1 : 0], item);
+			array_add(lists[settings_comment_is_deprecated(item.comment) ? 1 : 0], item);
 		};
 		var store = settings_store();
 		var names = struct_get_names(store);
 		for (var n = 0; n < array_length(names); n++) {
 			if (struct_exists(seen, names[n])) then continue;
 			if (names[n] == "language" || names[n] == "skinId") then continue;
-			array_push(lists[0], { key:names[n], comment:names[n] });
+			array_add(lists[0], { key:names[n], comment:names[n] });
 		};
 	};
 	return lists[_deprecated ? 1 : 0];
@@ -313,7 +313,7 @@ function settings_grouped_keys() {
 		var keys = [];
 		var src = groups[g].keys;
 		for (var k = 0; k < array_length(src); k++) {
-			array_push(keys, src[k]);
+			array_add(keys, src[k]);
 			explicit[$ src[k]] = true;
 		};
 		built[$ groups[g].id] = keys;
@@ -323,7 +323,7 @@ function settings_grouped_keys() {
 		var key = cat[i].key;
 		if (struct_exists(explicit, key)) then continue;
 		var bucket = settings_comment_is_deprecated(cat[i].comment) ? "deprecated" : "chart";
-		array_push(built[$ bucket], key);
+		array_add(built[$ bucket], key);
 		explicit[$ key] = true;
 	};
 	var defaults = settings_defaults();
@@ -331,7 +331,7 @@ function settings_grouped_keys() {
 	for (var n = 0; n < array_length(names); n++) {
 		var extra = names[n];
 		if (struct_exists(explicit, extra) || extra == "language" || extra == "skinId") then continue;
-		array_push(built[$ "chart"], extra);
+		array_add(built[$ "chart"], extra);
 	};
 	return built;
 }
@@ -356,14 +356,14 @@ function settings_gui_visible_rows() {
 	var rows = [];
 	for (var g = 0; g < array_length(groups); g++) {
 		var group_id = groups[g].id;
-		array_push(rows, { type:"group", id:group_id });
+		array_add(rows, { type:"group", id:group_id });
 		if (!bool(state[$ group_id])) then continue;
 		var keys = grouped[$ group_id];
 		if (!is_array(keys)) then continue;
 		for (var k = 0; k < array_length(keys); k++) {
 			var item = index[$ keys[k]];
 			if (!is_struct(item)) then item = { key:keys[k], comment:keys[k] };
-			array_push(rows, { type:"field", item:item });
+			array_add(rows, { type:"field", item:item });
 		};
 	};
 	return rows;
@@ -1110,7 +1110,7 @@ function settings_gui_refresh_hits() {
 			var skin_item = skin_rows[si];
 			if (!is_struct(skin_item)) then continue;
 			var skin_row_y = list_y + (si - scroll) * row_h;
-			array_push(skin_hits, {
+			array_add(skin_hits, {
 				skin_id: string(skin_item.skin_id ?? ""),
 				box: { x:list_x, y:skin_row_y, w:skin_list_w, h:row_h }
 			});
@@ -1121,7 +1121,7 @@ function settings_gui_refresh_hits() {
 			var pack = lang_rows[li];
 			if (!is_struct(pack)) then continue;
 			var lang_row_y = list_y + (li - scroll) * row_h;
-			array_push(lang_hits, {
+			array_add(lang_hits, {
 				locale: string(pack.id ?? ""),
 				y: lang_row_y,
 				box: { x:list_x, y:lang_row_y, w:list_w, h:row_h }
@@ -1133,7 +1133,7 @@ function settings_gui_refresh_hits() {
 			var entry = rows[i];
 			var row_y = list_y + (i - scroll) * row_h;
 			if (entry.type == "group") {
-				array_push(row_hits, {
+				array_add(row_hits, {
 					row_type:"group",
 					group_id:entry.id,
 					box:{ x:list_x, y:row_y, w:list_w, h:row_h }
@@ -1157,7 +1157,7 @@ function settings_gui_refresh_hits() {
 			} else {
 				hit.field = { x:ctrl_x, y:ctrl_y, w:ctrl_w, h:ctrl_h };
 			};
-			array_push(row_hits, hit);
+			array_add(row_hits, hit);
 		};
 	};
 }

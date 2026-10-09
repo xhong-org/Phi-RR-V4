@@ -20,34 +20,40 @@ if (tools_open) {
         hover_settings = false;
         var ts = (variable_global_exists("global_scales") ? global_scales : 1.0);
         if (!is_real(ts) || ts <= 0) then ts = 1.0;
-        var panel_w = min(room_width - 40, 520 * ts);
-        var panel_h = min(room_height - 40, 400 * ts);
-        var panel_x = (room_width - panel_w) * 0.5;
-        var panel_y = (room_height - panel_h) * 0.5;
-        var row_h = 48 * ts;
-        var row_w = panel_w - 48 * ts;
-        tools_export_box = { x: panel_x + 24 * ts, y: panel_y + 78 * ts, w: row_w, h: row_h };
-        tools_pec_box = { x: panel_x + 24 * ts, y: panel_y + 78 * ts + row_h + 14 * ts, w: row_w, h: row_h };
-        tools_close_box = { x: panel_x + 24 * ts, y: panel_y + panel_h - 24 * ts - row_h, w: row_w, h: row_h };
+        var tools_panel = phi_tools_panel_metrics(room_width, room_height, ts);
+        var panel_x = tools_panel.panel_x;
+        var panel_y = tools_panel.panel_y;
+        var panel_w = tools_panel.panel_w;
+        var panel_h = tools_panel.panel_h;
+        tools_export_box = tools_panel.buttons[0];
+        tools_pec_box = tools_panel.buttons[1];
+        tools_close_box = tools_panel.close;
         var tmx = mouse_x;
         var tmy = mouse_y;
-        hover_tools_export = point_in_rectangle(tmx, tmy, tools_export_box.x, tools_export_box.y, tools_export_box.x + tools_export_box.w, tools_export_box.y + tools_export_box.h);
-        hover_tools_pec = point_in_rectangle(tmx, tmy, tools_pec_box.x, tools_pec_box.y, tools_pec_box.x + tools_pec_box.w, tools_pec_box.y + tools_pec_box.h);
+        tools_hover = -1;
+        for (var tool_i = 0; tool_i < array_length(tools_panel.buttons); tool_i++) {
+                var tool_box = tools_panel.buttons[tool_i];
+                if (point_in_rectangle(tmx, tmy, tool_box.x, tool_box.y, tool_box.x + tool_box.w, tool_box.y + tool_box.h)) then tools_hover = tool_i;
+        };
+        hover_tools_export = (tools_hover == 0);
+        hover_tools_pec = (tools_hover == 1);
         hover_tools_close = point_in_rectangle(tmx, tmy, tools_close_box.x, tools_close_box.y, tools_close_box.x + tools_close_box.w, tools_close_box.y + tools_close_box.h);
         if (mouse_check_button_pressed(mb_left)) {
                 if (hover_tools_close) {
                         tools_open = false;
-                } else if (hover_tools_export || hover_tools_pec) {
-                        var want_pec = hover_tools_pec;
-                        var source_format = CHART_FORMAT.OFFICIAL;
-                        if (want_pec) then source_format = CHART_FORMAT.PEC;
-                        phi_tools_log("open dialog pec=" + string(want_pec) + " format=" + string(source_format));
+                } else if (tools_hover >= 0) {
+                        var tool_jobs = phi_tools_jobs();
+                        if (tools_hover >= array_length(tool_jobs)) then tools_hover = -1;
+                };
+                if (tools_hover >= 0 && mouse_check_button_pressed(mb_left) && !hover_tools_close) {
+                        var tool_job = phi_tools_jobs()[tools_hover];
+                        phi_tools_log("open dialog job=" + string(tools_hover) + " label=" + string(tool_job.label) + " source=" + string(tool_job.source) + " target=" + string(tool_job.target));
                         var tool_path = get_open_filename(lang("menu.toolsPick"), "");
                         phi_tools_log("open path=" + string(tool_path));
                         if (string_length(tool_path)) {
-                                var prepared = phi_tools_prepare_rpe_package(tool_path, source_format);
+                                var prepared = phi_tools_prepare_rpe_package(tool_path, tool_job.source, tool_job.target);
                                 phi_tools_log("prepare struct=" + string(is_struct(prepared)) + " ok=" + string(is_struct(prepared) ? prepared.ok : false));
-                                tools_status = phi_tools_finish_save(prepared, tool_path, want_pec);
+                                tools_status = phi_tools_finish_save(prepared, tool_path, tool_job.fail);
                         };
                 } else if (tmx < panel_x || tmx > panel_x + panel_w || tmy < panel_y || tmy > panel_y + panel_h) {
                         tools_open = false;

@@ -87,7 +87,7 @@ function lang_collect_json(_dir, _out) {
 	var found = "";
 	try { found = file_find_first(_dir + "*.json", 0); } catch (find_err) { delete(find_err); found = ""; };
 	while (is_string(found) && string_length(found)) {
-		array_push(_out, _dir + found);
+		array_add(_out, _dir + found);
 		try { found = file_find_next(); } catch (next_err) { delete(next_err); found = ""; };
 	};
 	try { file_find_close(); } catch (close_err) { delete(close_err); };
@@ -95,7 +95,7 @@ function lang_collect_json(_dir, _out) {
 	found = "";
 	try { found = file_find_first(_dir + "*", fa_directory); } catch (dir_err) { delete(dir_err); found = ""; };
 	while (is_string(found) && string_length(found)) {
-		if (found != "." && found != ".." && directory_exists(_dir + found)) then array_push(sub, _dir + found);
+		if (found != "." && found != ".." && directory_exists(_dir + found)) then array_add(sub, _dir + found);
 		try { found = file_find_next(); } catch (dir_next) { delete(dir_next); found = ""; };
 	};
 	try { file_find_close(); } catch (dir_close) { delete(dir_close); };
@@ -107,8 +107,8 @@ function lang_collect_json(_dir, _out) {
 				var item = string_trim(rows[r]);
 				if (!string_length(item)) then continue;
 				var full = _dir + item;
-				if (string_lower(filename_ext(item)) == ".json") then array_push(_out, full);
-				else if (directory_exists(full) || chart_native_is_dir(full)) then array_push(sub, full);
+				if (string_lower(filename_ext(item)) == ".json") then array_add(_out, full);
+				else if (directory_exists(full) || chart_native_is_dir(full)) then array_add(sub, full);
 			};
 		};
 	};
@@ -305,7 +305,7 @@ function lang_scan_packs() {
 	lang_collect_json(lang_dir(), files);
 	var extras = [lang_dir() + "en-US.json", lang_dir() + "zh-CN.json"];
 	for (var e = 0; e < array_length(extras); e++) {
-		array_push(files, extras[e]);
+		array_add(files, extras[e]);
 	};
 	var seen_path = {};
 	var seen_id = {};
@@ -328,7 +328,7 @@ function lang_scan_packs() {
 			continue;
 		};
 		seen_id[$ "id:" + pack.id] = true;
-		array_push(packs, pack);
+		array_add(packs, pack);
 		loaded += 1;
 	};
 	return { packs: packs, loaded: loaded, error: error_n, skipped: skipped };
@@ -378,7 +378,7 @@ function lang_flatten_keys(_root, _prefix, _out) {
 		var key = string_length(_prefix) ? $"{_prefix}.{field}" : field;
 		var val = _root[$ field];
 		if (is_struct(val)) then lang_flatten_keys(val, key, _out);
-		else array_push(_out, key);
+		else array_add(_out, key);
 	};
 }
 
@@ -390,8 +390,9 @@ function lang_required_keys() {
 		"common.settings", "common.cancel", "common.open", "common.menu", "common.loading",
 		"menu.subtitle", "menu.openPackage", "menu.loadSample", "menu.renderPlaceholder",
 		"menu.statusSelect", "menu.detailSupported", "menu.hintKeys", "menu.hintTap",
-		"menu.toolsTitle", "menu.toolsExport", "menu.toolsExportPec", "menu.toolsClose", "menu.toolsPick", "menu.toolsDone", "menu.toolsFail", "menu.toolsFailPec",
-		"menu.toolsNoPec", "menu.toolsPecRead", "menu.toolsConvert",
+		"menu.toolsTitle", "menu.toolsExport", "menu.toolsExportPec", "menu.toolsExportPecOfficial", "menu.toolsExportRpeOfficial", "menu.toolsExportRpePec",
+		"menu.toolsClose", "menu.toolsPick", "menu.toolsDone", "menu.toolsFail", "menu.toolsFailPec", "menu.toolsFailRpe",
+		"menu.toolsNoPec", "menu.toolsNoRpe", "menu.toolsPecRead", "menu.toolsRpeRead", "menu.toolsConvert",
 		"menu.toolsSaveTitle", "menu.toolsSaveZip", "menu.toolsSavePez",
 		"menu.noFile", "menu.cancelled", "menu.openFailed", "menu.filterChart",
 		"android.waitingPicker", "android.pickDetail", "android.pickerUnavailable", "android.pickerFailed",
@@ -461,7 +462,7 @@ function lang_validate() {
 		for (var p = 0; p < array_length(packs); p++) {
 			if (lang_pack_has_key(packs[p], key)) { present = true; break; };
 		};
-		if (!present) then array_push(missing, key);
+		if (!present) then array_add(missing, key);
 	};
 	if (array_length(missing) <= 0) then return "";
 	var shown = min(12, array_length(missing));

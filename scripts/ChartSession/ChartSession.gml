@@ -885,7 +885,7 @@ function chart_session_wipe_files(dir) {
                                 if (file_name != "." && file_name != "..") {
                                         var full_file = path + file_name;
                                         if (file_exists(full_file) && !directory_exists(full_file)) {
-                                                array_push(files, string_replace_all(full_file, "\\", "/"));
+                                                array_add(files, string_replace_all(full_file, "\\", "/"));
                                         };
                                 };
                                 file_name = file_find_next();
@@ -895,7 +895,7 @@ function chart_session_wipe_files(dir) {
                         while (string_length(dir_name)) {
                                 if (dir_name != "." && dir_name != "..") {
                                         if (directory_exists(path + dir_name)) {
-                                                array_push(dirs, path + dir_name + sep);
+                                                array_add(dirs, path + dir_name + sep);
                                         };
                                 };
                                 dir_name = file_find_next();
@@ -1760,8 +1760,8 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
         // Chart + music are both required. Missing either => fail, cleanup, back to menu.
         if (!string_length(chart_full) || !string_length(music_full)) {
                 var missing = [];
-                if (!string_length(chart_full)) then array_push(missing, "chart");
-                if (!string_length(music_full)) then array_push(missing, "music");
+                if (!string_length(chart_full)) then array_add(missing, "chart");
+                if (!string_length(music_full)) then array_add(missing, "music");
                 var missing_text = "";
                 for (var mi = 0; mi < array_length(missing); mi++) {
                         if (mi > 0) then missing_text += ", ";
