@@ -4,9 +4,10 @@
 #macro func function
 #macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal { "windows": 40537, "android": 40534, "gxgames": 40532 } // 各平台版本号(独立)
+#macro VerReal { "windows": 40540, "android": 40534, "gxgames": 40532 } // 各平台版本号(独立)
 #macro VerStr "v.4.1.0b"
 
+// 版本解析(?)
 function ver_real() {
 	var platform = "other";
 	if (os_type == os_gxgames) then platform = "gxgames";
@@ -18,6 +19,8 @@ function ver_real() {
 	};
 	return 40500;
 }
+
+// 其他
 #macro GAME_NAME "Re: Phi-RR - " + VerStr
 #macro HYW_MODE true
 #macro BYD_COLOR_MODE true
@@ -72,14 +75,12 @@ enum DEPTH {
 	BG = -100
 };
 
-/// PhiZone z: higher values draw later. 1000 depth per unit keeps 1.5 and 2
-/// apart, and a line-id tie break cannot cross into the next layer.
+/// PhiZone Z坐标 测试
 function chart_layer_depth(z) {
 	return (-1000 * z);
 }
 
-/// VM rejects other_instance.depth = value as a read-only built-in.
-/// Setting it from inside the instance still works.
+/// 神秘
 function chart_set_instance_depth(_inst, _depth) {
 	if (!instance_exists(_inst)) then return;
 	with (_inst) {
@@ -87,7 +88,7 @@ function chart_set_instance_depth(_inst, _depth) {
 	};
 }
 
-/// RPE type 1 tap, 2 hold, 3 flick, 4 drag. Explicit zIndex wins.
+/// RPE 音符辨别
 function chart_note_layer_z(rpe_type, explicit_z = undefined) {
 	if (is_real(explicit_z) && is_finite(explicit_z)) then return explicit_z;
 	var priority = 3;
@@ -97,16 +98,17 @@ function chart_note_layer_z(rpe_type, explicit_z = undefined) {
 	return priority + 2;
 }
 
-/// RPE LineData::update parent block, in view pixels, y still up.
-/// A child offset is scaled by view/1350 and view/900 before the father
-/// rotation. Rotating in chart space first opens a rectangle once the father
-/// turns and those two scales differ, which is every 16:9 playfield.
-/// Returns [x from view center, y up, rotation]. Unparented lines and fathers
-/// with rotation 0 match the previous chart-space fold.
+///@desc RPE 判定线处理
+///@param {Instance Id} _line
+///@param {double} _sx
+///@param {double} _sy
 function rpe_line_view_pose(_line, _sx, _sy) {
+	// 变量
 	var local_x = 0;
 	var local_y = 0;
 	var local_r = 0;
+
+	// 检查实例是否暴毙
 	if (!instance_exists(_line)) then return [local_x, local_y, local_r];
 	if (variable_instance_exists(_line, "__raw_x") && is_real(_line.__raw_x)) then local_x = _line.__raw_x * _sx;
 	if (variable_instance_exists(_line, "__raw_y") && is_real(_line.__raw_y)) then local_y = _line.__raw_y * _sy;
@@ -114,6 +116,8 @@ function rpe_line_view_pose(_line, _sx, _sy) {
 	if (!variable_instance_exists(_line, "_father_chain") || !is_array(_line._father_chain)) {
 		_line._father_chain = [];
 	};
+
+	// 
 	var chain = _line._father_chain;
 	if (array_length(chain) == 0 && is_real(_line.isFather) && _line.isFather >= 0
 			&& variable_global_exists("game_1") && is_struct(game_1) && is_array(game_1.line_list)) {
@@ -128,19 +132,29 @@ function rpe_line_view_pose(_line, _sx, _sy) {
 			lazy_guard++;
 		};
 	};
+
+	//
 	if (array_length(chain) <= 0) then return [local_x, local_y, local_r];
+
+	//
 	var parent_x = 0;
 	var parent_y = 0;
 	var parent_r = 0;
 	var have_parent = false;
+
+	//
 	for (var ai = array_length(chain) - 1; ai >= 0; ai--) {
 		var ancestor = chain[ai];
 		if (!instance_exists(ancestor) || !variable_instance_exists(ancestor, "__raw_x")) {
 			have_parent = false;
 			break;
 		};
+
+		// 换算
 		var ancestor_x = ancestor.__raw_x * _sx;
 		var ancestor_y = ancestor.__raw_y * _sy;
+
+		// 爸爸
 		if (!have_parent) {
 			parent_x = ancestor_x;
 			parent_y = ancestor_y;
@@ -154,7 +168,11 @@ function rpe_line_view_pose(_line, _sx, _sy) {
 			parent_r = ancestor.__raw_r + (bool(ancestor.rotFatherLine) ? parent_r : 0);
 		};
 	};
+
+	//
 	if (!have_parent) then return [local_x, local_y, local_r];
+	
+	//
 	var child_cos = dcos(parent_r);
 	var child_sin = dsin(parent_r);
 	var out_r = local_r;
@@ -166,7 +184,8 @@ function rpe_line_view_pose(_line, _sx, _sy) {
 	];
 }
 
-/// PhiEdit 1.7 EditMain::computeViewSize. Fit the chart aspect into 1350x900.
+///@desc PhiEdit 1.7 是这么写的 (关于AspectRatio)
+///@param {double} _aspect
 function rpe_preview_size(_aspect) {
 	if (!is_real(_aspect) || !is_finite(_aspect) || _aspect <= 0) then _aspect = 16 / 9;
 	var preview_w = 1350;
@@ -178,10 +197,10 @@ function rpe_preview_size(_aspect) {
 	return [preview_w, preview_h];
 }
 
-/// line.png only. LineView::apply uses scaleX * 4000 and scaleY * 5 design
-/// points at editor zoom 1, independent of the texture's pixel size.
-/// Those points sit in the preview from computeViewSize, then map onto the
-/// playfield by view/preview.
+///@desc 非自定义纹理缩放处理
+///@param {double} scale_x
+///@param {double} scale_y
+///@param {double} view_w
 function rpe_default_line_pixel_size(scale_x, scale_y, view_w) {
 	var design_y = view_w / 1350;
 	if (variable_global_exists("chart_view_height") && is_real(chart_view_height) && chart_view_height > 0) {
@@ -196,12 +215,12 @@ function rpe_default_line_pixel_size(scale_x, scale_y, view_w) {
 	return [scale_x * 4000 * (view_w / preview[0]), scale_y * 5 * (view_h / preview[1])];
 }
 
-/// Custom judge-line texture only (Texture != "line.png"), including GIF frames.
-/// LineView::apply sets scale to scaleX / shrink and scaleY / shrink. Playback
-/// shrink is 1, so the sprite is its pixel size times the line scale, in
-/// preview points. computeViewSize is that preview. The playfield shows the
-/// same 1350x900 chart space across view_w x view_h, so each axis maps by
-/// view/preview on its own.
+///@desc 自定义纹理缩放处理
+///@param {double} scale_x
+///@param {double} scale_y
+///@param {double} sprite_w
+///@param {double} sprite_h
+///@param {double} view_w
 function rpe_custom_texture_pixel_size(scale_x, scale_y, sprite_w, sprite_h, view_w) {
 	var aspect = 16 / 9;
 	if (variable_global_exists("chart_aspect_ratio") && is_real(chart_aspect_ratio) && is_finite(chart_aspect_ratio) && chart_aspect_ratio > 0) {
@@ -217,7 +236,8 @@ function rpe_custom_texture_pixel_size(scale_x, scale_y, sprite_w, sprite_h, vie
 	return [sprite_w * scale_x * (view_w / preview_w), sprite_h * scale_y * (view_h / preview_h)];
 }
 
-/// Pixel width of the judge line as Draw draws it. Used to clip an attached video.
+///@desc 文本
+///@param {Instance ID} line_instance
 function chart_line_pixel_width(line_instance) {
 	if (!instance_exists(line_instance)) then return 0;
 	var view_w = 1;
@@ -244,13 +264,14 @@ function chart_line_pixel_width(line_instance) {
 	return abs(pixel_size[0]);
 }
 
-/// PhiZone scaleOnNotes 2. Notes stay full size and are masked to the line's
-/// current pixel width. The strip is infinite along the note highway.
-/// Returns 0 (no clip), 1 (scissor), or 2 (rotated shader).
+///@desc PhiZone独有特性
+///@param {Instance ID} line_instance
 function chart_note_scale_clip_begin(line_instance) {
+
 	static u_clip = -1;
 	static u_half = -1;
 	static fetched = false;
+
 	if (!instance_exists(line_instance)) then return 0;
 	var mode = 0;
 	if (variable_instance_exists(line_instance, "scale_on_notes") && is_real(line_instance.scale_on_notes)) {
@@ -261,22 +282,27 @@ function chart_note_scale_clip_begin(line_instance) {
 	var half_w = chart_line_pixel_width(line_instance) * 0.5;
 	var ang = line_instance.image_angle;
 	var norm = ang mod 360;
+
 	if (norm < 0) then norm += 360;
+
 	var view_l = 0;
 	var view_t = 0;
 	var view_r = room_width;
 	var view_b = room_height;
+
 	if (variable_global_exists("chart_view_left") && is_real(chart_view_left)) then view_l = chart_view_left;
 	if (variable_global_exists("chart_view_right") && is_real(chart_view_right)) then view_r = chart_view_right;
 	if (variable_global_exists("chart_view_height") && is_real(chart_view_height) && chart_view_height > 0) then view_b = chart_view_height;
 
 	var horizontal = (norm <= 0.75 || norm >= 359.25 || abs(norm - 180) <= 0.75);
 	var vertical = (abs(norm - 90) <= 0.75 || abs(norm - 270) <= 0.75);
+
 	if (horizontal || vertical) {
 		var clip_l = view_l;
 		var clip_t = view_t;
 		var clip_r = view_r;
 		var clip_b = view_b;
+
 		if (horizontal) {
 			clip_l = line_instance.x - half_w;
 			clip_r = line_instance.x + half_w;
@@ -284,29 +310,35 @@ function chart_note_scale_clip_begin(line_instance) {
 			clip_t = line_instance.y - half_w;
 			clip_b = line_instance.y + half_w;
 		};
+
 		var l = max(view_l, clip_l);
 		var t = max(view_t, clip_t);
 		var r = min(view_r, clip_r);
 		var b = min(view_b, clip_b);
-		// Wider than the chart view: the default pipeline must draw notes and hits.
+		// 文本 , 不符合直接返回
 		if (l <= view_l && t <= view_t && r >= view_r && b >= view_b) then return 0;
 		var sl = floor(l);
 		var st = floor(t);
 		var sw = max(0, ceil(r) - sl);
 		var sh = max(0, ceil(b) - st);
+
 		gpu_set_scissor(sl, st, sw, sh);
+
 		return 1;
 	};
 
 	var dir_x = dcos(ang);
 	var dir_y = -dsin(ang);
 	var cover = true;
+
 	if (abs((view_l - line_instance.x) * dir_x + (view_t - line_instance.y) * dir_y) > half_w) then cover = false;
 	else if (abs((view_r - line_instance.x) * dir_x + (view_t - line_instance.y) * dir_y) > half_w) then cover = false;
 	else if (abs((view_l - line_instance.x) * dir_x + (view_b - line_instance.y) * dir_y) > half_w) then cover = false;
 	else if (abs((view_r - line_instance.x) * dir_x + (view_b - line_instance.y) * dir_y) > half_w) then cover = false;
+
+	// 
 	if (cover) then return 0;
-	// shader_reset inside a z-range capture drops later sprites off that surface.
+	// Z
 	var _capture_target = surface_get_target();
 	if (surface_exists(_capture_target) && _capture_target != application_surface) then return 0;
 	if (!shader_is_compiled(shd_note_scale_clip)) then return 0;
@@ -316,12 +348,16 @@ function chart_note_scale_clip_begin(line_instance) {
 		fetched = (u_clip >= 0 && u_half >= 0);
 		if (!fetched) then return 0;
 	};
+
 	shader_set(shd_note_scale_clip);
 	shader_set_uniform_f(u_clip, line_instance.x, line_instance.y, dir_x, dir_y);
 	shader_set_uniform_f(u_half, half_w);
+
 	return 2;
 }
 
+///@desc 音符激活
+///@param {int} active
 function chart_note_scale_clip_end(active) {
 	if (active == 1) {
 		chart_mask_scissor_set();
@@ -330,7 +366,7 @@ function chart_note_scale_clip_end(active) {
 	};
 }
 
-
+///@desc 音符判定类型
 enum TYPE {
 	PREFECT,
 	GOOD,
@@ -339,8 +375,7 @@ enum TYPE {
 	NONE
 };
 
-/// FC/AP color for the default judge line and play start/end bar.
-/// Does not read RPE colorEvents, custom textures, or line text.
+/// FC/AP 指示器
 function chart_line_judge_blend() {
 	if (!(variable_global_exists("game") && is_struct(game) && is_struct(game.settings)
 		&& bool(game.settings.enableLineJudge ?? false))) then return c_white;
@@ -381,6 +416,7 @@ if(cmd_count){
 		};
 	};
 }else{
+	// 实验性内容
 	if(!variable_global_exists("easing_type_in_official")) { globalvar easing_type_in_official;  };
 	variable_global_set("easing_type_in_official" , 10);
 };
@@ -1164,27 +1200,138 @@ function load_line_csv(){
 	});
 };
 
-///@desc Phigros Official的floorPosition计算
-function official_floor_at_beat(speed_events, beat, seconds_per_beat) {
-	var floor_value = 0;
-	for (var speed_i = 0; speed_i < array_length(speed_events); speed_i++) {
-		var speed_event = speed_events[speed_i];
-		if (beat <= speed_event.startTime) then break;
-		var event_start = speed_event.startTime;
-		if (speed_i == 0 && event_start < 0) then event_start = 0;
-		var event_floor = floor_value;
-		if (struct_exists(speed_event, "floorPosition") && is_real(speed_event.floorPosition)) {
-			event_floor = speed_event.floorPosition;
+/// PCR holdTime: floor, and a negative floor moves one step toward zero.
+function official_format_hold_beats(_hold_time) {
+	var beats = floor(real(_hold_time));
+	if (!is_finite(beats)) then return 0;
+	if (beats < 0) then beats += 1;
+	return beats;
+}
+
+function official_f32(_value) {
+	static float_buffer = buffer_create(4, buffer_fixed, 1);
+	if (!is_real(_value) || !is_finite(_value)) then return 0;
+	buffer_poke(float_buffer, 0, buffer_f32, _value);
+	return buffer_peek(float_buffer, 0, buffer_f32);
+}
+
+/// sim-phi getMaxVisiblePos. The note stays visible until the line floor passes this.
+function official_max_visible_pos(_value) {
+	static float_buffer = buffer_create(4, buffer_fixed, 1);
+	buffer_poke(float_buffer, 0, buffer_f32, _value);
+	var float_value = buffer_peek(float_buffer, 0, buffer_f32);
+	if (is_nan(float_value) || abs(float_value) == infinity) then return float_value;
+	var magic = 11718.75;
+	var prime = (float_value >= magic ? power(2, floor(1 + log2(float_value / magic))) : 1);
+	var candidate = (float_value / prime + 0.001);
+	buffer_poke(float_buffer, 0, buffer_f32, candidate);
+	var rounded = buffer_peek(float_buffer, 0, buffer_f32);
+	if (rounded <= candidate) then return rounded * prime;
+	var bits = buffer_peek(float_buffer, 0, buffer_u32);
+	buffer_poke(float_buffer, 0, buffer_u32, bits + (rounded <= 0 ? 1 : -1));
+	return buffer_peek(float_buffer, 0, buffer_f32) * prime;
+}
+
+/// sim-phi prerenderChart. Times are 1/32-beat integers: sim-phi truncates with
+/// `Number(t) | 0`, so the exporter must not emit fractional ticks.
+/// floorPosition is a float32 integral: y starts at the first event's start in
+/// seconds, each event stores y, then y = fround(y + seconds * value).
+/// A negative first start is a v1 pre-roll sentinel and is clamped to 0.
+/// Running again writes the same floors. _line_floor is not used.
+function official_prepare_speed_events(_events, _seconds_per_beat, _line_floor = undefined) {
+	if (!is_array(_events) || array_length(_events) <= 0) then return _events;
+	var spb = real(_seconds_per_beat);
+	if (!(spb > 0) || !is_finite(spb)) then spb = 1.875 / 60;
+	var count = array_length(_events);
+	var floor_y = 0;
+	var started = false;
+	for (var speed_i = 0; speed_i < count; speed_i++) {
+		var speed_event = _events[speed_i];
+		if (!is_struct(speed_event)) then continue;
+		var event_start = real(speed_event[$ "startTime"] ?? 0);
+		var event_end = real(speed_event[$ "endTime"] ?? event_start);
+		var event_value = real(speed_event[$ "value"] ?? 0);
+		if (!is_finite(event_start)) then event_start = 0;
+		if (!started && event_start < 0) then event_start = 0;
+		if (!is_finite(event_end) || event_end < event_start) then event_end = event_start;
+		if (!is_finite(event_value)) then event_value = 0;
+		speed_event.startTime = event_start;
+		speed_event.endTime = event_end;
+		speed_event.value = event_value;
+		if (!started) {
+			floor_y = official_f32(event_start * spb);
+			started = true;
 		};
-		// Runtime keeps the final speed after its declared endTime. Use the
-		// same continuation rule when precomputing Hold floor length.
-		var event_end = speed_event.endTime;
-		if (speed_i == array_length(speed_events) - 1 && beat > event_end) then event_end = beat;
-		var covered_end = min(beat, event_end);
-		floor_value = event_floor + max(0, covered_end - event_start) * seconds_per_beat * speed_event.value;
-		if (beat <= speed_event.endTime) then break;
+		speed_event.floorPosition = floor_y;
+		floor_y = official_f32(floor_y + (event_end - event_start) * spb * event_value);
 	};
-	return floor_value;
+	return _events;
+}
+
+/// Line floor at a beat, after official_prepare_speed_events.
+/// The cursor is the first event that has not ended. A gap uses that next
+/// event, extended backward. After the last event the last value continues.
+function official_floor_at_beat(speed_events, beat, seconds_per_beat) {
+	if (!is_array(speed_events) || array_length(speed_events) <= 0) then return 0;
+	var spb = real(seconds_per_beat);
+	if (!(spb > 0) || !is_finite(spb)) then return 0;
+	var sec = real(beat) * spb;
+	if (!is_finite(sec)) then return 0;
+	var count = 0;
+	var event_count = array_length(speed_events);
+	while (count < event_count - 1) {
+		var speed_event = speed_events[count];
+		if (!is_struct(speed_event)) then break;
+		if (real(speed_event[$ "endTime"] ?? 0) * spb >= sec) then break;
+		count++;
+	};
+	var chosen = speed_events[count];
+	if (!is_struct(chosen)) then return 0;
+	var start_sec = real(chosen[$ "startTime"] ?? 0) * spb;
+	var floor0 = real(chosen[$ "floorPosition"] ?? 0);
+	var value = real(chosen[$ "value"] ?? 0);
+	if (!is_finite(start_sec)) then start_sec = 0;
+	if (!is_finite(floor0)) then floor0 = 0;
+	if (!is_finite(value)) then value = 0;
+	return floor0 + (sec - start_sec) * value;
+}
+
+/// Official hold. Head speed stays 1. Body length is bodySpeed * holdTime in seconds.
+/// speed 0 or an empty hold is not drawn. holdFloorLength is that body in floor units.
+function official_pack_note(_note, _above, _line_index, _bpm, _seconds_per_beat) {
+	var chart_speed = real(_note[$ "speed"] ?? 1);
+	if (!is_finite(chart_speed)) then chart_speed = 1;
+	var hold_beats = 0;
+	var head_speed = chart_speed;
+	var body_speed = 1;
+	var hold_floor = 0;
+	if (real(_note[$ "type"] ?? 0) == 3) {
+		hold_beats = official_format_hold_beats(_note[$ "holdTime"] ?? 0);
+		var hold_sec = hold_beats * _seconds_per_beat;
+		body_speed = (chart_speed != 1) ? chart_speed : 1;
+		head_speed = 1;
+		if (chart_speed == 0 || hold_sec <= 0) {
+			body_speed = 0;
+			hold_beats = 0;
+			hold_sec = 0;
+		};
+		hold_floor = body_speed * hold_sec;
+		if (hold_floor < 0) then hold_floor = 0;
+	};
+	return {
+		"type": _note.type,
+		"time": _note.time,
+		"holdTime": hold_beats,
+		"holdFloorLength": hold_floor,
+		"speed": head_speed,
+		"bodySpeed": body_speed,
+		"xOffset": _note.positionX,
+		"yOffset": _note.floorPosition,
+		"hl": false,
+		"isAbove": _above,
+		"id": _line_index,
+		"bpm": _bpm
+	};
 }
 
 function Phigros() constructor { // 仅仅结构
@@ -1379,53 +1526,20 @@ function Phigros() constructor { // 仅仅结构
 			var bpm = line_data.bpm;
 			var line_speed_events = line_data.speedEvents;
 			array_sort(line_speed_events, function(a, b) { return a.startTime - b.startTime; });
-			// Official v1 uses a large negative start time as a pre-roll
-			// sentinel. PCR starts the first speed segment at chart time 0;
-			// keeping the sentinel would move the line hundreds of floor units
-			// before the first note.
-			if (game.version == 1 && array_length(line_speed_events) > 0) {
-				var first_speed = line_speed_events[0];
-				if (is_struct(first_speed) && is_real(first_speed.startTime)
-					&& first_speed.startTime < 0) {
-					first_speed.startTime = 0;
-				};
-			};
 			var line_seconds_per_beat = 1.875 / bpm;
-			if (game.version == 1) {
-				// v1 stores no floor base. Materialize the same cumulative
-				// timeline used by the reference loader before notes are read.
-				var v1_floor = 0;
-				for (var v1_speed_i = 0; v1_speed_i < array_length(line_speed_events); v1_speed_i++) {
-					var v1_speed_event = line_speed_events[v1_speed_i];
-					if (!is_struct(v1_speed_event)) then continue;
-					v1_speed_event.floorPosition = v1_floor;
-					var v1_start = real(v1_speed_event.startTime ?? 0);
-					var v1_end = real(v1_speed_event.endTime ?? v1_start);
-					v1_floor += max(0, v1_end - v1_start) * line_seconds_per_beat * real(v1_speed_event.value ?? 0);
-				};
-			};
+			var line_floor = line_data[$ "floorPosition"];
+			if (!is_real(line_floor) || !is_finite(line_floor)) then line_floor = undefined;
+			official_prepare_speed_events(line_speed_events, line_seconds_per_beat, line_floor);
 			for(var a = 0 ; a < array_length(line_data.notesAbove) ; a ++){
 				var n = line_data.notesAbove[a];
 				if (!is_struct(n)) then continue;
-				var hold_floor_length = 0;
-				if (n.type == 3) {
-					var hold_beats = max(0, floor(n.holdTime));
-					hold_floor_length = official_floor_at_beat(line_speed_events, n.time + hold_beats, line_seconds_per_beat) - n.floorPosition;
-					if (hold_floor_length == 0) then hold_floor_length = hold_beats * line_seconds_per_beat * real(n[$ "speed"] ?? 1);
-				};
-				array_add(self._notes , { "type" : n.type , "time" : n.time , "holdTime" : (n.type == 3 ? max(0, floor(n.holdTime)) : 0) , "holdFloorLength" : hold_floor_length, "speed" : real(n[$ "speed"] ?? 1), "xOffset" : n.positionX , "yOffset" : n.floorPosition , "hl" : false , "isAbove" : true , "id" : i , "bpm" : bpm});
+				array_add(self._notes, official_pack_note(n, true, i, bpm, line_seconds_per_beat));
 			};
 			
 			for(var b = 0 ; b < array_length(line_data.notesBelow) ; b ++){
 				var n = line_data.notesBelow[b];
 				if (!is_struct(n)) then continue;
-				var hold_floor_length = 0;
-				if (n.type == 3) {
-					var hold_beats = max(0, floor(n.holdTime));
-					hold_floor_length = official_floor_at_beat(line_speed_events, n.time + hold_beats, line_seconds_per_beat) - n.floorPosition;
-					if (hold_floor_length == 0) then hold_floor_length = hold_beats * line_seconds_per_beat * real(n[$ "speed"] ?? 1);
-				};
-				array_add(self._notes , { "type" : n.type , "time" : n.time , "holdTime" : (n.type == 3 ? max(0, floor(n.holdTime)) : 0) , "holdFloorLength" : hold_floor_length, "speed" : real(n[$ "speed"] ?? 1), "xOffset" : n.positionX , "yOffset" : n.floorPosition , "hl" : false , "isAbove" : false , "id" : i , "bpm" : bpm});
+				array_add(self._notes, official_pack_note(n, false, i, bpm, line_seconds_per_beat));
 			};
 			//delete(self.chart.judgeLineList[i].notesAbove);
 			//delete(self.chart.judgeLineList[i].notesBelow);
@@ -2017,7 +2131,7 @@ function Phigros() constructor { // 仅仅结构
 				if (variable_global_exists("InChartPath") && is_string(InChartPath) && string_length(InChartPath)) then root = InChartPath;
 				path = chart_path_join(root, "Chart_PEC_Official.json");
 			};
-			chart_buffer_save_text(path, json_stringify(self.officialChart, true));
+			chart_buffer_save_text(path, phi_official_json_text(self.officialChart, true));
 			show_debug_message($"[PhiTool] Wrote PEC as official: {path}");
 			return true;
 		}),
@@ -2045,7 +2159,7 @@ function Phigros() constructor { // 仅仅结构
 				if (variable_global_exists("InChartPath") && is_string(InChartPath) && string_length(InChartPath)) then root = InChartPath;
 				path = chart_path_join(root, "Chart_RPE_Official.json");
 			};
-			chart_buffer_save_text(path, json_stringify(self.officialChart, true));
+			chart_buffer_save_text(path, phi_official_json_text(self.officialChart, true));
 			show_debug_message($"[PhiTool] Wrote RPE as official: {path}");
 			return true;
 		}),
@@ -2607,8 +2721,10 @@ function phi_convert_speed(events, line_bpm, chart_bpm) {
 	return out;
 }
 
-function phi_push_official_notes(notes, list, above, line_bpm, chart_bpm) {
+function phi_push_official_notes(notes, list, above, line_bpm, chart_bpm, speed_events) {
 	if (!is_array(list)) then return;
+	var spb = 1.875 / line_bpm;
+	if (!(spb > 0) || !is_finite(spb)) then spb = 1.875 / 60;
 	for (var i = 0; i < array_length(list); i++) {
 		var note = list[i];
 		if (!is_struct(note)) then continue;
@@ -2619,27 +2735,27 @@ function phi_push_official_notes(notes, list, above, line_bpm, chart_bpm) {
 		else if (off_type == 4) then rpe_type = 3;
 		var start_tick = real(note[$ "time"] ?? 0);
 		var hold_tick = 0;
-		if (off_type == 3) then hold_tick = max(0, floor(real(note[$ "holdTime"] ?? 0)));
 		var note_speed = real(note[$ "speed"] ?? 1);
 		if (!is_finite(note_speed)) then note_speed = 1;
 		var note_alpha = 255;
 		if (off_type == 3) {
-			// Official hold head distance is the raw floor delta. It does not multiply
-			// note.speed. This chart copies the judge-line speed (2.3, 999, ...) into
-			// that field. RPE applies note.speed to the head as well as the body, so
-			// keeping 2.3/999 makes the head fall that many times too fast.
-			// Head speed stays 1. Body length is endFloor - startFloor, the integral
-			// of this line's speed across the hold, including BPM and speed changes.
-			// Speed 0 is kept: those holds fall until the head reaches the judge line,
-			// then the renderer hides them. An empty hold is not drawn.
-			if (hold_tick <= 0) {
+			// Official head speed is 1. The body is bodySpeed * holdTime and does not
+			// follow the judge-line speed. speed 0 or an empty hold is not drawn.
+			// RPE has one speed for the head and the body. Scale that speed so the
+			// RPE body matches bodySpeed * holdTime over this line's floor travel.
+			// When the line does not travel, the body speed is kept as-is.
+			hold_tick = official_format_hold_beats(note[$ "holdTime"] ?? 0);
+			var hold_sec = hold_tick * spb;
+			var body_speed = (note_speed != 1) ? note_speed : 1;
+			if (note_speed == 0 || hold_sec <= 0) {
 				note_speed = 0;
 				note_alpha = 0;
-			} else if (abs(note_speed) <= 0.0000001) {
-				note_speed = 0;
-				note_alpha = 255;
+				hold_tick = 0;
 			} else {
-				note_speed = 1;
+				var body_floor = body_speed * hold_sec;
+				var integral = official_floor_at_beat(speed_events, start_tick + hold_tick, spb) - official_floor_at_beat(speed_events, start_tick, spb);
+				if (abs(integral) <= 0.0000001) then note_speed = body_speed;
+				else note_speed = body_floor / integral;
 			};
 		};
 		array_add(notes, {
@@ -2706,11 +2822,26 @@ function phi_official_to_rpe(chart) {
 		off_move += array_length(move_src);
 		off_rotate += array_length(rotate_src);
 		off_alpha += array_length(alpha_src);
+		var speed_play = [];
+		for (var speed_copy_i = 0; speed_copy_i < array_length(speed_src); speed_copy_i++) {
+			var speed_copy_src = speed_src[speed_copy_i];
+			if (!is_struct(speed_copy_src)) then continue;
+			var speed_copy = {};
+			var speed_names = struct_get_names(speed_copy_src);
+			for (var speed_name_i = 0; speed_name_i < array_length(speed_names); speed_name_i++) {
+				speed_copy[$ speed_names[speed_name_i]] = speed_copy_src[$ speed_names[speed_name_i]];
+			};
+			array_add(speed_play, speed_copy);
+		};
+		array_sort(speed_play, phi_official_event_cmp);
+		var line_floor = _line[$ "floorPosition"];
+		if (!is_real(line_floor) || !is_finite(line_floor)) then line_floor = undefined;
+		official_prepare_speed_events(speed_play, 1.875 / line_bpm, line_floor);
 		var move_x = phi_fit_channel(move_src, 0);
 		var move_y = phi_fit_channel(move_src, 1);
 		var rotate = phi_fit_channel(rotate_src, 0);
 		var alpha = phi_fit_channel(alpha_src, 0);
-		var _speed = phi_convert_speed(speed_src, line_bpm, chart_bpm);
+		var _speed = phi_convert_speed(speed_play, line_bpm, chart_bpm);
 		eased_events += phi_count_eased(move_x) + phi_count_eased(move_y) + phi_count_eased(rotate) + phi_count_eased(alpha);
 		rpe_move_x += array_length(move_x);
 		rpe_move_y += array_length(move_y);
@@ -2718,8 +2849,8 @@ function phi_official_to_rpe(chart) {
 		rpe_alpha += array_length(alpha);
 		out_events += array_length(move_x) + array_length(move_y) + array_length(rotate) + array_length(alpha) + array_length(_speed);
 		var notes = [];
-		phi_push_official_notes(notes, _line[$ "notesAbove"], 1, line_bpm, chart_bpm);
-		phi_push_official_notes(notes, _line[$ "notesBelow"], 0, line_bpm, chart_bpm);
+		phi_push_official_notes(notes, _line[$ "notesAbove"], 1, line_bpm, chart_bpm, speed_play);
+		phi_push_official_notes(notes, _line[$ "notesBelow"], 0, line_bpm, chart_bpm, speed_play);
 		// Times are already chart beats, so the line clock stays at factor 1.
 		// A per-line factor on top of the converted beats would play the line twice.
 		array_add(judge, {
@@ -2911,6 +3042,9 @@ function phi_pec_build_timeline(bpm_raw) {
 
 /// cv holds until the next cv. A PhiEditor warp (|speed/7| >= 1000) does not
 /// move notes during the segment; the floor jumps when the next cv starts.
+function pec_speed_is_warp(playback_value) {
+	return abs(phi_finite_or(playback_value, 0)) >= 1000;
+}
 function phi_pec_speed_to_rpe(raw, timeline) {
 	var out = [];
 	if (!is_array(raw) || array_length(raw) <= 0) then return out;
@@ -2943,13 +3077,13 @@ function phi_pec_speed_to_rpe(raw, timeline) {
 		var beat = real(ev.beat);
 		var last = (speed_i >= array_length(kept) - 1);
 		if (last) {
-			var tail = (abs(pec_speed) >= 1000) ? 0 : pec_speed * 4.5;
+			var tail = pec_speed_is_warp(pec_speed) ? 0 : pec_speed * 4.5;
 			array_add(out, phi_pec_rpe_event(beat, beat + 1, tail, tail, 1));
 			continue;
 		};
 		var next_beat = real(kept[speed_i + 1].beat);
 		if (next_beat <= beat) then continue;
-		if (abs(pec_speed) < 1000) {
+		if (!pec_speed_is_warp(pec_speed)) {
 			var held = pec_speed * 4.5;
 			array_add(out, phi_pec_rpe_event(beat, next_beat, held, held, 1));
 			continue;
@@ -3351,6 +3485,15 @@ function phi_pec_to_rpe(pec_text, meta = undefined) {
 #macro PHI_EASE_SLICES 16
 #macro PHI_SAMPLE_EPS 0.00000005
 
+/// A fixed epsilon before a knot can already sit inside the next event, so a
+/// gap is sampled as that event's start and then stretched back across the gap.
+function phi_probe_before(t0, t1) {
+	var back = max(PHI_SAMPLE_EPS, (t1 - t0) * 0.001);
+	var probe = t1 - back;
+	if (probe <= t0) then return t0;
+	return probe;
+}
+
 function phi_finite_or(value, fallback) {
 	var n = real(value);
 	if (!is_finite(n)) then return fallback;
@@ -3653,6 +3796,33 @@ function phi_speed_beats_from_raw(raw) {
 	return out;
 }
 
+/// A 9999 burst is often a fraction of a beat. Holding that value across the
+/// following empty gap throws every later note many screens away, so it stays
+/// invisible until the hit. The burst itself is kept; the gap falls at 0.
+function phi_drop_extreme_speed_gaps(events) {
+	var out = [];
+	var n = array_length(events);
+	for (var i = 0; i < n; i++) {
+		if (i > 0) {
+			var prev = events[i - 1];
+			var gap = events[i].startTime - prev.endTime;
+			if (gap > 0.0005 && abs(prev.stop) >= 100) {
+				array_add(out, {
+					startTime: prev.endTime,
+					endTime: events[i].startTime,
+					start: 0,
+					stop: 0,
+					easingType: 1,
+					easingLeft: 0,
+					easingRight: 1
+				});
+			}
+		}
+		array_add(out, events[i]);
+	}
+	return out;
+}
+
 function phi_build_legacy_speed(beat_layers, timeline) {
 	var speed_layers = [];
 	var speed_splits = [];
@@ -3702,6 +3872,21 @@ function phi_build_legacy_speed(beat_layers, timeline) {
 			value: v0, endValue: v1, floorPosition: speed_floor
 		});
 		speed_floor += (sample_end_sec - sample_start_sec) * (v0 + v1) * 0.5;
+	}
+	// Playback holds the last speed after the final event. Without this tail,
+	// a ramp keeps integrating at its average and later notes drift.
+	if (array_length(segments) > 0) {
+		var last_speed_ev = segments[array_length(segments) - 1];
+		var last_end_value = real(last_speed_ev.endValue);
+		if (is_finite(last_speed_ev.endTime) && is_finite(last_end_value)) {
+			array_add(segments, {
+				startTime: last_speed_ev.endTime,
+				endTime: infinity,
+				value: last_end_value,
+				endValue: last_end_value,
+				floorPosition: speed_floor
+			});
+		}
 	}
 	return segments;
 }
@@ -3843,6 +4028,21 @@ function phi_texture_custom(value) {
 	return true;
 }
 
+/// Official has move, rotate, alpha, and speed only. UI binding, a custom
+/// texture, text, and any other extended channel cannot be shown there.
+/// Color still leaves a normal line. Incline is a harmless fallback event.
+function phi_line_official_unsupported(src, extended) {
+	if (phi_attach_ui_active(src[$ "attachUI"])) then return true;
+	if (phi_texture_custom(src[$ "Texture"])) then return true;
+	if (!is_struct(extended)) then return false;
+	var names = struct_get_names(extended);
+	for (var i = 0; i < array_length(names); i++) {
+		if (names[i] == "colorEvents" || names[i] == "inclineEvents") then continue;
+		if (phi_extended_list(extended, names[i])) then return true;
+	}
+	return false;
+}
+
 function phi_parent_chain(models, index) {
 	var stack = [];
 	var seen = {};
@@ -3861,8 +4061,16 @@ function phi_parent_chain(models, index) {
 	return chain;
 }
 
+function phi_model_factor(model) {
+	var factor = phi_finite_or(model[$ "factor"] ?? 1, 1);
+	if (!(factor > 0)) then factor = 1;
+	return factor;
+}
+
 /// Official x/y are 0..1, y up. r is the on-screen angle. aspect is view width / height.
-function phi_world_pose(models, chain, line_sec, aspect) {
+/// chart_sec is real chart time. Each line is read at chart_sec / bpmfactor.
+/// A model with no factor (PEC bake) is read at chart_sec itself.
+function phi_world_pose(models, chain, chart_sec, aspect) {
 	var parent_nx = 0;
 	var parent_ny = 0;
 	var parent_r = 0;
@@ -3871,9 +4079,10 @@ function phi_world_pose(models, chain, line_sec, aspect) {
 	if (!(aspect_v > 0) || !is_finite(aspect_v)) then aspect_v = 16 / 9;
 	for (var i = 0; i < array_length(chain); i++) {
 		var model = models[chain[i]];
-		var raw_x = phi_layers_sum(model.layers, "x", line_sec, 0);
-		var raw_y = phi_layers_sum(model.layers, "y", line_sec, 0);
-		var raw_r = phi_layers_sum(model.layers, "r", line_sec, 0);
+		var sample_t = chart_sec / phi_model_factor(model);
+		var raw_x = phi_layers_sum(model.layers, "x", sample_t, 0);
+		var raw_y = phi_layers_sum(model.layers, "y", sample_t, 0);
+		var raw_r = phi_layers_sum(model.layers, "r", sample_t, 0);
 		var nx = raw_x / 1350;
 		var ny = raw_y / 900;
 		if (!have) {
@@ -4055,11 +4264,12 @@ function phi_slice_scalar(knots, ctx, limit) {
 		var t1 = knots[i + 1];
 		if (t1 - t0 <= 0.0000001) then continue;
 		var v0 = phi_ctx_scalar(ctx, t0);
-		var pre = phi_ctx_scalar(ctx, t1 - PHI_SAMPLE_EPS);
+		var pre = phi_ctx_scalar(ctx, phi_probe_before(t0, t1));
 		var post = phi_ctx_scalar(ctx, t1);
+		// The value change belongs to the next event. A zero-length event at this
+		// same time would hide that event: the official cursor keeps the later one.
 		var jumped = abs(post - pre) > limit;
 		array_add(out, { t0: t0, t1: t1, v0: v0, v1: (jumped ? pre : post) });
-		if (jumped) then array_add(out, { t0: t1, t1: t1, v0: pre, v1: post });
 	}
 	return out;
 }
@@ -4072,14 +4282,14 @@ function phi_slice_pose(knots, models, chain, aspect) {
 		var t1 = knots[i + 1];
 		if (t1 - t0 <= 0.0000001) then continue;
 		var p0 = phi_world_pose(models, chain, t0, aspect);
-		var pre = phi_world_pose(models, chain, t1 - PHI_SAMPLE_EPS, aspect);
+		var pre = phi_world_pose(models, chain, phi_probe_before(t0, t1), aspect);
 		var post = phi_world_pose(models, chain, t1, aspect);
+		// Small gaps still have to hold. A 50-unit step is below the old 0.05
+		// screen test and was being stretched across the whole empty span.
 		var jump_xy = abs(post.x - pre.x) > 0.00001 || abs(post.y - pre.y) > 0.00001;
-		var jump_r = abs(post.r - pre.r) > 0.0001;
+		var jump_r = abs(post.r - pre.r) > 0.01;
 		array_add(move, { t0: t0, t1: t1, x0: p0.x, y0: p0.y, x1: (jump_xy ? pre.x : post.x), y1: (jump_xy ? pre.y : post.y) });
 		array_add(rot, { t0: t0, t1: t1, v0: p0.r, v1: (jump_r ? pre.r : post.r) });
-		if (jump_xy) then array_add(move, { t0: t1, t1: t1, x0: pre.x, y0: pre.y, x1: post.x, y1: post.y });
-		if (jump_r) then array_add(rot, { t0: t1, t1: t1, v0: pre.r, v1: post.r });
 	}
 	return { move: move, rot: rot };
 }
@@ -4112,7 +4322,8 @@ function phi_speed_knots(model, t0, t1) {
 	if (model.legacy) {
 		var segments = model.legacySegments;
 		for (var i = 0; i < array_length(segments); i++) {
-			array_add(extra, segments[i].startTime);
+			if (is_finite(segments[i].startTime)) then array_add(extra, segments[i].startTime);
+			if (!is_finite(segments[i].endTime)) then continue;
 			array_add(extra, segments[i].endTime);
 			if (abs(segments[i].value - segments[i].endValue) > 0.00001) then phi_push_slice_times(extra, segments[i].startTime, segments[i].endTime);
 		}
@@ -4132,17 +4343,60 @@ function phi_speed_knots(model, t0, t1) {
 	return phi_knots_unique(extra, t0, t1);
 }
 
+function phi_knots_from_prepared_scaled(dst, events, factor) {
+	if (!is_array(events)) then return;
+	var scale = factor;
+	if (!(scale > 0)) then scale = 1;
+	for (var i = 0; i < array_length(events); i++) {
+		array_add(dst, events[i].t0 * scale);
+		array_add(dst, events[i].t1 * scale);
+	}
+}
+
+/// Knots are chart seconds. A line event at local time t is placed at t * bpmfactor.
 function phi_pose_knots(models, chain, t0, t1) {
 	var extra = [];
 	for (var i = 0; i < array_length(chain); i++) {
-		var layers = models[chain[i]].layers;
+		var model = models[chain[i]];
+		var factor = phi_model_factor(model);
+		var layers = model.layers;
 		for (var li = 0; li < array_length(layers); li++) {
-			phi_knots_from_prepared(extra, layers[li].x);
-			phi_knots_from_prepared(extra, layers[li].y);
-			phi_knots_from_prepared(extra, layers[li].r);
+			phi_knots_from_prepared_scaled(extra, layers[li].x, factor);
+			phi_knots_from_prepared_scaled(extra, layers[li].y, factor);
+			phi_knots_from_prepared_scaled(extra, layers[li].r, factor);
 		}
 	}
 	return phi_knots_unique(extra, t0, t1);
+}
+
+/// A parent that turns swings its child on an arc. Linear angle still needs
+/// extra position samples; the child's own rotation stays a scalar.
+function phi_pose_arc_pieces(models, chain, t0, t1, aspect) {
+	if (array_length(chain) <= 1) then return 1;
+	var left = t1 - 0.00002;
+	if (left <= t0) then return 1;
+	var angle = abs(phi_ancestor_raw_r(models, chain, left, aspect) - phi_ancestor_raw_r(models, chain, t0, aspect));
+	if (angle <= 0.2) then return 1;
+	var n = ceil(angle / 6);
+	if (n < 4) then n = 4;
+	if (n > 48) then n = 48;
+	return n;
+}
+
+function phi_pose_refine_knots(models, chain, knots, aspect) {
+	var n = array_length(knots);
+	if (n < 2 || array_length(chain) <= 1) then return knots;
+	var out = [];
+	for (var i = 0; i < n - 1; i++) {
+		var t0 = knots[i];
+		var t1 = knots[i + 1];
+		array_add(out, t0);
+		if (t1 - t0 <= 0.0000001) then continue;
+		var pieces = phi_pose_arc_pieces(models, chain, t0, t1, aspect);
+		for (var s = 1; s < pieces; s++) array_add(out, t0 + (t1 - t0) * (s / pieces));
+	}
+	array_add(out, knots[n - 1]);
+	return out;
 }
 
 function phi_alpha_knots(model, t0, t1) {
@@ -4205,6 +4459,7 @@ function phi_rpe_bake(chart) {
 		noteSize: 0,
 		noteScale: 0,
 		fakeDropped: 0,
+		dropped: 0,
 		move: 0,
 		rotate: 0,
 		alpha: 0,
@@ -4212,6 +4467,16 @@ function phi_rpe_bake(chart) {
 		sliced: 0
 	};
 	var chart_end = 1;
+	var parent_ids = {};
+	var source_count = array_length(source_lines);
+	for (var parent_i = 0; parent_i < source_count; parent_i++) {
+		var parent_src = source_lines[parent_i];
+		if (!is_struct(parent_src)) then continue;
+		var parent_father = floor(phi_finite_or(parent_src[$ "father"] ?? -1, -1));
+		if (parent_father == parent_i) then continue;
+		if (parent_father < 0 || parent_father >= source_count) then continue;
+		parent_ids[$ string(parent_father)] = true;
+	}
 	for (var line_i = 0; line_i < array_length(source_lines); line_i++) {
 		var src = source_lines[line_i];
 		if (!is_struct(src)) then src = {};
@@ -4232,7 +4497,7 @@ function phi_rpe_bake(chart) {
 			var rotate = phi_expand_channel(phi_prep_events(_layer[$ "rotateEvents"], timeline));
 			var alpha = phi_expand_channel(phi_prep_events(_layer[$ "alphaEvents"], timeline));
 			array_add(layers, { x: move_x, y: move_y, r: rotate, a: alpha });
-			var speed_beats = phi_speed_beats_from_raw(_layer[$ "speedEvents"]);
+			var speed_beats = phi_drop_extreme_speed_gaps(phi_speed_beats_from_raw(_layer[$ "speedEvents"]));
 			if (array_length(speed_beats) > 0) then array_add(beat_speeds, speed_beats);
 			line_end = phi_event_end(move_x, line_end);
 			line_end = phi_event_end(move_y, line_end);
@@ -4267,6 +4532,7 @@ function phi_rpe_bake(chart) {
 			|| phi_extended_list(extended, "paintEvents") || phi_extended_list(extended, "gifEvents")
 			|| phi_extended_list(extended, "inclineEvents")) then stats.special++;
 		var notes = [];
+		var real_notes = 0;
 		var raw_notes = src[$ "notes"];
 		if (is_array(raw_notes)) {
 			for (var note_i = 0; note_i < array_length(raw_notes); note_i++) {
@@ -4278,6 +4544,8 @@ function phi_rpe_bake(chart) {
 				var end_line = phi_timeline_beat_to_sec(timeline, rpe_array_to_beat(note[$ "endTime"] ?? note[$ "startTime"] ?? 0));
 				if (end_line < start_line) then end_line = start_line;
 				line_end = max(line_end, end_line);
+				var note_fake = bool(note[$ "isFake"] ?? false);
+				if (!note_fake) then real_notes++;
 				var note_alpha = phi_finite_or(note[$ "alpha"] ?? 255, 255);
 				var note_size = phi_finite_or(note[$ "size"] ?? 1, 1);
 				if (abs(note_alpha - 255) > 0.5) then stats.noteAlpha++;
@@ -4290,15 +4558,22 @@ function phi_rpe_bake(chart) {
 					officialX: phi_finite_or(note[$ "positionX"] ?? 0, 0) / 75.375,
 					speed: phi_finite_or(note[$ "speed"] ?? 1, 1),
 					above: phi_note_above(note),
-					fake: bool(note[$ "isFake"] ?? false),
+					fake: note_fake,
 					yOffset: phi_finite_or(note[$ "yOffset"] ?? 0, 0)
 				});
 			}
 		}
-		if (!is_finite(line_end) || line_end > 100000) then line_end = 100000;
-		if (line_end < 0) then line_end = 0;
-		chart_end = max(chart_end, line_end * factor);
-		if (!is_finite(chart_end) || chart_end > 100000) then chart_end = 100000;
+		// A line Official cannot draw, with no real notes of its own, is not exported.
+		// Parents and children stay: their link is baked into the visible motion.
+		var linked = (father >= 0) || variable_struct_exists(parent_ids, string(line_i));
+		var drop = phi_line_official_unsupported(src, extended) && real_notes <= 0 && !linked;
+		if (drop) then stats.dropped++;
+		if (!drop) {
+			if (!is_finite(line_end) || line_end > 100000) then line_end = 100000;
+			if (line_end < 0) then line_end = 0;
+			chart_end = max(chart_end, line_end * factor);
+			if (!is_finite(chart_end) || chart_end > 100000) then chart_end = 100000;
+		}
 		array_add(models, {
 			factor: factor,
 			father: father,
@@ -4309,25 +4584,29 @@ function phi_rpe_bake(chart) {
 			legacySegments: legacy_segments,
 			modern: modern,
 			notes: notes,
-			lineEnd: line_end
+			lineEnd: line_end,
+			drop: drop
 		});
 	}
 	var baked_lines = [];
 	for (var bake_i = 0; bake_i < array_length(models); bake_i++) {
 		var model = models[bake_i];
+		if (bool(model[$ "drop"] ?? false)) then continue;
 		var factor = model.factor;
 		var line_start = 0;
 		var line_end = max(model.lineEnd, chart_end / factor);
 		if (line_end <= line_start) then line_end = line_start + 0.001;
 		var chain = phi_parent_chain(models, bake_i);
-		var pose = phi_slice_pose(phi_pose_knots(models, chain, line_start, line_end), models, chain, aspect);
+		var chart_t1 = line_end * factor;
+		var pose_knots = phi_pose_refine_knots(models, chain, phi_pose_knots(models, chain, 0, chart_t1), aspect);
+		var pose = phi_slice_pose(pose_knots, models, chain, aspect);
 		var alpha_ctx = { kind: "a", model: model };
 		var alpha = phi_slice_scalar(phi_alpha_knots(model, line_start, line_end), alpha_ctx, 0.00001);
 		if (model.attach) then alpha = [{ t0: line_start, t1: line_end, v0: 0, v1: 0 }];
 		var _speed = phi_slice_speed(model, phi_speed_knots(model, line_start, line_end), factor);
 		if (array_length(_speed) <= 0) then array_add(_speed, { t0: line_start * factor, t1: line_end * factor, value: 0 });
-		var move = phi_merge_move(phi_scale_move(pose.move, factor));
-		var rot = phi_merge_scalar(phi_scale_scalar(pose.rot, factor));
+		var move = phi_merge_move(pose.move);
+		var rot = phi_merge_scalar(pose.rot);
 		alpha = phi_merge_scalar(phi_scale_scalar(alpha, factor));
 		_speed = phi_merge_speed(_speed);
 		array_add(baked_lines, { move: move, rot: rot, alpha: alpha, speed: _speed, notes: model.notes });
@@ -4356,6 +4635,258 @@ function phi_note_xy_scaled(note) {
 	return false;
 }
 
+/// sim-phi stores event times with `Number(t) | 0`, so a slice shorter than one
+/// tick disappears and the line floor runs ahead of the note. phira integrates
+/// `(end - start) * secondsPerTick` in f32, and the same slices blow that sum up.
+/// Knots sit on the integers around every boundary. Each span keeps the real
+/// floor change, and every written time is an integer tick.
+function phi_official_tick_end(ranges) {
+	var end_tick = 0;
+	var count = array_length(ranges);
+	for (var i = 0; i < count; i++) {
+		var t1 = real(ranges[i].t1);
+		if (is_finite(t1) && t1 > end_tick) then end_tick = t1;
+	}
+	var tick_end = ceil(end_tick - 0.0000001);
+	if (!is_finite(tick_end) || tick_end < 1) then tick_end = 1;
+	if (tick_end > 20000000) then tick_end = 20000000;
+	return tick_end;
+}
+
+function phi_official_push_edge(dst, edge, tick_end) {
+	if (!is_finite(edge)) then return;
+	var lo = floor(edge + 0.000000001);
+	var hi = ceil(edge - 0.000000001);
+	if (lo < 0) then lo = 0;
+	if (hi < 0) then hi = 0;
+	if (lo > tick_end) then lo = tick_end;
+	if (hi > tick_end) then hi = tick_end;
+	array_add(dst, lo);
+	if (hi != lo) then array_add(dst, hi);
+}
+
+function phi_official_knots(ranges, tick_end) {
+	var raw = [0, tick_end];
+	var count = array_length(ranges);
+	for (var i = 0; i < count; i++) {
+		phi_official_push_edge(raw, real(ranges[i].t0), tick_end);
+		phi_official_push_edge(raw, real(ranges[i].t1), tick_end);
+	}
+	array_sort(raw, pec_cmp_real);
+	var knots = [];
+	for (var k = 0; k < array_length(raw); k++) {
+		var tk = raw[k];
+		var n = array_length(knots);
+		if (n > 0 && knots[n - 1] == tk) then continue;
+		array_add(knots, tk);
+	}
+	if (array_length(knots) < 2) then return [0, tick_end];
+	return knots;
+}
+
+function phi_official_f32_finite(value) {
+	var out = official_f32(value);
+	if (!is_finite(out)) then return 0;
+	return out;
+}
+
+function phi_official_quantize_speed(ranges, spb) {
+	var src = [];
+	var count = array_length(ranges);
+	for (var i = 0; i < count; i++) {
+		var ev = ranges[i];
+		var t0 = real(ev.t0);
+		var t1 = real(ev.t1);
+		var speed_value = real(ev.v);
+		if (!is_finite(t0) || !is_finite(t1) || !is_finite(speed_value)) then continue;
+		if (t1 <= t0) then continue;
+		array_add(src, { t0: t0, t1: t1, v: speed_value });
+	}
+	if (array_length(src) <= 0) then return [{ startTime: 0, endTime: 1, value: 0 }];
+	array_sort(src, function(a, b) { return pec_cmp_real(a.t0, b.t0); });
+	var seconds = real(spb);
+	if (!(seconds > 0) || !is_finite(seconds)) then seconds = 1.875 / 140;
+	var tick_end = phi_official_tick_end(src);
+	var knots = phi_official_knots(src, tick_end);
+	var floors = [];
+	var acc = 0;
+	var prev = 0;
+	var si = 0;
+	var nsrc = array_length(src);
+	for (var ki = 0; ki < array_length(knots); ki++) {
+		var t = knots[ki];
+		var scan = si;
+		while (scan < nsrc && src[scan].t1 <= prev + 0.000000001) scan++;
+		var at = prev;
+		while (scan < nsrc && src[scan].t0 < t - 0.000000000001) {
+			var a = max(at, src[scan].t0);
+			var b = min(t, src[scan].t1);
+			if (b > a) then acc += src[scan].v * (b - a) * seconds;
+			if (src[scan].t1 <= t + 0.000000001) {
+				scan++;
+				at = max(at, b);
+			} else break;
+		}
+		array_add(floors, acc);
+		prev = t;
+		si = scan;
+	}
+	var out = [];
+	for (var span_i = 0; span_i < array_length(knots) - 1; span_i++) {
+		var span_a = knots[span_i];
+		var span_b = knots[span_i + 1];
+		if (span_b <= span_a) then continue;
+		var dsec = (span_b - span_a) * seconds;
+		var value = 0;
+		if (dsec > 0) then value = (floors[span_i + 1] - floors[span_i]) / dsec;
+		value = phi_official_f32_finite(value);
+		var nout = array_length(out);
+		if (nout > 0 && out[nout - 1].value == value) {
+			out[nout - 1].endTime = span_b;
+		} else {
+			array_add(out, { startTime: span_a, endTime: span_b, value: value });
+		}
+	}
+	if (array_length(out) <= 0) then return [{ startTime: 0, endTime: 1, value: 0 }];
+	return out;
+}
+
+function phi_official_lerp(t0, t1, v0, v1, t) {
+	if (!(t1 > t0)) then return v1;
+	var p = (t - t0) / (t1 - t0);
+	if (p <= 0) then return v0;
+	if (p >= 1) then return v1;
+	return v0 + (v1 - v0) * p;
+}
+
+/// Left limit keeps the value before a jump. Right limit keeps the value after it.
+function phi_official_edge_values(events, knots) {
+	var n = array_length(events);
+	var out = [];
+	var left_i = 0;
+	var right_i = 0;
+	var eps = 0.0000001;
+	for (var ki = 0; ki < array_length(knots); ki++) {
+		var t = knots[ki];
+		while (left_i + 1 < n && events[left_i + 1].t0 < t - eps) left_i++;
+		var left_v = 0;
+		if (n <= 0) then left_v = 0;
+		else if (events[0].t0 >= t - eps) then left_v = events[0].v0;
+		else {
+			var left_ev = events[left_i];
+			if (t <= left_ev.t1 + eps) then left_v = phi_official_lerp(left_ev.t0, left_ev.t1, left_ev.v0, left_ev.v1, t);
+			else left_v = left_ev.v1;
+		}
+		while (right_i < n && events[right_i].t1 <= t + eps) right_i++;
+		var right_v = left_v;
+		if (n <= 0) then right_v = 0;
+		else if (right_i >= n) then right_v = events[n - 1].v1;
+		else {
+			var right_ev = events[right_i];
+			if (right_ev.t0 > t + eps) {
+				if (right_i == 0) then right_v = right_ev.v0;
+				else right_v = events[right_i - 1].v1;
+			} else right_v = phi_official_lerp(right_ev.t0, right_ev.t1, right_ev.v0, right_ev.v1, t);
+		}
+		array_add(out, { left: left_v, right: right_v });
+	}
+	return out;
+}
+
+function phi_official_same_slope(dt0, dv0, dt1, dv1) {
+	if (dt0 <= 0 || dt1 <= 0) then return false;
+	var slope0 = dv0 / dt0;
+	var slope1 = dv1 / dt1;
+	return abs(slope0 - slope1) <= max(0.00001, 0.0001 * max(abs(slope0), 0.00001));
+}
+
+function phi_official_quantize_scalar(ranges) {
+	var src = [];
+	var count = array_length(ranges);
+	for (var i = 0; i < count; i++) {
+		var ev = ranges[i];
+		var t0 = real(ev.t0);
+		var t1 = real(ev.t1);
+		var v0 = real(ev.v0);
+		var v1 = real(ev.v1);
+		if (!is_finite(t0) || !is_finite(t1) || !is_finite(v0) || !is_finite(v1)) then continue;
+		if (t1 <= t0) then continue;
+		array_add(src, { t0: t0, t1: t1, v0: v0, v1: v1 });
+	}
+	if (array_length(src) <= 0) then return [];
+	array_sort(src, function(a, b) { return pec_cmp_real(a.t0, b.t0); });
+	var tick_end = phi_official_tick_end(src);
+	var knots = phi_official_knots(src, tick_end);
+	var edges = phi_official_edge_values(src, knots);
+	var out = [];
+	for (var span_i = 0; span_i < array_length(knots) - 1; span_i++) {
+		var span_a = knots[span_i];
+		var span_b = knots[span_i + 1];
+		if (span_b <= span_a) then continue;
+		var v0 = edges[span_i].right;
+		var v1 = edges[span_i + 1].left;
+		var nout = array_length(out);
+		if (nout > 0) {
+			var prev = out[nout - 1];
+			var connected = abs(prev.rawEnd - v0) <= 0.00001;
+			if (connected && phi_official_same_slope(prev.endTime - prev.startTime, prev.rawEnd - prev.rawStart, span_b - span_a, v1 - v0)) {
+				prev.endTime = span_b;
+				prev.rawEnd = v1;
+				prev.end = phi_official_f32_finite(v1);
+				continue;
+			}
+		}
+		array_add(out, {
+			startTime: span_a,
+			endTime: span_b,
+			start: phi_official_f32_finite(v0),
+			"end": phi_official_f32_finite(v1),
+			rawStart: v0,
+			rawEnd: v1
+		});
+	}
+	for (var clean_i = 0; clean_i < array_length(out); clean_i++) {
+		variable_struct_remove(out[clean_i], "rawStart");
+		variable_struct_remove(out[clean_i], "rawEnd");
+	}
+	return out;
+}
+
+function phi_official_quantize_move(ranges) {
+	array_sort(ranges, function(a, b) { return pec_cmp_real(a.t0, b.t0); });
+	var src_x = [];
+	var src_y = [];
+	var count = array_length(ranges);
+	for (var i = 0; i < count; i++) {
+		var ev = ranges[i];
+		var t0 = real(ev.t0);
+		var t1 = real(ev.t1);
+		if (!is_finite(t0) || !is_finite(t1) || t1 <= t0) then continue;
+		array_add(src_x, { t0: t0, t1: t1, v0: real(ev.x0), v1: real(ev.x1) });
+		array_add(src_y, { t0: t0, t1: t1, v0: real(ev.y0), v1: real(ev.y1) });
+	}
+	if (array_length(src_x) <= 0) then return [];
+	var tick_end = phi_official_tick_end(src_x);
+	var knots = phi_official_knots(src_x, tick_end);
+	var edge_x = phi_official_edge_values(src_x, knots);
+	var edge_y = phi_official_edge_values(src_y, knots);
+	var out = [];
+	for (var span_i = 0; span_i < array_length(knots) - 1; span_i++) {
+		var span_a = knots[span_i];
+		var span_b = knots[span_i + 1];
+		if (span_b <= span_a) then continue;
+		array_add(out, {
+			startTime: span_a,
+			endTime: span_b,
+			start: phi_official_f32_finite(edge_x[span_i].right),
+			"end": phi_official_f32_finite(edge_x[span_i + 1].left),
+			start2: phi_official_f32_finite(edge_y[span_i].right),
+			end2: phi_official_f32_finite(edge_y[span_i + 1].left)
+		});
+	}
+	return out;
+}
+
 function phi_baked_to_official(baked, source_name) {
 	if (!is_struct(baked)) then return undefined;
 	var bpm = baked.bpm;
@@ -4367,27 +4898,27 @@ function phi_baked_to_official(baked, source_name) {
 	stats.notes = 0;
 	for (var line_i = 0; line_i < array_length(baked.lines); line_i++) {
 		var _line = baked.lines[line_i];
-		var _speed = [];
+		var speed_ranges = [];
 		var speed_src = phi_merge_speed(_line.speed);
 		for (var speed_i = 0; speed_i < array_length(speed_src); speed_i++) {
 			var ev = speed_src[speed_i];
-			var t0 = phi_round6(phi_sec_to_tick(ev.t0, bpm));
-			var t1 = phi_round6(phi_sec_to_tick(ev.t1, bpm));
-			if (t1 < t0) then t1 = t0;
-			array_add(_speed, { startTime: t0, endTime: t1, value: ev.value, floorPosition: 0 });
+			var t0 = phi_sec_to_tick(ev.t0, bpm);
+			var t1 = phi_sec_to_tick(ev.t1, bpm);
+			if (!is_finite(t0)) then t0 = 0;
+			if (!is_finite(t1) || t1 < t0) then t1 = t0;
+			if (t1 > t0) then array_add(speed_ranges, { t0: t0, t1: t1, v: real(ev.value) });
 		}
-		if (array_length(_speed) <= 0) then array_add(_speed, { startTime: 0, endTime: 32, value: 0, floorPosition: 0 });
-		var floor_acc = 0;
-		for (var floor_i = 0; floor_i < array_length(_speed); floor_i++) {
-			_speed[floor_i].floorPosition = floor_acc;
-			var dt = max(0, _speed[floor_i].endTime - _speed[floor_i].startTime) * spb;
-			floor_acc += dt * _speed[floor_i].value;
-		}
+		var _speed = phi_official_quantize_speed(speed_ranges, spb);
+		official_prepare_speed_events(_speed, spb);
 		var above = [];
 		var below = [];
 		for (var note_i = 0; note_i < array_length(_line.notes); note_i++) {
 			var note = _line.notes[note_i];
-			if (note.fake) then stats.fakeDropped++;
+			if (note.fake) {
+				stats.fakeDropped++;
+				continue;
+			}
+			stats.notes++;
 			var off_type = 1;
 			if (note.rpeType == 2) then off_type = 3;
 			else if (note.rpeType == 3) then off_type = 4;
@@ -4395,78 +4926,109 @@ function phi_baked_to_official(baked, source_name) {
 			var tick = round(phi_sec_to_tick(note.startSec, bpm));
 			var end_tick = round(phi_sec_to_tick(note.endSec, bpm));
 			var hold = 0;
+			var official_speed = note.speed;
 			if (off_type == 3) {
 				hold = end_tick - tick;
 				if (hold < 0) then hold = 0;
+				var hold_sec = hold * spb;
+				if (hold_sec <= 0.0000001) {
+					official_speed = 0;
+					hold = 0;
+				} else {
+					// Official body length is speed * holdTime. Fold the RPE
+					// floor travel and note speed into that one body speed.
+					var floor_end = official_floor_at_beat(_speed, tick + hold, spb);
+					var floor_start = official_floor_at_beat(_speed, tick, spb);
+					official_speed = ((floor_end - floor_start) * note.speed) / hold_sec;
+					if (!is_finite(official_speed)) then official_speed = 0;
+					official_speed = phi_official_f32_finite(official_speed);
+				};
 			}
-			var floor_v = official_floor_at_beat(speed, tick, spb);
+			var floor_v = official_floor_at_beat(_speed, tick, spb);
 			if (off_type != 3 && abs(note.speed) > 0.0000001 && abs(note.yOffset) > 0.0000001) {
 				floor_v += note.yOffset / (540 * note.speed);
 			}
 			var packed = {
-				type: off_type,
+				type: int64(off_type),
 				time: tick,
 				holdTime: hold,
-				positionX: note.officialX,
-				speed: note.speed,
+				positionX: phi_official_f32_finite(note.officialX),
+				speed: phi_official_f32_finite(official_speed),
 				floorPosition: floor_v
 			};
 			if (note.above) then array_add(above, packed);
 			else array_add(below, packed);
-			stats.notes++;
 		}
-		var move = [];
+		var move_ranges = [];
 		for (var move_i = 0; move_i < array_length(_line.move); move_i++) {
 			var mv = _line.move[move_i];
-			array_add(move, {
-				startTime: phi_round6(phi_sec_to_tick(mv.t0, bpm)),
-				endTime: phi_round6(phi_sec_to_tick(mv.t1, bpm)),
-				start: mv.x0,
-				"end": mv.x1,
-				start2: mv.y0,
-				end2: mv.y1
+			array_add(move_ranges, {
+				t0: phi_sec_to_tick(mv.t0, bpm),
+				t1: phi_sec_to_tick(mv.t1, bpm),
+				x0: mv.x0, y0: mv.y0, x1: mv.x1, y1: mv.y1
 			});
 		}
-		var rot = [];
+		var move = phi_official_quantize_move(move_ranges);
+		var rot_ranges = [];
 		for (var rot_i = 0; rot_i < array_length(_line.rot); rot_i++) {
 			var rv = _line.rot[rot_i];
-			array_add(rot, {
-				startTime: phi_round6(phi_sec_to_tick(rv.t0, bpm)),
-				endTime: phi_round6(phi_sec_to_tick(rv.t1, bpm)),
-				start: rv.v0,
-				"end": rv.v1
+			array_add(rot_ranges, {
+				t0: phi_sec_to_tick(rv.t0, bpm),
+				t1: phi_sec_to_tick(rv.t1, bpm),
+				v0: rv.v0, v1: rv.v1
 			});
 		}
-		var alpha = [];
+		var rot = phi_official_quantize_scalar(rot_ranges);
+		var alpha_ranges = [];
 		for (var alpha_i = 0; alpha_i < array_length(_line.alpha); alpha_i++) {
 			var av = _line.alpha[alpha_i];
-			array_add(alpha, {
-				startTime: phi_round6(phi_sec_to_tick(av.t0, bpm)),
-				endTime: phi_round6(phi_sec_to_tick(av.t1, bpm)),
-				start: av.v0,
-				"end": av.v1
+			array_add(alpha_ranges, {
+				t0: phi_sec_to_tick(av.t0, bpm),
+				t1: phi_sec_to_tick(av.t1, bpm),
+				v0: av.v0, v1: av.v1
 			});
 		}
+		var alpha = phi_official_quantize_scalar(alpha_ranges);
 		stats.move += array_length(move);
 		stats.rotate += array_length(rot);
 		stats.alpha += array_length(alpha);
-		stats.speed += array_length(speed);
+		stats.speed += array_length(_speed);
 		array_add(judge, {
 			bpm: bpm,
 			notesAbove: above,
 			notesBelow: below,
-			speedEvents: speed,
+			speedEvents: _speed,
 			judgeLineMoveEvents: move,
 			judgeLineRotateEvents: rot,
 			judgeLineDisappearEvents: alpha
 		});
 	}
+	stats.lines = array_length(judge);
 	return {
-		formatVersion: 3,
+		formatVersion: int64(3),
 		offset: baked.offsetMs / 1000,
 		judgeLineList: judge,
 		stats: stats
 	};
+}
+
+/// phira reads formatVersion as u32 and note type as u8. json_stringify writes
+/// whole GML numbers as 3.0, and serde rejects that float.
+function phi_official_json_text(chart, pretty) {
+	var text = json_stringify(chart, pretty);
+	text = string_replace_all(text, "\"formatVersion\": 3.0", "\"formatVersion\": 3");
+	text = string_replace_all(text, "\"formatVersion\":3.0", "\"formatVersion\":3");
+	var type_n = 1;
+	repeat (4) {
+		var type_real = "\"type\": " + string(type_n) + ".0";
+		var type_real_tight = "\"type\":" + string(type_n) + ".0";
+		var type_int = "\"type\": " + string(type_n);
+		var type_int_tight = "\"type\":" + string(type_n);
+		text = string_replace_all(text, type_real, type_int);
+		text = string_replace_all(text, type_real_tight, type_int_tight);
+		type_n += 1;
+	}
+	return text;
 }
 
 function phi_pec_emit_instant(commands, head, beat, fields) {
@@ -4548,8 +5110,8 @@ function phi_baked_to_pec(baked) {
 			var av = _line.alpha[alpha_i];
 			var ab0 = phi_timeline_sec_to_beat(timeline, av.t0);
 			var ab1 = phi_timeline_sec_to_beat(timeline, av.t1);
-			var a0 = clamp(av.v0, 0, 1) * 255;
-			var a1 = clamp(av.v1, 0, 1) * 255;
+			var a0 = phi_pec_alpha_file(av.v0);
+			var a1 = phi_pec_alpha_file(av.v1);
 			if (!alpha_started || abs(a0 - prev_a) > 0.05) {
 				phi_pec_emit_instant(commands, "ca " + _id, ab0, [a0]);
 				prev_a = a0;
@@ -4588,7 +5150,8 @@ function phi_baked_to_pec(baked) {
 			if (note.rpeType == 2) then body += " " + phi_num_text(nb1);
 			body += " " + phi_num_text(file_x) + " " + string(side) + " " + string(fake);
 			array_add(commands, body);
-			if (abs(note.speed - 1) > 0.00001) then array_add(commands, "# " + phi_num_text(note.speed));
+			array_add(commands, "# " + phi_num_text(phi_finite_or(note[$ "speed"] ?? 1, 1)));
+			array_add(commands, "& " + phi_num_text(phi_finite_or(note[$ "width"] ?? 1, 1)));
 			stats.notes++;
 		}
 	}
@@ -4631,6 +5194,47 @@ function phi_rpe_to_official(chart) {
 	return phi_baked_to_official(baked, "RPE>Official");
 }
 
+/// Write an Official package beside the source audio and art. Used by PLS_CONVERT_OUT.
+function phi_convert_package(out_dir) {
+	var session = chart_session_ensure();
+	if (!is_struct(session) || !session.ready) then return false;
+	var root = session.active_dir;
+	var chart_text = chart_read_text_file(chart_path_join(root, session.chart_file), -1);
+	if (!is_string(chart_text) || !string_length(chart_text)) then return false;
+	var built = undefined;
+	if (session.format == CHART_FORMAT.RPE) {
+		var parsed = phi_rpe_chart_value(chart_text);
+		if (!is_struct(parsed)) then return false;
+		built = phi_rpe_to_official(parsed);
+		delete(parsed);
+	} else if (session.format == CHART_FORMAT.PEC) {
+		built = phi_pec_to_official(chart_text);
+	} else return false;
+	if (!is_struct(built)) then return false;
+	var convert_stats = built[$ "stats"];
+	if (is_struct(convert_stats)) then phi_tools_event_report(convert_stats);
+	variable_struct_remove(built, "stats");
+	if (!directory_exists(out_dir)) then directory_create(out_dir);
+	var chart_name = "chart.json";
+	chart_buffer_save_text(chart_path_join(out_dir, chart_name), phi_official_json_text(built, false));
+	delete(built);
+	var music_name = chart_path_file_name(session.music_file);
+	var image_name = chart_path_file_name(session.image_file);
+	if (string_length(session.music_file)) then file_copy(chart_path_join(root, session.music_file), chart_path_join(out_dir, music_name));
+	if (string_length(session.image_file)) then file_copy(chart_path_join(root, session.image_file), chart_path_join(out_dir, image_name));
+	chart_buffer_save_text(chart_path_join(out_dir, "info.txt"),
+		"Name: " + string(session.name ?? "")
+		+ "\nLevel: " + string(session.level ?? "")
+		+ "\nComposer: " + string(session.composer ?? "")
+		+ "\nCharter: " + string(session.charter ?? "")
+		+ "\nSong: " + music_name
+		+ "\nPicture: " + image_name
+		+ "\nChart: " + chart_name
+		+ "\nOffset: 0\n");
+	print($"[ConvertPlay] wrote {chart_path_join(out_dir, chart_name)}");
+	return file_exists(chart_path_join(out_dir, chart_name));
+}
+
 function phi_rpe_event_plain(ev) {
 	if (!is_struct(ev)) then return false;
 	var points = ev[$ "bezierPoints"];
@@ -4645,7 +5249,18 @@ function phi_rpe_event_plain(ev) {
 function phi_rpe_ease_file(ev) {
 	var ease_id = floor(phi_finite_or(ev[$ "easingType"] ?? 1, 1));
 	if (ease_id < 1) then return 1;
-	return ease_id;
+	// PEC playback runs pec_easing(fileId). That matches RPE only when the
+	// file id is the inverse of the playback tween, which is not the raw
+	// chart id once easingType leaves the 1..15 involution.
+	return phi_pec_ease_from_rpe(ease_id);
+}
+
+function phi_pec_alpha_file(unit) {
+	// RPE alpha below 0 hides notes. PEC uses -1 for that. Values at or
+	// below -100 are a different Phira "appear early" extension, so a raw
+	// -255 must not be written through as -255.
+	if (phi_finite_or(unit, 0) <= -0.5 / 255) then return -1;
+	return clamp(unit, 0, 1) * 255;
 }
 
 function phi_rpe_collect_events(layer, key) {
@@ -4793,6 +5408,558 @@ function phi_rpe_linear_scalar(raw, timeline, t_end, scale, shift) {
 	return out;
 }
 
+function phi_ev_beat(ev, key) {
+	return rpe_array_to_beat(ev[$ key] ?? 0);
+}
+
+function phi_cover_event(events, b0, b1) {
+	var hold = 0;
+	for (var i = 0; i < array_length(events); i++) {
+		var ev = events[i];
+		var s = phi_ev_beat(ev, "startTime");
+		var e = phi_ev_beat(ev, "endTime");
+		if (e < s) then e = s;
+		var v0 = phi_finite_or(ev[$ "start"] ?? 0, 0);
+		var v1 = phi_finite_or(ev[$ "end"] ?? v0, v0);
+		if (e <= b0 + 0.0000001) {
+			hold = v1;
+			continue;
+		}
+		if (s >= b1 - 0.0000001) then break;
+		var full = abs(s - b0) <= 0.0005 && abs(e - b1) <= 0.0005;
+		return { mode: (full ? "full" : "partial"), ev: ev, v0: v0, v1: v1, ease: phi_rpe_ease_file(ev) };
+	}
+	return { mode: "hold", ev: undefined, v0: hold, v1: hold, ease: 1 };
+}
+
+function phi_raw_sample(ev, beat) {
+	var s = phi_ev_beat(ev, "startTime");
+	var e = phi_ev_beat(ev, "endTime");
+	var v0 = phi_finite_or(ev[$ "start"] ?? 0, 0);
+	var v1 = phi_finite_or(ev[$ "end"] ?? v0, v0);
+	var left = phi_finite_or(ev[$ "easingLeft"] ?? 0, 0);
+	var right = phi_finite_or(ev[$ "easingRight"] ?? 1, 1);
+	if (left == right) {
+		left = 0;
+		right = 1;
+	}
+	var points = ev[$ "bezierPoints"];
+	return phi_sample_event({
+		t0: s, t1: max(e, s), v0: v0, v1: v1,
+		ease: rpe_map_easing_id(ev[$ "easingType"] ?? 1),
+		e0: left, e1: right,
+		bezier: bool(ev[$ "bezier"] ?? 0) && is_array(points) && array_length(points) >= 4,
+		pts: points
+	}, beat);
+}
+
+function phi_span_sum(lists, b0, b1) {
+	var sum0 = 0;
+	var sum1 = 0;
+	var ease = 1;
+	var have_ease = false;
+	var must_slice = false;
+	for (var li = 0; li < array_length(lists); li++) {
+		var cover = phi_cover_event(lists[li], b0, b1);
+		if (cover.mode == "partial") {
+			must_slice = true;
+			sum0 += phi_raw_sample(cover.ev, b0);
+			sum1 += phi_raw_sample(cover.ev, b1);
+		} else {
+			sum0 += cover.v0;
+			sum1 += cover.v1;
+			if (cover.mode == "full" && abs(cover.v1 - cover.v0) > 0.0001) {
+				if (!have_ease) {
+					ease = cover.ease;
+					have_ease = true;
+				} else if (ease != cover.ease) then must_slice = true;
+			}
+		}
+	}
+	return { v0: sum0, v1: sum1, ease: ease, slice: must_slice };
+}
+
+function phi_beat_bounds(lists) {
+	var beats = [0];
+	for (var li = 0; li < array_length(lists); li++) {
+		var events = lists[li];
+		for (var i = 0; i < array_length(events); i++) {
+			array_add(beats, phi_ev_beat(events[i], "startTime"));
+			array_add(beats, phi_ev_beat(events[i], "endTime"));
+		}
+	}
+	array_sort(beats, pec_cmp_real);
+	var out = [];
+	for (var j = 0; j < array_length(beats); j++) {
+		var beat = beats[j];
+		if (!is_finite(beat)) then continue;
+		var n = array_length(out);
+		if (n > 0 && abs(out[n - 1] - beat) <= 0.0005) then continue;
+		array_add(out, beat);
+	}
+	if (array_length(out) <= 0) then array_add(out, 0);
+	return out;
+}
+
+function phi_sum_at_edge(lists, beat, after_jump) {
+	var sum = 0;
+	var list_n = array_length(lists);
+	for (var li = 0; li < list_n; li++) {
+		var events = lists[li];
+		var n = array_length(events);
+		var hold = 0;
+		var saw = false;
+		var sampled = false;
+		for (var i = 0; i < n; i++) {
+			var ev = events[i];
+			var s = phi_ev_beat(ev, "startTime");
+			var e = phi_ev_beat(ev, "endTime");
+			if (e < s) then e = s;
+			if (beat < s - 0.0000001) then break;
+			var at_start = abs(beat - s) <= 0.0000001;
+			var at_end = abs(beat - e) <= 0.0000001;
+			if (beat > e + 0.0000001) {
+				hold = phi_finite_or(ev[$ "end"] ?? ev[$ "start"] ?? 0, 0);
+				saw = true;
+				continue;
+			}
+			// A value jump lives between two events that share a beat.
+			// The span that ends there keeps the old value. The span that
+			// starts there takes the new one, so the writer emits cp.
+			if (!after_jump && at_start) {
+				if (!saw) then hold = phi_finite_or(ev[$ "start"] ?? 0, 0);
+				saw = true;
+				break;
+			}
+			if (after_jump && at_end && !at_start) {
+				hold = phi_finite_or(ev[$ "end"] ?? ev[$ "start"] ?? 0, 0);
+				saw = true;
+				continue;
+			}
+			sum += phi_raw_sample(ev, beat);
+			sampled = true;
+			break;
+		}
+		if (sampled) {
+			continue;
+		}
+		if (saw) then sum += hold;
+		else if (n > 0) then sum += phi_finite_or(events[0][$ "start"] ?? 0, 0);
+	}
+	return sum;
+}
+
+function phi_sum_at(lists, beat) {
+	return phi_sum_at_edge(lists, beat, false);
+}
+
+function phi_motion_bounds(lists) {
+	var beats = [0];
+	for (var li = 0; li < array_length(lists); li++) {
+		var events = lists[li];
+		var hold = undefined;
+		for (var i = 0; i < array_length(events); i++) {
+			var ev = events[i];
+			var s = phi_ev_beat(ev, "startTime");
+			var e = phi_ev_beat(ev, "endTime");
+			if (e < s) then e = s;
+			var v0 = phi_finite_or(ev[$ "start"] ?? 0, 0);
+			var v1 = phi_finite_or(ev[$ "end"] ?? v0, v0);
+			var jumps = false;
+			if (!is_undefined(hold) && abs(v0 - hold) > 0.0001) then jumps = true;
+			var changes = abs(v1 - v0) > 0.0001;
+			if (jumps || changes) then array_add(beats, s);
+			if (changes && e > s + 0.0000001) then array_add(beats, e);
+			hold = v1;
+		}
+	}
+	array_sort(beats, pec_cmp_real);
+	var out = [];
+	for (var j = 0; j < array_length(beats); j++) {
+		var beat = beats[j];
+		if (!is_finite(beat)) then continue;
+		var n = array_length(out);
+		if (n > 0 && abs(out[n - 1] - beat) <= 0.0005) then continue;
+		array_add(out, beat);
+	}
+	if (array_length(out) <= 0) then array_add(out, 0);
+	return out;
+}
+
+function phi_rpe_pieces(b0, b1) {
+	var n = ceil((b1 - b0) * 10);
+	if (n < 6) then n = 6;
+	if (n > 32) then n = 32;
+	return n;
+}
+
+function phi_axis_travel(lists, t0, t1) {
+	var travel = 0;
+	for (var li = 0; li < array_length(lists); li++) {
+		var events = lists[li];
+		var hold = undefined;
+		for (var i = 0; i < array_length(events); i++) {
+			var ev = events[i];
+			var s = phi_ev_beat(ev, "startTime");
+			var e = phi_ev_beat(ev, "endTime");
+			if (e < s) then e = s;
+			var v0 = phi_finite_or(ev[$ "start"] ?? 0, 0);
+			var v1 = phi_finite_or(ev[$ "end"] ?? v0, v0);
+			if (e < t0 - 0.0000001) {
+				hold = v1;
+				continue;
+			}
+			if (s > t1 + 0.0000001) then break;
+			if (!is_undefined(hold) && s > t0 + 0.0000001 && abs(v0 - hold) > 0.0001) then travel += abs(v0 - hold);
+			var a = max(s, t0);
+			var b = min(e, t1);
+			if (b > a + 0.0000001) then travel += abs(phi_raw_sample(ev, b) - phi_raw_sample(ev, a));
+			hold = v1;
+		}
+	}
+	return travel;
+}
+
+function phi_span_owner(lists, b0, b1) {
+	var found = undefined;
+	for (var li = 0; li < array_length(lists); li++) {
+		var events = lists[li];
+		for (var i = 0; i < array_length(events); i++) {
+			var ev = events[i];
+			var s = phi_ev_beat(ev, "startTime");
+			var e = phi_ev_beat(ev, "endTime");
+			if (e < s) then e = s;
+			if (e <= b0 + 0.0000001 || s >= b1 - 0.0000001) then continue;
+			var v0 = phi_finite_or(ev[$ "start"] ?? 0, 0);
+			var v1 = phi_finite_or(ev[$ "end"] ?? v0, v0);
+			if (abs(v1 - v0) <= 0.0001) then continue;
+			if (!phi_rpe_event_plain(ev)) then return undefined;
+			if (!is_undefined(found)) then return undefined;
+			found = ev;
+		}
+	}
+	return found;
+}
+
+function phi_move_push(out, timeline, b0, b1, x0, y0, x1, y1, ease) {
+	array_add(out, {
+		t0: phi_timeline_beat_to_sec(timeline, b0),
+		t1: phi_timeline_beat_to_sec(timeline, b1),
+		x0: 0.5 + x0 / 1350, y0: 0.5 + y0 / 900,
+		x1: 0.5 + x1 / 1350, y1: 0.5 + y1 / 900,
+		ease: ease
+	});
+}
+
+function phi_promote_window(own, own_lists, quiet_lists, b0, quiet_limit) {
+	var s = phi_ev_beat(own, "startTime");
+	var e = phi_ev_beat(own, "endTime");
+	if (e < s) then e = s;
+	if (e <= s + 0.0000001) then return undefined;
+	if (abs(s - b0) > 0.0005) then return undefined;
+	var own_delta = abs(phi_finite_or(own[$ "end"] ?? 0, 0) - phi_finite_or(own[$ "start"] ?? 0, 0));
+	if (phi_axis_travel(own_lists, s, e) > own_delta + 1) then return undefined;
+	if (phi_axis_travel(quiet_lists, s, e) > quiet_limit) then return undefined;
+	return { s: s, e: e, ease: phi_rpe_ease_file(own) };
+}
+
+function phi_promote_move(x_lists, y_lists, b0, x_own, y_own) {
+	if (!is_undefined(x_own) && !is_undefined(y_own)) {
+		var x_s = phi_ev_beat(x_own, "startTime");
+		var x_e = phi_ev_beat(x_own, "endTime");
+		var y_s = phi_ev_beat(y_own, "startTime");
+		var y_e = phi_ev_beat(y_own, "endTime");
+		if (y_s >= x_s - 0.0005 && y_e <= x_e + 0.0005) {
+			var along_x = phi_promote_window(x_own, x_lists, y_lists, b0, 36);
+			if (!is_undefined(along_x)) then return along_x;
+		}
+		if (x_s >= y_s - 0.0005 && x_e <= y_e + 0.0005) {
+			var along_y = phi_promote_window(y_own, y_lists, x_lists, b0, 36);
+			if (!is_undefined(along_y)) then return along_y;
+		}
+		return undefined;
+	}
+	if (!is_undefined(x_own)) then return phi_promote_window(x_own, x_lists, y_lists, b0, 36);
+	if (!is_undefined(y_own)) then return phi_promote_window(y_own, y_lists, x_lists, b0, 36);
+	return undefined;
+}
+
+function phi_rpe_composite_move(x_lists, y_lists, timeline) {
+	var lists = [];
+	for (var i = 0; i < array_length(x_lists); i++) array_add(lists, x_lists[i]);
+	for (var j = 0; j < array_length(y_lists); j++) array_add(lists, y_lists[j]);
+	var bounds = phi_motion_bounds(lists);
+	var out = [];
+	if (array_length(bounds) < 2) {
+		var x_hold = phi_sum_at_edge(x_lists, 0, true);
+		var y_hold = phi_sum_at_edge(y_lists, 0, true);
+		phi_move_push(out, timeline, 0, 0, x_hold, y_hold, x_hold, y_hold, 1);
+		return out;
+	}
+	var b = 0;
+	var bound_n = array_length(bounds);
+	while (b < bound_n - 1) {
+		var b0 = bounds[b];
+		var b1 = bounds[b + 1];
+		if (b1 - b0 <= 0.0000001) {
+			b++;
+			continue;
+		}
+		var x_own = phi_span_owner(x_lists, b0, b1);
+		var y_own = phi_span_owner(y_lists, b0, b1);
+		var promoted = phi_promote_move(x_lists, y_lists, b0, x_own, y_own);
+		if (!is_undefined(promoted)) {
+			var px0 = phi_sum_at_edge(x_lists, promoted.s, true);
+			var px1 = phi_sum_at_edge(x_lists, promoted.e, false);
+			var py0 = phi_sum_at_edge(y_lists, promoted.s, true);
+			var py1 = phi_sum_at_edge(y_lists, promoted.e, false);
+			phi_move_push(out, timeline, promoted.s, promoted.e, px0, py0, px1, py1, promoted.ease);
+			var next_b = b + 1;
+			while (next_b < bound_n - 1 && bounds[next_b] < promoted.e - 0.0005) next_b++;
+			b = next_b;
+			continue;
+		}
+		var x0 = phi_sum_at_edge(x_lists, b0, true);
+		var x1 = phi_sum_at_edge(x_lists, b1, false);
+		var y0 = phi_sum_at_edge(y_lists, b0, true);
+		var y1 = phi_sum_at_edge(y_lists, b1, false);
+		var xs = phi_span_sum(x_lists, b0, b1);
+		var ys = phi_span_sum(y_lists, b0, b1);
+		var dx = abs(x1 - x0);
+		var dy = abs(y1 - y0);
+		var x_moves = dx > 0.05;
+		var y_moves = dy > 0.05;
+		var ease = 1;
+		var slice = (x_moves && xs.slice) || (y_moves && ys.slice);
+		if (!slice && x_moves && phi_axis_travel(x_lists, b0, b1) > dx + 1) then slice = true;
+		if (!slice && y_moves && phi_axis_travel(y_lists, b0, b1) > dy + 1) then slice = true;
+		if (!slice) {
+			if (x_moves && y_moves && xs.ease != ys.ease) then slice = true;
+			else if (x_moves) then ease = xs.ease;
+			else if (y_moves) then ease = ys.ease;
+		}
+		if (slice && !xs.slice && !ys.slice) {
+			if (dx <= 36 && dy > 36) {
+				slice = false;
+				ease = ys.ease;
+			} else if (dy <= 36 && dx > 36) {
+				slice = false;
+				ease = xs.ease;
+			}
+		}
+		if (!slice) {
+			phi_move_push(out, timeline, b0, b1, x0, y0, x1, y1, ease);
+		} else {
+			var pieces = phi_rpe_pieces(b0, b1);
+			var prev_b = b0;
+			var sx = x0;
+			var sy = y0;
+			for (var step = 1; step <= pieces; step++) {
+				var beat = b0 + (b1 - b0) * (step / pieces);
+				var nx = x1;
+				var ny = y1;
+				if (step < pieces) {
+					nx = phi_sum_at(x_lists, beat);
+					ny = phi_sum_at(y_lists, beat);
+				}
+				phi_move_push(out, timeline, prev_b, beat, sx, sy, nx, ny, 1);
+				prev_b = beat;
+				sx = nx;
+				sy = ny;
+			}
+		}
+		b++;
+	}
+	return out;
+}
+
+function phi_rpe_composite_scalar(lists, timeline, scale, shift) {
+	var bounds = phi_motion_bounds(lists);
+	var out = [];
+	if (array_length(bounds) < 2) {
+		var held = phi_sum_at_edge(lists, 0, true) * scale + shift;
+		array_add(out, { t0: 0, t1: 0, v0: held, v1: held, ease: 1 });
+		return out;
+	}
+	var b = 0;
+	var bound_n = array_length(bounds);
+	while (b < bound_n - 1) {
+		var b0 = bounds[b];
+		var b1 = bounds[b + 1];
+		if (b1 - b0 <= 0.0000001) {
+			b++;
+			continue;
+		}
+		var own = phi_span_owner(lists, b0, b1);
+		if (!is_undefined(own)) {
+			var own_s = phi_ev_beat(own, "startTime");
+			var own_e = phi_ev_beat(own, "endTime");
+			if (own_e < own_s) then own_e = own_s;
+			var own_delta = abs(phi_finite_or(own[$ "end"] ?? 0, 0) - phi_finite_or(own[$ "start"] ?? 0, 0));
+			if (own_e > own_s + 0.0000001 && abs(own_s - b0) <= 0.0005 && phi_axis_travel(lists, own_s, own_e) <= own_delta + 0.05) {
+				var whole0 = phi_sum_at_edge(lists, own_s, true);
+				var whole1 = phi_sum_at_edge(lists, own_e, false);
+				array_add(out, {
+					t0: phi_timeline_beat_to_sec(timeline, own_s),
+					t1: phi_timeline_beat_to_sec(timeline, own_e),
+					v0: whole0 * scale + shift,
+					v1: whole1 * scale + shift,
+					ease: phi_rpe_ease_file(own)
+				});
+				var next_b = b + 1;
+				while (next_b < bound_n - 1 && bounds[next_b] < own_e - 0.0005) next_b++;
+				b = next_b;
+				continue;
+			}
+		}
+		var v0 = phi_sum_at_edge(lists, b0, true);
+		var v1 = phi_sum_at_edge(lists, b1, false);
+		var span = phi_span_sum(lists, b0, b1);
+		var slice = span.slice && abs(v1 - v0) > 0.0001;
+		if (slice && phi_axis_travel(lists, b0, b1) <= 0.0001) then slice = false;
+		if (!slice) {
+			array_add(out, {
+				t0: phi_timeline_beat_to_sec(timeline, b0),
+				t1: phi_timeline_beat_to_sec(timeline, b1),
+				v0: v0 * scale + shift,
+				v1: v1 * scale + shift,
+				ease: (abs(v1 - v0) > 0.0001 ? span.ease : 1)
+			});
+		} else {
+			var pieces = phi_rpe_pieces(b0, b1);
+			var prev_b = b0;
+			var prev = v0;
+			for (var step = 1; step <= pieces; step++) {
+				var beat = b0 + (b1 - b0) * (step / pieces);
+				var now = v1;
+				if (step < pieces) then now = phi_sum_at(lists, beat);
+				array_add(out, {
+					t0: phi_timeline_beat_to_sec(timeline, prev_b),
+					t1: phi_timeline_beat_to_sec(timeline, beat),
+					v0: prev * scale + shift,
+					v1: now * scale + shift,
+					ease: 1
+				});
+				prev_b = beat;
+				prev = now;
+			}
+		}
+		b++;
+	}
+	return out;
+}
+
+function phi_pose_time_knots(models, chain, t_end) {
+	var raw = [0, t_end];
+	for (var ci = 0; ci < array_length(chain); ci++) {
+		var layers = models[chain[ci]].layers;
+		for (var li = 0; li < array_length(layers); li++) {
+			var _layer = layers[li];
+			var keys = ["x", "y", "r"];
+			for (var ki = 0; ki < 3; ki++) {
+				var events = _layer[$ keys[ki]];
+				if (!is_array(events)) then continue;
+				for (var ei = 0; ei < array_length(events); ei++) {
+					array_add(raw, events[ei].t0);
+					array_add(raw, events[ei].t1);
+				}
+			}
+		}
+	}
+	array_sort(raw, pec_cmp_real);
+	var out = [];
+	for (var i = 0; i < array_length(raw); i++) {
+		var t = raw[i];
+		if (!is_finite(t) || t < 0) then continue;
+		if (t > t_end) then t = t_end;
+		var n = array_length(out);
+		if (n > 0 && abs(out[n - 1] - t) <= 0.00005) then continue;
+		array_add(out, t);
+	}
+	if (array_length(out) <= 0) then array_add(out, 0);
+	if (array_length(out) == 1) then array_add(out, max(t_end, 0.001));
+	return out;
+}
+
+function phi_chain_eased(models, chain, t0, t1) {
+	for (var ci = 0; ci < array_length(chain); ci++) {
+		var layers = models[chain[ci]].layers;
+		if (phi_layers_eased(layers, "x", t0, t1)) then return true;
+		if (phi_layers_eased(layers, "y", t0, t1)) then return true;
+		if (phi_layers_eased(layers, "r", t0, t1)) then return true;
+	}
+	return false;
+}
+
+function phi_ancestor_raw_r(models, chain, t, aspect) {
+	if (array_length(chain) <= 1) then return 0;
+	var anc = [];
+	for (var i = 0; i < array_length(chain) - 1; i++) array_add(anc, chain[i]);
+	return -phi_world_pose(models, anc, t, aspect).r;
+}
+
+function phi_pec_world_pieces(models, chain, timeline, aspect, t0, t1) {
+	var eased = phi_chain_eased(models, chain, t0, t1);
+	var angle = 0;
+	if (array_length(chain) > 1) {
+		var left = t1 - 0.00002;
+		if (left <= t0) then left = t0;
+		angle = abs(phi_ancestor_raw_r(models, chain, left, aspect) - phi_ancestor_raw_r(models, chain, t0, aspect));
+	}
+	if (!eased && angle <= 0.2) then return 1;
+	var b0 = phi_timeline_sec_to_beat(timeline, t0);
+	var b1 = phi_timeline_sec_to_beat(timeline, t1);
+	var n = ceil(max(0, b1 - b0) * 8);
+	if (angle > 12) then n = max(n, ceil(angle / 6));
+	if (n < 4) then n = 4;
+	if (n > 48) then n = 48;
+	return n;
+}
+
+/// Parent pose baked into PEC move/rotate. PEC has no father link, and a
+/// turning parent swings the child on an arc, so those spans stay linear.
+function phi_pec_world_channels(models, chain, timeline, aspect, t_end) {
+	var knots = phi_pose_time_knots(models, chain, t_end);
+	var move = [];
+	var rot = [];
+	var knot_n = array_length(knots);
+	for (var k = 0; k < knot_n - 1; k++) {
+		var t0 = knots[k];
+		var t1 = knots[k + 1];
+		if (t1 - t0 <= 0.0000001) then continue;
+		var pieces = phi_pec_world_pieces(models, chain, timeline, aspect, t0, t1);
+		var prev_t = t0;
+		var prev = phi_world_pose(models, chain, t0, aspect);
+		for (var step = 1; step <= pieces; step++) {
+			var t = t0 + (t1 - t0) * (step / pieces);
+			var sample_t = t;
+			if (step == pieces && k < knot_n - 2) {
+				sample_t = t - 0.00002;
+				if (sample_t <= prev_t) then sample_t = t;
+			}
+			var now = phi_world_pose(models, chain, sample_t, aspect);
+			array_add(move, {
+				t0: prev_t, t1: t,
+				x0: prev.x, y0: prev.y, x1: now.x, y1: now.y,
+				ease: 1
+			});
+			array_add(rot, {
+				t0: prev_t, t1: t,
+				v0: prev.r, v1: now.r,
+				ease: 1
+			});
+			prev_t = t;
+			prev = now;
+		}
+	}
+	if (array_length(move) <= 0) {
+		var pose = phi_world_pose(models, chain, 0, aspect);
+		array_add(move, { t0: 0, t1: 0, x0: pose.x, y0: pose.y, x1: pose.x, y1: pose.y, ease: 1 });
+		array_add(rot, { t0: 0, t1: 0, v0: pose.r, v1: pose.r, ease: 1 });
+	}
+	return { move: move, rot: rot };
+}
+
 function phi_rpe_to_pec(chart) {
 	if (!is_struct(chart) || !is_array(chart[$ "judgeLineList"])) then return undefined;
 	var meta = chart[$ "META"];
@@ -4802,13 +5969,6 @@ function phi_rpe_to_pec(chart) {
 	var timeline = phi_bpm_timeline(chart[$ "BPMList"]);
 	var bpm = timeline[0].bpm;
 	var source_lines = chart.judgeLineList;
-	var fallback = undefined;
-	for (var scan_i = 0; scan_i < array_length(source_lines); scan_i++) {
-		if (!phi_rpe_line_pec_direct(source_lines[scan_i])) {
-			fallback = phi_rpe_bake(chart);
-			break;
-		}
-	}
 	var baked_lines = [];
 	var stats = {
 		source: "RPE>PEC",
@@ -4831,6 +5991,8 @@ function phi_rpe_to_pec(chart) {
 		speed: 0,
 		sliced: 0
 	};
+	var pose_models = [];
+	var aspect = phi_chart_aspect_of(meta);
 	for (var line_i = 0; line_i < array_length(source_lines); line_i++) {
 		var src = source_lines[line_i];
 		if (!is_struct(src)) then src = {};
@@ -4852,7 +6014,7 @@ function phi_rpe_to_pec(chart) {
 		var beat_speeds = [];
 		for (var speed_i = 0; speed_i < array_length(layers); speed_i++) {
 			var speed_raw = phi_speed_beats_from_raw(is_struct(layers[speed_i]) ? layers[speed_i][$ "speedEvents"] : []);
-			if (array_length(speed_raw) > 0) then array_add(beat_speeds, speed_raw);
+			if (array_length(speed_raw) > 0) then array_add(beat_speeds, phi_drop_extreme_speed_gaps(speed_raw));
 		}
 		var speed_model = { legacy: legacy, legacySegments: [], modern: [] };
 		var line_end = 1;
@@ -4879,12 +6041,15 @@ function phi_rpe_to_pec(chart) {
 				if (abs(phi_finite_or(note[$ "alpha"] ?? 255, 255) - 255) > 0.5) then stats.noteAlpha++;
 				if (abs(phi_finite_or(note[$ "size"] ?? 1, 1) - 1) > 0.0001) then stats.noteSize++;
 				if (phi_note_xy_scaled(note)) then stats.noteScale++;
+				var note_width = phi_finite_or(note[$ "size"] ?? 1, 1);
+				if (variable_struct_exists(note, "sizeX")) then note_width = phi_finite_or(note[$ "sizeX"], note_width);
 				array_add(notes, {
 					rpeType: rpe_type,
 					startSec: start_line * factor,
 					endSec: end_line * factor,
 					officialX: phi_finite_or(note[$ "positionX"] ?? 0, 0) / 75.375,
 					speed: phi_finite_or(note[$ "speed"] ?? 1, 1),
+					width: note_width,
 					above: phi_note_above(note),
 					fake: bool(note[$ "isFake"] ?? false),
 					yOffset: 0
@@ -4892,40 +6057,75 @@ function phi_rpe_to_pec(chart) {
 			}
 		}
 		if (!is_finite(line_end) || line_end > 100000) then line_end = 100000;
-		if (is_struct(fallback) && !phi_rpe_line_pec_direct(src)) {
-			var baked_line = fallback.lines[line_i];
-			array_add(baked_lines, baked_line);
-			stats.sliced++;
-			if (floor(phi_finite_or(src[$ "father"] ?? -1, -1)) >= 0) then stats.parents++;
-			continue;
+		var x_lists = [];
+		var y_lists = [];
+		var r_lists = [];
+		var a_lists = [];
+		for (var layer_n = 0; layer_n < array_length(layers); layer_n++) {
+			if (!is_struct(layers[layer_n])) then continue;
+			var lx = phi_rpe_collect_events(layers[layer_n], "moveXEvents");
+			var ly = phi_rpe_collect_events(layers[layer_n], "moveYEvents");
+			var lr = phi_rpe_collect_events(layers[layer_n], "rotateEvents");
+			var la = phi_rpe_collect_events(layers[layer_n], "alphaEvents");
+			phi_rpe_sort_events(lx);
+			phi_rpe_sort_events(ly);
+			phi_rpe_sort_events(lr);
+			phi_rpe_sort_events(la);
+			if (array_length(lx) > 0) then array_add(x_lists, lx);
+			if (array_length(ly) > 0) then array_add(y_lists, ly);
+			if (array_length(lr) > 0) then array_add(r_lists, lr);
+			if (array_length(la) > 0) then array_add(a_lists, la);
 		}
-		var move = undefined;
-		var rot = undefined;
-		var alpha = undefined;
-		if (phi_rpe_line_pec_direct(src)) {
-			move = phi_rpe_xy_move(phi_rpe_collect_events(content, "moveXEvents"), phi_rpe_collect_events(content, "moveYEvents"), timeline);
-			rot = phi_rpe_scalar_channel(phi_rpe_collect_events(content, "rotateEvents"), timeline, -1, 0);
-			alpha = phi_rpe_scalar_channel(phi_rpe_collect_events(content, "alphaEvents"), timeline, 1 / 255, 0);
+		var father = floor(phi_finite_or(src[$ "father"] ?? -1, -1));
+		if (father < 0 || father >= array_length(source_lines) || father == line_i) then father = -1;
+		var prepared = [];
+		var pose_end = line_end;
+		for (var prep_i = 0; prep_i < array_length(layers); prep_i++) {
+			if (!is_struct(layers[prep_i])) then continue;
+			var prep_x = phi_prep_events(layers[prep_i][$ "moveXEvents"], timeline);
+			var prep_y = phi_prep_events(layers[prep_i][$ "moveYEvents"], timeline);
+			var prep_r = phi_prep_events(layers[prep_i][$ "rotateEvents"], timeline);
+			var prep_sets = [prep_x, prep_y, prep_r];
+			for (var prep_s = 0; prep_s < 3; prep_s++) {
+				var prep_events = prep_sets[prep_s];
+				for (var prep_e = 0; prep_e < array_length(prep_events); prep_e++) {
+					pose_end = max(pose_end, prep_events[prep_e].t1);
+				}
+			}
+			array_add(prepared, { x: prep_x, y: prep_y, r: prep_r });
 		}
-		if (!is_array(move)) {
-			var prep_x = phi_prep_events(phi_rpe_collect_events(content, "moveXEvents"), timeline);
-			var prep_y = phi_prep_events(phi_rpe_collect_events(content, "moveYEvents"), timeline);
-			move = phi_rpe_linear_pair(prep_x, prep_y, line_end, 1 / 1350, 0.5, 1 / 900, 0.5);
-			stats.sliced++;
+		array_add(pose_models, {
+			father: father,
+			rotFather: bool(src[$ "rotateWithFather"] ?? false),
+			layers: prepared,
+			endSec: pose_end
+		});
+		var move = [];
+		var rot = [];
+		if (father < 0) {
+			move = phi_rpe_composite_move(x_lists, y_lists, timeline);
+			rot = phi_rpe_composite_scalar(r_lists, timeline, -1, 0);
+			if (array_length(move) <= 0) then array_add(move, { t0: 0, t1: 0, x0: 0.5, y0: 0.5, x1: 0.5, y1: 0.5, ease: 1 });
+		} else {
+			stats.parents++;
 		}
-		if (!is_array(rot)) {
-			rot = phi_rpe_linear_scalar(phi_rpe_collect_events(content, "rotateEvents"), timeline, line_end, -1, 0);
-			stats.sliced++;
-		}
-		if (!is_array(alpha)) {
-			alpha = phi_rpe_linear_scalar(phi_rpe_collect_events(content, "alphaEvents"), timeline, line_end, 1 / 255, 0);
-			stats.sliced++;
-		}
-		if (array_length(move) <= 0) then array_add(move, { t0: 0, t1: line_end, x0: 0.5, y0: 0.5, x1: 0.5, y1: 0.5, ease: 1 });
+		var alpha = phi_rpe_composite_scalar(a_lists, timeline, 1 / 255, 0);
+		if (array_length(alpha) <= 0) then array_add(alpha, { t0: 0, t1: 0, v0: 0, v1: 0, ease: 1 });
 		var _speed = phi_slice_speed(speed_model, phi_speed_knots(speed_model, 0, line_end), factor);
 		if (array_length(_speed) <= 0) then array_add(_speed, { t0: 0, t1: line_end * factor, value: 0 });
-		if (floor(phi_finite_or(src[$ "father"] ?? -1, -1)) >= 0) then stats.parents++;
 		array_add(baked_lines, { move: move, rot: rot, alpha: alpha, speed: _speed, notes: notes });
+	}
+	for (var bake_i = 0; bake_i < array_length(pose_models); bake_i++) {
+		if (pose_models[bake_i].father < 0) then continue;
+		var chain = phi_parent_chain(pose_models, bake_i);
+		if (array_length(chain) <= 1) then continue;
+		var t_end = 0;
+		for (var chain_i = 0; chain_i < array_length(chain); chain_i++) {
+			t_end = max(t_end, pose_models[chain[chain_i]].endSec);
+		}
+		var world = phi_pec_world_channels(pose_models, chain, timeline, aspect, t_end);
+		baked_lines[bake_i].move = world.move;
+		baked_lines[bake_i].rot = world.rot;
 	}
 	stats.lines = array_length(baked_lines);
 	return phi_baked_to_pec({
@@ -5061,6 +6261,10 @@ function phi_pec_to_official(pec_text) {
 			chart_end = max(chart_end, at1);
 		}
 		var line_end = max(1, chart_end);
+		xs = phi_expand_channel(xs);
+		ys = phi_expand_channel(ys);
+		rots = phi_expand_channel(rots);
+		alphas = phi_expand_channel(alphas);
 		var move_knots = [];
 		phi_knots_from_prepared(move_knots, xs);
 		phi_knots_from_prepared(move_knots, ys);
@@ -5076,35 +6280,12 @@ function phi_pec_to_official(pec_text) {
 			var y0 = phi_ctx_scalar(yctx, t0);
 			var x_post = phi_ctx_scalar(xctx, t1);
 			var y_post = phi_ctx_scalar(yctx, t1);
-			var x_pre = phi_ctx_scalar(xctx, t1 - PHI_SAMPLE_EPS);
-			var y_pre = phi_ctx_scalar(yctx, t1 - PHI_SAMPLE_EPS);
+			var x_pre = phi_ctx_scalar(xctx, phi_probe_before(t0, t1));
+			var y_pre = phi_ctx_scalar(yctx, phi_probe_before(t0, t1));
 			var jumped = abs(x_post - x_pre) > 0.00001 || abs(y_post - y_pre) > 0.00001;
 			var x1 = jumped ? x_pre : x_post;
 			var y1 = jumped ? y_pre : y_post;
-			var eased = phi_list_eased(xs, t0, t1) || phi_list_eased(ys, t0, t1);
-			if (!eased) {
-				array_add(move_out, { t0: t0, t1: t1, x0: x0, y0: y0, x1: x1, y1: y1 });
-			} else {
-				stats.sliced++;
-				var pieces = phi_slice_count(t1 - t0);
-				var prev_t = t0;
-				var prev_x = x0;
-				var prev_y = y0;
-				for (var s = 1; s <= pieces; s++) {
-					var t = (s == pieces) ? t1 : (t0 + (t1 - t0) * (s / pieces));
-					var px = x1;
-					var py = y1;
-					if (s < pieces) {
-						px = phi_ctx_scalar(xctx, t);
-						py = phi_ctx_scalar(yctx, t);
-					}
-					array_add(move_out, { t0: prev_t, t1: t, x0: prev_x, y0: prev_y, x1: px, y1: py });
-					prev_t = t;
-					prev_x = px;
-					prev_y = py;
-				}
-			}
-			if (jumped) then array_add(move_out, { t0: t1, t1: t1, x0: x_pre, y0: y_pre, x1: x_post, y1: y_post });
+			array_add(move_out, { t0: t0, t1: t1, x0: x0, y0: y0, x1: x1, y1: y1 });
 		}
 		var rot_ctx = { kind: "list", events: rots, empty: 0 };
 		var alpha_ctx = { kind: "list", events: alphas, empty: 1 };
@@ -5260,7 +6441,8 @@ function phi_tools_event_report(stats) {
 			+ " noteAlpha->" + string(stats[$ "noteAlpha"] ?? 0)
 			+ " noteSize->" + string(stats[$ "noteSize"] ?? 0)
 			+ " noteScale->" + string(stats[$ "noteScale"] ?? 0)
-			+ " fakeAsNormal->" + string(stats[$ "fakeDropped"] ?? 0);
+			+ " fakeRemoved->" + string(stats[$ "fakeDropped"] ?? 0)
+			+ " ignored->" + string(stats[$ "dropped"] ?? 0);
 		var event_line = "events move->" + string(stats[$ "move"] ?? 0)
 			+ " rotate->" + string(stats[$ "rotate"] ?? 0)
 			+ " alpha->" + string(stats[$ "alpha"] ?? 0)
@@ -5502,9 +6684,7 @@ function phi_tools_jobs() {
 	jobs = [
 		{ source: CHART_FORMAT.OFFICIAL, target: CHART_FORMAT.RPE, label: "menu.toolsExport", fail: "menu.toolsFail" },
 		{ source: CHART_FORMAT.PEC, target: CHART_FORMAT.RPE, label: "menu.toolsExportPec", fail: "menu.toolsFailPec" },
-		{ source: CHART_FORMAT.PEC, target: CHART_FORMAT.OFFICIAL, label: "menu.toolsExportPecOfficial", fail: "menu.toolsFailPec" },
-		{ source: CHART_FORMAT.RPE, target: CHART_FORMAT.OFFICIAL, label: "menu.toolsExportRpeOfficial", fail: "menu.toolsFailRpe" },
-		{ source: CHART_FORMAT.RPE, target: CHART_FORMAT.PEC, label: "menu.toolsExportRpePec", fail: "menu.toolsFailRpe" }
+		{ source: CHART_FORMAT.RPE, target: CHART_FORMAT.OFFICIAL, label: "menu.toolsExportRpeOfficial", fail: "menu.toolsFailRpe" }
 	];
 	return jobs;
 }
@@ -5518,7 +6698,7 @@ function phi_tools_save_tag(target_id) {
 }
 
 function phi_tools_panel_metrics(room_w, room_h, ts) {
-	var rows = 5;
+	var rows = array_length(phi_tools_jobs());
 	var row_h = 40 * ts;
 	var gap = 8 * ts;
 	var title_h = 64 * ts;
@@ -5673,11 +6853,8 @@ function phi_tools_prepare_rpe_package(src_path, source_format = undefined, targ
 		if (!string_length(chart_path)) then return phi_tools_fail(missing, work, packed);
 
 		var built = undefined;
-		var built_text = "";
-		var built_is_text = false;
 		var to_rpe = (target_id == CHART_FORMAT.RPE);
 		var to_official = (target_id == CHART_FORMAT.OFFICIAL);
-		var to_pec = (target_id == CHART_FORMAT.PEC);
 		if (source_id == CHART_FORMAT.OFFICIAL && to_rpe) {
 			var official_text = chart_read_text_file(chart_path, -1);
 			phi_tools_log("official text chars=" + string(is_string(official_text) ? string_length(official_text) : -1));
@@ -5704,11 +6881,6 @@ function phi_tools_prepare_rpe_package(src_path, source_format = undefined, targ
 			phi_tools_log("pec->rpe text chars=" + string(is_string(pec_text) ? string_length(pec_text) : -1));
 			if (!is_string(pec_text) || !string_length(pec_text)) then return phi_tools_fail(lang("menu.toolsPecRead"), work, packed);
 			built = phi_pec_to_rpe(pec_text, phi_tools_meta_from_root(root));
-		} else if (source_id == CHART_FORMAT.PEC && to_official) {
-			var pec_off_text = chart_read_text_file(chart_path, -1);
-			phi_tools_log("pec->official text chars=" + string(is_string(pec_off_text) ? string_length(pec_off_text) : -1));
-			if (!is_string(pec_off_text) || !string_length(pec_off_text)) then return phi_tools_fail(lang("menu.toolsPecRead"), work, packed);
-			built = phi_pec_to_official(pec_off_text);
 		} else if (source_id == CHART_FORMAT.RPE && to_official) {
 			var rpe_off_text = chart_read_text_file(chart_path, -1);
 			phi_tools_log("rpe->official text chars=" + string(is_string(rpe_off_text) ? string_length(rpe_off_text) : -1));
@@ -5717,50 +6889,29 @@ function phi_tools_prepare_rpe_package(src_path, source_format = undefined, targ
 			if (!is_struct(rpe_off_chart)) then return phi_tools_fail(lang("menu.toolsRpeRead"), work, packed);
 			built = phi_rpe_to_official(rpe_off_chart);
 			delete(rpe_off_chart);
-		} else if (source_id == CHART_FORMAT.RPE && to_pec) {
-			var rpe_pec_text = chart_read_text_file(chart_path, -1);
-			phi_tools_log("rpe->pec text chars=" + string(is_string(rpe_pec_text) ? string_length(rpe_pec_text) : -1));
-			if (!is_string(rpe_pec_text) || !string_length(rpe_pec_text)) then return phi_tools_fail(lang("menu.toolsRpeRead"), work, packed);
-			var rpe_pec_chart = phi_rpe_chart_value(rpe_pec_text);
-			if (!is_struct(rpe_pec_chart)) then return phi_tools_fail(lang("menu.toolsRpeRead"), work, packed);
-			var pec_pack = phi_rpe_to_pec(rpe_pec_chart);
-			delete(rpe_pec_chart);
-			if (!is_struct(pec_pack)) then return phi_tools_fail(lang("menu.toolsConvert"), work, packed);
-			built_text = string(pec_pack[$ "text"] ?? "");
-			built_is_text = true;
-			var pec_stats = pec_pack[$ "stats"];
-			if (is_struct(pec_stats)) then phi_tools_event_report(pec_stats);
-			phi_tools_log("rpe->pec chars=" + string(string_length(built_text)) + " head=" + string_copy(built_text, 1, 40));
 		} else {
 			phi_tools_log("unsupported pair source=" + string(source_id) + " target=" + string(target_id));
 			return phi_tools_fail(lang("menu.toolsConvert"), work, packed);
 		};
 		var convert_fail = lang("menu.toolsConvert");
-		if (built_is_text) {
-			if (!string_length(built_text)) then return phi_tools_fail(convert_fail, work, packed);
-		} else {
-			phi_tools_log("convert struct=" + string(is_struct(built)));
-			if (!is_struct(built)) then return phi_tools_fail(convert_fail, work, packed);
-			var convert_stats = built[$ "stats"];
-			if (is_struct(convert_stats)) then phi_tools_event_report(convert_stats);
-			variable_struct_remove(built, "stats");
-		};
+		phi_tools_log("convert struct=" + string(is_struct(built)));
+		if (!is_struct(built)) then return phi_tools_fail(convert_fail, work, packed);
+		var convert_stats = built[$ "stats"];
+		if (is_struct(convert_stats)) then phi_tools_event_report(convert_stats);
+		variable_struct_remove(built, "stats");
 
 		var source_name = chart_path_file_name(chart_path);
 		var parts = phi_tools_stem_ext(source_name);
 		var taken = phi_tools_collect_names(discovered);
 		var mark = save_tag;
 		var archive_mark = save_tag;
-		var out_ext = ".json";
-		if (to_pec) then out_ext = ".pec";
-		var chart_file_name = phi_tools_unique_marked_name(parts.stem, mark, out_ext, taken);
+		var chart_file_name = phi_tools_unique_marked_name(parts.stem, mark, ".json", taken);
 		var chart_out = chart_path_join(chart_path_dir(chart_path), chart_file_name);
 		phi_tools_log("write chart " + chart_out);
-		if (built_is_text) then chart_buffer_save_text(chart_out, built_text);
-		else {
-			chart_buffer_save_text(chart_out, json_stringify(built, true));
-			delete(built);
-		};
+		var chart_text = json_stringify(built, true);
+		if (to_official) then chart_text = phi_official_json_text(built, true);
+		chart_buffer_save_text(chart_out, chart_text);
+		delete(built);
 		phi_tools_log("chart written exists=" + string(file_exists(chart_out)) + " bytes=" + string(chart_archive_size_bytes(chart_out)));
 		if (file_exists(chart_out) && string_lower(chart_path_norm(chart_path)) != string_lower(chart_path_norm(chart_out))) {
 			phi_tools_log("delete original chart " + chart_path);
@@ -6880,14 +8031,29 @@ function pec_floor_at_sec(speed_events, sec) {
 	// of a beat inside that segment pick up a floor step of 1 or more and
 	// stay off screen for the whole approach. Hold the floor at the segment
 	// start; the following event already stores the finished jump.
-	if (abs(event.value) >= 1000) then elapsed = 0;
+	if (pec_speed_is_warp(event.value)) then elapsed = 0;
 	return event.floor + elapsed * event.value;
 }
 
-function pec_easing(easing_id) {
+function pec_easing_table() {
 	static map = [0, 1, 3, 2, 6, 5, 4, 7, 9, 8, 12, 11, 10, 13, 15, 14, 1, 17, 16, 1, 19, 18, 22, 21, 20, 23, 25, 24, 29, 27, 26, 28];
+	return map;
+}
+
+function pec_easing(easing_id) {
+	var map = pec_easing_table();
 	var _id = clamp(floor(real(easing_id)), 0, array_length(map) - 1);
 	return map[_id];
+}
+
+function phi_pec_ease_from_rpe(chart_ease) {
+	var playback = rpe_map_easing_id(chart_ease);
+	var map = pec_easing_table();
+	var n = array_length(map);
+	for (var i = 0; i < n; i++) {
+		if (map[i] == playback) then return i;
+	}
+	return 1;
 }
 
 function pec_finalize_property(raw_events, timeline, kind) {

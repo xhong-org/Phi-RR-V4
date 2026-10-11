@@ -1,13 +1,28 @@
-/// @description Update Official Hold geometry using PCR floor semantics.
+/// @description Official hold. Head speed is 1. Body length is bodySpeed * holdTime.
+/// After the hit the head is dropped and the body shrinks by elapsed time.
 if(!_is_hold || !inition) then exit;
 
 var line_floor = _line_ref.__value[0];
-var position_floor_delta = (yOffset - line_floor);
 var time_before = (_now_seconds < realHitTime);
+var body_speed = variable_instance_exists(id, "bodySpeed") ? real(bodySpeed) : 1;
+if (!is_finite(body_speed)) then body_speed = 1;
+var hold_sec = hold_time_length;
+// speed 0 or an empty hold is not drawn.
+if (abs(body_speed) <= 0.0000001 || hold_sec <= 0) {
+	canDraw = false;
+	exit;
+};
+// Same visibility as a tap: hide only after the line floor passes maxVisiblePos.
+if (time_before && line_floor > max_visible_position) {
+	canDraw = false;
+	exit;
+};
+
+var position_floor_delta = (yOffset - line_floor);
 var line_x = _line_ref.x;
 var line_y = _line_ref.y;
-	var local_x = xOffset * chart_view_width * 0.05625;
-	var scale_y = chart_view_height * 0.6;
+var local_x = xOffset * chart_view_width * 0.05625;
+var scale_y = chart_view_height * 0.6;
 var rotation = _line_ref.image_angle;
 var rotation_cos = _line_ref.__cos;
 var rotation_sin = _line_ref.__sin;
@@ -17,9 +32,14 @@ var axis_y = rotation_cos * dir;
 var base_x = line_x + local_x * rotation_cos;
 var base_y = line_y - local_x * rotation_sin;
 
-var hold_floor_length = (variable_instance_exists(id, "holdFloorLength") ? holdFloorLength : hold_time_length);
-var head_cover_delta = (max_visible_position - line_floor);
-var is_out = (!isHold) && (head_cover_delta > 0);
+var full_px = body_speed * hold_sec * scale_y;
+if (full_px < 0) then full_px = 0;
+var remain_px = full_px;
+var show_head = time_before;
+if (!time_before) {
+	var gone = clamp((_now_seconds - realHitTime) / hold_sec, 0, 1);
+	remain_px = full_px * (1 - gone);
+};
 var _skin_hold = skin_active() ? skin_hold_parts(hl) : undefined;
 var _head_spr = note_hold_head;
 var _compact = false;
@@ -28,12 +48,15 @@ if (is_struct(_skin_hold)) {
 	if (sprite_exists(_skin_hold.body)) then _hold_body_height = max(1, sprite_get_height(_skin_hold.body));
 	_compact = bool(_skin_hold.compact);
 };
-var head_offset = (is_out && !_compact ? max(0, sprite_get_yoffset(_head_spr)) * image_yscale : 0);
-var hold_units = hold_floor_length + (is_out ? 0 : position_floor_delta);
-var hold_length = max(0, hold_units * scale_y - head_offset);
+var head_offset = 0;
+if (show_head && !_compact) {
+	head_offset = max(0, sprite_get_yoffset(_head_spr)) * image_yscale;
+	if (head_offset > remain_px) then head_offset = remain_px;
+};
+var hold_length = max(0, remain_px - head_offset);
 yscale = hold_length / max(1, _hold_body_height);
 
-if (is_out) {
+if (show_head) {
 	var head_distance = position_floor_delta * scale_y;
 	var head_x = base_x + axis_x * head_distance;
 	var head_y = base_y + axis_y * head_distance;
@@ -48,19 +71,10 @@ if (is_out) {
 	_hy0 = base_y;
 	_hx1 = base_x + axis_x * hold_length;
 	_hy1 = base_y + axis_y * hold_length;
+	_hx2 = _hx1;
+	_hy2 = _hy1;
 };
 
 image_angle = (-180 * (!isAbove) + rotation);
-var is_out_line = true;
-if (time_before) then is_out_line = (line_floor <= maximum_visual_length);
-var head_delta = (yOffset - line_floor);
-var speed_zero = (abs(self.speed) <= 0.0000001);
-// Speed 0 holds stay visible while the head is still in front of the line.
-// The moment the head reaches the line they disappear, even if the hit time
-// has not arrived. Other unhit holds also stop once the head is past the line.
-canDraw = (hold_time_length > 0 && is_out_line && hold_length > 0);
-if (speed_zero) {
-	if (head_delta <= 0.001) then canDraw = false;
-} else if (time_before && head_delta <= -0.001) {
-	canDraw = false;
-};
+canDraw = (show_head || hold_length > 0);
+if (isMiss) then image_alpha = 0.45;

@@ -64,10 +64,15 @@ function official_line_vis_cache(_line_data, _metrics) {
 		var sec1 = beat1 * spb;
 		if (sec1 < sec0) then sec1 = sec0;
 		var speed_value = real(speed_event.value ?? 0);
+		// Before the first event the line uses that event, extended back to time 0.
+		if (seg_i == 0 && sec0 > 0) {
+			event_floor -= sec0 * speed_value;
+			sec0 = 0;
+		};
 		floors[seg_i] = event_floor;
 		values[seg_i] = speed_value;
 		t0s[seg_i] = sec0;
-		// The runtime keeps the final speed past its declared end.
+		// A gap belongs to the next event. Only the final speed runs past its end.
 		t1s[seg_i] = (seg_i == seg_n - 1) ? max(sec1, 10000000) : sec1;
 		floor_acc = event_floor + max(0, sec1 - sec0) * speed_value;
 		seg_i++;
@@ -269,6 +274,7 @@ function official_lines_create_note(i) {
 		"line_id": (na[$ "id"]),
 		"bpm": (na.bpm),
 		"speed": (na[$ "speed"]),
+		"bodySpeed": (na[$ "bodySpeed"] ?? 1),
 		"_hl": (na[$ "hl"])
 	});
 	chart_lines_hide_created(note_instance);

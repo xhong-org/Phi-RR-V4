@@ -9,7 +9,27 @@ for(var i = 0 ; i < 4 ; i ++){
 	var events = (_event_groups[i]),
 		count = (clamp(_counts[i], 0, event_length - 1));
 
-	if(is_seek){
+	if(i == 3){
+		// sim-phi: the first speed event that has not ended. A gap uses the
+		// next event. Do not keep the previous speed across that gap.
+		if(is_seek){
+			var low = 0,
+				high = event_length - 1,
+				found = event_length - 1;
+			while(low <= high){
+				var middle = ((low + high) >> 1);
+				if(events[middle].endTime < now_time){
+					low = middle + 1;
+				}else{
+					found = middle;
+					high = middle - 1;
+				};
+			};
+			count = found;
+		}else{
+			while(count < event_length - 1 && events[count].endTime < now_time) count ++;
+		};
+	}else if(is_seek){
 		var low = 0,
 			high = event_length - 1,
 			found = 0;

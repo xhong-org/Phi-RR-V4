@@ -139,6 +139,8 @@ global.render_width = max(2, round((render_base_height * render_aspect_width / r
 global.pls_probe_until = 0;
 global.pls_probe_shot = 0;
 global.pls_probe_exit_sent = false;
+global.pls_convert_out = environment_get_variable("PLS_CONVERT_OUT");
+global.pls_convert_only = string_length(environment_get_variable("PLS_CONVERT_ONLY")) > 0;
 var _probe_shot_text = environment_get_variable("PLS_PROBE_SHOT");
 if (string_length(_probe_shot_text)) {
 	global.pls_probe_shot = real(_probe_shot_text);

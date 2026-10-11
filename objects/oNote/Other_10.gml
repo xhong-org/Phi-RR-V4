@@ -9,10 +9,9 @@ var _skin_hold = skin_hold_parts(_skin_hl);
 if (is_struct(_skin_hold) && sprite_exists(_skin_hold.body)) {
 	_hold_body_height = max(1, sprite_get_height(_skin_hold.body));
 };
-max_visible_position = (self.yOffset + 0.01);
-maximum_visual_length = (self._is_hold && holdFloorLength > 0
-	? (self.yOffset + holdFloorLength + 0.01)
-	: max_visible_position);
+max_visible_position = official_max_visible_pos(self.yOffset);
+// Official holds hide when the head reaches the line. The body is not a floor span.
+maximum_visual_length = max_visible_position;
 
 switch(self.type){
 	case 1:
@@ -33,7 +32,9 @@ switch(self.type){
 		_hy1 = 0;
 		_hx2 = 0;
 		_hy2 = 0;
-		yscale = (hold_time_length * room_height * 0.6 / _hold_body_height * self[$ "speed"]);
+		var body_speed = variable_instance_exists(id, "bodySpeed") ? real(bodySpeed) : 1;
+		if (!is_finite(body_speed) || body_speed < 0) then body_speed = 0;
+		yscale = (hold_time_length * room_height * 0.6 / _hold_body_height * body_speed);
 		isClickRealTime = realHitTime;
 		isHold = false;
 		_bak_time = realHitTime;

@@ -20,10 +20,9 @@ x = (line_x + local_x * rotation_cos + local_y * rotation_sin);
 y = (line_y - local_x * rotation_sin + local_y * rotation_cos);
 image_angle = rotation;
 
-// Phira draws a note before its time only while (noteFloor - lineFloor) * speed
-// is positive. That product is the head's side of the line. Negative line speed
-// or negative note speed puts the head on the back side; those notes stay hidden
-// until the floors meet, instead of travelling past the line and judging late.
+// sim-phi keeps drawing while maxVisiblePos is still ahead of the line floor,
+// including notes far from an off-screen line. It hides only after the line
+// floor passes that value. Distance culling is a separate option there and is off.
 var is_out_line = true;
-if (_now_seconds < realHitTime) then is_out_line = ((self.yOffset - line_floor) * self.speed > -0.001);
+if (_now_seconds < realHitTime) then is_out_line = (line_floor <= max_visible_position);
 canDraw = is_out_line;

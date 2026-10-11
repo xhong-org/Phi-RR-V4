@@ -128,6 +128,16 @@ if (phase == 10) {
 if (phase == 2) {
         var session2 = chart_session_ensure();
         chart_session_bind_paths();
+        if (variable_global_exists("pls_convert_out") && is_string(global.pls_convert_out) && string_length(global.pls_convert_out)) {
+                var convert_dir = global.pls_convert_out;
+                global.pls_convert_out = "";
+                var convert_ok = phi_convert_package(convert_dir);
+                print(convert_ok ? "[ConvertPlay][PASS]" : "[ConvertPlay][FAIL]");
+                if (variable_global_exists("pls_convert_only") && global.pls_convert_only) {
+                        game_end(convert_ok ? 0 : 1);
+                        exit;
+                };
+        };
         message = lang("loading.preparingRoom");
         detail = session2.format_name + " -> " + string(session2.play_room);
         if (session2.play_room < 0) {

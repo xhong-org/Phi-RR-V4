@@ -24,7 +24,10 @@ if(_event_lengths[1] > 0){
 	next_rotation = (rotate_event.start == rotate_event[$ "end"] ? rotate_event[$ "end"] : lerp(rotate_event.start, rotate_event[$ "end"], rotate_progress));
 };
 
-if(_event_lengths[3] > 0 && now_time >= _speed_events[0].startTime){
+if(_event_lengths[3] > 0){
+	// floorPosition is the float32 base at this event's start. Before the
+	// start this is the next event, extended backward. Past the last end
+	// the last value continues.
 	var speed_event = (_speed_events[_counts[3]]);
 	__value[0] = ((game.__time[1] - speed_event.startTime * _seconds_per_beat) * speed_event.value + __value[1]);
 };

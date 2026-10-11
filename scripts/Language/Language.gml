@@ -390,7 +390,7 @@ function lang_required_keys() {
 		"common.settings", "common.cancel", "common.open", "common.menu", "common.loading",
 		"menu.subtitle", "menu.openPackage", "menu.loadSample", "menu.renderPlaceholder",
 		"menu.statusSelect", "menu.detailSupported", "menu.hintKeys", "menu.hintTap",
-		"menu.toolsTitle", "menu.toolsExport", "menu.toolsExportPec", "menu.toolsExportPecOfficial", "menu.toolsExportRpeOfficial", "menu.toolsExportRpePec",
+		"menu.toolsTitle", "menu.toolsExport", "menu.toolsExportPec", "menu.toolsExportRpeOfficial",
 		"menu.toolsClose", "menu.toolsPick", "menu.toolsDone", "menu.toolsFail", "menu.toolsFailPec", "menu.toolsFailRpe",
 		"menu.toolsNoPec", "menu.toolsNoRpe", "menu.toolsPecRead", "menu.toolsRpeRead", "menu.toolsConvert",
 		"menu.toolsSaveTitle", "menu.toolsSaveZip", "menu.toolsSavePez",
