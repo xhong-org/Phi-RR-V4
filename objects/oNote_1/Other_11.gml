@@ -1,11 +1,11 @@
-/// @description Update non-hold RPE note position (PCR-aligned)
+///@desc 更新非 Hold 的 RPE 音符位置和屏幕外裁剪
 if (_is_hold || !inition) then exit;
 var _line = _line_ref;
 if (!instance_exists(_line)) { canDraw = false; exit; };
 
 var line_floor = real(_line.__value[0]);
 _position_floor_delta = floorPosition - line_floor;
-// Same sample coordinate as the pre-170 player: note speed times floor delta.
+// 采样坐标与 170 之前的播放器相同：音符速度乘地板差。
 _note_position_speed = note_speed * _position_floor_delta;
 _control_position_speed = _note_position_speed;
 
@@ -39,7 +39,7 @@ _note_y = _y_h;
 x = _x_h + _ox_v * posy;
 y = _y_h + _oy_v * posy;
 
-// Debug
+// 调试用的文字锚点。
 _debug_text_x = x//_x_h + _ox_v * posy;
 _debug_text_y = ((_y_h + (50 * (global_scales))) + _oy_v * posy);
 
@@ -47,7 +47,7 @@ image_angle = _line.image_angle + (isAbove ? 0 : 180);
 
 var uncover = bool(_line._uncover);
 if (_now_seconds < start_sec) {
-	// isCover masks notes that are fully behind the judge line, using signed distance.
+	// isCover 用有符号距离挡住完全在判定线后的音符。
 	_is_out_line = uncover || _note_position_speed >= -0.000001;
 } else {
 	_is_out_line = true;
@@ -61,6 +61,7 @@ var radius = sWH * 1.2365 + sHH;
 var radius_sq = radius * radius;
 outside = ((dx * dx + dy * dy) >= radius_sq);
 
+// 已判定或 Bad 仍要画淡出；飞出屏幕则不画。
 if (isJudge || isBad) {
 	canDraw = true;
 	if (!isBad) then image_alpha = alpha;

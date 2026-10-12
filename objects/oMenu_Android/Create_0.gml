@@ -1,5 +1,6 @@
-/// @description Android menu UI bootstrap
+///@desc 初始化 Android 菜单的会话、按钮和字体
 chart_session_ensure();
+// 从渲染界面返回时清掉上一局谱面会话。
 if (variable_global_exists("render_gui_returning") && global.render_gui_returning) {
         global.render_gui_returning = false;
         chart_session_cleanup(true);

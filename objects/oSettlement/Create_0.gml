@@ -1,4 +1,4 @@
-/// @description Chart settlement overlay. Drawn after the play-end wait.
+///@desc 创建结算界面、成绩数据和绘制函数
 if (!variable_instance_exists(id, "owner")) then owner = noone;
 depth = -12500;
 
@@ -106,23 +106,38 @@ judge_x = 0;
 retry_hit = [0, 0, 0, 0];
 cont_hit = [0, 0, 0, 0];
 
+///@desc 取结算已经过的微秒，录像模式用帧换算
+///@returns {Real} 已经过的微秒
 function settlement_elapsed_us() {
+	// 录像用渲染帧，交互用墙钟。
 	if (variable_global_exists("render_mode") && global.render_mode) {
 		return max(0, (global.render_frame - started_frame) / max(1, global.render_fps) * 1000000);
 	};
 	return max(0, get_timer() - started_at);
 }
 
+///@desc 从路径加载一张结算用精灵
+///@param {String} _path 图片路径
+///@returns {Asset.GMSprite} 精灵资源，失败为 -1
 function settlement_sprite_load(_path) {
+	// 路径空或文件不存在就失败。
 	if (!is_string(_path) || !string_length(_path)) then return -1;
 	if (!file_exists(_path) && !isExists(_path)) then return -1;
 	var spr = sprite_add(_path, 0, false, false, 0, 0);
+	// 单帧加载失败时再按一帧图集试一次。
 	if (!asset_sprite_valid(spr)) then spr = sprite_add(_path, 1, false, false, 0, 0);
 	if (!asset_sprite_valid(spr)) then return -1;
 	return spr;
 }
 
+///@desc 按分数和判定选出评级图片名
+///@param {Real} _score 分数
+///@param {Real} _good Good 数
+///@param {Real} _bad Bad 数
+///@param {Real} _miss Miss 数
+///@returns {String} 评级文件名
 function settlement_rank_file(_score, _good, _bad, _miss) {
+	// 没有 Bad 和 Miss 但有 Good 是 FC，满分是 phi。
 	if (_bad == 0 && _miss == 0 && _good > 0) then return "FC.png";
 	if (_score == 1000000) then return "phi.png";
 	if (_score < 700000) then return "F.png";
@@ -134,25 +149,34 @@ function settlement_rank_file(_score, _good, _bad, _miss) {
 	return "phi.png";
 }
 
+///@desc 按难度取结算音乐序号
+///@param {String} _level 难度文字
+///@returns {Real} 结算音乐序号
 function settlement_ending_index(_level) {
 	return chart_ending_index(_level);
 }
 
+///@desc 读取当前谱面的历史最高分
+///@returns {Real} 历史最高分
 function settlement_best_read() {
 	return chart_score_get(chart_score_md5());
 }
 
+///@desc 写入当前谱面的最高分，自动播放不记
+///@param {Real} _score 本局分数
+///@returns {Undefined} 无
 function settlement_best_write(_score) {
+	// 自动播放不覆盖成绩。
 	if (chart_autoplay_active()) then return;
 	chart_score_set(chart_score_md5(), _score);
 }
 
+///@desc 按窗口缩放重算结算面板位置
+///@returns {Undefined} 无
 function settlement_refresh_layout() {
 	var s = variable_global_exists("global_scales") ? global_scales : 1;
 	if (!is_real(s) || s <= 0) then s = 1;
-	// The ending draws over the whole window after the aspect mask is released.
-	// chart_view_left / chart_view_width follow that mask, so anchoring here
-	// slides the score column whenever the chart aspect changes.
+	// 结束遮罩放开后铺满窗口。用房间宽度，不用会跟着谱面宽高比滑动的 chart_view。
 	var vw = room_width;
 	if (!is_real(vw) || vw <= 0) then vw = 1366;
 	illus_half = 210 * s;
@@ -186,12 +210,18 @@ function settlement_refresh_layout() {
 	};
 }
 
+///@desc 取当前难度对应的结算音乐路径
+///@returns {String} 音乐文件路径
 function settlement_ending_path() {
 	return chart_ending_path(song_level);
 }
 
+///@desc 设置结算音乐音量
+///@param {Real} _vol 0 到 1 的音量
+///@returns {Undefined} 无
 function settlement_set_ending_volume(_vol) {
 	_vol = clamp(real(_vol), 0, 1);
+	// FMOD 和 GameMaker 音频分开调音量。
 	if (ending_fmod) {
 		if (ending_inst > 0 && instance_exists(oMedia)) {
 			var media = instance_find(oMedia, 0);
@@ -205,7 +235,10 @@ function settlement_set_ending_volume(_vol) {
 	if (ending_inst != -1 && audio_exists(ending_inst)) then audio_sound_gain(ending_inst, _vol, 0);
 }
 
+///@desc 停止并释放结算音乐
+///@returns {Undefined} 无
 function settlement_stop_audio() {
+	// FMOD 先停通道再释放声音。
 	if (ending_fmod) {
 		if (ending_inst > 0) {
 			try {
@@ -239,9 +272,13 @@ function settlement_stop_audio() {
 	ending_gm_buf = -1;
 }
 
+///@desc 循环播放结算音乐，录像模式不播
+///@returns {Undefined} 无
 function settlement_play_ending() {
+	// 录像不在这里播结算音乐。
 	if (variable_global_exists("render_mode") && global.render_mode) then return;
 	var path = settlement_ending_path();
+	// 文件不存在就放弃播放。
 	if (!file_exists(path) && !isExists(path)) {
 		print($"[Settlement] Ending file missing: {path}");
 		return;
@@ -256,6 +293,7 @@ function settlement_play_ending() {
 				delete(snd_err);
 				loaded = -1;
 			};
+			// 整段加载失败再试流式加载。
 			if (!(is_real(loaded) && loaded > 0)) {
 				try { loaded = fmod_system_create_stream(path, FMOD_MODE.LOOP_NORMAL); } catch (stream_err) {
 					delete(stream_err);
@@ -285,7 +323,11 @@ function settlement_play_ending() {
 	print($"[Settlement] Ending load failed: {path}");
 }
 
+///@desc 开始离开淡出，并记下是重试还是继续
+///@param {Bool} _retry 为真时离开后重试
+///@returns {Undefined} 无
 function settlement_begin_leave(_retry) {
+	// 已经在离开或结算已消费就不再开始。
 	if (leaving || consumed) then return;
 	leaving = true;
 	leave_retry = bool(_retry);
@@ -293,6 +335,8 @@ function settlement_begin_leave(_retry) {
 	leave_wait_at = -1;
 }
 
+///@desc 停掉结算音乐并重新开始本局
+///@returns {Undefined} 无
 function settlement_do_retry() {
 	settlement_stop_audio();
 	if (instance_exists(oPausedUI)) {
@@ -310,9 +354,12 @@ function settlement_do_retry() {
 	instance_destroy();
 }
 
+///@desc 停掉结算音乐并回到入口
+///@returns {Undefined} 无
 function settlement_do_continue() {
 	settlement_stop_audio();
 	consumed = true;
+	// 有过场就交给它收尾，否则直接拆播放。
 	if (instance_exists(oPlayTransition)) {
 		with (oPlayTransition) play_transition_finish_exit();
 	} else {
@@ -328,6 +375,7 @@ if (variable_global_exists("game") && is_struct(game) && is_struct(game.folder_c
 if (variable_global_exists("game") && is_struct(game) && is_struct(game.settings)) {
 	user_name = string(game.settings.userName ?? "");
 };
+// 没填玩家名时用 Guest。
 if (!string_length(string_trim(user_name))) then user_name = "Guest";
 
 accCalc();
@@ -347,6 +395,7 @@ best_prev = settlement_best_read();
 score_is_best = (!score_autoplay && score_value > best_prev);
 score_gap = max(0, best_prev - score_value);
 score_delta = max(0, score_value - best_prev);
+// 本局超过历史最高才写回。
 if (score_is_best) then settlement_best_write(score_value);
 
 var bg_path = "";
@@ -381,6 +430,14 @@ illus_cx = illus_rest_cx + slide_dist;
 retry_x = retry_rest_x - 240 * (variable_global_exists("global_scales") ? global_scales : 1);
 cont_x = cont_rest_x + 240 * (variable_global_exists("global_scales") ? global_scales : 1);
 
+///@desc 画一块斜切的结算面板
+///@param {Real} _x 左下角 X
+///@param {Real} _bottom 底边 Y
+///@param {Real} _w 宽度
+///@param {Real} _h 高度
+///@param {Real} _skew 顶边右移量
+///@param {Real} _a 透明度
+///@returns {Undefined} 无
 function settlement_draw_panel(_x, _bottom, _w, _h, _skew, _a) {
 	var y1 = _bottom;
 	var y0 = _bottom - _h;
@@ -392,7 +449,16 @@ function settlement_draw_panel(_x, _bottom, _w, _h, _skew, _a) {
 	draw_primitive_end();
 }
 
+///@desc 用精灵纹理画一颗菱形封面
+///@param {Real} _cx 中心 X
+///@param {Real} _cy 中心 Y
+///@param {Real} _half 中心到顶点的距离
+///@param {Asset.GMSprite} _spr 封面精灵
+///@param {Real} _col 染色
+///@param {Real} _a 透明度
+///@returns {Undefined} 无
 function settlement_draw_textured_diamond(_cx, _cy, _half, _spr, _col, _a) {
+	// 没有精灵或完全透明就不画。
 	if (!asset_sprite_valid(_spr) || _a <= 0) then return;
 	var tex = sprite_get_texture(_spr, 0);
 	var uvs = sprite_get_uvs(_spr, 0);
@@ -417,6 +483,13 @@ function settlement_draw_textured_diamond(_cx, _cy, _half, _spr, _col, _a) {
 	draw_primitive_end();
 }
 
+///@desc 画一颗纯色菱形底
+///@param {Real} _cx 中心 X
+///@param {Real} _cy 中心 Y
+///@param {Real} _half 中心到顶点的距离
+///@param {Real} _col 颜色
+///@param {Real} _a 透明度
+///@returns {Undefined} 无
 function settlement_draw_diamond_frame(_cx, _cy, _half, _col, _a) {
 	draw_primitive_begin(pr_trianglefan);
 	draw_vertex_color(_cx, _cy - _half, _col, _a);
@@ -426,6 +499,13 @@ function settlement_draw_diamond_frame(_cx, _cy, _half, _col, _a) {
 	draw_primitive_end();
 }
 
+///@desc 画菱形封面的四边框
+///@param {Real} _cx 中心 X
+///@param {Real} _cy 中心 Y
+///@param {Real} _half 中心到顶点的距离
+///@param {Real} _col 颜色
+///@param {Real} _a 透明度
+///@returns {Undefined} 无
 function settlement_draw_diamond_ring(_cx, _cy, _half, _col, _a) {
 	var lw = max(1, 2 * (variable_global_exists("global_scales") ? global_scales : 1));
 	draw_set_colour(_col);
@@ -436,6 +516,9 @@ function settlement_draw_diamond_ring(_cx, _cy, _half, _col, _a) {
 	draw_line_width(_cx - _half, _cy, _cx, _cy - _half, lw);
 }
 
+///@desc 画右上角玩家名和头像
+///@param {Real} _s 界面缩放
+///@returns {Undefined} 无
 function settlement_draw_user(_s) {
 	draw_set_alpha(user_alpha);
 	var ax = user_x;
@@ -461,6 +544,9 @@ function settlement_draw_user(_s) {
 	draw_text_transformed(ax - 12 * _s, ay + ah * 0.5, user_name, 0.32 * _s, 0.32 * _s, 0);
 }
 
+///@desc 画左上角重试按钮
+///@param {Real} _s 界面缩放
+///@returns {Undefined} 无
 function settlement_draw_retry(_s) {
 	var bar_h = 72 * _s;
 	var x0 = retry_x;
@@ -477,6 +563,9 @@ function settlement_draw_retry(_s) {
 		sc, sc, 0, c_white, 1);
 }
 
+///@desc 画右下角继续按钮
+///@param {Real} _s 界面缩放
+///@returns {Undefined} 无
 function settlement_draw_continue(_s) {
 	var bar_h = 72 * _s;
 	var x1 = room_width + cont_x;

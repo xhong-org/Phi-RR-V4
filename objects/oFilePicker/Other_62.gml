@@ -1,8 +1,10 @@
-/// @description HTTP list/download for sandbox URL or Node filesystem API
+///@desc 异步 HTTP：沙箱地址或 Node 文件系统接口的列表与下载
 var req = async_load[? "id"];
 var status = async_load[? "status"];
 
+// 盘符列表还在传输就先等。
 if (api_roots_id >= 0 && req == api_roots_id) {
+        // status 大于 0 表示仍在进行。
         if (status > 0) then exit;
         api_roots_id = -1;
         if (status < 0) {
@@ -29,6 +31,7 @@ if (api_roots_id >= 0 && req == api_roots_id) {
         exit;
 };
 
+// 目录列表回调。
 if (api_list_id >= 0 && req == api_list_id) {
         if (status > 0) then exit;
         api_list_id = -1;
@@ -42,9 +45,11 @@ if (api_list_id >= 0 && req == api_list_id) {
         exit;
 };
 
+// 不是当前下载就忽略。
 if (!downloading) then exit;
 if (req != download_id) then exit;
 
+// 下载进行中只更新已收字节。
 if (status > 0) {
         if (ds_map_exists(async_load, "sizeDownloaded")) then download_got = async_load[? "sizeDownloaded"];
         if (ds_map_exists(async_load, "contentLength")) then download_total = async_load[? "contentLength"];
@@ -67,6 +72,7 @@ if (status < 0) {
         exit;
 };
 
+// 解包结果转成待写入的文件列表。
 if (job == "unpack") {
         var unpacked = gx_fs_parse_unpack(string(async_load[? "result"] ?? ""));
         if (!unpacked.ok || array_length(unpacked.files) <= 0) {
@@ -86,6 +92,7 @@ if (job == "unpack") {
         exit;
 };
 
+// 单个 blob 写到目标路径后继续下一个。
 if (job == "blob") {
         if (api_unpack_index < 0 || api_unpack_index >= array_length(api_unpack_files)) {
                 gx_fp_blob_fail("Blob copy index is invalid.");
@@ -104,6 +111,7 @@ if (job == "blob") {
         exit;
 };
 
+// JSON 拉取结果落到本地再结束选择。
 if (fetch_json || job == "fetch") {
         api_job = "";
         var raw = string(async_load[? "result"] ?? "");
@@ -123,6 +131,7 @@ if (fetch_json || job == "fetch") {
 };
 
 var http_status = ds_map_exists(async_load, "http_status") ? async_load[? "http_status"] : 200;
+// 非 2xx 视为下载失败。
 if (is_real(http_status) && http_status != 0 && (http_status < 200 || http_status >= 300)) {
         last_error = "Download failed. HTTP " + string(http_status);
         status_text = last_error;
@@ -138,6 +147,7 @@ if (!file_exists(dest)) {
         status_text = last_error;
         exit;
 };
+// 普通下载必须是 zip 或 pez。
 if (!gx_file_picker_looks_like_zip(dest)) {
         last_error = "Downloaded file is not a zip/pez package.";
         status_text = last_error;

@@ -1,4 +1,4 @@
-/// @description GX menu: click-to-pick, optional API backup
+///@desc 绘制 GX 菜单标题、选文件按钮和 API 状态
 var scale_now = (variable_global_exists("global_scales") ? global_scales : 1.0);
 if (layout_w != room_width || layout_h != room_height || layout_scale != scale_now) {
         pls_gx_menu_layout();
@@ -33,6 +33,7 @@ draw_set_colour(c_white);
 draw_rectangle(pick_x, pick_y, pick_x + pick_w, pick_y + pick_h, true);
 draw_text_transformed(pick_x + pick_w * 0.5, pick_y + pick_h * 0.5, lang("gx.clickPick"), body_scale, body_scale, 0);
 
+// 远程模式没有 API 按钮，宽度为 0 时不画。
 if (api_btn_w > 0) {
         var api_dim = !api_online;
         draw_set_colour(hover_api ? fill_hot : (api_dim ? fill_dim : fill_idle));

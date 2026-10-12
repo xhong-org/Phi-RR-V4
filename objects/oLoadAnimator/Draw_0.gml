@@ -1,6 +1,7 @@
-/// @description Semi-transparent cover and skewed loading layout.
-// The chart viewport scissor must not crop this full-room cover.
+///@desc 绘制：半透明遮罩和倾斜的加载排版
+// 谱面视口裁剪不能切掉这张全屏遮罩。
 chart_mask_scissor_clear();
+// GX 离开加载房后结束动画。
 if (pls_is_gxgames() && room != room_loading && room != room_menu) {
     chart_loading_animation_finish();
     exit;
@@ -18,11 +19,11 @@ var _ui_scale = min(room_width / _design_w, room_height / _design_h);
 var _ui_origin_x = (room_width - _design_w * _ui_scale) * 0.5;
 var _ui_origin_y = (room_height - _design_h * _ui_scale) * 0.5;
 var _exit_pixel_x = 0;
+// 退出时整屏滑出，避免超宽屏两侧留下界面。
 if (state == LOAD_ANIM_STATE.EXITING && exit_started_at >= 0) {
     var _exit_t = clamp((_now - exit_started_at) / exit_duration, 0, 1);
     var _exit_ease = Easings.InExpo(_exit_t);
-    // Slide by the full room width so ultrawide leftover UI cannot sit in
-    // the side letterbox after a 1366-wide design-space move.
+    // 按整个房间宽度滑出。只按 1366 设计宽度移动时，超宽屏两侧黑边里还会残留界面。
     _exit_pixel_x = room_width * _exit_ease;
 };
 
@@ -44,7 +45,7 @@ draw_sprite_stretched_ext(
     0.6
 );
 
-// UI is revealed only inside the covered region and follows the same easing.
+// 界面只在已被遮罩盖住的区域里出现，缓动和遮罩一致。
 gpu_push_state();
 var _cover_x = _cover_right + _exit_pixel_x;
 var _scissor_x = clamp(_cover_x, 0, room_width);
@@ -54,13 +55,21 @@ draw_set_alpha(_ui_alpha);
 
 var _ui_cx = _design_w * 0.5;
 var _ui_cy = _design_h * 0.5;
-// GML anonymous functions do not capture local variables. Keep the current
-// transform in globals so these small coordinate helpers remain valid.
+// GML 匿名函数抓不到局部变量。把当前变换放进全局，这些坐标小函数才仍然有效。
 global.load_ui_origin_x = _ui_origin_x + _exit_pixel_x;
 global.load_ui_origin_y = _ui_origin_y;
 global.load_ui_scale = _ui_scale;
+///@desc 把设计坐标 x 换成房间坐标
+///@param {Real} _value 设计宽度上的 x
+///@returns {Real} 房间坐标 x
 var _ux = function(_value) { return global.load_ui_origin_x + _value * global.load_ui_scale; };
+///@desc 把设计坐标 y 换成房间坐标
+///@param {Real} _value 设计高度上的 y
+///@returns {Real} 房间坐标 y
 var _uy = function(_value) { return global.load_ui_origin_y + _value * global.load_ui_scale; };
+///@desc 把设计尺寸乘上界面缩放
+///@param {Real} _value 设计尺寸
+///@returns {Real} 缩放后的尺寸
 var _us = function(_value) { return _value * global.load_ui_scale; };
 
 // name 和 level 的 两平行四边形
@@ -77,12 +86,14 @@ var _level_raw = string(_info.level);
 var _level_num = _level_raw;
 var _level_name = "";
 var _level_parts = string_split(string_trim(_level_raw), " ");
+// 按空格拆等级：Lv. 后面是数字，其余第一段是名称。
 for (var _level_i = 0; _level_i < array_length(_level_parts); _level_i++) {
     var _level_part = string_trim(string(_level_parts[_level_i]));
     if (!string_length(_level_part)) then continue;
     var _level_lower = string_lower(_level_part);
     if (string_pos("lv", _level_lower) == 1) {
         var _lv_value = string_trim(string_delete(_level_part, 1, 2));
+        // 去掉 Lv. 后面多余的点。
         while (string_length(_lv_value) > 0 && string_char_at(_lv_value, 1) == ".") {
             _lv_value = string_trim(string_delete(_lv_value, 1, 1));
         };
@@ -91,8 +102,14 @@ for (var _level_i = 0; _level_i < array_length(_level_parts); _level_i++) {
     else if (!string_length(_level_name)) then _level_name = _level_part;
 };
 
+///@desc 文字超出最大宽度时缩小字号
+///@param {String} _text 要测量的文字
+///@param {Real} _base_scale 基础缩放
+///@param {Real} _max_width 允许的最大宽度
+///@returns {Real} 实际使用的缩放
 var _fit_scale = function(_text, _base_scale, _max_width) {
     var _width = string_width(_text) * _base_scale;
+    // 超宽才按比例缩小，避免除以 0。
     return _width > _max_width ? _base_scale * _max_width / max(1, _width) : _base_scale;
 };
 var _name_scale = _fit_scale(string(_info.name), 1, 270);
@@ -106,21 +123,20 @@ var _level_name_scale = _fit_scale(_level_name, 0.5, 75);
 draw_text_transformed_color(_ux(_ui_cx - 170), _uy(_ui_cy - 100), _level_num, _us(_level_num_scale), _us(_level_num_scale), 0, c_black, c_black, c_black, c_black, 1);
 draw_text_transformed_color(_ux(_ui_cx - 180), _uy(_ui_cy - 65), _level_name, _us(_level_name_scale), _us(_level_name_scale), 0, c_black, c_black, c_black, c_black, 1);
 
-// 绘制Charter 和 Illustrator
+// 绘制谱师和画师
 draw_set_halign(fa_left);
-// Charter
+// 谱师
 draw_text_transformed_color(_ux(_ui_cx - 500), _uy(_ui_cy + 10), lang("loadAnim.chart"), _us(0.3), _us(0.3), 0, c_white, c_white, c_white, c_white, 1);
 draw_text_transformed_color(_ux(_ui_cx - 500), _uy(_ui_cy + 30), string(_info.charter), _us(0.4), _us(0.4), 0, c_white, c_white, c_white, c_white, 1);
-// Illustrator
+// 画师
 draw_text_transformed_color(_ux(_ui_cx - 510), _uy(_ui_cy + 60), lang("loadAnim.illustration"), _us(0.3), _us(0.3), 0, c_white, c_white, c_white, c_white, 1);
 draw_text_transformed_color(_ux(_ui_cx - 510), _uy(_ui_cy + 80), string(_info.illustrator), _us(0.4), _us(0.4), 0, c_white, c_white, c_white, c_white, 1);
 
 
-// tips
+// 提示
 draw_text_transformed_color(_ux(55), _uy(_design_h - 40), tips[tip_index], _us(0.5), _us(0.5), 0, c_white, c_white, c_white, c_white, 1);
 
-// Preview size is window/2 by window/2. Origin is the sprite center, so
-// the name-aligned point is the draw position. One scale avoids squash.
+// 预览尺寸是窗口的一半乘一半。原点在精灵中心，所以对齐名字的点就是绘制位置。单一缩放避免压扁。
 if (sprite_exists(clear_sprite)) {
     var _win_w = max(1, window_get_width());
     var _win_h = max(1, window_get_height());
@@ -133,7 +149,7 @@ if (sprite_exists(clear_sprite)) {
         _art_scale, _art_scale, 0, c_white, 1);
 };
 
-// The loading label loops independently of the cover animation.
+// 加载字样的开合不跟遮罩动画绑在一起。
 var _loading_text = lang("loadAnim.loading");
 var _loading_scale = _us(0.5);
 var _loading_x = _ux(_design_w - 105);
@@ -144,6 +160,7 @@ var _loading_rect_left_full = _loading_x - _loading_rect_width * 0.5;
 var _loading_rect_right_full = _loading_x + _loading_rect_width * 0.5;
 var _loading_rect_scale = clamp(loading_rect_scale, 0, 1);
 var _loading_rect_width_scaled = _loading_rect_width * _loading_rect_scale;
+// 收回阶段从右缘缩短，展开阶段从左缘长出。
 var _loading_rect_left_scaled = loading_rect_phase == 3
     ? _loading_rect_right_full - _loading_rect_width_scaled
     : _loading_rect_left_full;
@@ -152,14 +169,14 @@ var _loading_rect_top = _loading_y - _loading_rect_height * 0.5;
 draw_set_halign(fa_center);
 draw_text_transformed_color(_loading_x, _loading_y, _loading_text,
     _loading_scale, _loading_scale, 0, c_white, c_white, c_white, c_white, 1);
+// 宽度为 0 时不画白条。
 if (_loading_rect_width_scaled > 0) {
     draw_set_colour(c_white);
     draw_rectangle(_loading_rect_left_scaled, _loading_rect_top,
         _loading_rect_left_scaled + _loading_rect_width_scaled,
         _loading_rect_top + _loading_rect_height, false);
 
-    // The second draw uses the right-middle text origin, so the rectangle's
-    // right edge stays fixed when its horizontal scale shrinks.
+    // 第二次绘制用右中对齐，横向缩小时右缘保持不动。
     gpu_set_scissor(_loading_rect_left_scaled, _loading_rect_top,
         _loading_rect_width_scaled, _loading_rect_height);
     draw_text_transformed_color(_loading_x, _loading_y, _loading_text,
@@ -194,7 +211,7 @@ if (state == LOAD_ANIM_STATE.EXITING) {
     _exit_x = room_width * (_exit_p * _exit_p * (3 - 2 * _exit_p));
 };
 
-// The blurred artwork is always a proportional crop covering the whole room.
+// 模糊图始终按比例铺满整个房间。
 if (sprite_exists(blur_sprite)) {
     var _bw = sprite_get_width(blur_sprite);
     var _bh = sprite_get_height(blur_sprite);
@@ -206,7 +223,7 @@ if (sprite_exists(blur_sprite)) {
     draw_rectangle(0, 0, room_width, room_height, true);
 };
 
-// Inner black cover. Its right edge is the reveal boundary.
+// 内层黑遮，右边缘是揭开边界。
 draw_set_colour(c_black);
 draw_set_alpha(0.6);
 draw_rectangle(_cover_x + _exit_x, 0, _cover_x + _exit_x + room_width, room_height, false);
@@ -230,8 +247,8 @@ var _panel_h = 92 * _sy;
 draw_set_alpha(1);
 draw_set_colour(c_black);
 if (sprite_exists(panel_sprite)) {
-    // This runtime has no draw_sprite_nineslice API; the authored nine-slice
-    // metadata remains on the high-resolution sprite for editor/runtime use.
+    // 当前运行时没有九宫格拉伸接口。
+    // 九宫格数据仍留在高分辨率精灵上，供编辑器和运行时使用。
     draw_sprite_stretched_ext(panel_sprite, 0, _panel_left, _panel_top, _panel_w, _panel_h, c_black, 1);
 };
 
@@ -280,7 +297,7 @@ draw_text_transformed(105 * _sx + _x, 270 * _sy, string(_info.name), 0.65 * _sca
 draw_text_transformed(90 * _sx + _x, 300 * _sy, lang("loadAnim.illustration"), 0.5 * _scale, 0.5 * _scale, 0);
 draw_text_transformed(90 * _sx + _x, 320 * _sy, "Phigros", 0.65 * _scale, 0.65 * _scale, 0);
 
-// The clear image uses a 45-degree parallelogram and stays above the illustration label.
+// 清晰图用 45 度平行四边形，画在插画标签上面。
 if (sprite_exists(clear_sprite)) {
     var _right_left = 430 * _sx + _x;
     var _right_top = 32 * _sy;

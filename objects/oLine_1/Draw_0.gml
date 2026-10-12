@@ -1,5 +1,6 @@
-/// @description Draw RPE judge line (supports extended scale/color/text)
+///@desc 绘制：RPE 判定线，支持扩展缩放、颜色和文本
 chart_mask_scissor_set();
+// 加载动画或判定线尚未解冻时不画。
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then exit;
 if (instance_exists(oRender_1)
 	&& variable_instance_exists(oRender_1, "_chart_lines_thaw_pending")
@@ -9,16 +10,16 @@ if (!is_real(s) || s <= 0) then s = 1.0;
 var _room_w = room_width;
 var _room_h = room_height;
 
-// No zIndex: the video is painted with this line, and appearanceOnAttach 0
-// (the default, including charts that never set it) hides the line. A declared
-// video zIndex is drawn by oExtraPlay, so this line stays on its own layer.
-// appearanceOnAttach 1/2 keeps the line visible above or under that video.
+// 没有 zIndex 时视频跟这条线一起画，appearanceOnAttach 为 0
+// （默认，包括从没设置过的谱）会藏起线。声明了视频 zIndex 的由 oExtraPlay 画，
+// 这条线留在自己的层上。appearanceOnAttach 为 1 或 2 时线仍可见，在视频上方或下方。
 var line_has_attached_video = false;
 var attached_video_owns_depth = false;
 if (instance_exists(oExtraPlay)) {
 	with (oExtraPlay) {
 		var _attached_video = video_line_index(other.id);
 		line_has_attached_video = _attached_video >= 0;
+		// 视频自己有 z 时不在这条线里画。
 		if (line_has_attached_video && is_real(videos[_attached_video].zIndex)) {
 			attached_video_owns_depth = true;
 		};
@@ -29,9 +30,11 @@ var attach_look = 0;
 if (variable_instance_exists(id, "appearance_on_attach") && is_real(appearance_on_attach)) {
 	attach_look = appearance_on_attach;
 };
+// 吸附视频且外观为 0、又没有文本时，线本身不画。
 if (line_has_attached_video && attach_look <= 0 && !has_text_events) then exit;
 
 if (has_paint_events) {
+	// 涂鸦表面尺寸必须跟房间一致，否则重建并清空。
 	if (!surface_exists(paint_surface)
 		|| surface_get_width(paint_surface) != _room_w
 		|| surface_get_height(paint_surface) != _room_h) {
@@ -46,6 +49,7 @@ if (has_paint_events) {
 		paint_last_valid = false;
 	};
 	if (surface_exists(paint_surface)) {
+		// 时间回退就清掉已经涂上的内容。
 		if (line_time < paint_last_time) {
 			surface_set_target(paint_surface);
 			draw_clear_alpha(c_black, 0);
@@ -55,6 +59,7 @@ if (has_paint_events) {
 		};
 		paint_last_time = line_time;
 		var paint_radius = real(__paint_radius) * s * sqrt(abs(__scale_x * __scale_y));
+		// 半径不大于 0 时清空并停止涂鸦。
 		if (paint_radius <= 0) {
 			if (paint_has_content) {
 				surface_set_target(paint_surface);
@@ -65,6 +70,7 @@ if (has_paint_events) {
 			paint_last_valid = false;
 		} else {
 			var paint_alpha = clamp(max(0, __raw_a) / 255, 0, 1);
+			// 有透明度才把上一帧到这一帧连成一条带子。
 			if (paint_alpha > 0) {
 				surface_set_target(paint_surface);
 				draw_set_colour(__color);
@@ -73,6 +79,7 @@ if (has_paint_events) {
 					var paint_dx = x - paint_last_x;
 					var paint_dy = y - paint_last_y;
 					var paint_distance = point_distance(paint_last_x, paint_last_y, x, y);
+					// 移动足够远才补中间的两个三角形。
 					if (paint_distance > 0.001) {
 						var paint_normal_x = -paint_dy / paint_distance;
 						var paint_normal_y = paint_dx / paint_distance;
@@ -102,23 +109,24 @@ if (has_paint_events) {
 		};
 		draw_surface(paint_surface, 0, 0);
 	};
+	// 涂鸦画完就不再画线精灵。
 	exit;
 };
 
+// 完全透明就不再画精灵。
 if (image_alpha <= 0) then exit;
 
-// Apply color from extended colorEvents (or default white)
+// 颜色来自扩展 colorEvents，否则是白。
 image_blend = __color;
 
 	if (has_text_events) {
 		if (string_length(line_text) > 0) {
 			if (line_text_font != -1 && font_exists(line_text_font)) then draw_set_font(line_text_font);
 			else if (variable_global_exists("game") && is_struct(game) && !is_undefined(game.font) && font_exists(game.font)) then draw_set_font(game.font);
-			// PhiEdit Label is font size 100 with node scale (scaleX, scaleY) * 0.5,
-			// left aligned. Anchor (0,0) is the bottom-left of that line box and
-			// (1,1) is the top-right. cmdysj's line box is one em (ascender 880,
-			// descender -120). image_angle is already the negated chart rotation,
-			// which is cocos's clockwise rotation in this Y-down space.
+			// PhiEdit 标签字号 100，节点缩放是 (scaleX, scaleY) * 0.5，左对齐。
+			// 锚点 (0,0) 是行框左下，(1,1) 是右上。cmdysj 的行框是一个 em
+			// （上升 880，下降 -120）。image_angle 已经是取反后的谱面旋转，
+			// 在这个 Y 向下的空间里就是 cocos 的顺时针旋转。
 			var _old_halign = draw_get_halign();
 			var _old_valign = draw_get_valign();
 			draw_set_halign(fa_left);
@@ -130,6 +138,7 @@ image_blend = __color;
 				text_view_w = chart_view_width;
 			};
 			var text_em_px = string_width("■");
+			// 方块测不出宽度时用字号兜底。
 			if (text_em_px < 1) then text_em_px = max(1, font_get_size(draw_get_font()));
 			var text_unit = (50 * (text_view_w / 1350)) / text_em_px;
 			var text_scale_x = text_unit * __scale_x;
@@ -138,6 +147,7 @@ image_blend = __color;
 			text_body = string_replace_all(text_body, "\r", "");
 			var text_rows = string_split(text_body, "\n");
 			var text_row_n = array_length(text_rows);
+			// 拆不出行时仍画整段。
 			if (text_row_n < 1) {
 				text_rows = [text_body];
 				text_row_n = 1;
@@ -146,11 +156,13 @@ image_blend = __color;
 			for (var text_i = 0; text_i < text_row_n; text_i++) {
 				var row = text_rows[text_i];
 				var row_width = 0;
+				// 多行时最后一行去掉尾部空白再量宽。
 				if (text_row_n > 1 && text_i == text_row_n - 1) {
 					var row_len = string_length(row);
 					var trail_n = row_len;
 					while (trail_n > 0) {
 						var trail_ch = string_char_at(row, trail_n);
+						// 遇到非空白就停。
 						if (trail_ch != " " && trail_ch != "\t") then break;
 						trail_n--;
 					};
@@ -167,6 +179,7 @@ image_blend = __color;
 			var text_sin = dsin(image_angle);
 			for (var text_i = 0; text_i < text_row_n; text_i++) {
 				var row = text_rows[text_i];
+				// 空行跳过。
 				if (string_length(row) <= 0) then continue;
 				var text_lx = pen_x * text_scale_x;
 				var text_ly = (pen_top + text_i * text_em_px) * text_scale_y;
@@ -180,12 +193,14 @@ image_blend = __color;
 		};
 } else {
 	var frame = 0;
+	// GIF 按累计延迟选出当前帧，绘制子图固定为 0。
 	if (has_gif_events && is_struct(gif_data) && is_array(gif_data.frames) && array_length(gif_data.frames) > 0) {
 		var gif_time = frac(__gif_progress) * max(0.000001, real(gif_data.total));
 		var gif_accum = 0;
 		for (var gif_i = 0; gif_i < array_length(gif_data.frames); gif_i++) {
 			gif_accum += max(0.000001, real(gif_data.delays[gif_i]));
 			frame = gif_i;
+			// 累计延迟超过当前进度就停在这一帧。
 			if (gif_time < gif_accum) then break;
 		};
 		var gif_sprite = gif_data.frames[frame];
@@ -198,6 +213,7 @@ image_blend = __color;
 	var texture_view_w = chart_view_width;
 	var sx;
 	var sy;
+	// 默认线、CSV 覆盖和自定义贴图像素尺寸各算各的缩放。
 	if (!is_default_line) {
 		var _csv = chart_line_override(line_id);
 		if (is_struct(_csv)) {
@@ -214,10 +230,9 @@ image_blend = __color;
 		sx = line_px[0] / anchor_width;
 		sy = line_px[1] / anchor_height;
 	};
-	// Cocos anchor Y is up. The anchor pixel must sit on the line after scale
-	// and rotation. Runtime sprite_add keeps origin (0, 0); a 1x1 Box.png
-	// cannot store a 0.5 offset, so a centred 4000x4000 backdrop was drawn
-	// from the line toward the bottom-right.
+	// Cocos 的锚点 Y 向上。缩放和旋转之后，锚点像素必须仍落在线上。
+	// 运行时 sprite_add 的原点是 (0, 0)；1x1 的 Box.png 存不住 0.5 偏移，
+	// 于是居中的 4000x4000 背景会从线往右下画。
 	var anchor_local_x = anchor_x * anchor_width;
 	var anchor_local_y = (1 - anchor_y) * anchor_height;
 	if (!is_default_line) {
@@ -226,19 +241,18 @@ image_blend = __color;
 		anchor_local_x -= sprite_get_xoffset(_line_sprite);
 		anchor_local_y -= sprite_get_yoffset(_line_sprite);
 	};
-	// Default line.png uses FC/AP. colorEvents, custom textures, GIF, paint,
-	// attachUI, and text keep __color (often white) and are not sampled.
+	// 默认 line.png 用 FC/AP。colorEvents、自定义贴图、GIF、涂鸦、
+	// attachUI 和文本保持 __color（常常是白），不采样判定色。
 	var texture_blend = __color;
-	// appearanceOnAttach 1 stays white unless color events already set __color.
-	// 2 uses the FC/AP judge tint, same as an ordinary default line.
+	// appearanceOnAttach 为 1 时保持白色，除非颜色事件已经写了 __color。
+	// 为 2 时用 FC/AP 判定色，和普通默认线一样。
 	var judge_tint = line_texture_use_judge_color
 		&& !(line_has_attached_video && attach_look == 1);
 	if (judge_tint && variable_global_exists("game") && is_struct(game)
 		&& bool(game.settings.enableLineJudge)) {
 		texture_blend = chart_line_judge_blend();
 	};
-	// draw_sprite_ext scales and rotates around the sprite origin. Shift that
-	// origin so the anchor pixel stays on the line. Same rotation as notes.
+	// draw_sprite_ext 绕精灵原点缩放和旋转。把原点挪开，锚点像素才留在线上。旋转和音符相同。
 	var anchor_shift_x = -anchor_local_x * sx;
 	var anchor_shift_y = -anchor_local_y * sy;
 	var anchor_cos = dcos(image_angle);

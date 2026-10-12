@@ -1,5 +1,6 @@
-/// @description Picker input; modal while open
+///@desc 步进：文件选择器输入，打开期间保持模态
 var scale_now = (variable_global_exists("global_scales") ? global_scales : 1.0);
+// 房间或缩放变了就重排并刷新列表。
 if (layout_w != room_width || layout_h != room_height || layout_scale != scale_now) {
         gx_fp_layout();
         gx_fp_refresh_list();
@@ -8,8 +9,10 @@ if (layout_w != room_width || layout_h != room_height || layout_scale != scale_n
         layout_scale = scale_now;
 };
 
+// 松开鼠标后才接收点击，避免打开瞬间误触。
 if (!armed && !mouse_check_button(mb_left)) then armed = true;
 
+// 下载中只更新进度文字。
 if (downloading) {
         if (download_total > 0) {
                 status_text = langf("picker.downloadProgress", string(download_got), string(download_total));
@@ -27,6 +30,7 @@ hover_up = gx_fp_hit(mx, my, btn_up);
 hover_back = gx_fp_hit(mx, my, btn_back);
 hover_fwd = gx_fp_hit(mx, my, btn_fwd);
 
+// Esc：下载中只取消下载，否则关闭选择器。
 if (keyboard_check_pressed(vk_escape)) {
         if (downloading) {
                 downloading = false;
@@ -41,6 +45,7 @@ if (keyboard_check_pressed(vk_escape)) {
         exit;
 };
 
+// 未下载时处理回车、后退和上下选择。
 if (!downloading) {
         if (keyboard_check_pressed(vk_enter)) {
                 gx_fp_activate_selected();
@@ -65,13 +70,16 @@ if (!downloading) {
         };
 };
 
+// 滚轮滚动列表。
 if (mouse_wheel_up()) then scroll = max(0, scroll - 1);
 if (mouse_wheel_down()) {
         var max_scroll = max(0, array_length(items) - visible_rows);
         scroll = min(max_scroll, scroll + 1);
 };
 
+// 还没武装或这一帧没按下左键，就不处理点击。
 if (!armed || !mouse_check_button_pressed(mb_left)) then exit;
+// 下载中只允许点取消。
 if (downloading) {
         if (hover_cancel) {
                 downloading = false;
@@ -89,6 +97,7 @@ if (hover_cancel) { gx_fp_finish_cancel(); exit; };
 if (hover_open) { gx_fp_activate_selected(); exit; };
 if (hover_folder) { gx_fp_confirm_local(current_dir); exit; };
 
+// 点盘符就跳到对应根目录。
 for (var ri = 0; ri < array_length(root_rects); ri++) {
         if (gx_fp_hit(mx, my, root_rects[ri])) {
                 gx_fp_goto_root(root_rects[ri].path);
@@ -101,6 +110,7 @@ if (mx >= list_x && mx < list_x + list_w && my >= list_y && my < list_y + list_h
         var index = scroll + row;
         if (index >= 0 && index < array_length(items)) {
                 var now = current_time;
+                // 400 毫秒内点同一行视为双击打开。
                 if (index == last_click_index && (now - last_click_time) < 400) {
                         selected = index;
                         gx_fp_activate_selected();

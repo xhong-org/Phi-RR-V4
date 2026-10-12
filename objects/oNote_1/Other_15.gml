@@ -1,9 +1,10 @@
-/// @description Auto-judge non-hold RPE note
+///@desc 自动判定非 Hold 的 RPE 音符
 if (_is_hold || !inition || isFake) then exit;
 
 var now_time = _now_seconds;
 var now_hit = judgeTime;
 
+// 非自动播放只处理超时 Miss。
 if (!chart_autoplay_active()) {
 	if (now_time > start_sec + lateHitTime && !isBad && !isJudge) {
 		if (is_real_note) {
@@ -22,6 +23,7 @@ if (now_time > start_sec + lateHitTime && !isBad && !isJudge && !game.settings.e
 	exit;
 };
 
+// Drag 和 Flick 到点即判并停用。
 if ((type == 2 || type == 4) && !isJudge && now_time >= start_sec
 	&& now_hit >= start_sec && now_hit <= start_sec + lateHitTime) {
 	if (is_real_note) {

@@ -1,4 +1,4 @@
-/// @description Update hold RPE note (PCR-aligned head/body/tail)
+///@desc 更新 RPE Hold 的头、身体和尾部几何
 if (!_is_hold || !inition) then exit;
 var _line = _line_ref;
 if (!instance_exists(_line)) { canDraw = false; exit; };
@@ -6,15 +6,12 @@ if (!instance_exists(_line)) { canDraw = false; exit; };
 var line_floor = real(_line.__value[0]);
 var time_before = (_now_seconds < start_sec);
 _position_floor_delta = floorPosition - line_floor;
-// Official speed-0 holds still fall at 1x until the head reaches the line.
-// Chart speed 0 is the marker; it is not a visual multiplier.
+// 谱面速度 0 只是标记。头碰到判定线前仍按 1 倍下落。
 var chart_speed = note_speed;
 var visual_speed = chart_speed;
 if (abs(chart_speed) <= 0.0000001) then visual_speed = 1;
 _control_position_speed = visual_speed * _position_floor_delta;
-// Reached or crossed the judge line before the hit: hide immediately.
-// A speed-0 hold stays hidden after that, instead of travelling past the line
-// until the screen cull.
+// 击中前已经越过判定线就立刻隐藏。速度 0 的 Hold 之后保持隐藏。
 if (time_before && _position_floor_delta * visual_speed <= -0.001) {
 	canDraw = false;
 	image_alpha = 0;
@@ -27,18 +24,18 @@ if (abs(chart_speed) <= 0.0000001 && _position_floor_delta <= 0.001) {
 };
 
 if (time_before) {
-	// Phira: hold head and body both live in speed-scaled floor space.
+	// 击中前头和身体都在速度缩放后的地板空间里。
 	_note_position_speed = _control_position_speed;
 } else {
 	_note_position_speed = 0;
 	isHold = true;
 };
 
-// Hold head visibility and body pinning depend on chart time, not judgment state.
+// 头是否露出、身体是否钉住，看谱面时间而不是判定状态。
 _is_out = time_before;
 if (time_before) {
 	var uncover = bool(_line._uncover);
-	// PCR masks pre-hit Holds by their precomputed tail visibility boundary.
+	// 击中前按预先算好的尾部可见边界遮罩。
 	_is_out_line = uncover || line_floor <= maximum_visual_length;
 } else {
 	_is_out_line = true;
@@ -81,8 +78,7 @@ _debug_text_y = ((_y_h + (50 * (global_scales))) + _oy_v * posy);
 
 var length_floor = hold_length_floor;
 if (length_floor == 0) then length_floor = (endFloorPosition - floorPosition);
-// Phira hold geometry: head/tail are speed * y_control * floor, so the body
-// length is the same scale times (tailFloor - headFloor).
+// 身体长度用同一套速度、Y 控制和地板差。
 var base_length = notes_h * visual_speed * control_y * uniform_factor;
 
 var _skin_hold = skin_active() ? skin_hold_parts(hl) : undefined;
@@ -125,6 +121,7 @@ var dy = y - sHH;
 var dyn_r = sWH * 1.2365 + sHH + note_speed * max(0, _note_position_speed) * notes_h;
 var dyn_r_sq = dyn_r * dyn_r;
 outside = ((dx * dx + dy * dy) >= dyn_r_sq);
+// 飞出动态半径且朝向屏幕外才丢掉。
 if (outside) {
 	var dot = dx * (_x_h - sWH) + dy * (_y_h - sHH);
 	if (dot <= 0) {
@@ -132,6 +129,7 @@ if (outside) {
 		exit;
 	};
 };
+// 尾部不可见且身体已经缩没就停止绘制。
 if (!(_is_out_line && (hold_px > 0.5 || _is_out || _now_seconds < end_sec))) {
 	canDraw = false;
 	exit;

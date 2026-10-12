@@ -1,10 +1,10 @@
-/// @description RPE note (PCR-aligned floor/position model)
+///@desc 初始化 RPE 音符的地板、控制和空间索引
 depth = DEPTH.NOTE;
 inition = false;
 canDraw = false;
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then visible = false;
 
-// defaults from CreateLines
+// CreateLines 没写入的字段用默认值补齐。
 if (!variable_instance_exists(id, "type")) then type = 1;
 if (!variable_instance_exists(id, "rpe_type")) then rpe_type = type;
 if (!variable_instance_exists(id, "isAbove")) then isAbove = true;
@@ -48,8 +48,7 @@ holdFloorLength = real(holdFloorLength);
 if (holdFloorLength == 0) then holdFloorLength = (endFloorPosition - floorPosition);
 hold_length_floor = holdFloorLength;
 size = real(size);
-// Chart multiplier arrives as note_speed. Reading the built-in speed here
-// returns 0: the creation struct has not copied it into hspeed yet.
+// 谱面倍率在 note_speed。此时读内置 speed 还是 0，创建结构还没写入 hspeed。
 note_speed = real(note_speed);
 if (!is_finite(note_speed)) then note_speed = 1;
 speed = 0;
@@ -68,7 +67,7 @@ _is_hold = (type == 3);
 _step_user_count = (_is_hold ? 2 : 1);
 _judge_user_count = (_is_hold ? 6 : 5);
 
-// bind to RPE line list
+// 绑定到 RPE 判定线，线不存在就销毁。
 if (!variable_global_exists("game_1") || !is_struct(game_1) || !is_array(game_1.line_list)
 	|| line_id < 0 || line_id >= array_length(game_1.line_list)) {
 	show_debug_message($"[oNote_1] invalid line_id={line_id}");
@@ -121,8 +120,7 @@ _oy_v = 0;
 outside = false;
 __first__ = false;
 
-// Phira-style dormant-note index. Static non-holds are grouped by effective
-// floor for binary viewport queries; Holds use interval overlap queries.
+// 休眠音符索引：非 Hold 按有效地板分组做视口二分，Hold 用区间重叠查询。
 if (variable_global_exists("game_1") && is_struct(game_1)
 	&& struct_exists(game_1, "_note_activation_records")) {
 	var _spatial_record = {
@@ -143,6 +141,7 @@ if (variable_global_exists("game_1") && is_struct(game_1)
 	};
 	if (variable_instance_exists(_line_ref, "_control_y") && is_struct(_line_ref._control_y)) {
 		var _spatial_y_values = _line_ref._control_y.values;
+		// Y 控制不是恒定 1 时，空间查询不再安全。
 		for (var _spatial_yi = 0; _spatial_yi < array_length(_spatial_y_values); _spatial_yi++) {
 			if (real(_spatial_y_values[_spatial_yi]) != 1) {
 				_spatial_record.spatialSafe = false;
@@ -151,6 +150,7 @@ if (variable_global_exists("game_1") && is_struct(game_1)
 		};
 	};
 	game_1._note_activation_records[$ string(id)] = _spatial_record;
+	// 可见且速度非 0 才进入空间分组。
 	if (visibleTime > 0 && note_speed != 0) {
 		if (_is_hold) {
 			var _hold_group_key = string(line_id) + ":" + string(isAbove);
@@ -183,13 +183,20 @@ if (variable_global_exists("game_1") && is_struct(game_1)
 
 rpe_controls = [_line_ref._control_alpha, _line_ref._control_pos, _line_ref._control_size, _line_ref._control_y];
 rpe_control_cursors = [0, 0, 0, 0];
+///@desc 按音符位置速度采样一条 RPE 控制曲线
+///@param {Real} control_index 控制下标：0 透明，1 位置，2 大小，3 Y
+///@param {Real} note_pos_speed 采样用的位置速度
+///@param {Real} default_value 越过末点时返回的默认值
+///@returns {Real} 插值后的控制值
 rpe_sample_control = function(control_index, note_pos_speed, default_value = 1) {
 	var control = rpe_controls[control_index];
+	// 控制点不足两个时无法插值。
 	if (!is_struct(control) || real(control.length) < 2) then return default_value;
 	var n = real(control.length);
 	var positions = control.positions;
 	var values = control.values;
 	var easings = control.easings;
+	// 落在首点之前用首值，越过末点用默认值。
 	if (note_pos_speed <= real(positions[0])) {
 		rpe_control_cursors[@ control_index] = 0;
 		return real(values[0]);
@@ -199,6 +206,7 @@ rpe_sample_control = function(control_index, note_pos_speed, default_value = 1) 
 		return default_value;
 	};
 	var i = clamp(rpe_control_cursors[control_index], 0, n - 2);
+	// 游标向两侧走到包住当前速度的区间。
 	while (i > 0 && note_pos_speed <= real(positions[i])) i--;
 	while (i < n - 2 && real(positions[i + 1]) < note_pos_speed) i++;
 	rpe_control_cursors[@ control_index] = i;
@@ -206,7 +214,10 @@ rpe_sample_control = function(control_index, note_pos_speed, default_value = 1) 
 		real(values[i]), real(values[i + 1]), real(easings[i]));
 };
 
+///@desc 按透明度、可见时间和判定线遮罩决定能否绘制
+///@returns {Bool} 本帧是否应该绘制
 rpe_note_apply_visibility = function() {
+	// 判定线没了就直接藏掉。
 	if (!instance_exists(_line_ref)) {
 		canDraw = false;
 		image_alpha = 0;
@@ -215,10 +226,10 @@ rpe_note_apply_visibility = function() {
 
 	var note_a = alpha;
 	if (variable_instance_exists(id, "isMiss") && isMiss) then note_a *= 0.5;
-	// Speed 0 holds used to be exported with alpha 0. They stay visible until the
-	// head reaches the judge line; Other_12 hides them at that point.
+	// 速度 0 的 Hold 曾经被导出成透明。头碰到判定线前保持可见，Other_12 到点再藏。
 	var speed_zero_hold = _is_hold && abs(note_speed) <= 0.0000001 && hold_length_floor > 0.0000001;
 	if (note_a <= 0) {
+		// 普通透明音符直接不画；速度 0 的 Hold 除外。
 		if (!speed_zero_hold) {
 			canDraw = false;
 			image_alpha = 0;
@@ -230,8 +241,7 @@ rpe_note_apply_visibility = function() {
 	var sec_to_hit = start_sec - _now_seconds;
 	var sec_to_hit_real = sec_to_hit * _line_time_factor;
 	var time_before = (sec_to_hit > 0);
-	// RPE visibleTime is a signed real-time threshold relative to the note head.
-	// Negative values intentionally keep short Holds hidden after their start.
+	// visibleTime 是相对音符头的有符号实时阈值。负值会让短 Hold 在开始后继续隐藏。
 	if (is_finite(visibleTime) && visibleTime < 999999 && sec_to_hit_real > visibleTime) {
 		canDraw = false;
 		image_alpha = 0;
@@ -250,6 +260,7 @@ rpe_note_apply_visibility = function() {
 		alpha_extra = 1;
 	};
 
+	// 判定线透明度不允许露出时不画。
 	if (!alpha_extra) {
 		canDraw = false;
 		image_alpha = 0;
@@ -257,6 +268,7 @@ rpe_note_apply_visibility = function() {
 	};
 
 	var final_a = note_a * rpe_sample_control(0, _control_position_speed, 1);
+	// 控制曲线把透明度压到 0 也不画。
 	if (final_a <= 0) {
 		canDraw = false;
 		image_alpha = 0;

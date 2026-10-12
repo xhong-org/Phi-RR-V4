@@ -1,4 +1,5 @@
-/// @description 暂停
+///@desc 用户事件 3：暂停
+// GX 与 FMOD 分开暂停。
 if (media_use_gx()) {
 	if (gx_audio_kind == "js" && gx_js_handle > 0) {
 		try { i_gx_audio_pause(gx_js_handle); } catch (pause_error) { delete(pause_error); };

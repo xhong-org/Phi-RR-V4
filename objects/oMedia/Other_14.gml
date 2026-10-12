@@ -1,4 +1,5 @@
-/// @description 恢复
+///@desc 用户事件 4：恢复播放
+// GX 与 FMOD 分开恢复。
 if (media_use_gx()) {
 	if (gx_audio_kind == "js" && gx_js_handle > 0) {
 		try { i_gx_audio_resume(gx_js_handle); } catch (resume_error) { delete(resume_error); };

@@ -1,12 +1,13 @@
-/// @description 
+///@desc 空格切换 RPE 暂停，倒计时期间不重复恢复
 if (variable_global_exists("render_mode") && global.render_mode) exit;
 if (chart_exit_started) then exit;
-// The pause overlay owns the delayed resume transition.
+// 暂停界面负责延迟恢复，这里不要再补一次。
 if (instance_exists(oPausedUI)) {
 	var pause_ui = instance_find(oPausedUI, 0);
 	if (variable_instance_exists(pause_ui, "retry_waiting") && pause_ui.retry_waiting) then exit;
 };
 if(game.__time[0] > 0){
+	// 已暂停则恢复并补偿时间，否则记下暂停时刻。
 	if(game.paused){
 		//audio_resume_sound(music);
 		m_resume();

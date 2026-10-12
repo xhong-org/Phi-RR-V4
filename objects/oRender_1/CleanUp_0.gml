@@ -1,4 +1,4 @@
-/// @description Release RPE and shared chart resources on room exit.
+///@desc 离开房间时释放 RPE 纹理、字体和共享资源
 chart_clip_shutdown();
 if (variable_global_exists("chart_surface") && !is_undefined(chart_surface) && surface_exists(chart_surface)) then surface_free(chart_surface);
 if (variable_global_exists("chart_surface")) then chart_surface = -1;
@@ -17,7 +17,7 @@ if(variable_global_exists("game") && !is_undefined(game)){
 	game = undefined;
 };
 if(variable_global_exists("game_1") && !is_undefined(game_1)){
-	// Inactive notes are outside normal instance iteration; reactivate for room cleanup.
+	// 未激活音符不在普通实例迭代里，清理前先重新激活。
 	instance_activate_object(oNote_1);
 	with (oLine_1) {
 		if (variable_instance_exists(id, "paint_surface") && surface_exists(paint_surface)) {
@@ -27,6 +27,7 @@ if(variable_global_exists("game_1") && !is_undefined(game_1)){
 	};
 	if (struct_exists(game_1, "Texture") && is_struct(game_1.Texture)) {
 		var _texture_names = struct_get_names(game_1.Texture);
+		// 删掉本局加载的自定义纹理。
 		for (var _ti = 0; _ti < array_length(_texture_names); _ti++) {
 			var _texture_sprite = game_1.Texture[$ _texture_names[_ti]];
 			if (sprite_exists(_texture_sprite)) then sprite_delete(_texture_sprite);
@@ -38,6 +39,7 @@ if(variable_global_exists("game_1") && !is_undefined(game_1)){
 		for (var _gi = 0; _gi < array_length(_gif_names); _gi++) {
 			var _gif_data = game_1.Gif[$ _gif_names[_gi]];
 			if (is_struct(_gif_data) && is_array(_gif_data.frames)) {
+				// 逐帧释放 GIF 精灵。
 				for (var _gfi = 0; _gfi < array_length(_gif_data.frames); _gfi++) {
 					var _gif_sprite = _gif_data.frames[_gfi];
 					if (sprite_exists(_gif_sprite)) then sprite_delete(_gif_sprite);
@@ -60,6 +62,8 @@ if(variable_global_exists("game_1") && !is_undefined(game_1)){
 	game_1._notes = [];
 	game_1 = undefined;
 };
+///@desc 清掉全局打击特效回调
+///@returns {Bool} 恒为假，表示不再生成特效
 if(variable_global_exists("_eff_c")) then _eff_c = (function(){ return(false); });
 mus_system_clean();
 skin_gameplay_unload();

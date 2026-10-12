@@ -1,4 +1,4 @@
-/// @description Loading pipeline controller
+///@desc 创建：同步加载管线控制器
 window_set_caption(GAME_NAME + " - " + lang("common.loading"));
 chart_session_ensure();
 
@@ -12,6 +12,7 @@ ui_font = pls_ui_font_add(28);
 
 var session = chart_session_ensure();
 source_path = session.source_path;
+// 没有谱面来源就直接失败。
 if (!string_length(source_path)) {
         failed = true;
         message = lang("loading.noSource");

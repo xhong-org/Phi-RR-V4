@@ -1,21 +1,35 @@
-/// @desc Standalone GIF87a/GIF89a decoder.
+// 独立的 GIF87a/GIF89a 解码器。
 
+///@desc 以抛出异常的方式中止 GIF 解码
+///@param {String} msg 错误说明
+///@returns {Undefined} 无
 function rpe_gif__fail(msg) {
     throw msg;
 }
 
+///@desc 读取一个无符号字节并前移读指针
+///@param {Struct} state 解码状态
+///@returns {Real} 0 到 255
 function rpe_gif__u8(state) {
+    // 越过文件末尾则失败
     if (state.pos >= state.size) then rpe_gif__fail("Unexpected end of GIF data");
     var value = buffer_peek(state.file_buffer, state.pos, buffer_u8);
     state.pos += 1;
     return value;
 }
 
+///@desc 按小端读取一个 16 位无符号整数
+///@param {Struct} state 解码状态
+///@returns {Real} 0 到 65535
 function rpe_gif__u16(state) {
     var lo = rpe_gif__u8(state);
     return lo | (rpe_gif__u8(state) << 8);
 }
 
+///@desc 读取 RGB 调色板并打包成整数颜色
+///@param {Struct} state 解码状态
+///@param {Real} count 颜色数量
+///@returns {Array} 每项为红、绿、蓝打包值
 function rpe_gif__palette(state, count) {
     var palette = array_create(count, 0);
     for (var i = 0; i < count; i++) {
@@ -27,19 +41,27 @@ function rpe_gif__palette(state, count) {
     return palette;
 }
 
+///@desc 跳过 GIF 子块直到块长为 0
+///@param {Struct} state 解码状态
+///@returns {Undefined} 无
 function rpe_gif__skip_subblocks(state) {
     while (true) {
         var count = rpe_gif__u8(state);
+        // 长度为 0 表示子块结束
         if (count == 0) then return;
         if (state.pos + count > state.size) then rpe_gif__fail("Truncated GIF subblock");
         state.pos += count;
     }
 }
 
+///@desc 把 GIF 子块读成字节数组
+///@param {Struct} state 解码状态
+///@returns {Array} 拼接后的字节
 function rpe_gif__read_subblocks(state) {
     var bytes = [];
     while (true) {
         var count = rpe_gif__u8(state);
+        // 长度为 0 表示图像数据结束
         if (count == 0) then return bytes;
         if (state.pos + count > state.size) then rpe_gif__fail("Truncated GIF image data");
         for (var i = 0; i < count; i++) {
@@ -48,6 +70,11 @@ function rpe_gif__read_subblocks(state) {
     }
 }
 
+///@desc 把 GIF 的 LZW 流解成颜色索引
+///@param {Array} bytes 压缩字节
+///@param {Real} minimum_code_size 最小码长
+///@param {Real} expected_size 期望像素数
+///@returns {Array} 颜色索引
 function rpe_gif__lzw_decode(bytes, minimum_code_size, expected_size) {
     if (minimum_code_size < 2 || minimum_code_size > 8) then rpe_gif__fail("Invalid GIF LZW code size");
 
@@ -72,6 +99,7 @@ function rpe_gif__lzw_decode(bytes, minimum_code_size, expected_size) {
     var output_pos = 0;
 
     while (output_pos < expected_size) {
+        // 位不够时继续从字节流补入
         while (bit_count < code_size) {
             if (byte_pos >= array_length(bytes)) then rpe_gif__fail("Truncated GIF LZW stream");
             bit_data = bit_data | (bytes[byte_pos] << bit_count);
@@ -83,12 +111,14 @@ function rpe_gif__lzw_decode(bytes, minimum_code_size, expected_size) {
         bit_data = bit_data >> code_size;
         bit_count -= code_size;
 
+        // 清除码重置字典与码长
         if (code == clear_code) {
             available = clear_code + 2;
             code_size = minimum_code_size + 1;
             old_code = -1;
             continue;
         }
+        // 结束码提前停止，后面再核对像素数
         if (code == end_code) then break;
 
         if (old_code < 0) {
@@ -102,6 +132,7 @@ function rpe_gif__lzw_decode(bytes, minimum_code_size, expected_size) {
 
         var input_code = code;
         var stack_size = 0;
+        // KwKwK：新码等于即将写入的字典项
         if (code == available) {
             stack[stack_size] = first_value;
             stack_size += 1;
@@ -131,6 +162,7 @@ function rpe_gif__lzw_decode(bytes, minimum_code_size, expected_size) {
             prefix[available] = old_code;
             suffix[available] = first_value;
             available += 1;
+            // 字典满当前码长且未到 12 位时加长
             if (available == (1 << code_size) && code_size < 12) {
                 code_size += 1;
             }
@@ -138,11 +170,20 @@ function rpe_gif__lzw_decode(bytes, minimum_code_size, expected_size) {
         old_code = input_code;
     }
 
+    // 像素数不足则整帧失败
     if (output_pos != expected_size) then rpe_gif__fail("GIF image has too few pixels");
     return output;
 }
 
+///@desc 用背景色清掉画布上的一块矩形
+///@param {Struct} state 解码状态
+///@param {Real} left 左
+///@param {Real} top 上
+///@param {Real} width 宽
+///@param {Real} height 高
+///@returns {Undefined} 无
 function rpe_gif__clear_rect(state, left, top, width, height) {
+    // 裁到画布范围内再写
     var x0 = max(0, left);
     var y0 = max(0, top);
     var x1 = min(state.width, left + width);
@@ -159,12 +200,17 @@ function rpe_gif__clear_rect(state, left, top, width, height) {
     }
 }
 
+///@desc 按上一帧的处置方式还原画布
+///@param {Struct} state 解码状态
+///@returns {Undefined} 无
 function rpe_gif__apply_disposal(state) {
     switch (state.previous_disposal) {
+        // 2：用背景盖住上一帧矩形
         case 2:
             rpe_gif__clear_rect(state, state.previous_left, state.previous_top,
                 state.previous_width, state.previous_height);
             break;
+        // 3：恢复绘制上一帧之前的画布
         case 3:
             if (state.restore_valid) {
                 buffer_copy(state.restore, 0, state.canvas_size, state.canvas, 0);
@@ -174,9 +220,22 @@ function rpe_gif__apply_disposal(state) {
     }
 }
 
+///@desc 把一帧索引像素画进画布，透明索引跳过
+///@param {Struct} state 解码状态
+///@param {Array} pixels 颜色索引
+///@param {Array} palette 调色板
+///@param {Real} left 左
+///@param {Real} top 上
+///@param {Real} image_width 图像宽
+///@param {Real} image_height 图像高
+///@param {Bool} interlaced 是否交错
+///@param {Bool} transparent 是否启用透明色
+///@param {Real} transparent_index 透明色索引
+///@returns {Undefined} 无
 function rpe_gif__draw_image(state, pixels, palette, left, top, image_width,
         image_height, interlaced, transparent, transparent_index) {
     var source_pos = 0;
+    // 交错时按 GIF 四趟行序回写
     var pass_starts = interlaced ? [0, 4, 2, 1] : [0];
     var pass_steps = interlaced ? [8, 8, 4, 2] : [1];
 
@@ -186,6 +245,7 @@ function rpe_gif__draw_image(state, pixels, palette, left, top, image_width,
             for (var image_x = 0; image_x < image_width; image_x++) {
                 var color_index = pixels[source_pos];
                 source_pos += 1;
+                // 透明索引不覆盖已有像素
                 if (transparent && color_index == transparent_index) then continue;
                 if (color_index < 0 || color_index >= array_length(palette)) then rpe_gif__fail("GIF color index is out of range");
 
@@ -202,8 +262,12 @@ function rpe_gif__draw_image(state, pixels, palette, left, top, image_width,
     }
 }
 
+///@desc 把当前画布抓成一帧精灵
+///@param {Struct} state 解码状态
+///@returns {Undefined} 无
 function rpe_gif__capture_frame(state) {
     var frame_pixels = state.width * state.height;
+    // 帧数或总像素超过预算则失败
     if (array_length(state.frames) >= 256 || state.decoded_pixels + frame_pixels > 16777216) {
         rpe_gif__fail("GIF frame budget exceeded");
     }
@@ -219,6 +283,10 @@ function rpe_gif__capture_frame(state) {
     array_add(state.frames, sprite);
 }
 
+///@desc 释放解码用的表面与缓冲，可选删除已生成精灵
+///@param {Struct} state 解码状态
+///@param {Bool} delete_sprites 是否删除已抓取的帧精灵
+///@returns {Undefined} 无
 function rpe_gif__cleanup(state, delete_sprites) {
     if (state.surface >= 0 && surface_exists(state.surface)) {
         surface_free(state.surface);
@@ -236,6 +304,7 @@ function rpe_gif__cleanup(state, delete_sprites) {
         buffer_delete(state.restore);
         state.restore = -1;
     }
+    // 失败路径才删精灵，成功路径把它们交给调用方
     if (delete_sprites) {
         for (var i = 0; i < array_length(state.frames); i++) {
             if (sprite_exists(state.frames[i])) then sprite_delete(state.frames[i]);
@@ -244,9 +313,9 @@ function rpe_gif__cleanup(state, delete_sprites) {
     }
 }
 
-/// @function rpe_gif_decode(file_path)
-/// @param {String} file_path
-/// @returns {Struct|Undefined} Decoded GIF frames and timing, or undefined on failure.
+///@desc 解码 GIF 文件为帧精灵与延迟
+///@param {String} file_path 文件路径
+///@returns {Struct} 帧、延迟与尺寸；失败为 undefined
 function rpe_gif_decode(file_path) {
     var state = {
         file_buffer: -1,
@@ -283,6 +352,7 @@ function rpe_gif_decode(file_path) {
         for (var header_pos = 0; header_pos < 6; header_pos++) {
             signature += chr(rpe_gif__u8(state));
         }
+        // 只接受 GIF87a 与 GIF89a
         if (signature != "GIF87a" && signature != "GIF89a") then rpe_gif__fail("Invalid GIF signature");
 
         state.width = rpe_gif__u16(state);
@@ -293,8 +363,9 @@ function rpe_gif_decode(file_path) {
 
         var screen_flags = rpe_gif__u8(state);
         var background_index = rpe_gif__u8(state);
-        rpe_gif__u8(state); // Pixel aspect ratio.
+        rpe_gif__u8(state); // 像素宽高比，解码不使用
         var global_palette = [];
+        // 最高位表示存在全局调色板
         if ((screen_flags & $80) != 0) {
             global_palette = rpe_gif__palette(state, 1 << ((screen_flags & 7) + 1));
 			if (background_index >= 0 && background_index < array_length(global_palette)) {
@@ -318,12 +389,14 @@ function rpe_gif_decode(file_path) {
         while (!finished) {
             var marker = rpe_gif__u8(state);
             switch (marker) {
+                // 0x3B 是文件结束标记
                 case $3B:
                     finished = true;
                     break;
 
                 case $21:
                     var extension_type = rpe_gif__u8(state);
+                    // 0xF9 是图形控制扩展，其余扩展整段跳过
                     if (extension_type == $F9) {
                         if (rpe_gif__u8(state) != 4) then rpe_gif__fail("Invalid GIF graphic control extension");
                         var gce_flags = rpe_gif__u8(state);
@@ -332,6 +405,7 @@ function rpe_gif_decode(file_path) {
                         if (rpe_gif__u8(state) != 0) then rpe_gif__fail("Invalid GIF graphic control terminator");
                         gce_transparent = (gce_flags & 1) != 0;
                         gce_disposal = (gce_flags >> 2) & 7;
+                        // 未定义的处置方式按不处置
                         if (gce_disposal > 3) then gce_disposal = 0;
                     } else {
                         rpe_gif__skip_subblocks(state);
@@ -351,6 +425,7 @@ function rpe_gif_decode(file_path) {
 
                     var image_flags = rpe_gif__u8(state);
                     var palette = global_palette;
+                    // 本帧自带局部调色板时覆盖全局表
                     if ((image_flags & $80) != 0) {
                         palette = rpe_gif__palette(state, 1 << ((image_flags & 7) + 1));
                     }
@@ -360,6 +435,7 @@ function rpe_gif_decode(file_path) {
                     var compressed = rpe_gif__read_subblocks(state);
                     var pixels = rpe_gif__lzw_decode(compressed, minimum_code_size, image_pixel_count);
 
+                    // 处置 3 需要先留下绘制前的画布
                     if (gce_disposal == 3) {
                         buffer_copy(state.canvas, 0, state.canvas_size, state.restore, 0);
                         state.restore_valid = true;
@@ -386,6 +462,7 @@ function rpe_gif_decode(file_path) {
                     gce_disposal = 0;
                     break;
 
+                // 未知块标记不能继续解析
                 default:
                     rpe_gif__fail("Unknown GIF block marker");
             }
@@ -403,13 +480,15 @@ function rpe_gif_decode(file_path) {
         return decoded;
     } catch (error) {
         show_debug_message($"[RPE GIF] {string(error)}");
+        // 失败时连同已生成的精灵一起释放
         rpe_gif__cleanup(state, true);
         return undefined;
     }
 }
 
-/// @function rpe_gif_free(decoded)
-/// @param {Struct} decoded
+///@desc 释放解码结果里的帧精灵
+///@param {Struct} decoded rpe_gif_decode 的返回值
+///@returns {Undefined} 无
 function rpe_gif_free(decoded) {
     if (!is_struct(decoded) || !struct_exists(decoded, "frames") || !is_array(decoded.frames)) then return;
     for (var i = 0; i < array_length(decoded.frames); i++) {

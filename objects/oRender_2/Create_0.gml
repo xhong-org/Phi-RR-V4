@@ -1,7 +1,7 @@
-/// @description 
+///@desc 创建 PEC 播放器、运行时和打击特效
 window_set_caption($"{GAME_NAME}");
 
-// Draw after the chart composition so the aspect mask is final.
+// 画在谱面合成之后，宽高比遮罩才是最终结果。
 depth = DEPTH.HEF + 1;
 
 if (os_browser == browser_not_a_browser) then gml_release_mode(true);
@@ -26,12 +26,13 @@ chart_session_bind_paths();
 if (chart_session_has_track()) {
         chart_session_apply_folder(game);
 } else {
+        // 没有选中谱面时退回示例。
         chart_session_load_sample();
         chart_session_bind_paths();
         chart_session_apply_folder(game);
 };
 game.Resource();
-// Configs() may overwrite folder_chart from ini; re-apply selected chart session.
+// Configs 可能用 ini 覆盖 folder_chart，这里再写回选中的会话。
 if (chart_session_has_track()) {
         chart_session_apply_folder(game);
         chart_session_bind_paths();
@@ -48,7 +49,7 @@ if (chart_session_has_track()) {
 };
 game_2 = (new PEC());
 
-// Clear the previous chart before PEC runtime creation schedules its notes.
+// 创建 PEC 运行时并登记音符之前，先清掉上一局的打击音表。
 if (variable_global_exists("render_mode") && global.render_mode) {
 	global.render_hitsounds = [];
 };
@@ -58,6 +59,7 @@ instance_create_depth(0, 0, -12001, oBG_1);
 instance_create_depth(0,0,0,oMedia , { "name" : (string_length(game.folder_chart.music) ? chart_in_path(game.folder_chart.music) : "") });
 
 var pec_path = (string_length(game.folder_chart.chart) ? chart_path_join(InChartPath, game.folder_chart.chart) : "");
+// 读谱失败就中止加载并回菜单。
 if (!pec_reader_load(game_2, pec_path)) {
 	show_debug_message($"[PEC] Failed to load: {pec_path}");
 	chart_loading_animation_abort();
@@ -67,6 +69,7 @@ if (!pec_reader_load(game_2, pec_path)) {
 skin_gameplay_ensure();
 chart_load_flags_reset();
 var _pec_render_mode = variable_global_exists("render_mode") && global.render_mode;
+// 录像一次建完运行时，交互模式则分帧创建。
 if (_pec_render_mode) {
 	pec_create_runtime(game_2);
 } else {
@@ -80,10 +83,18 @@ if (_pec_render_mode) {
 };
 instance_create_depth(0,0,DEPTH.BG - 1,oExtraPlay);
 
+///@desc 特效对象创建前的空打击回调
+///@returns {Bool} 恒为假，表示还没接上特效
 _eff_c = (function(){ return(false); });
 if (game.settings.useOldFX && !pls_is_gxgames() && !skin_active()) {
 	instance_create_depth(0, 0, 0, oEffect);
+	///@desc 在旧粒子系统上生成打击特效
+	///@param {Real} _x 世界坐标 X
+	///@param {Real} _y 世界坐标 Y
+	///@param {Real} color 粒子颜色，默认浅金
+	///@returns {Undefined} 无
 	_eff_c = method(self, function(_x, _y, color = #ffeca0) {
+		// 关闭打击特效时直接返回。
 		if (!game.settings.enableHitEffect) then return;
 		with (oEffect) {
 			part_particles_create_color(p1, floor(_x), floor(_y), _hitFX, color, 1);
@@ -116,8 +127,7 @@ play_transition_bg_alpha = 1;
 draw_set_font(game.font);
 var _ui_font_size = max(1, font_get_size(draw_get_font()));
 var _ui_name_width = max(1, string_width(string(game.folder_chart.name)));
-// font_scales is the pre-global-scales factor; draw code applies the window
-// scale once, just like the other HUD elements.
+// font_scales 不含窗口缩放，绘制时再乘一次，和其他界面元素一样。
 var _ui_reference_scale = (47 / _ui_font_size);
 var _ui_fit_scale = (((room_width / 2) - (80 * global_scales)) / _ui_name_width) / max(0.000001, global_scales);
 font_scales = clamp(min(_ui_reference_scale, _ui_fit_scale), 0.2, 0.55);

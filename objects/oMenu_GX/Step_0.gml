@@ -1,9 +1,10 @@
-/// @description GX click-to-pick / API backup
+///@desc 处理 GX 点击选文件、API 浏览和拖放导入
 var scale_now = (variable_global_exists("global_scales") ? global_scales : 1.0);
 if (layout_w != room_width || layout_h != room_height || layout_scale != scale_now) {
         pls_gx_menu_layout();
 };
 
+// 忙碌或设置打开时关掉拖放，避免误导入。
 if (busy || settings_gui_blocking()) {
         gx_drop_set_enabled(false);
         gx_file_ui_set_drop(false);
@@ -12,6 +13,7 @@ if (busy || settings_gui_blocking()) {
 };
 drop_panel_open = gx_file_ui_drop_open();
 
+// 本地模式定期重试 API 健康检查。
 if (!pls_is_gx_remote()) {
         health_timer++;
         if (health_timer > 180) {
@@ -21,6 +23,7 @@ if (!pls_is_gx_remote()) {
 };
 if (import_opened) then i_gx_drop_poll_import();
 
+// 设置界面挡住时清掉悬停并退出。
 if (settings_gui_blocking()) {
         hover_pick = false;
         hover_drop_btn = false;
@@ -39,6 +42,7 @@ hover_settings = !drop_panel_open && settings_menu_button_hit(mouse_x, mouse_y);
 var drop_status = gx_drop_status();
 gx_drop_unpause();
 
+// 拖放面板导入成功就立刻进加载房间。
 if (!busy && import_opened) {
         var imported = gx_import_poll_file();
         if (string_length(imported)) {
@@ -55,6 +59,7 @@ if (!busy && import_opened) {
         };
 };
 
+// 左键：设置、API 浏览，或打开点击选文件面板。
 if (!busy && mouse_check_button_pressed(mb_left)) {
         if (hover_settings) {
                 settings_gui_open();
@@ -74,6 +79,7 @@ if (!busy && mouse_check_button_pressed(mb_left)) {
         };
 };
 
+// 按拖放状态更新提示，读完且是谱面包才进加载。
 if (drop_status == GX_DROP_STATUS.READING) {
         status_text = lang("gx.statusReading");
         last_error = "";

@@ -1,9 +1,8 @@
-/// @description Draw the progress overlay from a dedicated surface.
+///@desc 把录像进度画到独立表面，避免写进成片
+// 编码结束后不再画进度。
 if (encoder_finished) exit;
 
-// The overlay is a window-only UI surface. In render mode the room stays at
-// the encoded video size, so using room dimensions here would leave a small
-// surface that gets enlarged and makes text blurry after a window resize.
+// 进度层跟窗口走。录像时房间保持成片尺寸，用房间尺寸会在拉大窗口后把字放大糊掉。
 var surface_width = max(1, window_get_width());
 var surface_height = max(1, window_get_height());
 if (!surface_exists(overlay_surface)
@@ -13,15 +12,13 @@ if (!surface_exists(overlay_surface)
     overlay_surface_width = surface_width;
     overlay_surface_height = surface_height;
 };
+// 表面创建失败就先不画。
 if (!surface_exists(overlay_surface)) exit;
 overlay_ready = true;
 
 var scale = min(surface_width / 1366, surface_height / 768);
 if (!is_real(scale) || scale <= 0) scale = 1.0;
-// The overlay surface is rendered at the current window size and then
-// displayed through the room surface. Those display transforms cancel out,
-// so the text only needs the current window adaptation scale. Applying a
-// room/window factor here would compensate the same transform twice.
+// 进度表面按窗口画，再经房间表面显示，两层变换抵消。文字只用窗口适配缩放。
 var text_scale_x = scale;
 var text_scale_y = scale;
 var panel_width = min(920 * scale, max(240 * scale, surface_width - 64 * scale));
@@ -69,6 +66,7 @@ var bar_height = 18 * scale;
 draw_set_colour(make_colour_rgb(38, 45, 64));
 draw_roundrect_ext(bar_left, bar_top, bar_left + bar_width, bar_top + bar_height,
     bar_height, bar_height, false);
+// 有进度才画前景条。
 if (progress > 0) {
     draw_set_colour(make_colour_rgb(96, 216, 190));
     draw_roundrect_ext(bar_left, bar_top, bar_left + bar_width * progress,

@@ -1,4 +1,4 @@
-/// @description 事件启用变量
+///@desc 按设置决定要不要画界面和刷新帧率
 _draw_user_count = (game.settings.enableChartGUI ? 1 : 0); // 绘制GUI
 var _show_fps = game.settings.enableFPS
 	&& !(variable_global_exists("render_mode") && global.render_mode);

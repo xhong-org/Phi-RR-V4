@@ -1,4 +1,4 @@
-/// @description Menu draw using Camera_View.global_scales
+///@desc 按 global_scales 绘制 Windows 菜单和工具面板
 var scale_now = (variable_global_exists("global_scales") ? global_scales : 1.0);
 if (layout_w != room_width || layout_h != room_height || layout_scale != scale_now) {
         event_user(0);
@@ -44,6 +44,7 @@ if (string_length(last_error)) {
 draw_set_colour(c_dkgray);
 draw_text_transformed(cx, room_height - max(18, 30 * s), lang("menu.hintKeys"), small_scale, small_scale, 0);
 
+// 工具面板盖住菜单，并画出转换任务按钮。
 if (tools_open) {
         var tools_panel = phi_tools_panel_metrics(room_width, room_height, s);
         tools_export_box = tools_panel.buttons[0];

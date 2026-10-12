@@ -1,11 +1,9 @@
-/// @function get_window_pos_scale(X, Y, W, H)
-/// @desc 将配置坐标转换为当前窗口的实际坐标
-/// @param {float} X 配置X坐标
-/// @param {float} Y 配置Y坐标
-/// @param {float} W 窗口宽度
-/// @param {float} H 窗口高度
-/// @returns {array} [screen_x, screen_y] 转换后的屏幕坐标
-
+///@desc 把配置坐标换成当前窗口上的屏幕坐标
+///@param {Real} X 配置横坐标
+///@param {Real} Y 配置纵坐标
+///@param {Real} W 窗口宽度，非正数时改用当前窗口宽
+///@param {Real} H 窗口高度，非正数时改用当前窗口高
+///@returns {Array} 屏幕坐标，依次为横坐标和纵坐标
 function get_window_pos_scale(X, Y, W = -1, H = -1) {
     if (!is_real(W) || W <= 0) then W = pls_window_width();
     if (!is_real(H) || H <= 0) then H = pls_window_height();

@@ -1,1 +1,1 @@
-// Render settings room.
+// 渲染设置房间。

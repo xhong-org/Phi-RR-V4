@@ -1,0 +1,140 @@
+官谱噪域的旧加载路径。运行时已改为分帧写入紧凑缓冲，只实例化当前还显示的方块。
+下面这些函数不再参与编译，留作对照。
+
+///@desc 从谱面的 blockAreaList 建立噪声区列表
+///@param {Struct} _chart 谱面结构
+///@returns {Array} 方块数组，没有列表则为空
+function official_blocks_build(_chart) {
+	var source = _chart[$ "blockAreaList"];
+	// 兼容三种字段名
+	if (!is_array(source)) source = _chart[$ "block_area_list"];
+	if (!is_array(source)) source = _chart[$ "block_area"];
+	var blocks = [];
+	if (!is_array(source)) return blocks;
+	var count = array_length(source);
+	for (var i = 0; i < count; i++) {
+		var area = source[i];
+		if (!is_struct(area)) continue;
+		var bottom_left = area[$ "bottomLeftPercentage"];
+		var top_right = area[$ "topRightPercentage"];
+		if (!is_struct(bottom_left) || !is_struct(top_right)) continue;
+		var left_x = real(bottom_left[$ "x"] ?? 0);
+		var left_y = real(bottom_left[$ "y"] ?? 0);
+		var right_x = real(top_right[$ "x"] ?? 0);
+		var right_y = real(top_right[$ "y"] ?? 0);
+		var appear = real(area[$ "appearTime"] ?? 0);
+		var enable = real(area[$ "enableTime"] ?? 0);
+		var disable = real(area[$ "disableTime"] ?? 0);
+		var disappear = real(area[$ "disappearTime"] ?? 0);
+		if (!is_finite(left_x) || !is_finite(left_y) || !is_finite(right_x) || !is_finite(right_y)) continue;
+		if (!is_finite(appear) || !is_finite(enable) || !is_finite(disable) || !is_finite(disappear)) continue;
+		enable = max(enable, appear);
+		disable = max(disable, enable);
+		disappear = max(disappear, disable);
+		var rgb = official_block_read_color(area);
+		array_add(blocks, {
+			subtract: bool(area[$ "isSubtract"] ?? false),
+			appear: appear,
+			enable: enable,
+			disable: disable,
+			disappear: disappear,
+			cr: rgb[0],
+			cg: rgb[1],
+			cb: rgb[2],
+			ord: array_length(blocks),
+			x0: left_x,
+			y0: left_y,
+			x1: right_x,
+			y1: right_y,
+			move: official_block_read_move(area),
+			scale: official_block_read_scale(area),
+			rotate: official_block_read_rotate(area),
+			on: false,
+			phase: 2,
+			fade: 1,
+			cx: 0,
+			cy: 0,
+			sx: 1,
+			sy: 1,
+			ang: 0,
+			corners: [0, 0, 0, 0, 0, 0, 0, 0]
+		});
+	}
+	return blocks;
+}
+
+///@desc 按出现时间再按文件顺序比较方块
+function official_block_sort_appear(_a, _b) {
+	if (_a.appear != _b.appear) return sign(_a.appear - _b.appear);
+	return sign(_a.ord - _b.ord);
+}
+
+///@desc 方块较多时按出现时间排序，供扫描游标使用
+function official_block_index(_state) {
+	var blocks = _state.blocks;
+	var count = array_length(blocks);
+	_state.bucket_lists = undefined;
+	_state.bucket_ends = undefined;
+	_state.scan_sorted = false;
+	_state.scan_active = undefined;
+	_state.scan_active_n = 0;
+	_state.scan_cursor = 0;
+	_state.scan_now = -infinity;
+	if (count < 400) return;
+	array_sort(blocks, official_block_sort_appear);
+	_state.scan_sorted = true;
+	_state.scan_active = array_create(4096, 0);
+}
+
+///@desc 旧的收集方式：排序游标、时间桶，或逐块激活
+function official_block_gather_legacy(_state, _now, _aspect, half) {
+	var blocks = _state.blocks;
+	var count = array_length(blocks);
+	if (_state.scan_sorted) {
+		if (_now < _state.scan_now) {
+			_state.scan_cursor = 0;
+			_state.scan_active_n = 0;
+		}
+		_state.scan_now = _now;
+		var active = _state.scan_active;
+		var live = _state.scan_active_n;
+		var cursor = _state.scan_cursor;
+		while (cursor < count && blocks[cursor].appear <= _now) {
+			if (live >= array_length(active)) {
+				array_add(active, cursor);
+			} else {
+				active[live] = cursor;
+			}
+			live++;
+			cursor++;
+		}
+		_state.scan_cursor = cursor;
+		var write = 0;
+		for (var si = 0; si < live; si++) {
+			var idx = active[si];
+			var block = blocks[idx];
+			if (block.disappear <= _now) continue;
+			active[write] = idx;
+			write++;
+			official_block_activate(_state, block, _now, _aspect, half);
+		}
+		_state.scan_active_n = write;
+	} else if (is_array(_state.bucket_lists)) {
+		var dt = _state.bucket_dt;
+		var lists = _state.bucket_lists;
+		var ends = _state.bucket_ends;
+		var bucket_count = array_length(lists);
+		var last_bucket = floor(_now / dt);
+		if (last_bucket >= bucket_count) last_bucket = bucket_count - 1;
+		for (var bucket = 0; bucket <= last_bucket; bucket++) {
+			if (bucket * dt > _now) break;
+			if (ends[bucket] <= _now) continue;
+			var list = lists[bucket];
+			if (!is_array(list)) continue;
+			var list_count = array_length(list);
+			for (var li = 0; li < list_count; li++) official_block_activate(_state, blocks[list[li]], _now, _aspect, half);
+		}
+	} else {
+		for (var i = 0; i < count; i++) official_block_activate(_state, blocks[i], _now, _aspect, half);
+	}
+}

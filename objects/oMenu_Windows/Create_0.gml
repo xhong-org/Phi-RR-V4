@@ -1,5 +1,5 @@
-/// @description Menu UI bootstrap
-// Depends on Camera_View defining global_scales first.
+///@desc 初始化 Windows 菜单按钮、工具面板和字体
+// 布局依赖 Camera_View 先定义好 global_scales。
 window_set_caption(GAME_NAME + " - " + lang("common.menu"));
 chart_session_ensure();
 if (variable_global_exists("render_gui_returning") && global.render_gui_returning) {
@@ -27,7 +27,7 @@ tools_export_box = { x: 0, y: 0, w: 1, h: 1 };
 tools_pec_box = { x: 0, y: 0, w: 1, h: 1 };
 tools_close_box = { x: 0, y: 0, w: 1, h: 1 };
 
-// Layout cache. Rebuild when room size or global_scales changes.
+// 布局缓存，房间尺寸或 global_scales 变化时重建。
 layout_w = -1;
 layout_h = -1;
 layout_scale = -1;

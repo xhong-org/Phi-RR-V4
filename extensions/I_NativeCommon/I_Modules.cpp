@@ -280,6 +280,10 @@ ID3D11BlendState* g_fullscreenBlend = nullptr;
 ID3D11SamplerState* g_fullscreenSampler = nullptr;
 ID3D11Texture2D* g_captureTexture = nullptr;
 ID3D11ShaderResourceView* g_captureSrv = nullptr;
+ID3D11Texture2D* g_resolveTexture = nullptr;
+UINT g_resolveWidth = 0;
+UINT g_resolveHeight = 0;
+DXGI_FORMAT g_resolveFormat = DXGI_FORMAT_UNKNOWN;
 ID3D11Buffer* g_quadBuffer = nullptr;
 float g_quadWidth = -1.0f;
 float g_quadHeight = -1.0f;
@@ -737,6 +741,14 @@ DXGI_FORMAT rpeColorViewFormat(DXGI_FORMAT format) {
     }
 }
 
+void rpeReleaseResolve() {
+    if (g_resolveTexture) g_resolveTexture->Release();
+    g_resolveTexture = nullptr;
+    g_resolveWidth = 0;
+    g_resolveHeight = 0;
+    g_resolveFormat = DXGI_FORMAT_UNKNOWN;
+}
+
 void rpeReleaseCapture() {
     if (g_captureSrv) g_captureSrv->Release();
     if (g_captureTexture) g_captureTexture->Release();
@@ -806,7 +818,7 @@ ID3D11ShaderResourceView* rpeSnapshotRenderTarget() {
     }
     D3D11_TEXTURE2D_DESC targetDesc{};
     targetTexture->GetDesc(&targetDesc);
-    if (targetDesc.Width == 0 || targetDesc.Height == 0 || targetDesc.SampleDesc.Count != 1) {
+    if (targetDesc.Width == 0 || targetDesc.Height == 0) {
         targetTexture->Release();
         targetResource->Release();
         targetView->Release();
@@ -814,6 +826,35 @@ ID3D11ShaderResourceView* rpeSnapshotRenderTarget() {
         return nullptr;
     }
     const DXGI_FORMAT viewFormat = rpeColorViewFormat(targetDesc.Format);
+    // 录像强制 8x MSAA。多重采样目标不能直接拷进着色器纹理，必须先 Resolve。
+    // 解析必须在目标解绑之后做。还绑着时 Resolve 读到的是未落地的样本，副本会是黑的。
+    // 解析失败时调用方不得改去采样 PS 槽 0，那个槽经常是字体，会把画面换成乱码。
+    const bool multisampled = targetDesc.SampleDesc.Count > 1;
+    if (multisampled) {
+        if (!g_resolveTexture || g_resolveWidth != targetDesc.Width || g_resolveHeight != targetDesc.Height
+            || g_resolveFormat != targetDesc.Format) {
+            rpeReleaseResolve();
+            D3D11_TEXTURE2D_DESC resolveDesc = targetDesc;
+            resolveDesc.MipLevels = 1;
+            resolveDesc.ArraySize = 1;
+            resolveDesc.SampleDesc.Count = 1;
+            resolveDesc.SampleDesc.Quality = 0;
+            resolveDesc.Usage = D3D11_USAGE_DEFAULT;
+            resolveDesc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+            resolveDesc.CPUAccessFlags = 0;
+            resolveDesc.MiscFlags = 0;
+            if (FAILED(g_device->CreateTexture2D(&resolveDesc, nullptr, &g_resolveTexture))) {
+                targetTexture->Release();
+                targetResource->Release();
+                targetView->Release();
+                if (depthView) depthView->Release();
+                return nullptr;
+            }
+            g_resolveWidth = targetDesc.Width;
+            g_resolveHeight = targetDesc.Height;
+            g_resolveFormat = targetDesc.Format;
+        }
+    }
     if (!g_captureTexture || g_captureWidth != targetDesc.Width || g_captureHeight != targetDesc.Height
         || g_captureFormat != targetDesc.Format) {
         rpeReleaseCapture();
@@ -855,8 +896,15 @@ ID3D11ShaderResourceView* rpeSnapshotRenderTarget() {
     ID3D11ShaderResourceView* unbound[4] = {};
     g_context->PSSetShaderResources(0, 4, unbound);
     g_context->OMSetRenderTargets(0, nullptr, nullptr);
-    const UINT sourceSubresource = D3D11CalcSubresource(0, 0, targetDesc.MipLevels);
-    g_context->CopySubresourceRegion(g_captureTexture, 0, 0, 0, 0, targetTexture, sourceSubresource, nullptr);
+    ID3D11Texture2D* copySource = targetTexture;
+    UINT copyMips = targetDesc.MipLevels;
+    if (multisampled) {
+        g_context->ResolveSubresource(g_resolveTexture, 0, targetTexture, 0, viewFormat);
+        copySource = g_resolveTexture;
+        copyMips = 1;
+    }
+    const UINT sourceSubresource = D3D11CalcSubresource(0, 0, copyMips);
+    g_context->CopySubresourceRegion(g_captureTexture, 0, 0, 0, 0, copySource, sourceSubresource, nullptr);
     g_context->OMSetRenderTargets(1, &targetView, depthView);
     g_context->PSSetShaderResources(0, 4, previousSrvs);
     for (ID3D11ShaderResourceView* previousSrv : previousSrvs) {
@@ -884,9 +932,9 @@ std::int32_t rpe_hlsl_draw(std::int32_t handle, float uvLeft, float uvTop,
     if (!g_context || !g_fullscreenVertexShader || shaderIt == g_shaders.end()) return 0;
     ShaderRecord& record = *shaderIt->second;
 
+    // 快照失败时不要采样 PS 槽 0。那个槽不是这一帧的画面，画上去会盖掉音符、打击特效，或把字体铺满成乱码。
     ID3D11ShaderResourceView* sourceView = rpeSnapshotRenderTarget();
-    if (!sourceView) g_context->PSGetShaderResources(0, 1, &sourceView);
-    if (!sourceView) return 1;
+    if (!sourceView) return 0;
 
     ID3D11VertexShader* previousVertexShader = nullptr;
     ID3D11PixelShader* previousPixelShader = nullptr;
@@ -1214,6 +1262,7 @@ void rpe_hlsl_shutdown() {
     if (g_fullscreenDepthStencil) g_fullscreenDepthStencil->Release();
     if (g_fullscreenRasterizer) g_fullscreenRasterizer->Release();
     rpeReleaseCapture();
+    rpeReleaseResolve();
     rpeReleaseQuad();
     g_fullscreenVertexShader = nullptr;
     g_fullscreenSampler = nullptr;

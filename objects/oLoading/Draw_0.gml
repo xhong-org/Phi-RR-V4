@@ -1,4 +1,4 @@
-/// @description Loading progress UI using Camera_View.global_scales.
+///@desc 绘制：用 Camera_View 的 global_scales 画加载进度
 if (font_exists(ui_font)) then draw_set_font(ui_font);
 else draw_set_font(-1);
 
@@ -25,6 +25,7 @@ if (string_length(session.detail)) {
         draw_text_transformed(cx, room_height * 0.68, string(session.detail), 0.32 * s, 0.32 * s, 0);
 };
 
+// 失败显示返回提示，否则按阶段画进度条。
 if (failed) {
         draw_set_colour(c_silver);
          draw_text_transformed(cx, room_height * 0.82, lang("loading.returning"), 0.35 * s, 0.35 * s, 0);

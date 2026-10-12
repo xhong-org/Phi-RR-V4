@@ -1,11 +1,13 @@
-/// @description PEC judge line runtime state.
+///@desc 创建：PEC 判定线的运行时状态
 depth = DEPTH.LINE;
 
+// 贴图缺失时退回默认判定线。
 if (!variable_instance_exists(id, "image_id") || !sprite_exists(image_id)) then image_id = line;
 if (!variable_instance_exists(id, "line_csv_scale")) then line_csv_scale = 1;
 sprite_index = image_id;
 image_blend = chart_line_judge_blend();
 var initial_scale = (variable_global_exists("global_scales") ? global_scales : 1);
+// 默认线和自定义贴图的初始缩放不同。
 if (image_id == line) {
 	image_xscale = 0.9204 * initial_scale;
 	image_yscale = 0.52 * initial_scale;
@@ -14,6 +16,7 @@ if (image_id == line) {
 	image_xscale = _csv_scale[0];
 	image_yscale = _csv_scale[1];
 };
+// 没有事件结构就用空的 PEC 线数据，并缓存各通道长度。
 if (!variable_instance_exists(id, "events") || !is_struct(events)) then events = pec_line_data();
 _move_index = 0;
 _alpha_index = 0;

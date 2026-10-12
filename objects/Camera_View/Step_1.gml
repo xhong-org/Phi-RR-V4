@@ -1,6 +1,7 @@
 /* began */
-/// @desc Keep room size + global_scales in sync with window
+///@desc 步进开始：让房间尺寸和 global_scales 跟着窗口走
 
+// 设计分辨率缺失时用当前房间尺寸补上。
 if (!variable_instance_exists(id, "start_width") || !is_real(start_width) || start_width <= 0) {
         start_width = max(1, room_width);
 };
@@ -8,14 +9,12 @@ if (!variable_instance_exists(id, "start_height") || !is_real(start_height) || s
         start_height = max(1, room_height);
 };
 
-// Interactive rooms follow the window. Rendering and archive tests keep the
-// requested surface so -resolution is stable across machines.
+// 交互房间跟窗口走。渲染和归档测试固定请求的表面，避免 -resolution 随机器变化。
 var _archive_sizing = variable_global_exists("pls_archive_test") && global.pls_archive_test;
 var _render_sizing = (variable_global_exists("render_mode") && global.render_mode) || _archive_sizing;
 var _sw = _render_sizing ? global.render_width : pls_window_width();
 var _sh = _render_sizing ? global.render_height : pls_window_height();
-// Window/canvas size jitters by 1-2px on Windows (DWM) and GX. Ignore that or
-// room + application_surface resize every frame and working set creeps up.
+// Windows（DWM）和 GX 上画布会抖 1～2 像素。忽略它，否则每帧改房间和应用表面，工作集会一直涨。
 var _jitter = pls_is_gxgames() ? 4 : 2;
 if (!variable_instance_exists(id, "size_last_w")) then size_last_w = room_width;
 if (!variable_instance_exists(id, "size_last_h")) then size_last_h = room_height;
@@ -31,6 +30,7 @@ if (abs(_sw - size_last_w) > _jitter || abs(_sh - size_last_h) > _jitter) {
                 alarm[0] = 1;
         };
 };
+// GX 上把 GUI 尺寸跟房间对齐。
 if (pls_is_gxgames()) {
         gx_last_room_w = size_last_w;
         gx_last_room_h = size_last_h;
@@ -41,7 +41,7 @@ if (pls_is_gxgames()) {
         };
 };
 
-// Always refresh global_scales here so UI in the same frame can use it.
+// 这里每帧刷新 global_scales，同帧界面才能用到。
 if (!variable_global_exists("global_scales")) {
         globalvar global_scales;
 };
@@ -52,8 +52,7 @@ if (start_width > 0 && start_height > 0) {
 };
 chart_view_refresh(room_width, room_height);
 
-// Fit the application surface before anything draws. Resizing it after the
-// frame is drawn clears that frame, which flashes black on entering a room.
+// 在任何绘制之前贴合应用表面。帧画完后再改尺寸会清掉这一帧，进房间会闪黑。
 if (application_surface_is_enabled() && surface_exists(application_surface)) {
 	var _surface_w = surface_get_width(application_surface);
 	var _surface_h = surface_get_height(application_surface);
@@ -62,6 +61,7 @@ if (application_surface_is_enabled() && surface_exists(application_surface)) {
 	};
 };
 
+// Windows 下按设置开关无阻塞拖动窗口。
 if (os_type == os_windows && extension_exists("I_Pulse")) {
 	var render_window = variable_global_exists("render_mode") && global.render_mode;
 	var prevent_move_freeze = !render_window;

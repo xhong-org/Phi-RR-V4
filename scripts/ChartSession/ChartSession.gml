@@ -1,5 +1,6 @@
-/// @desc Chart loading session + menu/play pipeline helpers
+/// 谱面加载会话，以及菜单与游玩管线的辅助函数
 
+// 谱面格式：未知、官谱、RPE、PEC
 enum CHART_FORMAT {
         UNKNOWN = 0,
         OFFICIAL = 1,
@@ -7,6 +8,8 @@ enum CHART_FORMAT {
         PEC = 3
 };
 
+///@desc 创建一份默认的谱面加载会话
+///@returns {Struct} 空会话结构
 function chart_session_default() { // 立正了
         return {
                 "source_path" : "",
@@ -41,7 +44,10 @@ function chart_session_default() { // 立正了
         };
 }
 
+///@desc 保证全局谱面会话和活动路径已存在
+///@returns {Struct} 当前会话
 function chart_session_ensure() {
+        // 会话或活动路径缺失时补上默认值
         if (!variable_global_exists("chart_session") || !is_struct(global.chart_session)) {
                 global.chart_session = chart_session_default();
         };
@@ -51,12 +57,18 @@ function chart_session_ensure() {
         return global.chart_session;
 }
 
+///@desc 把全局谱面会话和活动路径恢复为默认
+///@returns {Struct} 新建的会话
 function chart_session_reset() {
         global.chart_session = chart_session_default();
         global.chart_active_path = (working_directory + "chart/");
         return global.chart_session;
 }
 
+///@desc 写入会话状态并打印日志
+///@param {String} status_text 状态短句
+///@param {String} detail_text 补充说明，默认为空
+///@returns {Undefined} 无
 function chart_session_set_status(status_text, detail_text = "") {
         var session = chart_session_ensure();
         session.status = status_text;
@@ -64,12 +76,15 @@ function chart_session_set_status(status_text, detail_text = "") {
         print($"[ChartSession] {status_text} {detail_text}");
 }
 
+///@desc 清理解压目录与缓存，可选整份重置会话
+///@param {Bool} full_reset 为真时重建默认会话
+///@returns {Bool} 恒为真
 function chart_session_cleanup(full_reset = true) {
         var session = chart_session_ensure();
         var extract_dir = "";
         if (is_struct(session)) {
                 extract_dir = string(session.extract_dir);
-                // Also clean default unzip target when package load failed mid-way.
+                // 包加载中途失败时，也清掉默认解压目录
                 if (!string_length(extract_dir) && session.from_zip) {
                         extract_dir = chart_session_track_dir();
                 };
@@ -84,6 +99,7 @@ function chart_session_cleanup(full_reset = true) {
         chart_session_remove_dir(chart_gm_cache_dir());
         chart_cache_legacy_cleanup();
 
+        // 全量重置；否则只清空路径、文件列表和就绪标记
         if (full_reset) {
                 global.chart_session = chart_session_default();
                 global.chart_active_path = (working_directory + "chart/");
@@ -96,16 +112,22 @@ function chart_session_cleanup(full_reset = true) {
         return true;
 }
 
+///@desc 清除游玩拆卸完成标记
+///@returns {Undefined} 无
 function chart_playback_teardown_reset() {
         global.chart_playback_torn_down = false;
 }
 
-/// Reactivate judged/culled instances so room change can destroy them.
+///@desc 重新激活已判定或已剔除的实例，以便切房间时能销毁它们
+///@returns {Undefined} 无
 function chart_playback_prepare_exit() {
         instance_activate_all();
 }
 
+///@desc 释放本局 FMOD 打击音并清空 HitSounds
+///@returns {Undefined} 无
 function chart_playback_release_hitsounds() {
+        // 没有游戏结构或打击音表时直接返回
         if (!variable_global_exists("game_1") || !is_struct(game_1)) then return;
         if (!struct_exists(game_1, "HitSounds") || !is_struct(game_1.HitSounds)) then return;
         if (extension_exists("FMOD") && instance_exists(oMedia)) {
@@ -120,8 +142,10 @@ function chart_playback_release_hitsounds() {
         game_1.HitSounds = {};
 }
 
-/// Stop audio, drop FX/video, and wipe extract files before returning to menu.
+///@desc 回菜单前停音频、丢掉特效与视频，并清掉解压文件
+///@returns {Bool} 恒为真
 function chart_playback_teardown_for_menu() {
+        // 已经拆过则不再重复
         if (variable_global_exists("chart_playback_torn_down") && global.chart_playback_torn_down) {
                 return true;
         };
@@ -146,16 +170,22 @@ function chart_playback_teardown_for_menu() {
         return true;
 }
 
+///@desc 判断谱面 HUD 现在是否可以显示
+///@returns {Bool} 可以显示时为真
 function chart_hud_ready() {
+        // 加载动画期间不显示
         if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return false;
         if (instance_exists(oPlayTransition)) then return true;
         if (variable_global_exists("game") && is_struct(game) && !game.paused) then return true;
         return false;
 }
 
+///@desc 按当前渲染器拼出版本水印文字
+///@returns {String} 带版本与谱面格式的标签
 function chart_version_label() {
 	var _kind = "PGRVersion";
 	var _value = 0;
+	// RPE、PEC、官谱各取自己的版本字段
 	if (instance_exists(oRender_1) && variable_global_exists("game_1") && is_struct(game_1)) {
 		_kind = "RPEVersion";
 		_value = game_1.version;
@@ -169,11 +199,10 @@ function chart_version_label() {
 	return $"@{VerStr}[{ver_real()}] - Code By XTHX({_kind}->{_value})";
 }
 
-/// Stamp the build label onto the current render target.
-/// Play mode draws it in Draw GUI, which is after the encoder read and lands
-/// on the progress overlay. Call this while the chart surface is bound, or
-/// after the last fullscreen shader, and flush before restoring GPU state.
+///@desc 在当前渲染目标上盖版本水印；若画在 Draw GUI 会晚于编码器读取而落到进度条上，须在谱面 surface 绑定中或最后一次全屏着色器之后调用，并在恢复 GPU 前刷新
+///@returns {Undefined} 无
 function chart_draw_recorded_version() {
+	// 非录制模式或字体无效则不画
 	if (!(variable_global_exists("render_mode") && global.render_mode)) then return;
 	if (!variable_global_exists("game") || !is_struct(game) || !asset_font_valid(game.font)) then return;
 	var _scale = variable_global_exists("global_scales") ? global_scales : 1;
@@ -185,7 +214,15 @@ function chart_draw_recorded_version() {
 	var _valign = draw_get_valign();
 	var _font = draw_get_font();
 	gpu_push_state();
+	// 水印画在已经合成好的画面上。先刷新，再在非应用程序表面时解开后复位。
+	// 目标还绑着就 shader_reset，会把刚贴上的谱面清成白屏或黑屏，字体也会采到错乱的字形。
+	// 这处已经反复修过。不要删掉这次刷新和解绑。
+	pls_draw_flush();
+	var _version_target = surface_get_target();
+	var _version_held = surface_exists(_version_target) && _version_target != application_surface;
+	if (_version_held) then surface_reset_target();
 	shader_reset();
+	if (_version_held) then surface_set_target(_version_target);
 	gpu_set_blendenable(true);
 	gpu_set_blendmode(bm_normal);
 	gpu_set_texfilter(true);
@@ -198,6 +235,7 @@ function chart_draw_recorded_version() {
 	var _bound = surface_get_target();
 	var _sw = room_width;
 	var _sh = room_height;
+	// 优先用当前绑定 surface 的尺寸
 	if (surface_exists(_bound)) {
 		_sw = surface_get_width(_bound);
 		_sh = surface_get_height(_bound);
@@ -221,7 +259,10 @@ function chart_draw_recorded_version() {
 	draw_set_font(_font);
 }
 
+///@desc 判断现在能否画帧率
+///@returns {Bool} 允许时为真
 function chart_fps_draw_allowed() {
+        // 录制、结算或退场动画时不画
         if (variable_global_exists("render_mode") && global.render_mode) then return false;
         if (instance_exists(oSettlement)) then return false;
         if (instance_exists(oPlayTransition)) {
@@ -232,17 +273,33 @@ function chart_fps_draw_allowed() {
         return true;
 }
 
+///@desc 判断录制是否要带结算画面
+///@returns {Bool} 需要时为真
 function render_wants_settlement() {
         return variable_global_exists("render_mode") && global.render_mode
                 && variable_global_exists("render_settlement") && bool(global.render_settlement);
 }
 
-/// Outro 1s + wait 1s + settlement easings 3s + hold 3s.
-function render_settlement_tail_seconds() {
-        return 8.0;
+///@desc 谱面结束后、结算界面出现前要等的秒数
+///@returns {Real} 退场段数各 1 秒，再加 1 秒等待
+function render_settlement_lead_seconds() {
+        // 录像结束过场每段固定 1 秒。开了谱面遮罩要走三段，否则只退界面那一段。
+        // 段走完后再等 1 秒才创建结算。结尾音的时间是谱面秒，片头延迟由编码器另加，这里不要再加片头。
+        var phase_count = chart_mask_enabled() ? 3 : 1;
+        return phase_count + 1;
 }
 
+///@desc 结算收尾时长：退场和等待，加上缓动约 3 秒、停留 3 秒
+///@returns {Real} 从谱面结束到结算停留结束的秒数
+function render_settlement_tail_seconds() {
+        return render_settlement_lead_seconds() + 6;
+}
+
+///@desc 按难度前缀选择结算结尾音序号
+///@param {String} _level 难度文本
+///@returns {Real} EZ 为 1，HD 为 2，AT 为 4，其余为 3
 function chart_ending_index(_level) {
+        // 只看前两个字母
         var s = string_upper(string_trim(string(_level ?? "")));
         var prefix = string_copy(s, 1, 2);
         if (prefix == "EZ") then return 1;
@@ -251,14 +308,22 @@ function chart_ending_index(_level) {
         return 3;
 }
 
+///@desc 拼出结算结尾 wav 的可读路径
+///@param {String} _level 难度文本
+///@returns {String} 文件路径
 function chart_ending_path(_level) {
         var rel = $"resource/ending/ending{chart_ending_index(_level)}.wav";
         var p = string_replace_all($"{working_directory}{rel}", "\\", "/");
+        // 文件在就换成可读路径
         if (file_exists(p) || isExists(p)) then return chart_file_readable_path(p);
         return p;
 }
 
+///@desc 从 WAV 的 PCM data 块估算秒数
+///@param {String} _path 文件路径
+///@returns {Real} 时长秒数，读失败为 0
 function wav_pcm_duration_seconds(_path) {
+        // 路径无效、不是 WAVE 或过短则放弃
         if (!is_string(_path) || !string_length(_path)) then return 0;
         if (!file_exists(_path) && !isExists(_path)) then return 0;
         var src = -1;
@@ -274,6 +339,7 @@ function wav_pcm_duration_seconds(_path) {
         var rate = 0;
         var bits = 0;
         var data_size = 0;
+        // 遍历块，记下 fmt 与 data
         while (pos + 8 <= size) {
                 var ckid = skin_buf_tag(src, pos, 4);
                 buffer_seek(src, buffer_seek_start, pos + 4);
@@ -293,6 +359,7 @@ function wav_pcm_duration_seconds(_path) {
                         break;
                 };
                 pos = payload + cksize;
+                // 奇数块长按 RIFF 补齐到偶数字节
                 if ((cksize mod 2) == 1) then pos++;
         };
         buffer_delete(src);
@@ -301,7 +368,11 @@ function wav_pcm_duration_seconds(_path) {
         return data_size / bytes_per_sec;
 }
 
+///@desc 在结算时段按 wav 时长循环排入结尾音
+///@param {Real} _chart_seconds 谱面时长秒数
+///@returns {Real} 成功排入的次数，不需要或失败为 0
 function render_schedule_settlement_ending(_chart_seconds) {
+        // 不要结算或文件缺失则退出
         if (!render_wants_settlement()) then return 0;
         var level = "";
         if (variable_global_exists("game") && is_struct(game) && is_struct(game.folder_chart)) {
@@ -314,9 +385,12 @@ function render_schedule_settlement_ending(_chart_seconds) {
         };
         path = chart_file_readable_path(path);
         var chart_sec = max(0, real(_chart_seconds));
-        var start_t = chart_sec + 2.0;
-        var end_t = chart_sec + render_settlement_tail_seconds() + 1.0;
+        // 和结算界面同一时刻起音。原先固定加 2 秒，遮罩三段退场时会早两秒。
+        var lead = render_settlement_lead_seconds();
+        var start_t = chart_sec + lead;
+        var end_t = chart_sec + render_settlement_tail_seconds();
         var dur = wav_pcm_duration_seconds(path);
+        // 时长不可信时按 8 秒循环
         if (!(dur > 0.05 && dur < 600)) then dur = 8;
         var count = 0;
         for (var t = start_t; t < end_t; t += dur) {
@@ -326,12 +400,17 @@ function render_schedule_settlement_ending(_chart_seconds) {
         return count;
 }
 
-/// Hide or show chart objects without deactivate/activate.
-/// Activating is deferred to the end of the event, so a following
-/// event_perform or first Step is skipped and judge-line init is lost.
+///@desc 只改可见性来显隐谱面物体，不用 deactivate 或 activate，避免激活推迟到事件末尾而丢掉判定线初始化
+///@param {Bool} _visible 是否可见
+///@returns {Undefined} 无
 function chart_set_gameplay_visible(_visible) {
         var _show = bool(_visible);
+        ///@desc 把拥有者判定线列表里的实例设为同一可见性
+        ///@param {Struct} _owner 持有 runtime_line_instances 的结构
+        ///@param {Bool} _visible_flag 是否可见
+        ///@returns {Undefined} 无
         var _apply_line_list = function(_owner, _visible_flag) {
+                // 列表缺失或不是数组则跳过
                 if (!is_struct(_owner) || !struct_exists(_owner, "runtime_line_instances")) then return;
                 var _lines = _owner.runtime_line_instances;
                 if (!is_array(_lines)) then return;
@@ -351,9 +430,10 @@ function chart_set_gameplay_visible(_visible) {
         with (oNote_2) visible = _show;
 }
 
-/// Park FX behind the loading overlay. Judge lines and notes freeze only after
-/// Create + force-Step init; this function does not deactivate them.
+///@desc 加载遮罩期间把特效藏到后面；本函数不冻结判定线和音符，它们只在 Create 与强制 Step 初始化之后才停
+///@returns {Undefined} 无
 function chart_idle_behind_loading() {
+        // 没有加载动画则不动
         if (!(variable_global_exists("loading_animation_active") && global.loading_animation_active)) then return;
         chart_set_gameplay_visible(false);
         instance_deactivate_object(oRPEEffect);
@@ -361,12 +441,19 @@ function chart_idle_behind_loading() {
         instance_deactivate_object(oEffectNew);
 }
 
+///@desc 取仍有效的加载模糊精灵
+///@returns {Real} 精灵资源号，没有则为 -1
 function chart_blur_kept() {
+        // 没有记录或精灵已失效则返回 -1
         if (!variable_global_exists("chart_kept_blur")) then return -1;
         return sprite_exists(global.chart_kept_blur) ? global.chart_kept_blur : -1;
 }
 
+///@desc 记住加载模糊精灵，并删掉之前不同的那张
+///@param {Real} spr 要保留的精灵
+///@returns {Real} 保留的精灵，无效时为 -1
 function chart_blur_keep(spr) {
+        // 无效精灵不替换
         if (!sprite_exists(spr)) then return -1;
         var prev = chart_blur_kept();
         if (prev != -1 && prev != spr) {
@@ -376,7 +463,10 @@ function chart_blur_keep(spr) {
         return spr;
 }
 
+///@desc 从加载动画实例取模糊精灵并记住
+///@returns {Real} 精灵资源号，没有则为 -1
 function chart_blur_keep_from_animator() {
+        // 没有动画实例时沿用已经记住的精灵
         if (!instance_exists(oLoadAnimator)) then return chart_blur_kept();
         var spr = -1;
         with (oLoadAnimator) {
@@ -386,12 +476,14 @@ function chart_blur_keep_from_animator() {
         return chart_blur_kept();
 }
 
-/// Share the loading-screen blur with gameplay. Do not steal oLoadAnimator.blur_sprite
-/// while the overlay is still drawing it.
+///@desc 把加载界面的模糊图交给游玩背景；遮罩还在画 oLoadAnimator.blur_sprite 时不要把它抢走
+///@param {Bool} _force 为真时忽略设置也绑定
+///@returns {Real} 绑定的精灵，失败时为 -1
 function chart_blur_bind_game(_force = false) {
         var kept = chart_blur_keep_from_animator();
         if (!sprite_exists(kept)) then return -1;
         if (!variable_global_exists("game") || !is_struct(game)) then return kept;
+        // 未开模糊且非 GX 时只保留引用，不写进游戏背景
         var allow = _force || pls_is_gxgames();
         if (!allow && is_struct(game.settings)) then allow = bool(game.settings.enableBlur);
         if (!allow) then return kept;
@@ -407,7 +499,10 @@ function chart_blur_bind_game(_force = false) {
         return kept;
 }
 
+///@desc 取加载界面当前该画的模糊图
+///@returns {Real} 精灵资源号，没有则为 -1
 function chart_loading_blur_draw_sprite() {
+        // 优先动画实例，其次记住的图，最后游戏背景
         if (instance_exists(oLoadAnimator)) {
                 with (oLoadAnimator) {
                         if (sprite_exists(blur_sprite)) then return blur_sprite;
@@ -419,16 +514,22 @@ function chart_loading_blur_draw_sprite() {
         return -1;
 }
 
+///@desc 删掉记住的模糊精灵并清空引用
+///@returns {Undefined} 无
 function chart_blur_release() {
         var spr = chart_blur_kept();
+        // 有精灵才删除
         if (spr != -1) {
                 try { sprite_delete(spr); } catch (del_error) { delete(del_error); };
         };
         global.chart_kept_blur = -1;
 }
 
+///@desc 中止加载动画并清掉相关全局标记
+///@returns {Undefined} 无
 function chart_loading_animation_abort() {
         chart_blur_release();
+        // 动画实例还在就关掉并销毁
         if (instance_exists(oLoadAnimator)) {
                 with (oLoadAnimator) {
                         visible = false;
@@ -451,15 +552,20 @@ function chart_loading_animation_abort() {
         process_mem_trim();
 }
 
+///@desc 从加载动画取模糊精灵；所有权仍留在动画器直到 finish，游玩侧共用同一张
+///@returns {Real} 精灵资源号
 function chart_loading_take_blur_sprite() {
-        // Ownership stays with the animator until finish(). Gameplay shares the same sprite.
+        // 所有权留在动画器直到 finish()，游玩侧共用同一张精灵
         return chart_blur_keep_from_animator();
 }
 
+///@desc 结束加载动画，把模糊图交给游玩并销毁动画实例
+///@returns {Undefined} 无
 function chart_loading_animation_finish() {
         chart_blur_bind_game(false);
         if (instance_exists(oLoadAnimator)) {
                 with (oLoadAnimator) {
+                        // 模糊图已交给全局时，不要让实例销毁时删掉它
                         if (sprite_exists(blur_sprite) && blur_sprite == chart_blur_kept()) then blur_sprite = -1;
                         visible = false;
                         persistent = false;
@@ -473,6 +579,10 @@ function chart_loading_animation_finish() {
         global.load_animator_instance = noone;
 }
 
+///@desc 把会话标为失败，可选清理后仍保留错误信息
+///@param {String} message 错误说明
+///@param {Bool} cleanup 为真时清理并写回失败状态
+///@returns {Bool} 恒为假
 function chart_session_fail(message, cleanup = true) {
         var session = chart_session_ensure();
         session.ready = false;
@@ -491,6 +601,7 @@ function chart_session_fail(message, cleanup = true) {
         session.illustrator = "";
         session.play_room = -1;
         print($"[ChartSession][Error] {message}");
+        // 清理会重建会话，所以要把失败信息写回去
         if (cleanup) {
                 chart_session_cleanup(true);
                 var kept = chart_session_ensure();
@@ -501,20 +612,30 @@ function chart_session_fail(message, cleanup = true) {
         return false;
 }
 
+///@desc 判断会话是否已有可玩谱面
+///@returns {Bool} 就绪且格式已知、谱面文件非空时为真
 function chart_session_has_track() {
         var session = chart_session_ensure();
         return (session.ready && string_length(session.chart_file) > 0 && session.format != CHART_FORMAT.UNKNOWN);
 }
 
+///@desc 把路径反斜杠统一成正斜杠
+///@param {Any} path 原始路径
+///@returns {String} 规范化路径
 function chart_path_norm(path) {
         var p = string(path);
         p = string_replace_all(p, "\\", "/");
         return p;
 }
 
+///@desc 拼接目录与子路径，并去掉子路径开头的斜杠
+///@param {String} base_path 父目录
+///@param {String} child_name 子路径
+///@returns {String} 拼接结果
 function chart_path_join(base_path, child_name) {
         var base = chart_path_norm(base_path);
         var child = string_replace_all(string(child_name), "\\", "/");
+        // 剥掉子路径前导斜杠，避免拼出双斜杠
         while (string_length(child) > 0 && string_char_at(child, 1) == "/") {
                 child = string_delete(child, 1, 1);
         };
@@ -524,25 +645,37 @@ function chart_path_join(base_path, child_name) {
         return base + child;
 }
 
+///@desc 取小写扩展名，含点
+///@param {String} path 路径
+///@returns {String} 扩展名，没有则为空
 function chart_path_ext(path) {
         var p = chart_path_norm(path);
         var point = string_last_pos(".", p);
+        // 没有点号就没有扩展名
         if (point <= 0) then return "";
         return string_lower(string_copy(p, point, string_length(p) - point + 1));
 }
 
+///@desc 返回 GX 本地临时根目录
+///@returns {String} 固定临时根
 function chart_gx_local_root() {
         return "/tmp/pls/";
 }
 
+///@desc 返回 GX 沙盒存档根目录，并保证以斜杠结尾
+///@returns {String} 沙盒根路径
 function chart_gx_sandbox_root() {
         var base = gx_path_clean(string(game_save_id));
+        // 空存档号时退回沙盒默认根
         if (!string_length(base)) then base = "/_savedata";
         if (string_char_at(base, string_length(base)) != "/") then base += "/";
         return base;
 }
 
+///@desc 按平台准备并返回谱面包解压目录
+///@returns {String} 以斜杠结尾的 track 目录
 function chart_session_track_dir() {
+        // 原生文件、GX、普通存档三条路径
         if (chart_use_native_files()) {
                 var external = chart_native_external_dir();
                 if (!string_length(external) && os_type == os_android) then external = "/storage/emulated/0/Android/data/com.xthx.pls/files/";
@@ -564,13 +697,21 @@ function chart_session_track_dir() {
         return track;
 }
 
+///@desc 判断目录是否存在，原生文件走本地接口
+///@param {String} path 目录路径
+///@returns {Bool} 存在时为真
 function chart_path_dir_exists(path) {
+        // GameMaker 没有时再问原生接口
         if (directory_exists(path)) then return true;
         if (chart_use_native_files()) then return chart_native_is_dir(path);
         return false;
 }
 
+///@desc 用 GameMaker、原生或 GX 任一方式判断文件存在
+///@param {String} path 文件路径
+///@returns {Bool} 存在时为真
 function chart_file_exists_any(path) {
+        // 依次试 GameMaker、原生和 GX
         if (file_exists(path)) then return true;
         if (chart_use_native_files()) then return chart_native_exists(path);
         if (pls_is_gxgames() && is_string(path) && string_length(path)) {
@@ -580,7 +721,10 @@ function chart_file_exists_any(path) {
         return false;
 }
 
+///@desc 按平台准备并返回 GameMaker 可读缓存目录
+///@returns {String} 以斜杠结尾的 tmp 目录
 function chart_gm_cache_dir() {
+        // 原生、GX、普通存档各自准备 tmp
         if (chart_use_native_files()) {
                 var android_dir = chart_path_norm(chart_native_external_dir() + "tmp/");
                 chart_native_mkdir(android_dir);
@@ -597,11 +741,16 @@ function chart_gm_cache_dir() {
         return dir;
 }
 
+///@desc 删除目录下文件名以前缀开头的文件
+///@param {String} dir 目录
+///@param {String} prefix 文件名前缀
+///@returns {Undefined} 无
 function chart_delete_files_with_prefix(dir, prefix) {
         dir = chart_path_norm(dir);
         if (!string_length(dir) || !string_length(prefix)) then return;
         if (string_char_at(dir, string_length(dir)) != "/") then dir += "/";
         var lower_prefix = string_lower(prefix);
+        // 原生列举与 file_find 两条路径，不删子目录
         if (chart_use_native_files()) {
                 if (!chart_native_is_dir(dir)) then return;
                 var listing = chart_native_list(dir);
@@ -630,11 +779,14 @@ function chart_delete_files_with_prefix(dir, prefix) {
         };
 }
 
+///@desc 清掉旧的 bg_cache、track_cache 与 caches 目录
+///@returns {Undefined} 无
 function chart_cache_legacy_cleanup() {
         chart_delete_files_with_prefix(working_directory, "bg_cache_");
         chart_delete_files_with_prefix(working_directory + "caches/", "bg_cache_");
         chart_delete_files_with_prefix(game_save_id, "bg_cache_");
         chart_delete_files_with_prefix(game_save_id + "caches/", "bg_cache_");
+        // Android 再清外部和内部旧缓存
         if (os_type == os_android && android_files_available()) {
                 var external = android_files_external_dir();
                 var internal = android_files_internal_dir();
@@ -651,7 +803,11 @@ function chart_cache_legacy_cleanup() {
         if (directory_exists(game_save_id + "caches/")) then directory_destroy(game_save_id + "caches/");
 }
 
+///@desc 让 Android 上 GameMaker 打不开的文件复制到缓存后再返回
+///@param {String} path 原路径
+///@returns {String} 可读路径，复制失败则仍返回原路径
 function chart_file_readable_path(path) {
+        // 已经能直接打开则原样返回
         if (file_exists(path)) then return path;
         if (os_type != os_android || !android_files_available()) then return path;
         if (!android_files_exists(path)) then return path;
@@ -668,9 +824,13 @@ function chart_file_readable_path(path) {
         return dest;
 }
 
+///@desc 判断路径是否为绝对地址、盘符或网络地址
+///@param {String} path 路径
+///@returns {Bool} 是绝对路径时为真
 function chart_path_is_absolute(path) {
         var p = chart_path_norm(path);
         if (!string_length(p)) then return false;
+        // blob、http、根斜杠或盘符都算绝对路径
         if (string_pos("blob:", p) == 1) then return true;
         if (string_pos("http://", p) == 1) then return true;
         if (string_pos("https://", p) == 1) then return true;
@@ -679,21 +839,26 @@ function chart_path_is_absolute(path) {
         return false;
 }
 
-/// @desc Join InChartPath + relative name, then make it GM-openable on Android.
+///@desc 把相对名接到 InChartPath 上，并在 Android 上变成 GameMaker 能打开的路径
+///@param {String} relative_or_full 相对名或绝对路径
+///@returns {String} 可读路径，空输入则为空
 function chart_in_path(relative_or_full) {
         var p = string(relative_or_full);
+        // 空串直接返回；绝对路径不再拼接
         if (!string_length(p)) then return "";
         var full = chart_path_is_absolute(p) ? chart_path_norm(p) : chart_path_join(InChartPath, p);
         return chart_file_readable_path(full);
 }
 
-/// RPE stores judge-line art in Pictures/. Texture may be "Pictures/Box.png"
-/// or only "Box.png". Root files (Algebra) stay at the chart directory.
+///@desc 在谱面目录、Pictures 和已发现图片里解析判定线贴图；根目录文件仍留在谱面目录
+///@param {String} relative_path 相对贴图路径
+///@returns {String} 可读路径，找不到则为空
 function chart_resolve_asset(relative_path) {
         var relative = chart_path_norm(relative_path);
         while (string_length(relative) > 0 && string_char_at(relative, 1) == "/") {
                 relative = string_delete(relative, 1, 1);
         };
+        // 空路径和 line.png 不解析
         if (!string_length(relative) || string_lower(relative) == "line.png") then return "";
         var file_name = chart_path_file_name(relative);
         var candidates = [relative];
@@ -726,19 +891,23 @@ function chart_resolve_asset(relative_path) {
                         name_hit = found;
                 };
         };
+        // 同名只命中一次才采用，避免张冠李戴
         if (name_hits == 1 && (chart_file_exists_any(name_hit) || file_exists(name_hit))) {
                 return chart_file_readable_path(name_hit);
         };
         return "";
 }
 
-/// sprite_add misses some sandbox paths unless imgnum and slash style both vary.
+///@desc 用不同 imgnum 与斜杠写法尝试 sprite_add，沙盒路径失败时再复制到缓存
+///@param {String} path 图片路径
+///@returns {Real} 精灵资源号，失败为 -1
 function chart_sprite_add_file(path) {
         if (!is_string(path) || !string_length(path)) then return -1;
         var try_paths = [path, string_replace_all(path, "/", "\\")];
         var seen = {};
         for (var try_i = 0; try_i < array_length(try_paths); try_i++) {
                 var try_path = try_paths[try_i];
+                // 正反斜杠各试一次，重复路径跳过
                 if (!string_length(try_path) || struct_exists(seen, try_path)) then continue;
                 seen[$ try_path] = true;
                 if (!file_exists(try_path) && !chart_file_exists_any(try_path)) then continue;
@@ -760,6 +929,9 @@ function chart_sprite_add_file(path) {
         return -1;
 }
 
+///@desc 列出目录的直接子目录
+///@param {String} parent_path 父目录
+///@returns {Array} 子目录完整路径
 function chart_list_immediate_dirs(parent_path) {
         var dirs = [];
         var parent = chart_path_norm(parent_path);
@@ -775,6 +947,7 @@ function chart_list_immediate_dirs(parent_path) {
                         if (!string_length(listed)) then continue;
                         var rel = chart_path_rel(parent, listed);
                         var slash = string_pos("/", rel);
+                        // 原生列举只取第一层目录名
                         if (slash <= 0) then continue;
                         var child_name = string_copy(rel, 1, slash - 1);
                         if (!string_length(child_name) || child_name == "." || child_name == "..") then continue;
@@ -786,6 +959,7 @@ function chart_list_immediate_dirs(parent_path) {
                 return dirs;
         };
 
+        // GX 保持正斜杠，其它平台用反斜杠探测
         var list_root = pls_is_gxgames() ? parent : string_replace_all(parent, "/", "\\");
         var probe = file_find_first(list_root + "*", fa_directory);
         while (string_length(probe)) {
@@ -801,6 +975,10 @@ function chart_list_immediate_dirs(parent_path) {
         return dirs;
 }
 
+///@desc 若全部谱面都在同一个子目录且根上没有谱面，则返回该子目录
+///@param {String} track_path 解压根
+///@param {Struct} discovered 文件扫描结果
+///@returns {String} 唯一嵌套根，否则为空
 function chart_session_unique_nested_root(track_path, discovered) {
         var track = chart_path_norm(track_path);
         if (string_length(track) && string_char_at(track, string_length(track)) != "/") then track += "/";
@@ -820,16 +998,20 @@ function chart_session_unique_nested_root(track_path, discovered) {
                 if (!string_length(first_child)) then first_child = child;
                 else if (string_lower(first_child) != string_lower(child)) then unique = false;
         };
+        // 根上有谱面或子目录不唯一则不用嵌套根
         if (has_root_file || !unique || !string_length(first_child)) then return "";
         return chart_path_join(track, first_child);
 }
 
-/// @desc Windows-style extract root: scan all files, then nested folder fallback.
+///@desc 按 Windows 式解压根解析：先扫全部文件，再回退到嵌套文件夹
+///@param {String} track_path 解压输出目录
+///@returns {String} 实际谱面包根目录
 function chart_session_resolve_extract_root(track_path) {
         print($"[ChartSession][Unzip][finish] scanning output={track_path} exists={chart_path_exists_any(track_path)}");
         var discovered_root = File_Discoverer(track_path);
         print($"[ChartSession][Unzip][finish] discovered charts={array_length(discovered_root.chart)} music={array_length(discovered_root.music)} image={array_length(discovered_root.image)} other={array_length(discovered_root.other)}");
 
+        // 根上已有谱面时优先用唯一嵌套包，否则就用根
         if (array_length(discovered_root.chart) > 0) {
                 var nested_root = chart_session_unique_nested_root(track_path, discovered_root);
                 if (string_length(nested_root)) {
@@ -839,6 +1021,7 @@ function chart_session_resolve_extract_root(track_path) {
                 return track_path;
         };
 
+        // 根上没有谱面时再扫一层子目录
         var children = chart_list_immediate_dirs(track_path);
         for (var child_i = 0; child_i < array_length(children); child_i++) {
                 var full = children[child_i];
@@ -852,7 +1035,12 @@ function chart_session_resolve_extract_root(track_path) {
         return track_path;
 }
 
+///@desc 在列表里找与谱面主文件名相同的文件
+///@param {Array} list 候选路径
+///@param {String} chart_full 谱面完整路径
+///@returns {String} 命中路径，没有则为空
 function chart_pick_stem_match(list, chart_full) {
+        // 去掉扩展名后再比主文件名
         if (!is_array(list) || !string_length(chart_full)) then return "";
         var chart_stem = string_lower(chart_path_file_name(chart_full));
         var dot = string_last_pos(".", chart_stem);
@@ -867,6 +1055,9 @@ function chart_pick_stem_match(list, chart_full) {
         return "";
 }
 
+///@desc 递归删掉目录树里的文件，保留目录本身
+///@param {String} dir 根目录
+///@returns {Undefined} 无
 function chart_session_wipe_files(dir) {
         dir = chart_path_norm(dir);
         if (!string_length(dir)) then return;
@@ -876,6 +1067,7 @@ function chart_session_wipe_files(dir) {
         if (string_length(root) && string_char_at(root, string_length(root)) != sep) then root += sep;
         var dirs = [root];
         var files = [];
+        // 先收集再删除，避免边遍历边改目录
         while (array_length(dirs) > 0) {
                 var n = array_length(dirs);
                 for (var i = 0; i < n; i++) {
@@ -909,10 +1101,14 @@ function chart_session_wipe_files(dir) {
         };
 }
 
+///@desc 按平台删掉目录；GX 与原生走各自接口
+///@param {String} path 目录路径
+///@returns {Undefined} 无
 function chart_session_remove_dir(path) {
         if (!string_length(path)) then return;
         path = chart_path_norm(path);
         if (pls_is_gxgames()) then gx_fs_wipe(path);
+        // 原生删完即返回，不再走 GameMaker 目录销毁
         if (chart_use_native_files()) {
                 if (chart_native_is_dir(path) || chart_native_exists(path)) {
                         chart_native_delete(path);
@@ -927,20 +1123,33 @@ function chart_session_remove_dir(path) {
         if (directory_exists(path)) then directory_destroy(path);
 }
 
+///@desc 取路径最后一段文件名
+///@param {String} path 路径
+///@returns {String} 文件名
 function chart_path_file_name(path) {
         var p = chart_path_norm(path);
         var slash = max(string_last_pos("/", p), string_last_pos("\\", p));
+        // 没有分隔符时整段就是文件名
         if (slash <= 0) then return p;
         return string_copy(p, slash + 1, string_length(p) - slash);
 }
 
+///@desc 取路径所在目录，含末尾斜杠
+///@param {String} path 路径
+///@returns {String} 目录，没有斜杠则为空
 function chart_path_dir(path) {
         var p = chart_path_norm(path);
         var slash = string_last_pos("/", p);
+        // 没有斜杠则没有目录部分
         if (slash <= 0) then return "";
         return string_copy(p, 1, slash);
 }
 
+///@desc 在文件列表里找与谱面同目录的附属文件，否则用第一个同名
+///@param {Array} files 候选路径
+///@param {String} file_name 目标文件名
+///@param {String} chart_path 谱面路径
+///@returns {String} 命中路径，没有则为空
 function chart_find_sidecar(files, file_name, chart_path) {
         if (!is_array(files)) then return "";
         var wanted = string_lower(file_name);
@@ -949,12 +1158,18 @@ function chart_find_sidecar(files, file_name, chart_path) {
         for (var i = 0; i < array_length(files); i++) {
                 var path = files[i];
                 if (string_lower(chart_path_file_name(path)) != wanted) then continue;
+                // 同目录优先，否则留第一个同名
                 if (string_lower(chart_path_dir(path)) == chart_dir) then return path;
                 if (!string_length(fallback)) then fallback = path;
         };
         return fallback;
 }
 
+///@desc 读取 line.csv，筛出属于当前谱面的判定线贴图覆盖
+///@param {String} line_path csv 路径
+///@param {String} chart_path 当前谱面路径
+///@param {String} root_dir 谱面包根
+///@returns {Array} 覆盖行结构
 function chart_load_line_overrides(line_path, chart_path, root_dir) {
         var result = [];
         if (!chart_file_exists_any(line_path)) then return result;
@@ -970,6 +1185,7 @@ function chart_load_line_overrides(line_path, chart_path, root_dir) {
                 var row = rows[i];
                 if (!is_struct(row) || is_undefined(row[$ "LineId"]) || is_undefined(row[$ "Image"])) then continue;
                 var row_chart = string_lower(chart_path_file_name(string(row[$ "Chart"] ?? "")));
+                // 行里的 Chart 与当前谱面文件名不符则跳过
                 if (string_length(row_chart) && row_chart != chart_name) then continue;
                 var image_name = chart_path_norm(string(row.Image));
                 var image_full = chart_path_join(line_dir, image_name);
@@ -988,7 +1204,12 @@ function chart_load_line_overrides(line_path, chart_path, root_dir) {
         return result;
 }
 
+///@desc 把 csv 单元格解析成布尔，无法识别时用默认值
+///@param {Any} value 单元格
+///@param {Bool} fallback 无法识别时的默认值
+///@returns {Bool} 解析结果
 function chart_line_csv_parse_bool(value, fallback = true) {
+        // 布尔、数字和 true、false、yes、no 都认
         if (is_bool(value)) then return value;
         if (is_real(value) && is_finite(value)) then return value != 0;
         var text = string_lower(string_trim(string(value ?? "")));
@@ -997,6 +1218,10 @@ function chart_line_csv_parse_bool(value, fallback = true) {
         return fallback;
 }
 
+///@desc 按 line.csv 的缩放、竖向高度和宽高比算出精灵显示比例
+///@param {Struct} _override 一行覆盖数据
+///@param {Real} _sprite 精灵资源号，缺省为 -1
+///@returns {Array} 横向比例和纵向比例
 function chart_line_csv_sprite_scale(_override, _sprite = -1) {
         var _scale = 1;
         var _aspect = 1;
@@ -1004,6 +1229,7 @@ function chart_line_csv_sprite_scale(_override, _sprite = -1) {
         if (is_struct(_override)) {
                 if (is_real(_override[$ "Scale"]) && is_finite(_override.Scale)) {
                         _scale = _override.Scale;
+                // 没有 Scale 时用 Vert 相对 1080 的高度
                 } else if (!is_undefined(_override[$ "Vert"])) {
                         var _vert = real(_override.Vert);
                         if (is_finite(_vert) && _vert != 0 && sprite_exists(_sprite)) {
@@ -1027,6 +1253,7 @@ function chart_line_csv_sprite_scale(_override, _sprite = -1) {
                 _view_w = chart_view_width;
         };
         var _d_scale;
+        // 宽屏用判定线缩放，否则按视口高度
         if (_use_line_scale) {
                 var _ui_scale = (_view_w > _view_h * 0.75) ? (_view_h / 18.75) : (_view_w / 14.0625);
                 _d_scale = (_ui_scale * 18.75) / 1080;
@@ -1037,8 +1264,12 @@ function chart_line_csv_sprite_scale(_override, _sprite = -1) {
         return [_base * _aspect, _base];
 }
 
+///@desc 按判定线号取最后一条覆盖
+///@param {Real} line_id 判定线号
+///@returns {Any} 覆盖结构，没有则为未定义
 function chart_line_override(line_id) {
         var session = chart_session_ensure();
+        // 从后往前找，后写的覆盖先生效
         if (!is_array(session.line_overrides)) then return undefined;
         for (var i = array_length(session.line_overrides) - 1; i >= 0; i--) {
                 if (session.line_overrides[i].LineId == line_id) then return session.line_overrides[i];
@@ -1046,10 +1277,14 @@ function chart_line_override(line_id) {
         return undefined;
 }
 
+///@desc 加载或复用判定线覆盖贴图，锚点放在中心
+///@param {Real} line_id 判定线号
+///@returns {Real} 精灵资源号，失败为 -1
 function chart_line_override_sprite(line_id) {
         var row = chart_line_override(line_id);
         if (!is_struct(row)) then return -1;
         var key = "line_csv_" + string(line_id);
+        // 纹理组里已有则直接复用
         if (struct_exists(game.TextureGroup, key) && sprite_exists(game.TextureGroup[$ key])) {
                 return game.TextureGroup[$ key];
         };
@@ -1060,9 +1295,12 @@ function chart_line_override_sprite(line_id) {
         return sprite;
 }
 
+///@desc 按谱面格式读取额外偏移并换成秒
+///@returns {Real} 偏移秒数，没有则为 0
 function chart_extra_offset_seconds() {
         var session = chart_session_ensure();
         switch (session.format) {
+                // RPE 的偏移是毫秒，要换成秒
                 case CHART_FORMAT.RPE:
                         if (variable_global_exists("game_1") && is_struct(game_1) && is_struct(game_1.chart_info)) {
                                 return real(game_1.chart_info.offset ?? 0) / 1000;
@@ -1082,27 +1320,39 @@ function chart_extra_offset_seconds() {
         return 0;
 }
 
+///@desc 以 extra.json 所在目录为根拼接资源路径
+///@param {String} relative_path 相对路径
+///@returns {String} 完整路径
 function chart_extra_asset_path(relative_path) {
         var session = chart_session_ensure();
         var root = InChartPath;
+        // 有 extra.json 时改用它所在目录
         if (is_string(session.extra_file) && string_length(session.extra_file)) {
                 root = chart_path_dir(chart_path_join(InChartPath, session.extra_file));
         };
         return chart_path_join(root, relative_path);
 }
 
+///@desc 若完整路径在基目录下则返回相对路径，否则只留文件名
+///@param {String} base_dir 基目录
+///@param {String} full_path 完整路径
+///@returns {String} 相对路径或文件名
 function chart_path_rel(base_dir, full_path) {
         var base = chart_path_norm(base_dir);
         var full = chart_path_norm(full_path);
         if (string_length(base) && string_char_at(base, string_length(base)) != "/") then base += "/";
+        // 不在基目录下就只留文件名
         if (string_pos(string_lower(base), string_lower(full)) == 1) {
                 return string_copy(full, string_length(base) + 1, string_length(full) - string_length(base));
         };
         return chart_path_file_name(full);
 }
 
+///@desc 把会话活动目录写到全局谱面路径，并补上末尾斜杠
+///@returns {String} 活动路径
 function chart_session_bind_paths() {
         var session = chart_session_ensure();
+        // 没有活动目录时退回默认 chart
         if (string_length(session.active_dir)) {
                 global.chart_active_path = session.active_dir;
         } else {
@@ -1114,7 +1364,11 @@ function chart_session_bind_paths() {
         return global.chart_active_path;
 }
 
+///@desc 把会话里的曲名、难度和三个文件写进游戏的 folder_chart
+///@param {Struct} _game 游戏结构
+///@returns {Bool} 会话不可用时为假
 function chart_session_apply_folder(_game) {
+        // 游戏结构或会话不可用则不写
         if (!is_struct(_game)) then return false;
         if (!chart_session_has_track()) then return false;
         var session = global.chart_session;
@@ -1126,7 +1380,11 @@ function chart_session_apply_folder(_game) {
         return true;
 }
 
+///@desc 按谱面格式选择游玩房间
+///@param {Real} format_id CHART_FORMAT 枚举值
+///@returns {Real} 房间资源号，未知为 -1
 function chart_session_play_room_for(format_id) {
+        // 未知格式没有对应房间
         switch (format_id) {
                 case CHART_FORMAT.OFFICIAL: return room_play_official;
                 case CHART_FORMAT.RPE: return room_play_rpe;
@@ -1135,7 +1393,11 @@ function chart_session_play_room_for(format_id) {
         return -1;
 }
 
+///@desc 按谱面格式返回显示名
+///@param {Real} format_id CHART_FORMAT 枚举值
+///@returns {String} Official、RPE、PEC 或 unknown
 function chart_session_format_name(format_id) {
+        // 未知格式显示 unknown
         switch (format_id) {
                 case CHART_FORMAT.OFFICIAL: return "Official";
                 case CHART_FORMAT.RPE: return "RPE";
@@ -1144,12 +1406,22 @@ function chart_session_format_name(format_id) {
         return "unknown";
 }
 
+///@desc 去掉文本开头的 BOM
+///@param {String} text 原文
+///@returns {String} 去掉 BOM 后的文本，非字符串则为空
 function chart_text_strip_bom(text) {
         if (!is_string(text) || !string_length(text)) then return "";
+        // 只去掉开头的一个 BOM
         if (string_char_at(text, 1) == chr(0xFEFF)) then return string_delete(text, 1, 1);
         return text;
 }
 
+///@desc 把缓冲区里的 UTF-16 解码成字符串，并合并代理对
+///@param {Real} buff 缓冲区
+///@param {Real} start 起始字节
+///@param {Real} nbytes 字节数
+///@param {Bool} big_endian 是否大端
+///@returns {String} 解码文本
 function chart_buffer_utf16_to_text(buff, start, nbytes, big_endian) {
         if (!asset_buffer_valid(buff) || nbytes < 2) then return "";
         var size = buffer_get_size(buff);
@@ -1162,6 +1434,7 @@ function chart_buffer_utf16_to_text(buff, start, nbytes, big_endian) {
                 var b1 = buffer_peek(buff, i + 1, buffer_u8);
                 var code = big_endian ? ((b0 << 8) | b1) : (b0 | (b1 << 8));
                 i += 2;
+                // 遇到结束符停止；高位代理再拼低位
                 if (code == 0) then break;
                 if (code >= 0xD800 && code <= 0xDBFF && i + 1 < end_pos) {
                         var s0 = buffer_peek(buff, i, buffer_u8);
@@ -1177,6 +1450,11 @@ function chart_buffer_utf16_to_text(buff, start, nbytes, big_endian) {
         return text;
 }
 
+///@desc 把缓冲区切片按文本读出，buffer_text 失败再试 buffer_string
+///@param {Real} buff 缓冲区
+///@param {Real} start 起始字节
+///@param {Real} nbytes 字节数
+///@returns {String} 文本，失败为空
 function chart_buffer_slice_to_text(buff, start, nbytes) {
         if (!asset_buffer_valid(buff) || nbytes <= 0) then return "";
         var src = buffer_create(nbytes + 1, buffer_fixed, 1);
@@ -1191,6 +1469,7 @@ function chart_buffer_slice_to_text(buff, start, nbytes) {
                 delete(text_error);
                 text = "";
         };
+        // 先按 buffer_text，空了再按 buffer_string
         if (!is_string(text) || !string_length(text)) {
                 try {
                         buffer_seek(src, buffer_seek_start, 0);
@@ -1204,7 +1483,10 @@ function chart_buffer_slice_to_text(buff, start, nbytes) {
         return is_string(text) ? text : "";
 }
 
-/// Legacy Windows path used before GX buffer/JS readers.
+///@desc 用旧的文本文件接口读谱，这是 GX 缓冲与 JS 读取之前的 Windows 路径
+///@param {String} path 文件路径
+///@param {Real} max_chars 最大字符数，非正表示不截断
+///@returns {String} 文本，失败为空
 function chart_read_text_via_file(path, max_chars) {
         var handle = -1;
         try { handle = file_text_open_read(path); } catch (open_error) { delete(open_error); return ""; };
@@ -1214,6 +1496,7 @@ function chart_read_text_via_file(path, max_chars) {
                 while (!file_text_eof(handle)) {
                         text += file_text_readln(handle);
                         if (!file_text_eof(handle)) then text += "\n";
+                        // 超过上限就停止继续读行
                         if (max_chars > 0 && string_length(text) >= max_chars) then break;
                 };
         } catch (read_error) {
@@ -1225,8 +1508,13 @@ function chart_read_text_via_file(path, max_chars) {
         return chart_text_strip_bom(text);
 }
 
+///@desc 按平台读取文本，并识别 UTF-8 与 UTF-16 的 BOM
+///@param {String} path 文件路径
+///@param {Real} max_chars 最大字符数，默认 200000
+///@returns {String} 文本，失败为空
 function chart_read_text_file(path, max_chars = 200000) {
         if (!is_string(path) || !string_length(path)) then return "";
+        // 原生、GX 与本地文件三条入口
         if (chart_use_native_files() && chart_native_exists(path)) {
                 var native_text = chart_native_read_text(path);
                 if (!is_string(native_text)) then native_text = "";
@@ -1250,6 +1538,7 @@ function chart_read_text_file(path, max_chars = 200000) {
                         var b0 = buffer_peek(buff, 0, buffer_u8);
                         var b1 = (size > 1) ? buffer_peek(buff, 1, buffer_u8) : 0;
                         var b2 = (size > 2) ? buffer_peek(buff, 2, buffer_u8) : 0;
+                        // 按 BOM 选择 UTF-8 或 UTF-16
                         if (size >= 3 && b0 == 0xEF && b1 == 0xBB && b2 == 0xBF) {
                                 start = 3;
                                 take = min(take, size - 3);
@@ -1271,19 +1560,26 @@ function chart_read_text_file(path, max_chars = 200000) {
         };
 
         text = chart_text_strip_bom(is_string(text) ? text : "");
+        // 缓冲读空时回退到旧文本接口
         if (!string_length(text)) then text = chart_read_text_via_file(path, max_chars);
         if (!string_length(text) && pls_is_gxgames()) then return gx_fs_read_js_text(path, max_chars);
         if (max_chars > 0 && string_length(text) > max_chars) then text = string_copy(text, 1, max_chars);
         return text;
 }
 
+///@desc 把探测到的谱面文本缓存在会话里
+///@param {String} path 谱面路径
+///@param {String} text 文本
+///@returns {Undefined} 无
 function chart_cache_detected_text(path, text) {
         var session = chart_session_ensure();
         session.detected_chart_path = chart_path_norm(path);
         session.detected_chart_text = text;
 }
 
-/// Head and tail are searched together. RPE charts often put META after judgeLineList.
+///@desc 同时看头部和尾部特征来判断谱面格式；RPE 常把 META 放在 judgeLineList 之后
+///@param {String} text 谱面文本
+///@returns {Real} CHART_FORMAT 枚举值
 function chart_probe_format_text(text) {
         if (!is_string(text) || !string_length(text)) then return CHART_FORMAT.UNKNOWN;
         var has_rpe = (string_pos("\"RPEVersion\"", text) > 0);
@@ -1293,6 +1589,7 @@ function chart_probe_format_text(text) {
         var has_fmt = (string_pos("\"formatVersion\"", text) > 0);
         var has_lines = (string_pos("\"judgeLineList\"", text) > 0);
         var has_move = (string_pos("\"judgeLineMoveEvents\"", text) > 0);
+        // 字段组合先判 RPE，再判官谱，最后用行首指令判 PEC
         if (has_rpe) then return CHART_FORMAT.RPE;
         if (has_meta && (has_bpm || has_layers)) then return CHART_FORMAT.RPE;
         if (has_layers && (has_bpm || has_lines) && !has_fmt && !has_move) then return CHART_FORMAT.RPE;
@@ -1305,6 +1602,10 @@ function chart_probe_format_text(text) {
         return CHART_FORMAT.UNKNOWN;
 }
 
+///@desc 只读文件末尾一段文本，并处理 UTF-16 对齐
+///@param {String} path 文件路径
+///@param {Real} max_chars 最大字符数，默认 16000
+///@returns {String} 尾部文本
 function chart_read_text_tail(path, max_chars = 16000) {
         if (!is_string(path) || !string_length(path)) then return "";
         var max_bytes = max(8, max_chars * 4);
@@ -1335,6 +1636,7 @@ function chart_read_text_tail(path, max_chars = 16000) {
         var b0 = (size > 0) ? buffer_peek(buff, 0, buffer_u8) : 0;
         var b1 = (size > 1) ? buffer_peek(buff, 1, buffer_u8) : 0;
         var text = "";
+        // UTF-16 起点必须落在偶数字节
         if (size >= 2 && b0 == 0xFF && b1 == 0xFE) {
                 if (from < 2) then from = 2;
                 if ((from mod 2) != 0) then from += 1;
@@ -1356,9 +1658,13 @@ function chart_read_text_tail(path, max_chars = 16000) {
         return text;
 }
 
+///@desc 按扩展名和内容探测谱面格式，头不够时再拼尾部
+///@param {String} chart_path 谱面路径
+///@returns {Real} CHART_FORMAT 枚举值
 function chart_detect_format(chart_path) {
         if (!chart_file_exists_any(chart_path)) then return CHART_FORMAT.UNKNOWN;
         var ext = chart_path_ext(chart_path);
+        // .pec 直接判定；文本特征失败后再试整段 JSON
         if (ext == ".pec") then return CHART_FORMAT.PEC;
 
         if (ext == ".json" || ext == ".txt") {
@@ -1398,6 +1704,7 @@ function chart_detect_format(chart_path) {
                 };
         };
 
+        // 仍未知时用 bp 或 n1 指令兜底
         var head = string_lower(chart_read_text_file(chart_path, 4000));
         if (string_pos("bp ", head) > 0 || string_pos("n1 ", head) > 0) then return CHART_FORMAT.PEC;
         var tail_pec = string_lower(chart_read_text_tail(chart_path, 4000));
@@ -1405,7 +1712,13 @@ function chart_detect_format(chart_path) {
         return CHART_FORMAT.UNKNOWN;
 }
 
+///@desc 按给定相对名精确查找存在的文件，再按文件名在列表里找
+///@param {Array} list 候选路径
+///@param {String} preferred_name 优先文件名或相对路径
+///@param {String} base_dir 基目录，默认为空
+///@returns {String} 命中路径，没有则为空
 function chart_pick_preferred(list, preferred_name, base_dir = "") {
+        // 先按完整相对路径，再按文件名
         if (!string_length(preferred_name)) then return "";
         var prefer = string_replace_all(string(preferred_name), "\\", "/");
         while (string_length(prefer) > 0 && string_char_at(prefer, 1) == "/") {
@@ -1430,10 +1743,15 @@ function chart_pick_preferred(list, preferred_name, base_dir = "") {
         return "";
 }
 
+///@desc 优先用确实存在的指定文件，否则取列表里第一个存在的
+///@param {Array} list 候选路径
+///@param {String} preferred_name 优先名
+///@param {String} base_dir 基目录，默认为空
+///@returns {String} 命中路径，没有则为空
 function chart_pick_best(list, preferred_name, base_dir = "") {
         if (!is_array(list) || array_length(list) <= 0) then return "";
 
-        // Prefer info.txt path only when the file really exists.
+        // 只有文件真实存在时才采用 info.txt 里的路径
         var preferred_hit = chart_pick_preferred(list, preferred_name, base_dir);
         if (string_length(preferred_hit)) then return preferred_hit;
 
@@ -1443,6 +1761,9 @@ function chart_pick_best(list, preferred_name, base_dir = "") {
         return "";
 }
 
+///@desc 去掉信息值的空白、引号和空值记号
+///@param {Any} val 原始值
+///@returns {String} 整理后的文本，空值记号变成空串
 function chart_info_trim_value(val) {
         var v = string(val);
         v = string_replace_all(v, "\r", "");
@@ -1455,7 +1776,7 @@ function chart_info_trim_value(val) {
                 if (last == " " || last == "\t") then v = string_delete(v, string_length(v), 1);
                 else break;
         };
-        // Strip simple YAML/JSON quotes and null-ish values.
+        // 去掉简单的 YAML 或 JSON 引号，以及 null 一类空值
         if (string_length(v) >= 2) {
                 var a = string_char_at(v, 1);
                 var b = string_char_at(v, string_length(v));
@@ -1468,11 +1789,16 @@ function chart_info_trim_value(val) {
         return v;
 }
 
+///@desc 把数字或宽比高的文本解析成宽高比
+///@param {Any} value 原始值
+///@param {Real} fallback 解析失败时的默认比
+///@returns {Real} 宽高比
 function chart_parse_aspect_ratio(value, fallback = 16 / 9) {
         if (is_real(value) && is_finite(value) && value > 0) then return value;
         var text = string_trim(string(value ?? ""));
         if (!string_length(text)) then return fallback;
         var sep = string_pos(":", text);
+        // 支持冒号或斜杠分隔
         if (sep <= 0) then sep = string_pos("/", text);
         if (sep > 1 && sep < string_length(text)) {
                 var aspect_w = number(string_trim(string_copy(text, 1, sep - 1)), 0);
@@ -1487,10 +1813,16 @@ function chart_parse_aspect_ratio(value, fallback = 16 / 9) {
         return fallback;
 }
 
+///@desc 按中英文键名把一条信息写入曲目结构
+///@param {Struct} info 曲目信息
+///@param {String} key 键名
+///@param {Any} val 值
+///@returns {Undefined} 无
 function chart_info_apply_value(info, key, val) {
         var normalized_key = string_lower(string_replace_all(string(key), " ", ""));
         normalized_key = string_replace_all(normalized_key, "\t", "");
         var value = chart_info_trim_value(val);
+        // 空值不覆盖已有字段
         if (!string_length(value)) then return;
 
         switch (normalized_key) {
@@ -1527,6 +1859,7 @@ function chart_info_apply_value(info, key, val) {
                         info.illustrator = value;
                 break;
                 case "difficulty":
+                        // 难度只在等级还空着时写入
                         if (!string_length(info.level)) then info.level = value;
                 break;
                 case "image":
@@ -1565,7 +1898,9 @@ function chart_info_apply_value(info, key, val) {
         };
 }
 
-/// @desc Parse root-only info.txt / info.yml style metadata.
+///@desc 解析仅限根目录的 info.txt 或 info.yml 风格元数据
+///@param {String} info_path 信息文件路径
+///@returns {Struct} 曲目信息，读失败则为空字段
 function chart_parse_info_file(info_path) {
         var info = {
                 "name" : "",
@@ -1586,7 +1921,7 @@ function chart_parse_info_file(info_path) {
                 var text_ln = string_replace_all(lines[info_i], "\n", "");
                 if (!string_length(text_ln)) then continue;
 
-                // Skip YAML multi-line block markers / comments.
+                // 跳过 YAML 多行块标记和注释行
                 var first = string_char_at(text_ln, 1);
                 if (first == "#" || first == "-" || first == " " || first == "\t") then continue;
 
@@ -1601,6 +1936,9 @@ function chart_parse_info_file(info_path) {
         return info;
 }
 
+///@desc 解析 info.csv，支持键值两列或表头加一行数据
+///@param {String} info_path csv 路径
+///@returns {Struct} 曲目信息
 function chart_parse_info_csv(info_path) {
         var info = {
                 "name" : "", "level" : "", "image" : "", "music" : "", "chart" : "",
@@ -1615,6 +1953,7 @@ function chart_parse_info_csv(info_path) {
         var height = ds_grid_height(grid);
         var head0 = string_lower(chart_info_trim_value(ds_grid_get(grid, 0, 0)));
         var head1 = (width >= 2) ? string_lower(chart_info_trim_value(ds_grid_get(grid, 1, 0))) : "";
+        // 键值表从第二行读；普通表用最后一个非空数据行
         if (width >= 2 && height >= 2
                 && (head0 == "key" || head0 == "键")
                 && (head1 == "value" || head1 == "值")) {
@@ -1644,7 +1983,9 @@ function chart_parse_info_csv(info_path) {
         return info;
 }
 
-/// @desc info.txt / info.yml are valid only in package root.
+///@desc 只接受谱面包根目录的 info.txt、info.yml 或 info.csv
+///@param {String} root_dir 包根目录
+///@returns {Struct} 含 info、has_info、source 的结果
 function chart_load_root_info(root_dir) {
         var info = {
                 "name" : "",
@@ -1688,7 +2029,7 @@ function chart_load_root_info(root_dir) {
                 };
         };
 
-        // Nested info.txt/yml discovered by scan are ignored on purpose.
+        // 扫描到的嵌套 info.txt 或 yml 故意忽略
         return {
                 "info" : info,
                 "has_info" : false,
@@ -1696,12 +2037,18 @@ function chart_load_root_info(root_dir) {
         };
 }
 
+///@desc 扫描目录，选出谱面、音乐和图片并写入会话
+///@param {String} dir_path 谱面目录
+///@param {String} source_path 来源路径，默认为空
+///@param {Bool} from_zip 是否来自压缩包
+///@returns {Bool} 成功为真
 function chart_session_build_from_dir(dir_path, source_path = "", from_zip = false) {
         var session = chart_session_ensure();
         var root = chart_path_norm(dir_path);
         if (string_length(root) && string_char_at(root, string_length(root)) != "/") then root += "/";
 
         chart_session_set_status("Scanning files", root);
+        // 目录不存在直接失败
         if (!chart_path_dir_exists(root) && !chart_file_exists_any(root)) {
                 return chart_session_fail("Track directory not found.");
         };
@@ -1714,8 +2061,7 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
         session.from_zip = from_zip;
         global.chart_active_path = root;
 
-        // Priority: root info.txt -> root info.yml -> pure directory scan.
-        // Nested info.* found while scanning are ignored.
+        // 优先级：根目录 info.txt，其次 info.yml，再纯目录扫描；扫描到的嵌套 info 忽略
         chart_session_set_status("Reading metadata", "root info.txt / info.yml only");
         var info_pack = chart_load_root_info(root);
         var info = info_pack.info;
@@ -1738,7 +2084,7 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
         if (!string_length(image_full) && string_length(chart_full)) {
                 image_full = chart_pick_stem_match(discovered.image, chart_full);
         };
-        // Still none: choose the largest image file (usually the illustration, not UI icons)
+        // 仍没有图片时选最大的文件，通常是曲绘而不是界面小图
         if (!string_length(image_full) && is_array(discovered.image) && array_length(discovered.image) > 0) {
                 var best_img = "";
                 var best_size = -1;
@@ -1757,7 +2103,7 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
 
         print($"[ChartSession] Picked info={info_source} chart={chart_full} music={music_full} image={image_full}");
 
-        // Chart + music are both required. Missing either => fail, cleanup, back to menu.
+        // 谱面和音乐都必需，缺一则失败、清理并回菜单
         if (!string_length(chart_full) || !string_length(music_full)) {
                 var missing = [];
                 if (!string_length(chart_full)) then array_add(missing, "chart");
@@ -1773,6 +2119,7 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
 
         chart_session_set_status("Detecting format", chart_path_file_name(chart_full));
         var format_id = chart_detect_format(chart_full);
+        // 首选谱面格式未知时，换另一个谱面再探
         if (format_id == CHART_FORMAT.UNKNOWN && is_array(discovered.chart)) {
                 for (var chart_try_i = 0; chart_try_i < array_length(discovered.chart); chart_try_i++) {
                         var chart_try = discovered.chart[chart_try_i];
@@ -1818,7 +2165,7 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
         session.info_offset_ms = real(info.offset_ms ?? 0);
         session.aspect_ratio = real(info.aspect_ratio ?? (16 / 9));
 
-        // name/level only from root info; otherwise keep empty strings.
+        // 曲名和难度只来自根目录信息，否则保持空串
         session.name = (has_info && string_length(info.name)) ? info.name : "";
         session.level = (has_info && string_length(info.level)) ? info.level : "";
         session.composer = (has_info && string_length(info.composer)) ? info.composer : "";
@@ -1832,6 +2179,9 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
         return true;
 }
 
+///@desc 解压谱面包并按解压根建立会话
+///@param {String} zip_path 压缩包路径
+///@returns {Bool} 成功为真
 function chart_session_load_zip(zip_path) {
         var session = chart_session_ensure();
         session.ready = false;
@@ -1846,6 +2196,7 @@ function chart_session_load_zip(zip_path) {
 
         chart_session_set_status("Preparing extract folder", "");
         var track_path = chart_session_track_dir();
+        // 先清空 track 目录再解压
         chart_session_remove_dir(track_path);
         if (chart_use_native_files()) {
                 chart_native_mkdir(track_path);
@@ -1872,6 +2223,8 @@ function chart_session_load_zip(zip_path) {
         return chart_session_build_from_dir(root, zip_path, true);
 }
 
+///@desc 加载内置示例谱，并用 configs.ini 补空的曲名与文件
+///@returns {Bool} 会话就绪时为真
 function chart_session_load_sample() {
         var sample_dir = working_directory + "chart/";
         chart_session_set_status("Loading sample chart", sample_dir);
@@ -1888,6 +2241,7 @@ function chart_session_load_sample() {
                 var cfg_music = ini_read_string("Chart", "music", "");
                 var cfg_bg = ini_read_string("Chart", "bg", "");
                 ini_close();
+                // 配置只填会话里还空着的曲名和难度
                 if (string_length(cfg_name) && !string_length(session.name)) {
                         session.name = cfg_name;
                 };
@@ -1902,12 +2256,16 @@ function chart_session_load_sample() {
         return session.ready;
 }
 
+///@desc 按扩展名从压缩包、目录或单个谱面文件开始加载
+///@param {String} path 来源路径
+///@returns {Bool} 成功为真
 function chart_session_begin_source(path) {
         chart_session_reset();
         if (!string_length(path)) {
                 return chart_session_fail("Empty source path.");
         };
         var ext = chart_path_ext(path);
+        // 压缩包、目录、单文件三条入口
         if (ext == ".zip" || ext == ".pez") {
                 return chart_session_load_zip(path);
         };

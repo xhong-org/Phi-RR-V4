@@ -1,5 +1,6 @@
-/// @description Update PEC note geometry and autoplay judgment.
+///@desc 更新 PEC 音符位置，并处理自动播放或超时判定
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then exit;
+// 暂停或判定线丢失时不更新。
 if (game.paused || !instance_exists(line_ref)) then exit;
 var chart_sec = game.__time[1] - game_2.chart.offsetSeconds;
 var line_floor = line_ref.floor_position;
@@ -13,7 +14,7 @@ var axis_y = line_ref.__cos * sideDirection;
 var base_x = line_ref.x + line_ref.__cos * local_x;
 var base_y = line_ref.y - line_ref.__sin * local_x;
 var before_hold = (type == 2 && chart_sec < startSec);
-// Phira: note travel is note.speed * (noteFloor - lineFloor) for taps and holds.
+// 位移是音符速度乘音符地板与判定线地板之差。
 var speed_pos = note_speed * (floorPosition - line_floor);
 var distance_units = (type == 2 && !before_hold) ? 0 : speed_pos;
 var distance = distance_units * scene_height;
@@ -28,6 +29,7 @@ if (type != 2) {
 	image_alpha = chart_note_pass_fade(chart_sec, startSec, late_window_sec);
 };
 
+// Hold 单独算头尾，并在自动或手动路径里判定。
 if (type == 2) {
 	var before = before_hold;
 	var _skin_hold = skin_active() ? skin_hold_parts(hl) : undefined;
@@ -52,6 +54,7 @@ if (type == 2) {
 	};
 	yscale = body_scale;
 	canDraw = line_notes_visible && (hold_length > 0 || before) && (before ? !behind_line : true);
+	// 自动播放到判定秒开始 Hold，超时则记 Miss。
 	if (chart_autoplay_active()) {
 		if (!hold_started && chart_sec >= judge_sec) {
 			hold_started = true;
@@ -74,6 +77,7 @@ if (type == 2) {
 		&& (chart_autoplay_active() || chart_kb_hold_alive())) {
 		var bpm_events = game_2.chart.bpmList;
 		if (chart_sec < hold_bpm_last_sec) then hold_bpm_index = pec_bpm_index_at_sec(bpm_events, chart_sec);
+		// BPM 事件向前走到当前秒，按间隔刷尾迹。
 		while (hold_bpm_index + 1 < array_length(bpm_events) && bpm_events[hold_bpm_index + 1].second <= chart_sec) hold_bpm_index++;
 		hold_bpm_last_sec = chart_sec;
 		if (chart_sec - hold_effect_sec >= bpm_events[hold_bpm_index].holdTickInterval) {
@@ -82,6 +86,7 @@ if (type == 2) {
 			hold_effect_sec = chart_sec;
 		};
 	};
+	// Hold 结束时补记判定并停用。
 	if (chart_sec >= endSec && (hold_started || isMiss || chart_autoplay_active() || chart_sec > late_deadline_sec)) {
 		if (!isFake) {
 			if (hold_started && (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) && !isMiss) {
@@ -104,6 +109,7 @@ y = note_y;
 
 
 canDraw = line_notes_visible && !judged && (chart_sec < startSec ? !behind_line : image_alpha > 0);
+// 非 Hold：到触发秒判定，超时则记 Miss。
 if (chart_autoplay_active()) {
 	if (chart_sec >= trigger_sec && !judged) {
 		judged = true;

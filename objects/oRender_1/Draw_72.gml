@@ -1,6 +1,7 @@
-/// @description Resolve recursive RPE parent transforms before drawing.
+///@desc 绘制前解析 RPE 父子判定线的世界变换
 skin_runtime_gpu_ensure();
 skin_tex_diag_frame();
+// 加载还没完成时不解析判定线。
 if (chart_load_draw_suppressed()) then exit;
 if (!variable_global_exists("game_1") || !is_struct(game_1) || !is_array(game_1.line_list)) then exit;
 
@@ -23,6 +24,7 @@ var line_layout_changed = !variable_instance_exists(id, "_rpe_layout_width")
 _rpe_layout_width = worker_window_width;
 _rpe_layout_height = worker_window_height;
 var line_resolve_start = get_timer();
+// 线够多时用并行工作器解析，否则走本机回退。
 if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") && line_count >= worker_min_lines) {
 	var worker_frame_start = get_timer();
 	var hierarchy_size = line_count * 8;
@@ -61,8 +63,7 @@ if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") &&
 	for (var worker_line_index = 0; worker_line_index < line_count; worker_line_index++) {
 		var worker_line = game_1.line_list[worker_line_index];
 		if (instance_exists(worker_line)) {
-			// Native resolver rotates then adds. Feed it view pixels so that
-			// matches RPE, which scales by view/1350 and view/900 first.
+			// 原生解析先旋转再相加。先换成视图像素，才和先乘 view/1350、view/900 的 RPE 一致。
 			buffer_write(_rpe_worker_input, buffer_f64, real(worker_line.__raw_x) * worker_scale_x);
 			buffer_write(_rpe_worker_input, buffer_f64, real(worker_line.__raw_y) * worker_scale_y);
 			buffer_write(_rpe_worker_input, buffer_f64, real(worker_line.__raw_r));
@@ -128,6 +129,7 @@ if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") &&
 		_rpe_worker_profile_native_us += worker_native_us;
 		_rpe_worker_profile_apply_us += worker_apply_us;
 		_rpe_worker_profile_total_us += worker_total_us;
+		// 采样够一窗口就打印平均耗时并清零。
 		if (_rpe_worker_profile_samples >= worker_profile_frames) {
 			print($"[RPE Worker] avg us: snapshot={_rpe_worker_profile_snapshot_us / _rpe_worker_profile_samples}, native={_rpe_worker_profile_native_us / _rpe_worker_profile_samples}, apply={_rpe_worker_profile_apply_us / _rpe_worker_profile_samples}, total={_rpe_worker_profile_total_us / _rpe_worker_profile_samples}, lines={line_count}");
 			_rpe_worker_profile_samples = 0;
@@ -139,6 +141,7 @@ if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") &&
 	};
 };
 
+// 工作器没成功时，在主线程逐线算姿态。
 if (!worker_resolved) {
 	for (var line_index = 0; line_index < line_count; line_index++) {
 		var child = game_1.line_list[line_index];
@@ -182,9 +185,8 @@ if (!worker_resolved) {
 	};
 };
 
-// Notes run during Step before lines finish their parent transform. Refresh only
-// their visual geometry now that every line has its final world transform.
-// During pause, refresh geometry only when a resize moved the judge lines.
+// 音符在 Step 里更新时父变换还没完成。线的世界变换就绪后再刷新外观。
+// 暂停时只有窗口尺寸带动判定线移动才刷新。
 var line_game_paused = variable_global_exists("game") && is_struct(game) && game.paused;
 if (!line_game_paused || line_layout_changed) {
 	with (oNote_1) {

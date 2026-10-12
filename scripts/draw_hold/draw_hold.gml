@@ -1,18 +1,21 @@
-/// @function draw_hold(x, y, scalex, scaley, hold_body_scale, angle, subimg, colour, alpha, draw_head, attach_head, tail_trim, head_attach_scale)
-/// @description Draws a Hold from its head reference point with sprite-origin joins.
-/// @param {Real} x
-/// @param {Real} y
-/// @param {Real} scalex
-/// @param {Real} scaley
-/// @param {Real} hold_body_scale
-/// @param {Real} angle
-/// @param {Real} subimg
-/// @param {Colour} colour
-/// @param {Real} alpha
-/// @param {Bool} draw_head
-/// @param {Bool} attach_head Whether the body starts at the head's visible edge.
-/// @param {Real} tail_trim Distance in screen pixels that the tail overlaps the body.
-/// @param {Real} head_attach_scale Fraction of the head origin used for attachment.
+///@desc 从头部参考点绘制长条，并按精灵原点衔接
+///@param {Real} x 头部参考点横坐标
+///@param {Real} y 头部参考点纵坐标
+///@param {Real} scalex 横向缩放
+///@param {Real} scaley 纵向缩放
+///@param {Real} hold_body_scale 身体长度缩放
+///@param {Real} angle 旋转角度
+///@param {Real} subimg 子图帧
+///@param {Real} colour 混合颜色
+///@param {Real} alpha 透明度
+///@param {Bool} draw_head 是否绘制头部
+///@param {Bool} attach_head 身体是否从头部可见边缘开始
+///@param {Real} tail_trim 尾部叠进身体的屏幕像素
+///@param {Real} head_attach_scale 头部原点用于衔接的比例
+///@param {Any} head_spr 头部精灵，无效时用默认
+///@param {Any} body_spr 身体精灵，无效时用默认
+///@param {Any} end_spr 尾部精灵，无效时用默认
+///@returns {Undefined} 无
 function draw_hold(x, y, scalex, scaley, hold_body_scale, angle = 0, subimg = 0,
 		colour = c_white, alpha = 1, draw_head = true, attach_head = draw_head,
 		tail_trim = 0, head_attach_scale = 0.25, head_spr = -1, body_spr = -1, end_spr = -1) {
@@ -30,6 +33,7 @@ function draw_hold(x, y, scalex, scaley, hold_body_scale, angle = 0, subimg = 0,
 	var _alpha = clamp(real(alpha), 0, 1);
 	if (_alpha <= 0 || _xscale == 0) then return;
 
+	// 沿角度的反方向把身体和尾部从头部排开
 	var _axis_x = -dsin(angle);
 	var _axis_y = -dcos(angle);
 	var _head_distance = 0;

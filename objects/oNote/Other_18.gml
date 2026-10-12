@@ -1,4 +1,4 @@
-/// @description Correct hold length after a window resize.
+///@desc 窗口尺寸变化后重算 Hold 身体长度
 if(!_is_hold) then exit;
 
 var scale_y = (room_height * 0.6);

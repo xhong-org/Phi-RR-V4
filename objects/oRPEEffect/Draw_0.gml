@@ -1,4 +1,5 @@
-/// @description Apply chart-local effects before the HUD renderer.
+///@desc 在界面之前应用谱面局部效果或区间捕获
+// 关闭谱面着色器时整段跳过。
 if (chart_setting_on("disableChartShader")) then exit;
 chart_mask_scissor_set();
 if (variable_instance_exists(id, "effect_boundary_role")) {
@@ -17,6 +18,7 @@ if (variable_instance_exists(id, "effect_boundary_role")) {
 				};
 			};
 		};
+		// 这个区间当前没有生效效果，不开始捕获。
 		if (!_boundary_state.active) then exit;
 		var boundary_width = surface_get_width(application_surface);
 		var boundary_height = surface_get_height(application_surface);
@@ -28,9 +30,7 @@ if (variable_instance_exists(id, "effect_boundary_role")) {
 		};
 		if (surface_exists(_boundary_state.surface)) {
 			pls_draw_flush();
-			// Nested ranges must return to the outer capture. surface_get_target
-			// can report the chart mask while that outer capture is current, and
-			// the mask blit then covers the inner result.
+			// 嵌套区间必须回到外层捕获。surface_get_target 可能仍报谱面遮罩，贴回时会盖住内层结果。
 			var _capture_parent = surface_get_target();
 			if (instance_exists(effect_boundary_controller)) {
 				var _capture_stack = effect_boundary_controller.effect_capture_stack;
@@ -48,9 +48,7 @@ if (variable_instance_exists(id, "effect_boundary_role")) {
 			_boundary_state.caller = _capture_parent;
 			surface_set_target(_boundary_state.surface);
 			draw_clear_alpha(c_black, 0);
-			// Sprites must land as premultiplied colour with a single alpha.
-			// bm_normal squares alpha, so note edges darken and thin lines vanish;
-			// shaders that test coverage (the beam wipe) then see nothing to draw.
+			// 精灵要以预乘颜色和一次 alpha 落上去。bm_normal 会把 alpha 平方，音符边缘变暗，细线消失。
 			gpu_push_state();
 			gpu_set_blendmode_ext_sepalpha(bm_src_alpha, bm_inv_src_alpha, bm_one, bm_inv_src_alpha);
 			chart_gpu_blend_commit();
@@ -58,12 +56,11 @@ if (variable_instance_exists(id, "effect_boundary_role")) {
 		};
 	} else if (_boundary_state.active && surface_exists(_boundary_state.surface)) {
 		pls_draw_flush();
-		// Unbind before shader_reset. Resetting while this capture is still the
-		// target drops the notes that were flushed into it (video 2 glitch).
+		// 先解绑再 shader_reset。捕获还是目标时 reset 会丢掉刚提交进去的音符。
 		var _boundary_parent = _boundary_state.caller;
 		surface_reset_target();
 		shader_reset();
-		// One reset for the set in the start sentinel.
+		// 和开始哨兵的一次 set 对应，这里只弹一次。
 		if (_boundary_state.capture_pushed && instance_exists(effect_boundary_controller)) {
 			var _capture_stack = effect_boundary_controller.effect_capture_stack;
 			if (is_array(_capture_stack)) {
@@ -84,8 +81,7 @@ if (variable_instance_exists(id, "effect_boundary_role")) {
 			var _fast_lum = clamp(real(_layer_fast[0]), 0, 1);
 			var _fast_gray = clamp(real(_layer_fast[1]), 0, 1);
 			var _fast_invis = clamp(real(_layer_fast[2]), 0, 1);
-			// The notes sit outside this z range and are already on the parent.
-			// A fully invisible layer (the HUD band) must not be blitted back.
+			// 音符在这个深度之外，已经在父表面上。完全不可见的层不能贴回去。
 			if (_fast_invis < 0.999) {
 				var _lum_byte = round(_fast_lum * 255);
 				draw_set_colour(c_white);
@@ -104,8 +100,7 @@ if (variable_instance_exists(id, "effect_boundary_role")) {
 				draw_surface_ext(_boundary_state.surface, 0, 0, 1, 1, 0, make_colour_rgb(_lum_byte, _lum_byte, _lum_byte), 1 - _fast_invis);
 				pls_draw_flush();
 				if (_blit_graded) {
-					// shader_reset on a still-bound outer capture (video 2 glitch
-					// around this grayscale band) drops the notes just blitted.
+					// 外层捕获还绑着时 shader_reset 会丢掉刚贴上的音符，所以先解开再复位。
 					var _graded_target = surface_get_target();
 					var _graded_capture = surface_exists(_graded_target) && _graded_target != application_surface;
 					if (_graded_capture) then surface_reset_target();
@@ -144,9 +139,7 @@ if (instance_exists(oPlayTransition)) {
 if (_transition_allows_shaders
 	&& (!is_array(effect_capture_stack) || array_length(effect_capture_stack) <= 0)) {
 	effect_render(effects_local);
-	// Shaders without targetRange are fullscreen. oChartMask presents them
-	// after every Draw, immediately before the chart blit. Shading here would
-	// miss later layers, and shading after the blit never reaches the screen.
+	// 没有目标区间的着色器是全屏的，由 oChartMask 在贴回前呈现。这里着色会漏掉后面的层。
 	if (!(variable_global_exists("chart_surface_active") && chart_surface_active && instance_exists(oChartMask))) {
 		effect_render(effects_global);
 	};

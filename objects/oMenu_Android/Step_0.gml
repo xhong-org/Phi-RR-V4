@@ -1,9 +1,10 @@
-/// @description Android menu interactions (I_AndroidOpen, no get_open_filename)
+///@desc 处理 Android 选文件、示例谱和设置按钮
 var scale_now = (variable_global_exists("global_scales") ? global_scales : 1.0);
 if (layout_w != room_width || layout_h != room_height || layout_scale != scale_now) {
         event_user(0);
 };
 
+// 文件选择器异步返回后再进加载房间。
 if (picking && extension_exists("I_AndroidOpen")) {
         var pick_status = i_android_open_status();
         if (pick_status == ANDROID_OPEN_STATUS.OK) {
@@ -25,6 +26,7 @@ if (picking && extension_exists("I_AndroidOpen")) {
                         room_goto(room_loading);
                 };
                 exit;
+        // 取消或失败时复位选择器并显示错误。
         } else if (pick_status == ANDROID_OPEN_STATUS.CANCELLED || pick_status == ANDROID_OPEN_STATUS.ERROR) {
                 picking = false;
                 last_error = i_android_open_error();
@@ -37,6 +39,7 @@ if (picking && extension_exists("I_AndroidOpen")) {
         };
 };
 
+// 设置界面挡住时不再响应菜单点击。
 if (settings_gui_blocking()) {
         hover_open = false;
         hover_sample = false;
@@ -51,8 +54,10 @@ hover_sample = (mx >= btn_sample.x && mx <= btn_sample.x + btn_sample.w && my >=
 hover_settings = settings_menu_button_hit(mx, my);
 
 if (picking) then exit;
+// 没按下左键就只更新悬停。
 if (!mouse_check_button_pressed(mb_left)) then exit;
 
+// 设置、打开谱面或载入示例，三者互斥。
 if (hover_settings) {
         settings_gui_open();
 } else if (hover_open) {
@@ -63,6 +68,7 @@ if (hover_settings) {
                 pick_started = i_android_open_pick("application/zip");
                 if (!pick_started) then last_error = i_android_open_error();
         };
+        // 选择器真正启动后才进入等待状态。
         if (pick_started) {
                 picking = true;
                 last_error = "";

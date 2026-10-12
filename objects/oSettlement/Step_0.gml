@@ -1,4 +1,5 @@
-/// @description Settlement timeline, input, and leave fade.
+///@desc 推进结算动画，并处理重试和继续
+// 已经离开或游戏状态丢了就停止。
 if (consumed) then exit;
 if (!variable_global_exists("game") || !is_struct(game)) {
 	instance_destroy();
@@ -10,6 +11,7 @@ var now = settlement_elapsed_us();
 var s = variable_global_exists("global_scales") ? global_scales : 1;
 if (!is_real(s) || s <= 0) then s = 1;
 
+// 离开淡出结束后再真正重试或继续。
 if (leaving) {
 	var leave_raw = clamp((now - leave_started_at) / max(1, leave_fade_dur), 0, 1);
 	fade_alpha = leave_raw;
@@ -17,6 +19,7 @@ if (leaving) {
 	if (leave_raw >= 1) {
 		if (leave_wait_at < 0) then leave_wait_at = now;
 		if (now - leave_wait_at >= leave_wait_dur) {
+			// 等淡出和额外等待都结束。
 			if (leave_retry) then settlement_do_retry();
 			else settlement_do_continue();
 		};
@@ -40,6 +43,7 @@ var btn_eased = Easings.InOutCubic(btn_raw);
 retry_x = lerp(-240 * s, retry_rest_x, btn_eased);
 cont_x = lerp(240 * s, cont_rest_x, btn_eased);
 
+// 滑入过了减速点才开始滚分。
 if (score_tween_at < 0 && slide_raw >= score_decel_t) then score_tween_at = now;
 if (score_tween_at >= 0) {
 	var score_raw = clamp((now - score_tween_at) / max(1, text_dur), 0, 1);
@@ -57,6 +61,7 @@ if (score_tween_at >= 0) {
 	gap_show = 0;
 };
 
+// 分数块满透明度后再淡入后面两块。
 if (box_alpha[0] >= 1) {
 	if (box1_at < 0) then box1_at = now;
 	box_alpha[@ 1] = Easings.OutCubic(clamp((now - box1_at) / max(1, text_dur), 0, 1));
@@ -75,6 +80,7 @@ if (other_done && !rank_started) {
 	rank_started = true;
 	rank_fade_at = now;
 };
+// 评级先淡入，再从两倍缩回一倍。
 if (rank_started) {
 	if (rank_scale_at < 0) {
 		var fade_raw = clamp((now - rank_fade_at) / max(1, rank_fade_dur), 0, 1);
@@ -109,8 +115,10 @@ retry_hit = [retry_x, retry_y, retry_x + retry_w, retry_y + bar_h];
 var cont_w = 210 * s;
 cont_hit = [room_width + cont_x - cont_w, room_height - bar_h, room_width + cont_x, room_height];
 
+// 录像不接收结算输入。
 if (variable_global_exists("render_mode") && global.render_mode) then exit;
 
+// R 重试，回车或 Esc 继续，点击命中对应按钮。
 if (keyboard_check_pressed(ord("R"))) {
 	settlement_begin_leave(true);
 	exit;

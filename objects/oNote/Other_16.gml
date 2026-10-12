@@ -1,7 +1,8 @@
-/// @description Judge a hold note using cached beat/time values.
+///@desc 用缓存节拍判定官谱 Hold，并按节拍刷新尾迹
 var now_time = _now_beat,
 	now_hit_time = judgeTime;
 
+// 手动时只判超时 Miss，并在按住期间刷新特效。
 if (!chart_autoplay_active()) {
 	if (now_time > self.time + lateHitTime && !isMiss && notJudge) {
 		hit_status = (judgeCalc(self.time, now_time, self.bpm, _hx0, _hy0, self.type, false, true));
@@ -19,6 +20,7 @@ if (!chart_autoplay_active()) {
 				_bak_time = _now_seconds;
 			};
 		};
+		// Hold 结束时结算并停用。
 		if (now_time >= self.time + self.holdTime && !notJudge) {
 			hit_status = (judgeCalc(self.time, now_hit_time, self.bpm, _hx0, _hy0, self.type, false, !isMiss));
 			instance_deactivate_object(self);
@@ -27,6 +29,7 @@ if (!chart_autoplay_active()) {
 	exit;
 };
 
+// 自动播放在击中时刻判定 Hold 头。
 if(now_time >= now_hit_time && !isMiss && notJudge && hit_status == TYPE.NONE){
 	event_user(2);
 	hit_status = (judgeCalc(self.time, now_hit_time, self.bpm, _hx0, _hy0, self.type, true, false));
@@ -46,6 +49,7 @@ if(now_time > self.time + lateHitTime && !isMiss && notJudge && !game.settings.e
 };
 
 if(now_time >= self.time){
+	// 到开始时间后钉在判定线上，并按半拍刷新尾迹。
 	if(!isHold){
 		isHold = true;
 		event_user(2);

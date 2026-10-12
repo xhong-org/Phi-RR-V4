@@ -1,7 +1,9 @@
-/// @description 读取
+///@desc 用户事件 1：读取音频
+// 已经启动过就先复查文件是否存在。
 if(start){
 	self[$ "success"] = undefined;
 	event_user(8);
+	// 文件不存在就不再打开。
 	if(!self[$ "isExists"]){
 		//print("[F-Sound] No Exists.");	
 		exit;
@@ -20,6 +22,7 @@ gx_pcm_id = -1;
 resources_released = false;
 
 var audio_path = chart_file_readable_path(self.name);
+// GX 不走 FMOD，交给平台加载。
 if (media_use_gx()) {
 	self[$ "success"] = undefined;
 	if (gx_media_load_from_path(id, audio_path)) then exit;
@@ -31,6 +34,7 @@ track = (fmod_system_create());
 fmod_system_select(track);
 fmod_system_init(128 , FMOD_MODE.DEFAULT);
 
+// 流式或整段加载，失败时下面会标 success 为 false。
 if(use_stream){
 	soundIndex = (fmod_system_create_stream(audio_path,FMOD_MODE.ACCURATETIME));	
 }else{
@@ -41,6 +45,7 @@ if(soundIndex){
 	use_stream = true;
 	position = 0;
 	var length_sound = soundIndex;
+	// 有子音轨时用第一条的时长。
 	if (fmod_sound_get_num_sub_sounds(soundIndex) > 0) {
 		var sub_sound = fmod_sound_get_sub_sound(soundIndex, 0);
 		if (sub_sound) then length_sound = sub_sound;

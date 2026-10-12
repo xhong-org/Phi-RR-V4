@@ -1,6 +1,7 @@
-/// @description Draw directly, avoiding an event dispatch for every visible note.
+///@desc 直接绘制可见的官谱音符，跳过额外事件分发
 if(!canDraw) then exit;
 
+// 皮肤开启时走皮肤精灵，否则用默认音符图。
 if (skin_active()) {
 	var _skin_kind = (type == 2 ? "drag" : (type == 4 ? "flick" : "tap"));
 	var _skin_spr = skin_note_sprite(_skin_kind, isBad ? 0 : hl);
@@ -10,6 +11,7 @@ if (skin_active()) {
 	var sk = sprite_exists(_skin_spr) ? skin_note_scale_k(_skin_spr) : 1;
 	var hk = (is_struct(_skin_hold) && sprite_exists(_skin_hold.head)) ? skin_note_scale_k(_skin_hold.head) : 1;
 	if(!_is_hold){
+		// Bad 判定画红帧并提前结束。
 		if(isBad){
 			var alpha = ((1 - (_now_seconds - judgeRealTime)) * 0.5);
 			if (sprite_exists(_skin_spr)) then draw_sprite_ext(_skin_spr, 0, _bad_x, _bad_y, image_xscale * sk, image_yscale * sk, _bad_angle, c_red, alpha);
@@ -42,6 +44,7 @@ if (skin_active()) {
 };
 
 if(!_is_hold){
+	// 默认皮肤的 Bad 同样画红帧后结束。
 	if(isBad){
 		var alpha = ((1 - (_now_seconds - judgeRealTime)) * 0.5);
 		draw_sprite_ext(sprite_index, 2, _bad_x, _bad_y, image_xscale, image_yscale, _bad_angle, c_red, alpha);

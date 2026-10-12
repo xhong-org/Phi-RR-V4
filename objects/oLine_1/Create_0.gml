@@ -1,16 +1,17 @@
-/// @description RPE judge line (PCR-aligned preprocess)
-// Coordinate/runtime model references com.teammio.pcr:
-// - rpec_parser.gml (event layer conversion)
-// - CCEvents.gml / CCLEExecute (event cursor + tween)
-// - notes/rpe_parse CoordinateSystemConversion + speed integrals
+///@desc 创建：RPE 判定线预处理，对齐 PCR
+// 坐标和运行时参考 com.teammio.pcr：
+// - rpec_parser.gml（事件层转换）
+// - CCEvents.gml / CCLEExecute（事件游标和缓动）
+// - notes/rpe_parse 的坐标系转换和速度积分
 
-// depth applied after zOrder/line_id resolve
+// 深度等 zOrder 和 line_id 确定后再写。
 _father_chain = [];
 sprite_index = line;
 image_blend = c_white;
 image_alpha = 1;
 image_angle = 0;
 
+// 缺省字段补成可运行的默认值。
 if (!variable_instance_exists(id, "line_id")) then line_id = 0;
 if (!variable_instance_exists(id, "events")) then events = [];
 if (!variable_instance_exists(id, "extEvents")) then extEvents = {};
@@ -33,6 +34,7 @@ rotFatherLine = bool(rotFatherLine);
 if (!is_real(bpmfactor) || bpmfactor <= 0) then bpmfactor = 1;
 anchor_x = 0.5;
 anchor_y = 0.5;
+// 锚点必须是有限数，否则回到中心。
 if (is_array(anchor) && array_length(anchor) >= 2) {
 	anchor_x = real(anchor[0]);
 	anchor_y = real(anchor[1]);
@@ -49,8 +51,8 @@ paint_last_y = 0;
 paint_last_radius = 0;
 paint_last_time = -infinity;
 
-// attachUI (PCR 1.2.1-Public): pause / combonumber / combo / score / bar / name / level
-// Only known keys bind HUD; bound lines stay fully transparent (not drawn).
+// attachUI（PCR 1.2.1-Public）：pause / combonumber / combo / score / bar / name / level
+// 只有已知键才绑定界面；绑定后的线保持全透明，不绘制。
 attachUI = (is_undefined(attachUI) ? bindUI : attachUI);
 bindUI = (is_undefined(bindUI) ? attachUI : bindUI);
 attach_ui_key = "";
@@ -58,8 +60,9 @@ is_attach_ui = false;
 var _aui_raw = attachUI;
 if (is_string(_aui_raw)) {
         var _aui_key = string_lower(string_replace_all(_aui_raw, " ", ""));
-        // match RPE.attachUI_Group without "default"
+        // 对齐 RPE.attachUI_Group，不含 default。
         var _attach_ui_keys = ["pause", "combonumber", "combo", "score", "bar", "name", "level"];
+        // 命中已知键才算界面绑定。
         if (array_get_index(_attach_ui_keys, _aui_key) >= 0) {
                 attach_ui_key = _aui_key;
                 is_attach_ui = true;
@@ -69,11 +72,11 @@ if (is_attach_ui) {
         image_alpha = 0;
 };
 
-// RPE.CreateLines assigns the final depth after sorting by zOrder and line_id.
+// RPE.CreateLines 按 zOrder 和 line_id 排序后才写最终深度。
 if (!variable_instance_exists(id, "zOrder") || !is_real(zOrder)) then zOrder = 0;
 zOrder = real(zOrder);
 if (!is_finite(zOrder)) then zOrder = 0;
-z = zOrder; // PCR alias
+z = zOrder; // PCR 别名
 depth = DEPTH.LINE;
 
 rpe_map_easing = rpe_map_easing_id;
@@ -84,6 +87,7 @@ gif_data = undefined;
 if (has_gif_events && is_string(image) && string_length(image)) {
 	if (!struct_exists(game_1, "Gif") || !is_struct(game_1.Gif)) then game_1.Gif = {};
 	var gif_cache_valid = false;
+	// 缓存有效才复用，坏帧就删掉重载。
 	if (struct_exists(game_1.Gif, image)) {
 		var cached_gif = game_1.Gif[$ image];
 		gif_cache_valid = is_struct(cached_gif)
@@ -93,12 +97,14 @@ if (has_gif_events && is_string(image) && string_length(image)) {
 			&& real(cached_gif.total) > 0;
 		if (gif_cache_valid) {
 			for (var gif_cache_i = 0; gif_cache_i < array_length(cached_gif.frames); gif_cache_i++) {
+				// 有一帧精灵丢了，整段缓存作废。
 				if (!sprite_exists(cached_gif.frames[gif_cache_i])) {
 					gif_cache_valid = false;
 					break;
 				};
 			};
 		};
+		// 缓存无效就删掉坏帧。
 		if (!gif_cache_valid) {
 			if (is_struct(cached_gif) && is_array(cached_gif.frames)) {
 				for (var gif_stale_i = 0; gif_stale_i < array_length(cached_gif.frames); gif_stale_i++) {
@@ -114,6 +120,7 @@ if (has_gif_events && is_string(image) && string_length(image)) {
 		var gif_path = chart_resolve_asset(image);
 		var gif_last_sprite = -1;
 		if (string_length(gif_path)) then gif_last_sprite = sprite_add_gif(gif_path, 0, 0, gif_frame_delays_raw, gif_frame_sprites);
+		// 拆帧数组为空时，至少留下最后一张。
 		if (array_length(gif_frame_sprites) <= 0 && sprite_exists(gif_last_sprite)) then array_add(gif_frame_sprites, gif_last_sprite);
 		var gif_frame_delays = [];
 		var gif_total_time = 0;
@@ -136,6 +143,7 @@ if (has_gif_events && is_string(image) && string_length(image)) {
 	gif_data = game_1.Gif[$ image];
 	if (is_struct(gif_data) && is_array(gif_data.frames) && array_length(gif_data.frames) > 0
 		&& sprite_exists(gif_data.frames[0])) then line_image = gif_data.frames[0];
+// 静态自定义贴图按文件名缓存在 game_1.Texture。
 } else if (is_string(image) && string_length(image) && image != "line.png") {
 		var tex_path = chart_resolve_asset(image);
         if (string_length(tex_path)) {
@@ -153,6 +161,7 @@ if (has_gif_events && is_string(image) && string_length(image)) {
                         };
                 };
         };
+		// 贴图没找到只警告一次。
 		if (line_image == line && variable_global_exists("game_1") && is_struct(game_1)) {
 			if (!struct_exists(game_1, "_texture_miss") || !is_struct(game_1._texture_miss)) then game_1._texture_miss = {};
 			if (!struct_exists(game_1._texture_miss, image)) {
@@ -165,15 +174,21 @@ sprite_index = line_image;
 image_speed = 0;
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then visible = false;
 
-// Per-layer cursor maps
+// 每层事件的游标、保持值和上次有效值。
 events_count = [];
 events_hold = [];
 events_recall = [];
 rpe_speed_events = [];
 speed_event_index = 0;
 
-// Evaluate one event channel at line_time (CCLEExecute-like cursor)
+// 在 line_time 上求值一条事件通道，游标类似 CCLEExecute。
+///@desc 求值某一层的一条数值事件
+///@param {Real} layer_index 事件层下标
+///@param {String} event_name 通道名
+///@param {Real} default_value 通道缺失时的值
+///@returns {Real} 当前值
 rpe_eval_events = function(layer_index, event_name, default_value) {
+         // 层或通道不存在就用默认值。
          if (!is_struct(events[layer_index])) then return default_value;
          if (!struct_exists(events[layer_index], event_name)) then return default_value;
          var arr = events[layer_index][$ event_name];
@@ -198,6 +213,7 @@ rpe_eval_events = function(layer_index, event_name, default_value) {
                 idx--;
         };
 
+        // 吃掉已经结束的事件，记住终点。
         while ((idx < n) && (arr[idx].endTime <= line_time)) {
                 events_hold[layer_index][$ event_name] = arr[idx][$ "end"];
                 idx++;
@@ -212,6 +228,7 @@ rpe_eval_events = function(layer_index, event_name, default_value) {
         var st = ev.startTime;
         var et = ev.endTime;
 
+        // 还在这条开始之前：用上一条终点，没有上一条就用起点。
         if (line_time < st) {
                 if (idx > 0) then return arr[idx - 1][$ "end"];
                 return ev.start;
@@ -231,6 +248,7 @@ rpe_eval_events = function(layer_index, event_name, default_value) {
         };
         var tval;
 
+        // 贝塞尔用牛顿迭代把 x 解回参数，再取 y。
         if (bool(ev[$ "bezier"] ?? 0) && is_array(ev.bezierPoints) && array_length(ev.bezierPoints) >= 4) {
                 var p = clamp((line_time - st) / (et - st), 0, 1);
                 var x1 = ev.bezierPoints[0];
@@ -242,6 +260,7 @@ rpe_eval_events = function(layer_index, event_name, default_value) {
                         var u = 1 - tt;
                         var xx = 3 * u * u * tt * x1 + 3 * u * tt * tt * x2 + tt * tt * tt;
                         var dx = 3 * u * u * x1 + 6 * u * tt * (x2 - x1) + 3 * tt * tt * (1 - x2);
+                        // 导数太小就停止，避免除爆。
                         if (abs(dx) < 0.000001) then break;
                         tt -= (xx - p) / dx;
                         tt = clamp(tt, 0, 1);
@@ -258,6 +277,7 @@ rpe_eval_events = function(layer_index, event_name, default_value) {
                 };
         };
 
+        // 非有限结果退回上次有效值。
         if (!is_finite(tval)) {
                 tval = events_recall[layer_index][$ event_name];
         } else {
@@ -266,11 +286,16 @@ rpe_eval_events = function(layer_index, event_name, default_value) {
         return tval;
 };
 
-// RPEVersion < 170 stores a flat trapezoid table (floorPosition on each
-// segment). 170+ stores one integrated layer struct per speed layer.
+// RPEVersion 小于 170 存扁平梯形表，每段自带 floorPosition。
+// 170 及以上每层速度是一个已积分的层结构。
+///@desc 求给定秒数上的速度 floor
+///@param {Real} t 谱面秒
+///@returns {Real} 各层 floor 之和
 rpe_speed_floor_at = function(t) {
+        // 没有速度事件。
         if (!is_array(rpe_speed_events) || array_length(rpe_speed_events) <= 0) then return 0;
         var first_speed = rpe_speed_events[0];
+        // 旧表带 floorPosition，走遗留查询。
         if (is_struct(first_speed) && struct_exists(first_speed, "floorPosition")) {
                 return rpe_legacy_floor_at(rpe_speed_events, t);
         };
@@ -282,13 +307,21 @@ rpe_speed_floor_at = function(t) {
         return floor_sum;
 };
 
+///@desc 用当前 line_sec 求速度 floor
+///@returns {Real} 当前 floor
 rpe_speed_floor = function() {
         var t = (variable_instance_exists(id, "line_sec") ? line_sec : 0);
         return rpe_speed_floor_at(t);
 };
 
-// ---- extended (special) events: single channel, not multi-layer ----
+// 扩展事件是单通道，不按多层相加。
+///@desc 求一条事件在 line_time 上的缓动进度
+///@param {Struct} ev 事件
+///@param {Real} st 开始秒
+///@param {Real} et 结束秒
+///@returns {Real} 进度，弹性等缓动可以超出 0 到 1
 rpe_event_progress = function(ev, st, et) {
+        // 零时长直接到终点。
         if (st == et) then return 1;
         var ease = real(ev.easingType ?? 1);
         if (!is_real(ease) || ease <= 1 || ease >= 32) then ease = 1;
@@ -310,6 +343,7 @@ rpe_event_progress = function(ev, st, et) {
                         var u = 1 - tt;
                         var xx = 3 * u * u * tt * x1 + 3 * u * tt * tt * x2 + tt * tt * tt;
                         var dx = 3 * u * u * x1 + 6 * u * tt * (x2 - x1) + 3 * tt * tt * (1 - x2);
+                        // 导数太小就停止。
                         if (abs(dx) < 0.000001) then break;
                         tt -= (xx - p) / dx;
                         tt = clamp(tt, 0, 1);
@@ -321,11 +355,16 @@ rpe_event_progress = function(ev, st, et) {
         if (ease <= 1) {
                 return clamp((line_time - st) / max(0.0000001, et - st), 0, 1);
         };
-        // Do not clamp: OutElastic/Back and easing-window samples can exceed 0..1.
+        // 不要夹到 0 到 1：OutElastic、Back 和缓动窗口采样可以超出。
         return tween_execute(line_time, st, et, 0, 1, ease, e0, e1);
 };
 
+///@desc 求值一条扩展数值事件
+///@param {String} event_name 通道名
+///@param {Real} default_value 通道缺失时的值
+///@returns {Real} 当前值
 rpe_eval_ext_events = function(event_name, default_value) {
+         // 没有扩展事件或这条通道就用默认值。
          if (!is_struct(extEvents)) then return default_value;
          if (!struct_exists(extEvents, event_name)) then return default_value;
          var arr = extEvents[$ event_name];
@@ -368,6 +407,7 @@ rpe_eval_ext_events = function(event_name, default_value) {
         if (st == et || v0 == v1) then return v1;
 
         var tval = lerp(v0, v1, rpe_event_progress(ev, st, et));
+        // 非有限结果退回上次有效值。
         if (!is_finite(tval)) {
                 tval = ext_recall[$ event_name];
         } else {
@@ -376,7 +416,11 @@ rpe_eval_ext_events = function(event_name, default_value) {
         return tval;
 };
 
+///@desc 求值颜色事件并混合两端颜色
+///@param {Real} default_value 没有颜色事件时的颜色
+///@returns {Real} 当前颜色
 rpe_eval_color_events = function(default_value) {
+         // 没有颜色通道就用默认色。
          if (!is_struct(extEvents)) then return default_value;
          if (!struct_exists(extEvents, "colorEvents")) then return default_value;
          var arr = extEvents[$ "colorEvents"];
@@ -422,20 +466,30 @@ rpe_eval_color_events = function(default_value) {
         return tval;
 };
 
+///@desc 求值文本事件，并按事件选择字体
+///@param {String} default_value 没有文本事件时的文字
+///@returns {String} 当前文字
 rpe_eval_text_events = function(default_value) {
 		line_text_font = (!is_undefined(game.font) && font_exists(game.font)) ? game.font : -1;
+		// 没有文本通道就用默认文字。
 		if (!is_struct(extEvents)) then return default_value;
 		if (!struct_exists(extEvents, "textEvents")) then return default_value;
 		var arr = extEvents[$ "textEvents"];
 		if (!is_array(arr) || array_length(arr) <= 0) then return default_value;
 
+		///@desc 按文本事件里的字体名切换绘制字体
+		///@param {Struct} text_event 文本事件
+		///@returns {Undefined} 无
 		var select_font = function(text_event) {
+			// 事件不是结构就返回。
 			if (!is_struct(text_event)) then return;
 			var font_name = string(text_event[$ "font"] ?? "cmdysj");
+			// 空名或默认 cmdysj 不换字体。
 			if (!string_length(font_name) || string_lower(font_name) == "cmdysj") then return;
 			if (struct_exists(game_1, "Fonts") && is_struct(game_1.Fonts)
 				&& struct_exists(game_1.Fonts, font_name)) {
 				var selected_font = game_1.Fonts[$ font_name];
+				// 字体已经加载才换上。
 				if (selected_font != -1 && font_exists(selected_font)) then line_text_font = selected_font;
 			};
 		};
@@ -473,6 +527,7 @@ rpe_eval_text_events = function(default_value) {
         var et = ev.endTime;
 		var v0 = string(ev.start);
 		var v1 = string(ev[$ "end"]);
+		// 还没到这条开始就用上一条的文字。
 		if (line_time < st) {
 				if (idx > 0) {
 						select_font(arr[idx - 1]);
@@ -481,10 +536,12 @@ rpe_eval_text_events = function(default_value) {
 				return string(default_value);
 		};
 		select_font(ev);
+		// 起终点相同就不用插值。
 		if (st == et || v0 == v1) then return v1;
 
         var p = rpe_event_progress(ev, st, et);
         var out_text = v0;
+        // 百分号标记按数字插值，否则只在前缀关系下逐字变长。
         if (bool(ev[$ "isPercent"] ?? false)) {
                 var n0 = real(v0);
                 var n1 = real(v1);
@@ -497,6 +554,7 @@ rpe_eval_text_events = function(default_value) {
                 var is_prefix = false;
                 if (lt >= lh && string_copy(v1, 1, lh) == v0) then is_prefix = true;
                 if (lh >= lt && string_copy(v0, 1, lt) == v1) then is_prefix = true;
+                // 一方是另一方的前缀时，按长度裁切。
                 if (is_prefix) {
                         var lp_now = lerp(lh, lt, p);
                         if (lh < lt) then out_text = string_copy(v1, 1, max(0, round(lp_now)));
@@ -512,9 +570,8 @@ if (!is_array(events)) then events = [];
 var _clean_layers = [];
 for (var li = 0; li < array_length(events); li++) {
         if (is_struct(events[li])) {
-                // RPE permits omitted channels. Materialize the canonical
-                // channels before creating cursors so every layer has a
-                // stable runtime shape from its first Step.
+                // RPE 允许省略通道。建游标前补齐标准通道，
+                // 这样每一层从第一步起形状都稳定。
                 if (!struct_exists(events[li], "moveXEvents")) then events[li].moveXEvents = [];
                 if (!struct_exists(events[li], "moveYEvents")) then events[li].moveYEvents = [];
                 if (!struct_exists(events[li], "alphaEvents")) then events[li].alphaEvents = [];
@@ -540,6 +597,7 @@ for (var li = 0; li < array_length(events); li++) {
                 ev_layer[$ en] = rpe_prep_event_array(ev_layer[$ en], is_speed);
                 cmap[$ en] = 0;
                 var arr0 = ev_layer[$ en];
+                // 有事件时用第一条的起点当保持值。
                 if (is_array(arr0) && array_length(arr0) > 0) {
                         hmap[$ en] = arr0[0][$ "start"] ?? 0;
                         rmap[$ en] = hmap[$ en];
@@ -564,16 +622,18 @@ has_text_events = false;
 has_color_events = false;
 has_scale_events = false;
 
-// Special prep for extended channels (PCR rpec_parser semantics)
+// 扩展通道的特殊预处理，语义对齐 PCR rpec_parser。
 var enames = struct_get_names(extEvents);
 for (var ei = 0; ei < array_length(enames); ei++) {
         var en = enames[ei];
         var raw_arr = extEvents[$ en];
+        // 不是数组的通道清空。
         if (!is_array(raw_arr)) {
                 extEvents[$ en] = [];
                 continue;
         };
 
+        // 颜色：拍数换成秒，RGB 数组收成颜色值。
         if (en == "colorEvents") {
                 has_color_events = (array_length(raw_arr) > 0);
                 for (var ci = 0; ci < array_length(raw_arr); ci++) {
@@ -583,6 +643,7 @@ for (var ei = 0; ei < array_length(enames); ei++) {
                         if (struct_exists(cev, "endTime")) then cev.endTime = game_1.Math.beatToAbsSec(game_1.Math.arrToBeat(cev.endTime));
                         var el = cev[$ "easingLeft"] ?? 0;
                         var er = cev[$ "easingRight"] ?? 1;
+                        // 缓动窗口非法时恢复成整段。
                         if ((el == er) || (el < 0) || (el > 1) || (er < 0) || (er > 1)) {
                                 el = 0; er = 1;
                         };
@@ -594,6 +655,7 @@ for (var ei = 0; ei < array_length(enames); ei++) {
 
                         var c0 = cev.start;
                         var c1 = cev[$ "end"];
+                        // 起点和终点都可以是 RGB 数组。
                         if (is_array(c0) && array_length(c0) >= 3) {
                                 cev.start = make_color_rgb(real(c0[0]), real(c0[1]), real(c0[2]));
                         } else if (!is_real(c0)) {
@@ -614,6 +676,7 @@ for (var ei = 0; ei < array_length(enames); ei++) {
                 continue;
         };
 
+        // 文本：拍数换成秒，并识别两端都有的 %P% 百分号标记。
         if (en == "textEvents") {
                 has_text_events = (array_length(raw_arr) > 0);
                 for (var ti = 0; ti < array_length(raw_arr); ti++) {
@@ -637,6 +700,7 @@ for (var ei = 0; ei < array_length(enames); ei++) {
                         var marker = "%P%";
                         var has_p0 = (string_pos(marker, ts) > 0);
                         var has_p1 = (string_pos(marker, te) > 0);
+                        // 两端都有标记才按数字百分比插值。
                         tev.isPercent = (has_p0 && has_p1);
                         tev.start = string_replace_all(ts, marker, "");
                         tev[$ "end"] = string_replace_all(te, marker, "");
@@ -650,7 +714,7 @@ for (var ei = 0; ei < array_length(enames); ei++) {
                 continue;
         };
 
-        // numeric channels: scaleX/scaleY/paint (and any other)
+        // 数值通道：scaleX、scaleY、paint 以及其他。
         if (en == "scaleXEvents" || en == "scaleYEvents") then has_scale_events = true;
         extEvents[$ en] = rpe_prep_event_array(raw_arr, false);
         var narr = extEvents[$ en];
@@ -667,28 +731,41 @@ line_texture_use_judge_color = is_default_line
 	&& !has_paint_events
 	&& !is_attach_ui;
 
-// PCR calcFloorPosition over the same merged table used by runtime.
+// PCR 的 calcFloorPosition，用和运行时同一张合并表。
+///@desc 按秒查询速度 floor
+///@param {Real} sec 谱面秒
+///@returns {Real} floor
 rpe_floor_at_sec = function(sec) {
         return rpe_speed_floor_at(sec);
 };
 
+///@desc 按拍查询速度 floor
+///@param {Real} beat 拍数
+///@returns {Real} floor
 rpe_floor_at_beat = function(beat) {
         return rpe_floor_at_sec(game_1.Math.beatToAbsSec(beat));
 };
-// ---- PCR isCover / note controls ----
-// isCover=false => unCover notes (notes remain visible past the line)
+// PCR 的 isCover 和音符控制。
+// isCover 为 false 时音符过线后仍然可见。
 isCover = (is_bool(isCover) ? isCover : (real(isCover) != 0));
 _uncover = !isCover;
 _alpha_decimal = 255;
+///@desc 把音符控制点收成按位置排序的表
+///@param {Array} raw 原始控制点
+///@param {String} value_name 取值字段名
+///@returns {Struct} positions、values、easings 和 length
 rpe_prepare_control = function(raw, value_name) {
 	var result = { positions: [], values: [], easings: [], length: 0 };
+	// 不是数组就返回空表。
 	if (!is_array(raw)) then return result;
 	var entries = [];
 	for (var ci = 0; ci < array_length(raw); ci++) {
 		var ce = raw[ci];
+		// 跳过坏点，位置或值不是有限数也不收。
 		if (!is_struct(ce)) then continue;
 		var control_position = real(ce[$ "x"] ?? 0) / 540;
 		var control_value = real(ce[$ value_name] ?? 1);
+		// 位置不是有限数就丢掉这一点。
 		if (!is_finite(control_position)) then continue;
 		if (!is_finite(control_value)) then control_value = 1;
 		array_add(entries, {
@@ -697,13 +774,20 @@ rpe_prepare_control = function(raw, value_name) {
 			easing:rpe_map_easing(ce[$ "easing"] ?? 1)
 		});
 	};
-	array_sort(entries, function(a, b) {
+	array_sort(entries,
+///@desc 按位置比较两个控制点
+///@param {Struct} a 前一个点
+///@param {Struct} b 后一个点
+///@returns {Real} a 更小为 -1，更大为 1
+function(a, b) {
+		// 位置小的排前面，相等则视为相同。
 		if (a.position < b.position) then return -1;
 		if (a.position > b.position) then return 1;
 		return 0;
 	});
 	for (var entry_i = 0; entry_i < array_length(entries); entry_i++) {
 		var existing_count = array_length(result.positions);
+		// 同一位置后来的点覆盖前面的。
 		if (existing_count > 0 && result.positions[existing_count - 1] == entries[entry_i].position) {
 			result.values[existing_count - 1] = entries[entry_i].value;
 			result.easings[existing_count - 1] = entries[entry_i].easing;
@@ -721,7 +805,7 @@ _control_pos = rpe_prepare_control(posControl, "pos");
 _control_size = rpe_prepare_control(sizeControl, "size");
 _control_y = rpe_prepare_control(yControl, "y");
 
-// Runtime state
+// 运行时状态。
 line_time = 0;
 line_sec = 0;
 __raw_x = 0;
@@ -748,6 +832,6 @@ x = __x;
 y = __y;
 image_blend = __color;
 if (is_attach_ui) {
-        // line sprite stays hidden; real alpha is evaluated in Step and written to HUD
+        // 绑定界面的线精灵保持隐藏；真实透明度在步进里算完再写到界面。
         image_alpha = 0;
 };

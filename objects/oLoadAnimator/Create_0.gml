@@ -1,4 +1,5 @@
-/// @description Loading UI animator. The async loader owns chart preparation.
+///@desc 创建：加载界面动画。谱面准备由异步加载器负责
+// 已经有一个动画实例就不要再留。
 if (variable_global_exists("load_animator_instance")
         && instance_exists(global.load_animator_instance)) {
     instance_destroy();
@@ -46,6 +47,7 @@ tips = [];
 tip_index = 0;
 
 var _tips_path = working_directory + "resource/tips.txt";
+// 从 tips.txt 读提示，没有就用语言包里的兜底句。
 if (file_exists(_tips_path)) {
     var _tips_file = file_text_open_read(_tips_path);
     while (!file_text_eof(_tips_file)) {
@@ -58,16 +60,14 @@ if (array_length(tips) == 0) then array_add(tips, lang("loadAnim.tipsFallback"))
 tip_index = irandom(array_length(tips) - 1);
 
 ui_font = pls_ui_font_add(35, false, false, -infinity, infinity, false);
-// Cache the loading box dimensions once. Draw must only animate its scale;
-// recalculating the base width every frame can make the box drift when draw
-// state or the UI scale changes.
+// 加载框尺寸只量一次。绘制只做缩放；每帧重算底宽会在绘制状态或界面缩放变化时漂移。
 draw_set_font(ui_font);
 var _loading_font_width = string_width(lang("loadAnim.loading")) * 0.5;
 var _loading_font_height = string_height(lang("loadAnim.loading")) * 0.5;
 loading_rect_width_design = _loading_font_width + 40;
 loading_rect_height_design = _loading_font_height + 30;
 
-// High-resolution black parallelogram. Its corners stay fixed through nine-slice scaling.
+// 高分辨率黑色平行四边形。九宫格拉伸时角保持不动。
 var _panel_surface = surface_create(512, 256);
 if (surface_exists(_panel_surface)) {
     surface_set_target(_panel_surface);
@@ -89,9 +89,13 @@ if (surface_exists(_panel_surface)) {
         sprite_set_nineslice(panel_sprite, _slice);
     };
 };
-/// 绘制填充平行四边形（锐角 75°）
-/// 参数：px, py 为左下角起点坐标；pw 为底边长度；ph 为高；col 为颜色
-
+///@desc 绘制填充平行四边形，锐角 75 度
+///@param {Real} px 左下角 x
+///@param {Real} py 左下角 y
+///@param {Real} pw 底边长度
+///@param {Real} ph 高度
+///@param {Real} col 颜色
+///@returns {Undefined} 无
 function draw_parallelogram_fill(px, py, pw, ph, col) {
     // 锐角（75°）转弧度
     var ang = degtorad(75);
@@ -118,18 +122,22 @@ function draw_parallelogram_fill(px, py, pw, ph, col) {
     draw_primitive_end();
 }
 
-/// 将目标 sprite 放大到 1080p 16:9 后再裁成 75° 平行四边形。
-/// @param {Asset.GMSprite} target_spr
+///@desc 把精灵放大到 16:9 画布后再裁成 75 度平行四边形
+///@param {Asset.GMSprite} target_spr 源精灵
+///@returns {Asset.GMSprite} 新精灵，失败为 -1
 function sprite_parallelogram_fixed(target_spr) {
+    // 源精灵无效或尺寸为 0 时无法裁切。
     if (!sprite_exists(target_spr)) then return -1;
     var src_w = sprite_get_width(target_spr);
     var src_h = sprite_get_height(target_spr);
     if (src_w <= 0 || src_h <= 0) then return -1;
 
+    // GX 用较小画布，避免内存过高。
     var box_w = pls_is_gxgames() ? 960 : 1920;
     var box_h = pls_is_gxgames() ? 540 : 1080;
     var cover = max(box_w / src_w, box_h / src_h);
     var plate = surface_create(box_w, box_h);
+    // 铺底表面创建失败。
     if (!surface_exists(plate)) then return -1;
     var _old_colour = draw_get_colour();
     var _old_alpha = draw_get_alpha();
@@ -144,6 +152,7 @@ function sprite_parallelogram_fixed(target_spr) {
 
     var offset = box_h / tan(degtorad(75));
     var surf = surface_create(box_w, box_h);
+    // 第二张表面失败时释放第一张并恢复绘制状态。
     if (!surface_exists(surf)) {
         surface_free(plate);
         draw_set_alpha(_old_alpha);
@@ -166,6 +175,7 @@ function sprite_parallelogram_fixed(target_spr) {
 
     var spr_new = sprite_create_from_surface(surf, 0, 0, box_w, box_h, false, false, 0, 0);
     surface_free(surf);
+    // 从表面生成精灵失败。
     if (!sprite_exists(spr_new)) then return -1;
     sprite_set_offset(spr_new, box_w * 0.5, box_h * 0.5);
     return spr_new;

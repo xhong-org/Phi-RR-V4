@@ -1,4 +1,5 @@
-/// @description Draw settlement above the composited chart.
+///@desc 在合成后的谱面之上绘制结算界面
+// 已经离开就不再画。
 if (consumed) then exit;
 chart_mask_scissor_clear();
 pls_draw_flush();
@@ -51,6 +52,7 @@ var score_tx = score_x + 28 * s;
 draw_text_transformed(score_tx, score_bottom - score_h * 0.50, ScoreSystemPad(score_show), 0.72 * s, 0.72 * s, 0);
 draw_set_alpha(a0 * 0.85);
 var rec_line = "";
+// 自动播放、新纪录和普通纪录用不同的一行字。
 if (score_autoplay) {
 	rec_line = "AUTOPLAY";
 } else if (score_is_best) {
@@ -103,6 +105,7 @@ settlement_draw_user(s);
 settlement_draw_retry(s);
 settlement_draw_continue(s);
 
+// 离开时盖一层黑。
 if (fade_alpha > 0) {
 	draw_set_colour(c_black);
 	draw_set_alpha(fade_alpha);

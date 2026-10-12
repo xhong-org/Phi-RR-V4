@@ -1,2 +1,2 @@
-/// @description Chart draw end.
-// Noise areas are drawn by oChartMask before it unbinds the chart surface.
+///@desc 官谱绘制结束，噪点由遮罩在解绑前绘制
+// 噪点区域由 oChartMask 在解开谱面表面之前绘制。

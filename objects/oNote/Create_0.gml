@@ -1,4 +1,4 @@
-/// @description Cache immutable values before entering the note hot path.
+///@desc 缓存官谱音符的节拍换算和判定线引用
 depth = DEPTH.NOTE;
 inition = false;
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then visible = false;
@@ -9,6 +9,7 @@ _judge_user_count = (_is_hold ? 6 : 5);
 _beat_per_second = (self.bpm / 1.875);
 _seconds_per_beat = (1 / _beat_per_second);
 if (!is_real(self.line_id)) then self.line_id = 0;
+// 判定线无效就销毁，避免后续热路径空引用。
 if (!is_array(game.line_list) || self.line_id < 0 || self.line_id >= array_length(game.line_list)) {
         show_debug_message($"[oNote] invalid line_id={self.line_id}, lines={is_array(game.line_list) ? array_length(game.line_list) : -1}");
         instance_destroy();
@@ -24,5 +25,6 @@ event_user(0);
 canDraw = false;
 hl = self._hl;
 
+// Hold、Drag/Flick、Tap 的迟到窗口毫秒不同。
 var late_ms = _is_hold ? 161 : ((self.type == 2 || self.type == 4) ? 160 : 201);
 lateHitTime = (late_ms * 0.001 * _beat_per_second);

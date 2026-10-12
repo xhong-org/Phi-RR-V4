@@ -1,5 +1,4 @@
-/// @description Official hold. Head speed is 1. Body length is bodySpeed * holdTime.
-/// After the hit the head is dropped and the body shrinks by elapsed time.
+///@desc 更新官谱 Hold：头速为 1，身体按 bodySpeed 乘时长伸缩
 if(!_is_hold || !inition) then exit;
 
 var line_floor = _line_ref.__value[0];
@@ -7,12 +6,12 @@ var time_before = (_now_seconds < realHitTime);
 var body_speed = variable_instance_exists(id, "bodySpeed") ? real(bodySpeed) : 1;
 if (!is_finite(body_speed)) then body_speed = 1;
 var hold_sec = hold_time_length;
-// speed 0 or an empty hold is not drawn.
+// 速度为 0 或空 Hold 不画。
 if (abs(body_speed) <= 0.0000001 || hold_sec <= 0) {
 	canDraw = false;
 	exit;
 };
-// Same visibility as a tap: hide only after the line floor passes maxVisiblePos.
+// 和 Tap 一样，判定线地板越过 maxVisiblePos 才隐藏。
 if (time_before && line_floor > max_visible_position) {
 	canDraw = false;
 	exit;
@@ -36,6 +35,7 @@ var full_px = body_speed * hold_sec * scale_y;
 if (full_px < 0) then full_px = 0;
 var remain_px = full_px;
 var show_head = time_before;
+// 击中后按已过时间缩短身体。
 if (!time_before) {
 	var gone = clamp((_now_seconds - realHitTime) / hold_sec, 0, 1);
 	remain_px = full_px * (1 - gone);

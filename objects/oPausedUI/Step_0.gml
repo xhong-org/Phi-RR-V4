@@ -1,8 +1,10 @@
+// 暂停界面的输入、倒计时和按钮命中。
 if (!instance_exists(owner)) {
         instance_destroy();
         exit;
 };
 paused_ui_refresh_layout();
+// 结算或过场中不允许操作。
 if (!paused_ui_can_control()) then exit;
 
 gui_width = max(1, room_width);
@@ -14,12 +16,14 @@ button_x[0] = gui_width * 0.5 - spacing;
 button_x[1] = gui_width * 0.5;
 button_x[2] = gui_width * 0.5 + spacing;
 
+// 重试或继续的等待结束后再真正开播。
 if (retry_waiting) {
         if (get_timer() - retry_started_at >= retry_delay) {
                 var completed_mode = retry_mode;
                 retry_waiting = false;
                 retry_mode = 0;
                 action_queued = false;
+                // 模式 1 走重试开场，否则恢复播放。
                 if (completed_mode == 1) {
 			if (instance_exists(oPlayTransition)) {
 				var transition = instance_find(oPlayTransition, 0);
@@ -52,6 +56,7 @@ var mouse_gui_x = mouse_x;
 var mouse_gui_y = mouse_y;
 var button_pressed = mouse_check_button_pressed(mb_left);
 
+// 游玩中双击暂停按钮或按 Esc 暂停。
 if (!game.paused) {
 		if (button_pressed && point_in_rectangle(mouse_gui_x, mouse_gui_y,
 				pause_button_x - pause_button_radius, pause_button_y - pause_button_radius,
@@ -71,6 +76,7 @@ if (!game.paused) {
 };
 
 var draw_scale = 0.9 * ui_scale;
+// 三个暂停按钮的悬停范围。
 for (var i = 0; i < 3; i++) {
         var sprite = button_sprite[i];
         var half_width = max(40 * ui_scale, sprite_get_width(sprite) * draw_scale * 0.7);

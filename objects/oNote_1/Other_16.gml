@@ -1,10 +1,11 @@
-/// @description Auto-judge hold RPE note
+///@desc 自动判定 RPE Hold，并按 BPM 刷新尾迹
 if (!_is_hold || !inition || isFake) then exit;
 
 var now_time = _now_seconds;
 var now_hit = judgeTime;
 var bpm_use = game_1.Math.bpmAtAbsSec(_now_seconds);
 
+// 手动时超时记 Miss，按住期间才刷尾迹。
 if (!chart_autoplay_active()) {
 	if (now_time > start_sec + lateHitTime && !isMiss && notJudge) {
 		if (is_real_note) {
@@ -25,6 +26,7 @@ if (!chart_autoplay_active()) {
 				_bak_time = _now_seconds;
 			};
 		};
+		// Hold 结束时结算并停用。
 		if (now_time >= end_sec && !notJudge) {
 			if (is_real_note) {
 				hit_status = judgeCalc(start_sec, now_hit, 0, _hx0, _hy0, type, false, !isMiss, true);
@@ -35,6 +37,7 @@ if (!chart_autoplay_active()) {
 	exit;
 };
 
+// 自动播放在击中时刻判定 Hold 头。
 if (now_time >= now_hit && !isMiss && notJudge && hit_status == TYPE.NONE) {
 	if (is_real_note) {
 		var _hold_xy = rpe_note_hit_effect_xy();

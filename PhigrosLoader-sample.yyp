@@ -115,6 +115,7 @@
     {"id":{"name":"ID3D11","path":"extensions/ID3D11/ID3D11.yy",},},
     {"id":{"name":"VideoRenderer","path":"extensions/VideoRenderer/VideoRenderer.yy",},},
     {"id":{"name":"yyfmod_windows","path":"extensions/yyfmod_windows/yyfmod_windows.yy",},},
+    {"id":{"name":"OfficialBlockLegacy","path":"notes/OfficialBlockLegacy/OfficialBlockLegacy.yy",},},
     {"id":{"name":"rpe_parse","path":"notes/rpe_parse/rpe_parse.yy",},},
     {"id":{"name":"Step_RPE_v0","path":"notes/Step_RPE_v0/Step_RPE_v0.yy",},},
     {"id":{"name":"Step_RPE_v1","path":"notes/Step_RPE_v1/Step_RPE_v1.yy",},},

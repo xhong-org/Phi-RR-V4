@@ -1,4 +1,5 @@
-/// @description FPS and version, above the chart mask and every z-range shader.
+///@desc 在谱面遮罩之上绘制帧率、版本和探针截图
+// HUD 还没准备好就不画。
 if (!chart_hud_ready()) then exit;
 shader_reset();
 gpu_set_blendmode(bm_normal);
@@ -25,6 +26,7 @@ if (variable_global_exists("pls_probe_until") && global.pls_probe_until > 0
 	};
 	var _probe_shot_at = 31;
 	if (variable_global_exists("pls_probe_shot") && global.pls_probe_shot > 0) then _probe_shot_at = global.pls_probe_shot;
+	// 色差探针到点后保存屏幕和遮罩。
 	if (global.pls_probe_screen_time >= _probe_shot_at) {
 		global.pls_chromatic_screen_shot = true;
 		pls_draw_flush();

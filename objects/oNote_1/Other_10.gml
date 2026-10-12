@@ -1,7 +1,7 @@
-/// @description Initialise RPE note state
+///@desc 按类型初始化 RPE 音符贴图、Hold 几何和判定偏移
 if (inition) then exit;
 
-// map Official-compatible sprites (type already remapped in CreateLines)
+// 类型已在 CreateLines 映射成官谱兼容编号。
 switch (type) {
 	case 1:
 		depth = DEPTH.NOTE + 1;
@@ -27,7 +27,7 @@ switch (type) {
 		notJudge = true;
 		isMiss = false;
 		_bak_time = 0;
-		__first__ = false; // PCR: head judged / attached to line
+		__first__ = false; // PCR：头已判定并贴上判定线
 		break;
 	case 4:
 		depth = DEPTH.NOTE;
@@ -41,7 +41,7 @@ switch (type) {
 		break;
 };
 
-// Shared judge/draw flags (must exist for non-hold notes too)
+// 非 Hold 也要有这些判定和绘制标记。
 isHold = false;
 notJudge = true;
 isMiss = false;
@@ -63,7 +63,7 @@ _last_global_scales = initial_scale;
 image_alpha = alpha;
 image_blend = c_white;
 
-// hold visual length in floor units (PCR velocity)
+// Hold 视觉长度用地板单位。
 if (_is_hold) {
 	if (hold_length_floor == 0 && endFloorPosition != floorPosition) {
 		hold_length_floor = endFloorPosition - floorPosition;

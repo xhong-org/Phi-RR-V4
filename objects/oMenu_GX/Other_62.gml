@@ -1,10 +1,12 @@
-/// @description Local Node API health + optional chart URL download
+///@desc 处理本地 API 健康检查和谱面 URL 下载完成
 var req = async_load[? "id"];
 var status = async_load[? "status"];
 
+// 还在下载中的正状态码先忽略。
 if (health_id >= 0 && req == health_id) {
         if (status > 0) then exit;
         health_id = -1;
+        // 健康检查失败就提示先启动本地服务。
         if (status < 0) {
                 api_online = false;
                 detail_text = lang("gx.runServer");
@@ -18,12 +20,14 @@ if (health_id >= 0 && req == health_id) {
 };
 
 if (query_http_id < 0) then exit;
+// 不是这次 URL 下载的回调就丢掉。
 if (req != query_http_id) then exit;
 
 var status = async_load[? "status"];
 if (status > 0) then exit;
 
 query_http_id = -1;
+// URL 下载失败则停在菜单并显示错误。
 if (status < 0) {
         busy = false;
         last_error = lang("gx.urlFailed");

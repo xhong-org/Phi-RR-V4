@@ -1,8 +1,9 @@
-/// @description Cache immutable chart data used by the per-frame hot path.
+///@desc 创建：缓存每帧热路径要用的不变谱面数据
 depth = DEPTH.LINE;
 sprite_index = self.image_id;
 image_blend = chart_line_judge_blend();
 
+// 拆出四条事件流并记下长度，避免每帧再查结构。
 _events = self.events;
 delete(self.events);
 
@@ -31,6 +32,7 @@ __cos = 1;
 __sin = 0;
 __value = [0, 0];
 
+// 用户事件 1 预计算速度事件的 floor。
 event_user(1);
 
 chart_force_event_init = false;

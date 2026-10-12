@@ -1,4 +1,4 @@
-/// @description Rebuild Android menu layout from Camera_View.global_scales
+///@desc 按 global_scales 重算 Android 菜单按钮位置
 if (!variable_global_exists("global_scales")) {
         globalvar global_scales;
         global_scales = 1.0;

@@ -1,5 +1,7 @@
-/// @description 播放
+///@desc 用户事件 2：播放
+// 离线渲染不播声音。
 if (variable_global_exists("render_mode") && global.render_mode) then exit;
+// GX 按 js、缓冲区或资源三种来源播放。
 if (media_use_gx()) {
 	if (gx_audio_kind == "js" && gx_js_handle > 0) {
 		try { i_gx_audio_play(gx_js_handle); } catch (play_error) { delete(play_error); };

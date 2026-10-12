@@ -1,14 +1,14 @@
-/// @description
+///@desc 推进 RPE 时钟、音符激活和曲终退出
 if (chart_load_step(oLine_1, rpe_lines_pump, rpe_lines_complete, rpe_lines_thaw_force_init, rpe_sync_note_activation)) then exit;
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active) exit;
 //if(game.settings.enableFPS) then window_set_caption($"{GAME_NAME} - FPS: {fps} / {fps_real}");
 var chart_os_hold = chart_android_focus_step();
 if(!game.paused && !chart_os_hold){
-	// The chart clock stays entirely on get_timer()'s microsecond timebase.
+	// 谱面时钟只用 get_timer 的微秒时间基。
 	game.Math.ctime();
-	event_user(0); // BPMList compensation (RPE Other_10)
+	event_user(0); // 用用户事件 0 补偿 BPM 列表
 	var _rpe = game_1;
-	// Activate only notes entering the configured preload window.
+	// 只激活进入预加载窗口的音符。
 	if (is_struct(_rpe) && bool(_rpe._note_activation_enabled ?? false)
 		&& is_array(_rpe._notes)) {
 		var _room_w = room_width;
@@ -22,6 +22,7 @@ if(!game.paused && !chart_os_hold){
 		var _note_count = array_length(_notes);
 		var _note_index = clamp(real(_rpe._note_activation_index ?? 0), 0, _note_count);
 		var _activation_records = _rpe._note_activation_records;
+		// 按时间顺序激活到期音符。
 		while (_note_index < _note_count && _notes[_note_index].activateSec <= _note_now) {
 			var _time_note_id = _notes[_note_index].id;
 			chart_note_activate(_time_note_id);
@@ -36,14 +37,14 @@ if(!game.paused && !chart_os_hold){
 		_rpe._note_activation_index = _note_index;
 		_rpe._note_activation_last_time = _note_now;
 
-		// Phira-style spatial query: project the screen onto each line's local
-		// normal, then binary-search floor-sorted dormant notes in that interval.
+		// 把屏幕投到每条线的法线，再对按地板排序的休眠音符做二分。
 		var _spatial_groups = _rpe._note_spatial_groups;
 		if (is_array(_spatial_groups)) {
 			var _spatial_group_count = array_length(_spatial_groups);
 			for (var _sgi = 0; _sgi < _spatial_group_count; _sgi++) {
 				var _sg = _spatial_groups[_sgi];
 				var _sg_line = _sg.line;
+				// 判定线不在或速度为 0 时跳过这一组。
 				if (!instance_exists(_sg_line)) then continue;
 				var _sg_speed = real(_sg.speed);
 				if (_sg_speed == 0) then continue;
@@ -71,6 +72,7 @@ if(!game.paused && !chart_os_hold){
 				var _sg_notes = _sg.notes;
 				var _lo = 0;
 				var _hi = array_length(_sg_notes);
+				// 二分找到第一枚进入地板区间的音符。
 				while (_lo < _hi) {
 					var _mid = (_lo + _hi) div 2;
 					if (_sg_notes[_mid].spatialFloor < _floor_min) then _lo = _mid + 1;
@@ -79,6 +81,7 @@ if(!game.paused && !chart_os_hold){
 				var _sg_note_count = array_length(_sg_notes);
 				for (var _sni = _lo; _sni < _sg_note_count; _sni++) {
 					var _sn = _sg_notes[_sni];
+					// 超出地板区间就不用再看后面的音符。
 					if (_sn.spatialFloor > _floor_max) then break;
 					if (_sn.activated) then continue;
 					var _sn_to_hit = _sn.startSec - real(_sg_line.line_sec);
@@ -92,7 +95,7 @@ if(!game.paused && !chart_os_hold){
 			};
 		};
 
-		// Holds are grouped so each line/side projects the viewport only once.
+		// Hold 按线和上下侧分组，每组只投影一次视口。
 		var _hold_groups = _rpe._note_spatial_hold_groups;
 		if (is_array(_hold_groups)) {
 			var _hold_group_count = array_length(_hold_groups);
@@ -116,6 +119,7 @@ if(!game.paused && !chart_os_hold){
 				var _hold_notes = _hg.notes;
 				var _hold_count = real(_hg.count);
 				var _shi = 0;
+				// 已激活或已结束的 Hold 从有效前缀里换出去。
 				while (_shi < _hold_count) {
 					var _sh = _hold_notes[_shi];
 					if (_sh.activated || _sh.endSec <= _sh_line_sec) {
@@ -160,6 +164,7 @@ elif(game.paused && game.__time[0] > 0){
 if (!(variable_global_exists("render_mode") && global.render_mode)
 	&& !chart_exit_started && game.__time[0] > 0 && instance_exists(oMedia)) {
 	var exit_media = instance_find(oMedia, 0);
+	// 音频播完就进入退出流程。
 	if (exit_media.length > 0 && game.__time[4] >= exit_media.length) {
 		chart_exit_started = true;
 		chart_exit_timer = get_timer();

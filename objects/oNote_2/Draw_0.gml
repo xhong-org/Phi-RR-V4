@@ -1,6 +1,7 @@
-/// @description Draw PEC note geometry.
+///@desc 绘制 PEC 音符或 Hold 几何
 if (!canDraw) then exit;
 
+// 有皮肤时换皮肤精灵，否则用默认 Hold 绘制。
 if (skin_active()) {
 	var _skin_kind = (type == 4 ? "drag" : (type == 3 ? "flick" : "tap"));
 	var _skin_spr = skin_note_sprite(_skin_kind, hl);

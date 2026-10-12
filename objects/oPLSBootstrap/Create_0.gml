@@ -1,4 +1,4 @@
-/// @description Route command-line archive tests without changing normal startup.
+///@desc 解析命令行并分流到渲染、归档测试或菜单
 lang_init();
 if (!lang_boot_guard()) then exit;
 global.pls_archive_test = false;
@@ -34,6 +34,7 @@ global.pls_environment_run = string_length(environment_archive_source) > 0;
 var render_base_height = 768;
 var render_aspect_width = 16;
 var render_aspect_height = 9;
+// 逐个参数识别归档测试、渲染和结算开关。
 for (var i = 1; i < param_count; i++) {
         if (parameter_string(i) == "-archive-test" && i + 1 < param_count) {
                 i++;
@@ -52,6 +53,7 @@ for (var i = 1; i < param_count; i++) {
         } else if ((parameter_string(i) == "-resolution" || parameter_string(i) == "-res") && i + 1 < param_count) {
                 i++;
                 global.render_resolution = string_lower(parameter_string(i));
+                // 把分辨率名字换成基准高度。
                 switch (global.render_resolution) {
                         case "720p":
                                 render_base_height = 720;
@@ -80,6 +82,7 @@ for (var i = 1; i < param_count; i++) {
                 i++;
                 var aspect_value = string_trim(parameter_string(i));
                 var aspect_separator = string_pos(":", aspect_value);
+                // 宽高比格式不对就退回 16:9。
                 if (aspect_separator <= 1 || aspect_separator >= string_length(aspect_value)) {
                         print($"[Renderer] Invalid aspect ratio '{aspect_value}', using 16:9");
                         render_aspect_width = 16;
@@ -89,6 +92,7 @@ for (var i = 1; i < param_count; i++) {
                         var aspect_width = real(string_trim(string_copy(aspect_value, 1, aspect_separator - 1)));
                         var aspect_height = real(string_trim(string_copy(aspect_value, aspect_separator + 1,
                                 string_length(aspect_value) - aspect_separator)));
+                        // 宽或高不是正数也退回 16:9。
                         if (is_nan(aspect_width) || !is_finite(aspect_width) || aspect_width <= 0
                                 || is_nan(aspect_height) || !is_finite(aspect_height) || aspect_height <= 0) {
                                 print($"[Renderer] Invalid aspect ratio '{aspect_value}', using 16:9");
@@ -120,6 +124,7 @@ for (var i = 1; i < param_count; i++) {
                 global.render_settlement = true;
                 if (i + 1 < param_count) {
                         var settlement_arg = string_lower(string_trim(parameter_string(i + 1)));
+                        // 下一个参数不是新开关时，当作结算开或关。
                         if (string_length(settlement_arg) && string_char_at(settlement_arg, 1) != "-") {
                                 i++;
                                 global.render_settlement = (settlement_arg == "1"
@@ -142,6 +147,7 @@ global.pls_probe_exit_sent = false;
 global.pls_convert_out = environment_get_variable("PLS_CONVERT_OUT");
 global.pls_convert_only = string_length(environment_get_variable("PLS_CONVERT_ONLY")) > 0;
 var _probe_shot_text = environment_get_variable("PLS_PROBE_SHOT");
+// 环境变量给出探针截图时间和退出时间。
 if (string_length(_probe_shot_text)) {
 	global.pls_probe_shot = real(_probe_shot_text);
 	if (is_nan(global.pls_probe_shot) || !is_finite(global.pls_probe_shot) || global.pls_probe_shot <= 0) {
@@ -151,6 +157,7 @@ if (string_length(_probe_shot_text)) {
 var _probe_until_text = environment_get_variable("PLS_PROBE_UNTIL");
 if (string_length(_probe_until_text)) {
 	global.pls_probe_until = real(_probe_until_text);
+	// 非法的退出时间当作不探针。
 	if (is_nan(global.pls_probe_until) || !is_finite(global.pls_probe_until) || global.pls_probe_until <= 0) {
 		global.pls_probe_until = 0;
 	} else {
@@ -159,11 +166,13 @@ if (string_length(_probe_until_text)) {
 	};
 };
 
+// 按渲染、归档测试、环境谱面、探针或普通菜单分流。
 if (global.render_mode) {
 	global.render_cli = true;
         if (!string_length(global.render_output)) {
                 global.render_output = working_directory + "render.mp4";
         };
+        // 没有 ffmpeg 就不进加载。
         if (!render_ffmpeg_require()) then exit;
         var render_session = chart_session_reset();
         render_session.source_path = global.render_source;

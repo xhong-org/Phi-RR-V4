@@ -1,4 +1,4 @@
-/// @description Initialize deterministic chart rendering.
+///@desc 初始化确定性谱面录像和片头片尾帧数
 depth = -20000000000000000;
 encoder_started = false;
 encoder_finished = false;
@@ -6,6 +6,7 @@ frame_width = 0;
 frame_height = 0;
 total_frames = 0;
 surface_recovery_logged = false;
+capture_fail_count = 0;
 render_started_at = get_timer();
 render_status = "Preparing chart and encoder";
 gpu_capture_ready = false;
@@ -18,6 +19,7 @@ ui_font = pls_ui_font_add(28, true, false, -infinity, infinity, false);
 if (os_type == os_windows) {
     var d3d_info = os_get_info();
     if (ds_exists(d3d_info, ds_type_map)
+        // 拿到 D3D11 设备和上下文才初始化 GPU 抓帧。
         && ds_map_exists(d3d_info, "video_d3d11_device")
         && ds_map_exists(d3d_info, "video_d3d11_context")) {
         var d3d_args = buffer_create(16, buffer_fixed, 1);
@@ -29,8 +31,7 @@ if (os_type == os_windows) {
     };
 };
 
-// Record from the chart start animation. The 0.1s pre-animation wait is not
-// written to the file, so audio delay is animation + start delay only.
+// 从开场动画开始录。动画前的等待不写入文件，音频延迟只含动画和开始等待。
 global.render_intro_animation_seconds = 1.0;
 global.render_intro_start_delay_seconds = 0.5;
 global.render_intro_seconds = global.render_intro_animation_seconds + global.render_intro_start_delay_seconds;

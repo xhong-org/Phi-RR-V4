@@ -1,6 +1,6 @@
-/// @description Shared PCR-style pause overlay.
+///@desc 创建暂停界面、倒计时精灵和操作函数
 if (!variable_instance_exists(id, "owner")) then owner = noone;
-// Draw End runs after oChartMask (-12000) has blitted the chart.
+// 绘制结束在 oChartMask（-12000）贴回谱面之后。
 depth = -99999999;
 
 opened_at = get_timer();
@@ -16,11 +16,9 @@ retry_mode = 0;
 retry_started_at = 0;
 retry_delay = 3000000;
 countdown_shown = -1;
-// Saira's live SDF draw is blank in this pass. Rasterize the TTF once, with
-// SDF off, and keep the glyphs as ordinary sprites.
-// Settings AA is MSAA on the swapchain. It never filters texels inside a
-// sprite, and bm_normal squares coverage, so the font's gray fringe is lost.
-// Bake at 2x the on-screen em and store premultiplied coverage.
+// 这一轮实时 SDF 画出来是空的。关掉 SDF 把 TTF 光栅成普通精灵。
+// 设置里的抗锯齿是交换链 MSAA，滤不到精灵内部像素，bm_normal 还会把覆盖度平方。
+// 按屏幕字号的 2 倍烘焙，并保存预乘覆盖度。
 countdown_em = 47 * 1.4;
 countdown_supersample = 2;
 countdown_font_size = ceil(countdown_em * countdown_supersample);
@@ -37,6 +35,7 @@ if (font_exists(countdown_font)) {
     draw_set_valign(fa_top);
     draw_set_colour(c_white);
     draw_set_alpha(1);
+    // 只烘焙倒计时用到的 1、2、3。
     for (var _bake_digit = 1; _bake_digit <= 3; _bake_digit++) {
         var _bake_text = string(_bake_digit);
         var _bake_pad = 16;
@@ -51,7 +50,7 @@ if (font_exists(countdown_font)) {
         gpu_set_blendenable(true);
         gpu_set_texfilter(true);
         gpu_set_alphatestenable(false);
-        // Straight-alpha font: RGB picks up coverage once, alpha stays linear.
+        // 直通 alpha：颜色只乘一次覆盖度，alpha 保持线性。
         gpu_set_blendmode_ext_sepalpha(bm_src_alpha, bm_inv_src_alpha, bm_one, bm_inv_src_alpha);
         draw_set_font(countdown_font);
         draw_set_colour(c_white);
@@ -68,12 +67,24 @@ if (font_exists(countdown_font)) {
     print($"[PausedUI] Saira countdown font missing path={pls_bundled_font_path()}");
 };
 
-// Used only when the Saira sprite failed to bake.
+// 只有 Saira 精灵烘焙失败时才用线段数字。
+///@desc 用像素精灵画一段七段数码管
+///@param {Real} _x 左上角 X
+///@param {Real} _y 左上角 Y
+///@param {Real} _w 段宽度
+///@param {Real} _h 段高度
+///@returns {Undefined} 无
 paused_ui_draw_bar = function(_x, _y, _w, _h) {
     var _sw = max(1, sprite_get_width(spr_pixel_2));
     var _sh = max(1, sprite_get_height(spr_pixel_2));
     draw_sprite_ext(spr_pixel_2, 0, _x, _y, max(_w, 1) / _sw, max(_h, 1) / _sh, 0, c_white, 1);
 };
+///@desc 用七段几何画一个倒计时数字
+///@param {Real} _digit 要画的数字，只用 1、2、3
+///@param {Real} _cx 中心 X
+///@param {Real} _cy 中心 Y
+///@param {Real} _height 数字高度
+///@returns {Undefined} 无
 paused_ui_draw_digit = function(_digit, _cx, _cy, _height) {
     var _h = max(48, _height);
     var _w = _h * 0.62;
@@ -84,8 +95,9 @@ paused_ui_draw_digit = function(_digit, _cx, _cy, _height) {
     var _mid_y = _cy - _t * 0.5;
     var _bot = _cy + _h * 0.5 - _t;
     var _vh = (_h - _t) * 0.5;
-    // 0 top, 1 upper-right, 2 lower-right, 3 bottom, 4 lower-left, 5 upper-left, 6 middle
+    // 0 上，1 右上，2 右下，3 下，4 左下，5 左上，6 中。
     var _segs = [false, false, false, false, false, false, false];
+    // 按数字点亮对应段。
     if (_digit == 1) {
         _segs[1] = true;
         _segs[2] = true;
@@ -111,7 +123,10 @@ paused_ui_draw_digit = function(_digit, _cx, _cy, _height) {
     if (_segs[2]) then paused_ui_draw_bar(_right, _cy, _t, _vh);
 };
 
+///@desc 绘制暂停遮罩、倒计时或三个操作按钮
+///@returns {Undefined} 无
 paused_ui_draw = function() {
+    // 不能操作，或既没暂停也没在倒计时，就不画。
     if (!paused_ui_can_control() || (!game.paused && !retry_waiting)) then exit;
     if (!draw_logged) {
         draw_logged = true;
@@ -138,12 +153,13 @@ paused_ui_draw = function() {
         _black_scale_x, _black_scale_y, 0, c_white, _overlay_alpha);
 
     draw_set_alpha(retry_waiting ? 1 : _fade);
+    // 继续播放时画倒计时，否则画三个按钮。
     if (retry_waiting && retry_mode == 2) {
         var _seconds_left = max(1, ceil((retry_delay - (get_timer() - retry_started_at)) / 1000000));
         shader_reset();
         draw_set_colour(c_white);
         draw_set_alpha(1);
-        // Bake is countdown_em * supersample. Scale brings it back to Saira 47 * 1.4 * ui_scale.
+        // 烘焙尺寸是字号乘超采样，缩回来才是屏幕上的大小。
         var _digit_scale = max(ui_scale, 0.5) / max(1, countdown_supersample);
         var _digit_x = chart_view_left + chart_view_width * 0.5;
         var _digit_y = chart_view_height * 0.5;
@@ -153,7 +169,7 @@ paused_ui_draw = function() {
             var _digit_filter = gpu_get_texfilter();
             gpu_set_texfilter(true);
             gpu_set_alphatestenable(false);
-            // Sprite RGB is already multiplied by coverage.
+            // 精灵颜色已经乘过覆盖度，用预乘混合。
             gpu_set_blendmode_ext(bm_one, bm_inv_src_alpha);
             draw_sprite_ext(_digit_sprite, 0, _digit_x, _digit_y, _digit_scale, _digit_scale, 0, c_white, 1);
             gpu_set_blendmode(bm_normal);
@@ -197,7 +213,10 @@ pause_button_radius = 42;
 pause_layout_width = -1;
 pause_layout_height = -1;
 
+///@desc 判断当前能否操作暂停界面
+///@returns {Bool} 可以操作时为真
 function paused_ui_can_control() {
+	// 结算界面或非重试过场中禁止操作。
 	if (instance_exists(oSettlement)) then return false;
 	if (instance_exists(oPlayTransition) && !retry_waiting) {
 		var _transition = instance_find(oPlayTransition, 0);
@@ -212,9 +231,12 @@ function paused_ui_can_control() {
                 && !owner.chart_exit_started;
 }
 
+///@desc 房间尺寸变化时重算暂停按钮位置
+///@returns {Undefined} 无
 function paused_ui_refresh_layout() {
 	var _width = max(1, room_width);
 	var _height = max(1, room_height);
+	// 尺寸没变就不用重算。
 	if (pause_layout_width == _width && pause_layout_height == _height) then return;
 	pause_layout_width = _width;
 	pause_layout_height = _height;
@@ -224,7 +246,10 @@ function paused_ui_refresh_layout() {
 	pause_button_radius = max(36, 42 * _scale);
 }
 
+///@desc 暂停播放并锁住非 Hold 音符坐标
+///@returns {Undefined} 无
 function paused_ui_pause() {
+        // 还没开播或已经暂停就返回。
         if (!paused_ui_can_control() || game.paused || game.__time[0] <= 0) then return;
         print("[PausedUI] Pause");
         with (oNote) {
@@ -263,7 +288,10 @@ function paused_ui_pause() {
         opened_at = get_timer();
 }
 
+///@desc 从暂停进入继续倒计时
+///@returns {Undefined} 无
 function paused_ui_resume() {
+        // 没在暂停就不开始倒计时。
         if (!paused_ui_can_control() || !game.paused) then return;
         retry_ready = false;
         retry_waiting = true;
@@ -274,7 +302,10 @@ function paused_ui_resume() {
         print("[PausedUI] Resume countdown started");
 }
 
+///@desc 退出谱面并回到入口
+///@returns {Undefined} 无
 function paused_ui_back() {
+        // 已经排队离开就不再重复触发。
         if (action_queued) then return;
         print("[PausedUI] Back to menu");
         action_queued = true;
@@ -292,6 +323,8 @@ function paused_ui_back() {
         };
 }
 
+///@desc 清空分数、连击和打击特效
+///@returns {Undefined} 无
 function paused_ui_reset_score() {
         combo = 0;
         if (variable_global_exists("phi_state_list") && is_struct(phi_state_list)) {
@@ -311,7 +344,10 @@ function paused_ui_reset_score() {
         };
 }
 
+///@desc 把官谱判定线和音符复位到重试起点
+///@returns {Undefined} 无
 function paused_ui_reset_official() {
+        // 加载动画还在时不复位。
         if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return;
         instance_activate_object(oLine);
         instance_activate_object(oNote);
@@ -344,7 +380,10 @@ function paused_ui_reset_official() {
         official_notes_refreeze_after_retry();
 }
 
+///@desc 把 PEC 判定线和音符复位到重试起点
+///@returns {Undefined} 无
 function paused_ui_reset_pec() {
+        // 加载动画还在时不复位。
         if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return;
         instance_activate_object(oLine_2);
         instance_activate_object(oNote_2);
@@ -379,10 +418,14 @@ function paused_ui_reset_pec() {
         pec_notes_refreeze_after_retry();
 }
 
+///@desc 把 RPE 判定线、音符和视频复位到重试起点
+///@returns {Undefined} 无
 function paused_ui_reset_rpe() {
+        // 加载动画还在时不复位。
         if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return;
         instance_activate_object(oNote_1);
         with (oLine_1) {
+                // 每层事件游标和扩展计数都回到 0。
                 for (var layer_index = 0; layer_index < array_length(events_count); layer_index++) {
                         if (!is_struct(events_count[layer_index])) then continue;
                         var event_names = struct_get_names(events_count[layer_index]);
@@ -473,8 +516,7 @@ function paused_ui_reset_rpe() {
                                 if (is_struct(record)) then record.activated = false;
                         };
                 };
-                // Hold spatial queries remove activated entries by swapping them
-                // out of the active prefix. Rebuild that prefix for a retry.
+                // Hold 空间查询会把已激活项换出有效前缀，重试时把前缀重建回来。
                 if (is_array(game_1._note_spatial_hold_groups)) {
                         for (var hold_group_i = 0; hold_group_i < array_length(game_1._note_spatial_hold_groups); hold_group_i++) {
                                 var hold_group = game_1._note_spatial_hold_groups[hold_group_i];
@@ -525,12 +567,15 @@ function paused_ui_reset_rpe() {
         with (oRPEEffect) chart_time = 0;
 }
 
+///@desc 停掉播放并把当前谱面和分数复位
+///@returns {Undefined} 无
 function paused_ui_retry_prepare() {
         game.paused = true;
         m_pause();
         m_stop();
         with (oMedia) position = 0;
         paused_ui_reset_score();
+        // 按当前渲染器选择对应的复位路径。
         if (owner.object_index == oRender_1) then paused_ui_reset_rpe();
         else if (owner.object_index == oRender_2) then paused_ui_reset_pec();
         else paused_ui_reset_official();
@@ -544,7 +589,10 @@ function paused_ui_retry_prepare() {
         game.__time = [0, 0, 0, 0, 0, retained_offset];
 }
 
+///@desc 准备重试并重新播放开场
+///@returns {Undefined} 无
 function paused_ui_retry() {
+        // 已经在离开流程里就不再重试。
         if (action_queued) then return;
         print("[PausedUI] Retry chart");
         action_queued = true;

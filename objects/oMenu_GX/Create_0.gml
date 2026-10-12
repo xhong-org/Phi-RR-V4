@@ -1,4 +1,4 @@
-/// @description GX.games menu: click-to-pick, optional API backup
+///@desc 初始化 GX 菜单、远程状态和可选的本地 API
 window_set_caption(GAME_NAME + " - " + lang("common.menu"));
 chart_session_ensure();
 if (variable_global_exists("render_gui_returning") && global.render_gui_returning) {
@@ -25,6 +25,7 @@ health_timer = 0;
 query_http_id = -1;
 query_http_dest = "";
 last_error = "";
+// 远程页面只提示点击选文件；本地则探测 API 健康。
 if (pls_is_gx_remote()) {
         status_text = lang("gx.statusClick");
         detail_text = lang("gx.detailRemote");
@@ -37,9 +38,11 @@ if (pls_is_gx_remote()) {
         health_id = gx_fs_request_health();
 };
 
+// 地址栏带谱面参数时，按协议下载或直接进加载。
 var query_chart = gx_query_chart();
 if (string_length(query_chart)) {
         var query_lower = string_lower(query_chart);
+        // file: 协议在网页里不可读。
         if (string_pos("file:", query_lower) == 1) {
                 last_error = lang("gx.fileProtocol");
                 status_text = lang("gx.fileProtocolStatus");

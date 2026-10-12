@@ -1,4 +1,4 @@
-/// @description Draw RPE note
+///@desc 在谱面遮罩内绘制 RPE 音符或 Hold
 chart_mask_scissor_set();
 if (!canDraw) then exit;
 
@@ -17,6 +17,7 @@ if (!_is_hold && !isBad && !rpe_skip_pass_fade) {
 	_alpha *= chart_note_pass_fade(_now_seconds, start_sec, chart_note_miss_window_sec(type, false));
 };
 
+// 皮肤和默认贴图分开画，Hold 再按是否击中选择头尾。
 if (skin_active()) {
 	var _skin_kind = (type == 2 ? "drag" : (type == 4 ? "flick" : "tap"));
 	var _skin_spr = skin_note_sprite(_skin_kind, isBad ? 0 : _frame);

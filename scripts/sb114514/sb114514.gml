@@ -1,6 +1,7 @@
 /* began */
 
-/// 事件。
+///@desc 按时间存放并求值的事件列表
+///@returns {Struct} 事件集合
 function CEvents() constructor {
 	// 内部数组
 	array = (array_create(0));
@@ -9,16 +10,19 @@ function CEvents() constructor {
 	index = (int64(0)); // 索引
 	value = 0; // 值
 	
-	/// @desc 新事件
-	/// @arg  {Real} startTime d0
-	/// @arg  {Real} start d1
-	/// @arg  {Real} endTime d2
-	/// @arg  {Real} end d3
-	/// @arg  {Real} easing i0
-	/// @arg  {Real} easeLeft d4
-	/// @arg  {Real} easeRight d5
-	static add = (function(d0, d1, _d2 = undefined, _d3 = undefined, _i0 = EASE_TYPE.LINEAR, _d4 = 0, _d5 = 1, _sb = undefined) { // d0(startTime), d1(start), [d2(endTime)], [d3(end)]
+	///@desc 追加一个瞬时或区间事件
+	///@param {Real} d0 起始时间
+	///@param {Real} d1 起始值
+	///@param {Any} _d2 结束时间，可省略
+	///@param {Any} _d3 结束值，可省略
+	///@param {Real} _i0 缓动类型
+	///@param {Real} _d4 缓动区间左端
+	///@param {Real} _d5 缓动区间右端
+	///@param {Any} _sb 预留参数
+	///@returns {Undefined} 无
+	static add = (function(d0, d1, _d2 = undefined, _d3 = undefined, _i0 = EASE_TYPE.LINEAR, _d4 = 0, _d5 = 1, _sb = undefined) { // d0 起始时间，d1 起始值，可选结束时间与结束值
 		var _event = ({ d0, d1 });
+		// 起止都不同才记录区间和缓动
 		if ((is_numeric(_d2)) && (is_numeric(_d3))) {
 			if ((_d2 != d0) && (_d3 != d1)) {
 				(_event.d2) = _d2;
@@ -34,20 +38,31 @@ function CEvents() constructor {
 		array_add(array, _event);
 	});
 	
-	/// 重置
+	///@desc 把读取位置和当前值清回起点
+	///@returns {Undefined} 无
 	static reset = (function() {
 		index = (int64(0));
 		value = 0;
 	});
 	
-	/// 排序
-	static sort = (function() { array_sort(array, (function(_0, _1) { return(sign((_0.d0) - (_1.d0))); })) });
+	///@desc 按起始时间升序排列事件
+	///@returns {Undefined} 无
+	static sort = (function() { array_sort(array, (
+		///@desc 比较两个事件的起始时间
+		///@param {Struct} _0 前一个事件
+		///@param {Struct} _1 后一个事件
+		///@returns {Real} 起始时间差的符号
+		function(_0, _1) { return(sign((_0.d0) - (_1.d0))); })) });
 	
-	/// 缓动
+	///@desc 在预采样表中插值得到缓动进度
+	///@param {Real} _easing 缓动类型
+	///@param {Real} _progress 归一化进度
+	///@returns {Real} 缓动后的进度
 	static _get_ease_progress = (function(_easing = EASE_TYPE.LINEAR, _progress = 0) {
 		static _ease_infors = (__PCRTWEEN__());
 		if (_progress < 0) then return(0);
 		elif (_progress > 1) then return(1);
+		// 表以 0.01 为步长，相邻两点之间再线性插值
 		var _progress_fixed = (100 * _progress), _progress_int = (int32(_progress_fixed));
 		var _ease_node_0 = (_ease_infors[_easing][_progress_int]);
 		if (_progress_int >= 100) then return(_ease_node_0);
@@ -55,8 +70,9 @@ function CEvents() constructor {
 		return((_ease_node_1 - _ease_node_0) * (_progress_fixed - _progress_int) + _ease_node_0);
 	});
 	
-	/// 计算
-	/// @arg {Real} t
+	///@desc 按时间求当前事件值
+	///@param {Real} _t 当前时间
+	///@returns {Real} 当前值
 	static execute = (function(_t) {
 		var _len = (array_length(array));
 		if (!_len) then return(value); // 空
@@ -75,7 +91,7 @@ function CEvents() constructor {
 		
 		// 主循环
 		if (index < _len) {
-			// value = _e_f.d1; // Test
+			// value = _e_f.d1; // 测试
 			var _i = index; repeat(_len - _i) { var _e = (array[_i ++]);
 				// 流程1
 				var

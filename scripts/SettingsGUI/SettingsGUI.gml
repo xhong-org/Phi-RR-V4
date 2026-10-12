@@ -1,26 +1,38 @@
-/// @description Phigros().settings GUI. Normal list = comments without 已废弃/已弃用.
+/// @description Phigros().settings 设置界面。普通列表是注释里不含已废弃或已弃用的项。
 
+///@desc 返回设置 ini 的路径
+///@returns {String} configs.ini 路径
 function settings_ini_path() {
 	return $"{working_directory}resource/configs.ini";
 }
 
+///@desc 判断字段注释是否标成已废弃或已弃用
+///@param {String} _comment 字段注释
+///@returns {Bool} 是否废弃
 function settings_comment_is_deprecated(_comment) {
 	var s = string(_comment ?? "");
+	// 注释里出现任一标记即视为废弃
 	return (string_pos("已废弃", s) > 0) || (string_pos("已弃用", s) > 0);
 }
 
+///@desc 从字段注释里去掉废弃标记和默认值，留下显示名
+///@param {String} _comment 字段注释
+///@returns {String} 修剪后的标签
 function settings_comment_label(_comment) {
 	var s = string(_comment ?? "");
 	s = string_replace_all(s, "(已弃用)", "");
 	s = string_replace_all(s, "(已废弃)", "");
+	// 从默认值标记处截断
 	var p = string_pos("(default:", s);
 	if (p > 0) then s = string_copy(s, 1, p - 1);
 	return string_trim(s);
 }
 
-/// Comments copied from Phigros.settings field comments. Deprecated = line contains 已废弃/已弃用.
+///@desc 返回设置项目录，注释来自 Phigros.settings，含已废弃或已弃用则算废弃
+///@returns {Array} 键与注释列表
 function settings_catalog() {
 	static cat = undefined;
+	// 静态目录只建一次
 	if (!is_undefined(cat)) then return cat;
 	cat = [
 		{ key:"enableBlur", comment:"是否启用背景模糊(default:true)" },
@@ -62,14 +74,21 @@ function settings_catalog() {
 	return cat;
 }
 
+///@desc 创建设置界面用的光栅字体
+///@returns {Real} 字体资源
 function settings_ui_font() {
-	// SDF at the settings panel's sub-1 scale is invisible on some GPUs. Raster font stays readable.
+	// 设置面板缩放小于 1 时，部分 GPU 上 SDF 会看不见，光栅字体仍可读。
 	return pls_ui_font_add(24, false, false, 32, 65535, false);
 }
 
-/// Largest uniform scale that keeps _text inside the box. Font must already be set.
+///@desc 求能把文字放进盒子的最大统一缩放，调用前须已设置字体
+///@param {String} _text 文本
+///@param {Real} _max_w 最大宽度
+///@param {Real} _max_h 最大高度
+///@returns {Real} 缩放系数，空文本为 1
 function settings_fit_text_scale(_text, _max_w, _max_h) {
 	var label = string(_text ?? "");
+	// 空文本不缩放；宽高至少按 1，避免除零
 	if (!string_length(label)) then return 1;
 	var gw = string_width(label);
 	var gh = string_height(label);
@@ -78,20 +97,27 @@ function settings_fit_text_scale(_text, _max_w, _max_h) {
 	return max(0.05, min(max(1, _max_w) / gw, max(1, _max_h) / gh));
 }
 
-/// Same values as Phigros.settings before configs.ini is applied.
+///@desc 返回应用 configs.ini 之前的 Phigros.settings 默认值
+///@returns {Struct} 默认设置，基线无效时为空结构
 function settings_defaults() {
+	// 基线不存在时新建一次 Phigros 来生成它
 	if (!variable_global_exists("phigros_settings_baseline") || !is_struct(global.phigros_settings_baseline)) {
 		var _probe = new Phigros();
 		delete _probe;
 	};
 	if (!variable_global_exists("phigros_settings_baseline") || !is_struct(global.phigros_settings_baseline)) {
+		// 探测后仍没有基线则返回空结构
 		return {};
 	};
 	return global.phigros_settings_baseline;
 }
 
+///@desc 浅拷贝结构体的一层字段
+///@param {Struct} _src 源结构
+///@returns {Struct} 新结构，源无效时为空
 function settings_clone(_src) {
 	var out = {};
+	// 源不是结构则返回空拷贝
 	if (!is_struct(_src)) then return out;
 	var names = struct_get_names(_src);
 	for (var i = 0; i < array_length(names); i++) {
@@ -100,13 +126,21 @@ function settings_clone(_src) {
 	return out;
 }
 
+///@desc 读取当前对局设置里的布尔项
+///@param {String} _key 设置键
+///@returns {Bool} 是否开启，没有对局时为假
 function chart_setting_on(_key) {
+	// 没有对局设置时视为关闭
 	if (!variable_global_exists("game") || !is_struct(game) || !is_struct(game.settings)) then return false;
 	return bool(game.settings[$ _key] ?? false);
 }
 
+///@desc 按默认值判断设置项是字符串、布尔还是数字
+///@param {String} _key 设置键
+///@returns {String} string、bool 或 number
 function settings_kind(_key) {
 	var d = settings_defaults();
+	// 默认值里没有该键时当作数字
 	if (!struct_exists(d, _key)) then return "number";
 	var v = d[$ _key];
 	if (is_string(v)) then return "string";
@@ -114,9 +148,14 @@ function settings_kind(_key) {
 	return "number";
 }
 
+///@desc 把 ini 文本解析成布尔或数字
+///@param {String} _str 原始文本
+///@param {Any} _default 解析失败时的默认值
+///@returns {Any} 0、1、数值或默认值
 function settings_parse_value(_str, _default) {
 	if (is_undefined(_str)) then return _default;
 	var s = string_lower(string(_str));
+	// true 和 false 变成 1 和 0，非数字退回默认值
 	if (s == "false") then return 0;
 	if (s == "true") then return 1;
 	if (s == "undefined") then return _default;
@@ -124,14 +163,23 @@ function settings_parse_value(_str, _default) {
 	catch (e) { delete(e); return _default; };
 }
 
+///@desc 把设置值格式化成写入 ini 的字符串
+///@param {String} _key 设置键
+///@param {Any} _value 当前值
+///@returns {String} ini 文本
 function settings_format_ini(_key, _value) {
+	// 布尔写成 true 或 false，其余转成字符串
 	if (settings_kind(_key) == "bool") then return (bool(_value) ? "true" : "false");
 	if (is_string(_value)) then return _value;
 	return string(_value);
 }
 
+///@desc 把存储里的数值项钳到允许范围
+///@param {Struct} _store 设置存储
+///@returns {Undefined} 无
 function settings_clamp_store(_store) {
 	if (!is_struct(_store)) then return;
+	// 只钳制存在的键，帧数和抗锯齿取整
 	if (struct_exists(_store, "refreshFPSCount")) then _store.refreshFPSCount = clamp(real(_store.refreshFPSCount), 1, 300);
 	if (struct_exists(_store, "notePreloadSeconds")) then _store.notePreloadSeconds = clamp(real(_store.notePreloadSeconds), 0, 60);
 	if (struct_exists(_store, "rpeWorkerMinLines")) then _store.rpeWorkerMinLines = clamp(floor(real(_store.rpeWorkerMinLines)), 1, 1024);
@@ -140,9 +188,11 @@ function settings_clamp_store(_store) {
 	if (struct_exists(_store, "judgeOffset")) then _store.judgeOffset = clamp(real(_store.judgeOffset), -5000, 5000);
 }
 
-/// The shipped configs.ini only had a few Settings keys. Those are not a user save.
-/// A real save written by the settings UI includes userName / aa_level / comboString.
+///@desc 判断该键是否应忽略；随包的 configs.ini 只有少量键，不算用户存档
+///@param {String} _key 设置键
+///@returns {Bool} 为真表示不要从 ini 读入
 function settings_saved_key_ignored(_key) {
+	// 没有 Settings 段，或缺少界面才会写的键，则整段视为旧档
 	if (!ini_section_exists("Settings")) then return true;
 	var legacy = !ini_key_exists("Settings", "userName")
 		&& !ini_key_exists("Settings", "aa_level")
@@ -151,6 +201,9 @@ function settings_saved_key_ignored(_key) {
 	return !ini_key_exists("Settings", _key);
 }
 
+///@desc 把 ini 里的有效键读入存储并钳制
+///@param {Struct} _store 设置存储
+///@returns {Undefined} 无
 function settings_load_into(_store) {
 	if (!is_struct(_store)) then return;
 	var f = settings_ini_path();
@@ -158,8 +211,10 @@ function settings_load_into(_store) {
 	var names = struct_get_names(_store);
 	for (var i = 0; i < array_length(names); i++) {
 		var key = names[i];
+		// 被忽略的键不从 ini 覆盖
 		if (settings_saved_key_ignored(key)) then continue;
 		var cur = _store[$ key];
+		// 字符串原样读，其他键再解析成数值
 		if (settings_kind(key) == "string") {
 			_store[$ key] = ini_read_string("Settings", key, string(cur ?? ""));
 		} else {
@@ -170,6 +225,9 @@ function settings_load_into(_store) {
 	settings_clamp_store(_store);
 }
 
+///@desc 把存储和当前语言写回 ini
+///@param {Struct} _store 设置存储
+///@returns {Undefined} 无
 function settings_save_store(_store) {
 	if (!is_struct(_store)) then return;
 	settings_clamp_store(_store);
@@ -179,30 +237,44 @@ function settings_save_store(_store) {
 		var key = names[i];
 		ini_write_string("Settings", key, settings_format_ini(key, _store[$ key]));
 	};
+	// 语言不在设置结构里，单独写入
 	ini_write_string("Settings", "language", lang_current_id());
 	ini_close();
 }
 
+///@desc 返回对局设置，否则返回已加载的全局设置
+///@returns {Struct} 设置结构
 function settings_store() {
+	// 对局进行中优先用 game.settings
 	if (variable_global_exists("game") && is_struct(game) && is_struct(game.settings)) {
 		return game.settings;
 	};
 	if (!variable_global_exists("pls_settings") || !is_struct(global.pls_settings)) {
+		// 还没有全局副本时从默认值克隆并读 ini
 		global.pls_settings = settings_clone(settings_defaults());
 		settings_load_into(global.pls_settings);
 	};
 	return global.pls_settings;
 }
 
+///@desc 把抗锯齿和垂直同步立刻应用到显示
+///@param {Any} _key 刚改的键，省略表示全部相关项
+///@returns {Undefined} 无
 function settings_apply_live(_key) {
 	var s = settings_store();
+	// 只在改这两项或未指定键时刷新显示
 	if (_key == "aa_level" || _key == "enableVsync" || is_undefined(_key)) {
 		display_custom(real(s.aa_level ?? 8), bool(s.enableVsync ?? true));
 	};
 }
 
+///@desc 修改一项设置、钳制、保存并尝试立即生效
+///@param {String} _key 设置键
+///@param {Any} _value 新值
+///@returns {Undefined} 无
 function settings_set(_key, _value) {
 	var s = settings_store();
+	// 布尔项先归一化再写入
 	if (settings_kind(_key) == "bool") then _value = bool(_value);
 	s[$ _key] = _value;
 	settings_clamp_store(s);
@@ -210,13 +282,17 @@ function settings_set(_key, _value) {
 	settings_apply_live(_key);
 }
 
+///@desc 删除设置文件并恢复默认后再保存
+///@returns {Undefined} 无
 function settings_clear_data() {
 	var f = settings_ini_path();
 	try {
+		// 普通删除失败时再试原生文件删除
 		if (file_exists(f)) then file_delete(f);
 		else if (chart_use_native_files() && chart_native_exists(f)) then chart_native_delete(f);
 	} catch (del_err) { delete(del_err); };
 	var fresh = settings_clone(settings_defaults());
+	// 对局内则把默认值写回 game.settings
 	if (variable_global_exists("game") && is_struct(game) && is_struct(game.settings)) {
 		var names = struct_get_names(fresh);
 		for (var i = 0; i < array_length(names); i++) {
@@ -228,8 +304,11 @@ function settings_clear_data() {
 	settings_apply_live(undefined);
 }
 
+///@desc 不删文件，把内存和存档都恢复成默认值
+///@returns {Undefined} 无
 function settings_reset_defaults() {
 	var fresh = settings_clone(settings_defaults());
+	// 对局内同步写回 game.settings，再保存
 	if (variable_global_exists("game") && is_struct(game) && is_struct(game.settings)) {
 		var names = struct_get_names(fresh);
 		for (var i = 0; i < array_length(names); i++) {
@@ -241,6 +320,8 @@ function settings_reset_defaults() {
 	settings_apply_live(undefined);
 }
 
+///@desc 弹出确认框，同意后重置设置
+///@returns {Undefined} 无
 function settings_confirm_reset() {
 	var buttons = [
 		msgbox_button("Yes", settings_gui_reset_and_sync),
@@ -249,8 +330,12 @@ function settings_confirm_reset() {
 	msgbox_warning_async("Do you want to reset settings?", "Warning", buttons, MSGBOX_BUTTON_ALIGN.RIGHT);
 }
 
+///@desc 返回普通或废弃设置项列表
+///@param {Bool} _deprecated 为真时返回废弃列表
+///@returns {Array} 设置项目数组
 function settings_list(_deprecated) {
 	static lists = undefined;
+	// 普通和废弃两份列表只建一次
 	if (!is_array(lists)) {
 		lists = [[], []];
 		var cat = settings_catalog();
@@ -263,6 +348,7 @@ function settings_list(_deprecated) {
 		var store = settings_store();
 		var names = struct_get_names(store);
 		for (var n = 0; n < array_length(names); n++) {
+			// 目录里没有、且不是 language 或 skinId 的键补进普通列表
 			if (struct_exists(seen, names[n])) then continue;
 			if (names[n] == "language" || names[n] == "skinId") then continue;
 			array_add(lists[0], { key:names[n], comment:names[n] });
@@ -271,7 +357,8 @@ function settings_list(_deprecated) {
 	return lists[_deprecated ? 1 : 0];
 }
 
-/// Collapsible groups on the General tab. Deprecated keys are the old developer list.
+///@desc 返回常规页可折叠分组，废弃键是旧的开发者列表
+///@returns {Array} 分组定义
 function settings_group_defs() {
 	static groups = [
 		{ id:"display", keys:["enableBlur", "enableSurface", "enableLineJudge", "showBG", "enableHitEffect", "enableNoteHightLight", "enableChartGUI", "aa_level", "useOldFX", "enableVsync"] },
@@ -282,7 +369,11 @@ function settings_group_defs() {
 	return groups;
 }
 
+///@desc 返回分组的本地化标题
+///@param {String} _id 分组 id
+///@returns {String} 标题，未知 id 则原样返回
 function settings_group_title(_id) {
+	// 未知分组 id 原样返回
 	switch (_id) {
 		case "display": return lang("settings.groupDisplay", "Display");
 		case "debug": return lang("settings.groupDebug", "Debug");
@@ -292,8 +383,11 @@ function settings_group_title(_id) {
 	return string(_id);
 }
 
+///@desc 按键建立设置目录索引
+///@returns {Struct} 键到目录项的映射
 function settings_catalog_index() {
 	static index = undefined;
+	// 索引只建一次
 	if (is_struct(index)) then return index;
 	index = {};
 	var cat = settings_catalog();
@@ -303,8 +397,11 @@ function settings_catalog_index() {
 	return index;
 }
 
+///@desc 把目录和默认值里的键分进各个分组
+///@returns {Struct} 分组 id 到键数组
 function settings_grouped_keys() {
 	static built = undefined;
+	// 分组结果只算一次
 	if (is_struct(built)) then return built;
 	var groups = settings_group_defs();
 	var explicit = {};
@@ -321,6 +418,7 @@ function settings_grouped_keys() {
 	var cat = settings_catalog();
 	for (var i = 0; i < array_length(cat); i++) {
 		var key = cat[i].key;
+		// 目录中多出的键，废弃的进 deprecated，其余进 chart
 		if (struct_exists(explicit, key)) then continue;
 		var bucket = settings_comment_is_deprecated(cat[i].comment) ? "deprecated" : "chart";
 		array_add(built[$ bucket], key);
@@ -330,24 +428,32 @@ function settings_grouped_keys() {
 	var names = struct_get_names(defaults);
 	for (var n = 0; n < array_length(names); n++) {
 		var extra = names[n];
+		// language 和 skinId 不进分组
 		if (struct_exists(explicit, extra) || extra == "language" || extra == "skinId") then continue;
 		array_add(built[$ "chart"], extra);
 	};
 	return built;
 }
 
+///@desc 取得或初始化各分组的展开状态
+///@returns {Struct} 分组开关
 function settings_gui_group_state() {
+	// 首次使用时四个分组都收起
 	if (!variable_instance_exists(id, "group_open") || !is_struct(group_open)) {
 		group_open = { display:false, debug:false, chart:false, deprecated:false };
 	};
 	return group_open;
 }
 
+///@desc 把四个分组的展开状态拼成签名
+///@returns {String} 用于判断折叠是否变化
 function settings_gui_fold_sig() {
 	var state = settings_gui_group_state();
 	return string(bool(state[$ "display"])) + string(bool(state[$ "debug"])) + string(bool(state[$ "chart"])) + string(bool(state[$ "deprecated"]));
 }
 
+///@desc 按展开状态生成当前可见的分组和字段行
+///@returns {Array} 行描述
 function settings_gui_visible_rows() {
 	var index = settings_catalog_index();
 	var grouped = settings_grouped_keys();
@@ -357,6 +463,7 @@ function settings_gui_visible_rows() {
 	for (var g = 0; g < array_length(groups); g++) {
 		var group_id = groups[g].id;
 		array_add(rows, { type:"group", id:group_id });
+		// 分组收起时不加入其字段
 		if (!bool(state[$ group_id])) then continue;
 		var keys = grouped[$ group_id];
 		if (!is_array(keys)) then continue;
@@ -369,7 +476,10 @@ function settings_gui_visible_rows() {
 	return rows;
 }
 
+///@desc 取得界面草稿，没有则从当前设置克隆
+///@returns {Struct} 未保存的草稿
 function settings_gui_draft() {
+	// 没有草稿时从当前设置克隆一份
 	if (!variable_instance_exists(id, "draft") || !is_struct(draft)) {
 		draft = settings_clone(settings_store());
 		draft_saved = settings_clone(draft);
@@ -377,21 +487,34 @@ function settings_gui_draft() {
 	return draft;
 }
 
+///@desc 写入草稿中的一项并钳制数值
+///@param {String} _key 设置键
+///@param {Any} _value 新值
+///@returns {Undefined} 无
 function settings_gui_draft_set(_key, _value) {
 	var editing = settings_gui_draft();
+	// 布尔项先归一化再写入草稿
 	if (settings_kind(_key) == "bool") then _value = bool(_value);
 	editing[$ _key] = _value;
 	settings_clamp_store(editing);
 }
 
+///@desc 按设置类型比较两个值是否相同
+///@param {String} _key 设置键
+///@param {Any} _a 左值
+///@param {Any} _b 右值
+///@returns {Bool} 是否相等
 function settings_values_equal(_key, _a, _b) {
 	var kind = settings_kind(_key);
+	// 布尔和字符串各自规范化，数字直接比
 	if (kind == "bool") then return bool(_a ?? false) == bool(_b ?? false);
 	if (kind == "string") then return string(_a ?? "") == string(_b ?? "");
 	if (is_real(_a) && is_real(_b)) then return _a == _b;
 	return string(_a ?? "") == string(_b ?? "");
 }
 
+///@desc 检查废弃项相对已保存草稿是否有改动
+///@returns {Bool} 是否有未保存的废弃项改动
 function settings_gui_deprecated_dirty() {
 	var editing = settings_gui_draft();
 	var saved = variable_instance_exists(id, "draft_saved") ? draft_saved : undefined;
@@ -400,16 +523,21 @@ function settings_gui_deprecated_dirty() {
 	if (!is_array(keys)) then return false;
 	for (var i = 0; i < array_length(keys); i++) {
 		var key = keys[i];
+		// 任一废弃键不同即视为有改动
 		if (!settings_values_equal(key, editing[$ key], saved[$ key])) then return true;
 	};
 	return false;
 }
 
+///@desc 把草稿写入设置存储并保存，可跳过废弃项
+///@param {Bool} _include_deprecated 是否包含废弃项
+///@returns {Undefined} 无
 function settings_gui_commit_to_store(_include_deprecated) {
 	var editing = settings_gui_draft();
 	var saved = is_struct(draft_saved) ? draft_saved : settings_clone(settings_store());
 	var dest = settings_store();
 	var skip = {};
+	// 不包含废弃项时，用已保存值盖回这些键
 	if (!_include_deprecated) {
 		var deprecated_keys = settings_grouped_keys()[$ "deprecated"];
 		if (is_array(deprecated_keys)) {
@@ -420,6 +548,7 @@ function settings_gui_commit_to_store(_include_deprecated) {
 	for (var i = 0; i < array_length(names); i++) {
 		var key = names[i];
 		var value = editing[$ key];
+		// 跳过的键不采用草稿里的新值
 		if (struct_exists(skip, key)) {
 			value = struct_exists(saved, key) ? saved[$ key] : dest[$ key];
 			editing[$ key] = value;
@@ -431,6 +560,7 @@ function settings_gui_commit_to_store(_include_deprecated) {
 	try {
 		settings_save_store(dest);
 	} catch (save_err) {
+		// 保存失败只丢掉异常，界面仍关闭
 		delete(save_err);
 	};
 	try {
@@ -442,7 +572,10 @@ function settings_gui_commit_to_store(_include_deprecated) {
 	settings_gui_close();
 }
 
+///@desc 用当前存储重设设置界面的草稿
+///@returns {Undefined} 无
 function settings_gui_sync_draft() {
+	// 设置界面不存在则不用同步
 	if (!instance_exists(oSettings)) then return;
 	with (oSettings) {
 		draft = settings_clone(settings_store());
@@ -450,27 +583,38 @@ function settings_gui_sync_draft() {
 	};
 }
 
+///@desc 恢复默认设置并同步界面草稿
+///@returns {Undefined} 无
 function settings_gui_reset_and_sync() {
 	settings_reset_defaults();
 	settings_gui_sync_draft();
 }
 
+///@desc 确认后连废弃项一起保存
+///@returns {Undefined} 无
 function settings_gui_save_yes() {
 	if (!instance_exists(oSettings)) then return;
 	with (oSettings) settings_gui_commit_to_store(true);
 }
 
+///@desc 只保存非废弃项
+///@returns {Undefined} 无
 function settings_gui_save_normal_only() {
 	if (!instance_exists(oSettings)) then return;
 	with (oSettings) settings_gui_commit_to_store(false);
 }
 
+///@desc 返回保存废弃项时的警告文案
+///@returns {String} 警告文本
 function settings_deprecated_save_warning_text() {
 	return "The settings you changed include deprecated options. Saving may cause Phi-RR to crash. Are you sure you want to save?";
 }
 
+///@desc 提交正在编辑的字段，废弃项有改动时先警告
+///@returns {Undefined} 无
 function settings_gui_request_save() {
 	settings_gui_commit_edit();
+	// 没有废弃项改动则直接保存
 	if (!settings_gui_deprecated_dirty()) {
 		settings_gui_commit_to_store(true);
 		return;
@@ -481,6 +625,7 @@ function settings_gui_request_save() {
 		msgbox_button("Only normal", settings_gui_save_normal_only)
 	];
 	var msg = settings_deprecated_save_warning_text();
+	// 原生对话框可用时用同步警告
 	if (i_wbox_native_ready()) {
 		msgbox_warning_sync(msg, "Warning", buttons, MSGBOX_BUTTON_ALIGN.RIGHT);
 	} else {
@@ -488,14 +633,22 @@ function settings_gui_request_save() {
 	};
 }
 
+///@desc 放弃编辑并关闭设置界面
+///@returns {Undefined} 无
 function settings_gui_discard_close() {
 	if (variable_instance_exists(id, "editing_key")) then editing_key = "";
+	// Android 上先藏起虚拟键盘
 	if (os_type == os_android) {
 		try { keyboard_virtual_hide(); } catch (hide_err) { delete(hide_err); };
 	};
 	settings_gui_close();
 }
 
+///@desc 按标签文字测量按钮宽度，不小于给定最小值
+///@param {String} _label 按钮文字
+///@param {Real} _min_w 最小宽度
+///@param {Real} _h 按钮高度
+///@returns {Real} 按钮宽度
 function settings_gui_button_width(_label, _min_w, _h) {
 	var text_w = 0;
 	if (string_length(_label)) {
@@ -507,23 +660,36 @@ function settings_gui_button_width(_label, _min_w, _h) {
 			text_w = string_width(_label) * text_scale;
 			draw_set_font(old_font);
 		} else {
+			// 字体不存在时用字数粗略估算
 			text_w = string_length(_label) * _h * 0.45;
 		};
 	};
 	return max(_min_w, ceil(text_w + _h * 0.7));
 }
 
+///@desc 取设置字段的显示名并缓存
+///@param {String} _key 设置键
+///@param {String} _comment 目录注释
+///@returns {String} 显示标签
 function settings_field_label(_key, _comment) {
 	lang_ensure();
 	if (!is_struct(global.pls_lang.field_labels)) then global.pls_lang.field_labels = {};
+	// 已缓存则直接返回
 	if (struct_exists(global.pls_lang.field_labels, _key)) then return global.pls_lang.field_labels[$ _key];
 	var label = lang("fields." + string(_key), settings_comment_label(_comment));
+	// 翻译为空时退回键名
 	if (!string_length(label)) then label = string(_key);
 	global.pls_lang.field_labels[$ _key] = label;
 	return label;
 }
 
+///@desc 绘制一个菜单按钮
+///@param {Struct} _btn 含 x、y、w、h、label 的按钮
+///@param {Bool} _hot 是否悬停
+///@param {Real} _text_scale 文字缩放
+///@returns {Undefined} 无
 function menu_draw_button(_btn, _hot, _text_scale) {
+	// 按钮结构无效则不画
 	if (!is_struct(_btn)) then return;
 	draw_set_colour(_hot ? make_colour_rgb(70, 110, 180) : make_colour_rgb(40, 48, 64));
 	draw_rectangle(_btn.x, _btn.y, _btn.x + _btn.w, _btn.y + _btn.h, false);
@@ -532,11 +698,16 @@ function menu_draw_button(_btn, _hot, _text_scale) {
 	draw_text_transformed(_btn.x + _btn.w * 0.5, _btn.y + _btn.h * 0.5, _btn.label, _text_scale, _text_scale, 0);
 }
 
+///@desc 取得或重建皮肤预览表面
+///@param {Real} _w 宽度
+///@param {Real} _h 高度
+///@returns {Real} 表面 id
 function settings_skin_preview_surface(_w, _h) {
 	_w = max(1, floor(_w));
 	_h = max(1, floor(_h));
 	if (!variable_instance_exists(id, "skin_preview_surf") || !surface_exists(skin_preview_surf)
 		|| surface_get_width(skin_preview_surf) != _w || surface_get_height(skin_preview_surf) != _h) {
+		// 尺寸变化时先释放旧表面
 		if (variable_instance_exists(id, "skin_preview_surf") && surface_exists(skin_preview_surf)) {
 			surface_free(skin_preview_surf);
 		};
@@ -545,6 +716,8 @@ function settings_skin_preview_surface(_w, _h) {
 	return skin_preview_surf;
 }
 
+///@desc 释放皮肤预览表面
+///@returns {Undefined} 无
 function settings_skin_preview_surface_free() {
 	if (variable_instance_exists(id, "skin_preview_surf") && surface_exists(skin_preview_surf)) {
 		surface_free(skin_preview_surf);
@@ -552,6 +725,14 @@ function settings_skin_preview_surface_free() {
 	};
 }
 
+///@desc 绘制皮肤列表、添加按钮和预览
+///@param {Real} _s 界面缩放
+///@param {Real} _body 正文缩放
+///@param {Real} _small 小字缩放
+///@param {Real} _fill_idle 普通填充色
+///@param {Real} _fill_hot 悬停填充色
+///@param {Real} _fill_on 选中填充色
+///@returns {Undefined} 无
 function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill_on) {
 	var items = skin_menu_items();
 	var selected = skin_selected_id();
@@ -566,6 +747,7 @@ function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill
 		if (!is_struct(item)) then continue;
 		var row_y = list_y + (i - scroll) * row_h;
 		var on = (string(item.skin_id ?? "") == selected);
+		// 选中行高亮，奇数行加底
 		if (on) {
 			draw_set_colour(make_colour_rgb(70, 110, 180));
 			draw_rectangle(list_x + 2, row_y, list_x + skin_list_w - 2, row_y + row_h, false);
@@ -600,6 +782,7 @@ function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill
 			title = string(items[n].name ?? title);
 			author = string(items[n].author ?? "");
 			desc = string(items[n].description ?? "");
+			// 找到当前选中项后停止
 			break;
 		};
 	};
@@ -609,6 +792,7 @@ function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill
 	var clip_h = max(1, floor(list_h - inset * 2));
 	var surf = settings_skin_preview_surface(clip_w, clip_h);
 	var used_surf = surface_exists(surf);
+	// 表面可用时画到表面，否则直接画到界面
 	if (used_surf) {
 		surface_set_target(surf);
 		draw_clear_alpha(make_colour_rgb(18, 24, 38), 1);
@@ -637,6 +821,7 @@ function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill
 	var inner_w = max(40, clip_w - inner_pad * 2);
 	var title_h = 34 * _s;
 	if (string_length(author)) then title_h = 50 * _s;
+	// 按标题、作者、说明和删除按钮挤出音符区高度
 	if (string_length(desc)) then title_h = max(title_h, 54 * _s + desc_h + 10 * _s);
 	var delete_h = (selected != SKIN_DEFAULT_ID) ? 48 * _s : 8 * _s;
 	var fx_min = 96 * _s;
@@ -644,7 +829,12 @@ function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill
 	var note_box = min(note_want, inner_w / 4 * 0.9, max(48 * _s, clip_h - title_h - fx_min - delete_h));
 	var gap = inner_w / 4;
 	var cx = ox + inner_pad + gap * 0.5;
+	///@desc 按盒子估算精灵内容高度
+	///@param {Real} _spr 精灵
+	///@param {Real} _box 目标边长
+	///@returns {Real} 包围盒缩放后的高度
 	var note_disp_h = function(_spr, _box) {
+		// 用包围盒高度而不是整张画布
 		if (!sprite_exists(_spr)) then return 0;
 		var nw = sprite_get_width(_spr);
 		var nh = sprite_get_height(_spr);
@@ -657,6 +847,7 @@ function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill
 	if (is_struct(pack) && is_real(pack.preview_row_ratio) && pack.preview_row_ratio > 0) {
 		note_row_h = pack.preview_row_ratio * note_box;
 	} else if (is_struct(pack)) {
+		// 没有预览行高比时用各音符包围盒高度
 		note_row_h = max(note_disp_h(pack.click, note_box), max(note_disp_h(pack.click_mh, note_box),
 			max(note_disp_h(pack.drag, note_box), max(note_disp_h(pack.drag_mh, note_box),
 			max(note_disp_h(pack.flick, note_box), max(note_disp_h(pack.flick_mh, note_box),
@@ -680,24 +871,49 @@ function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill
 	var preview_y = oy + title_h + max(note_row_h * 0.5, hold_up) + 2 * _s;
 	var note_row = note_row_h + 4 * _s;
 	var hold_body_px = hold_want;
+	///@desc 把精灵内容中心对齐到给定点再绘制
+	///@param {Real} _spr 精灵
+	///@param {Real} _x 中心 x
+	///@param {Real} _y 中心 y
+	///@param {Real} _k 缩放
+	///@param {Real} _frame 帧
+	///@returns {Undefined} 无
 	var draw_one = function(_spr, _x, _y, _k, _frame) {
 		if (!sprite_exists(_spr)) then return;
+		// 用包围盒中心修正原点偏移
 		var k = real(_k);
 		var frame = clamp(real(_frame), 0, max(0, sprite_get_number(_spr) - 1));
 		var content_cy = (sprite_get_bbox_top(_spr) + sprite_get_bbox_bottom(_spr)) * 0.5;
 		var dy = (sprite_get_yoffset(_spr) - content_cy) * k;
 		draw_sprite_ext(_spr, frame, _x, _y + dy, k, k, 0, c_white, 1);
 	};
+	///@desc 求把精灵长边放进盒子的缩放
+	///@param {Real} _spr 精灵
+	///@param {Real} _box 目标边长
+	///@returns {Real} 缩放系数
 	var fit_k = function(_spr, _box) {
+		// 精灵无效时不缩放
 		if (!sprite_exists(_spr)) then return 1;
 		return real(_box) / max(1, max(sprite_get_width(_spr), sprite_get_height(_spr)));
 	};
+	///@desc 用头身尾绘制一条预览长条
+	///@param {Real} _hx 中心 x
+	///@param {Real} _hy 中心 y
+	///@param {Real} _head 头精灵
+	///@param {Real} _body 身精灵
+	///@param {Real} _tail 尾精灵
+	///@param {Real} _k 头尾缩放
+	///@param {Real} _body_scale 身的纵向缩放
+	///@param {Real} _frame 帧
+	///@returns {Undefined} 无
 	var draw_hold_preview = function(_hx, _hy, _head, _body, _tail, _k, _body_scale, _frame) {
+		// 缺切片时回退到内置长条
 		if (!sprite_exists(_head)) then _head = note_hold_head;
 		if (!sprite_exists(_body)) then _body = note_hold_body;
 		if (!sprite_exists(_tail)) then _tail = note_hold_end;
 		draw_hold_fit(_hx, _hy, _k, _k, _body_scale, 0, _frame, c_white, 1, true, true, 0, 1, _head, _body, _tail);
 	};
+	// 有皮肤包时画普通与多押两行，否则用内置精灵的两帧
 	if (is_struct(pack)) {
 		var k_click = fit_k(sprite_exists(pack.click_mh) ? pack.click_mh : pack.click, note_box);
 		var k_drag = fit_k(sprite_exists(pack.drag_mh) ? pack.drag_mh : pack.drag, note_box);
@@ -747,6 +963,7 @@ function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill
 	};
 	if (cycle.showing) then draw_one(demo_spr, demo_x, demo_y, fit_k(demo_spr, demo_box), demo_frame);
 	var fx_age = cycle.fx_age;
+	// 特效阶段再画打击和粒子
 	if (fx_age >= 0) {
 		var fx_col = #ffeca0;
 		if (is_struct(pack)) then fx_col = skin_hitfx_color(pack, #ffeca0);
@@ -759,6 +976,7 @@ function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill
 		};
 	};
 
+	// 非默认皮肤才画删除按钮
 	if (selected != SKIN_DEFAULT_ID) {
 		draw_set_halign(fa_center);
 		draw_set_valign(fa_middle);
@@ -773,6 +991,7 @@ function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill
 		draw_text_transformed(del_x + skin_delete.w * 0.5, del_y + skin_delete.h * 0.5, del_label, del_scale, del_scale, 0);
 	};
 
+	// 画完把表面贴回预览区
 	if (used_surf) {
 		surface_reset_target();
 		draw_surface(surf, skin_preview_x + inset, list_y + inset);
@@ -781,7 +1000,17 @@ function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill
 	draw_rectangle(skin_preview_x, list_y, skin_preview_x + skin_preview_w, list_y + list_h, true);
 }
 
+///@desc 绘制一个设置页签
+///@param {Struct} _box 页签矩形
+///@param {Bool} _hot 是否悬停
+///@param {Bool} _on 是否选中
+///@param {String} _label 标题
+///@param {Real} _scale 备用文字缩放，实际按盒子重算
+///@param {Real} _fill_on 选中色
+///@param {Real} _fill_idle 普通色
+///@returns {Undefined} 无
 function settings_gui_draw_tab(_box, _hot, _on, _label, _scale, _fill_on, _fill_idle) {
+	// 页签矩形无效则不画
 	if (!is_struct(_box)) then return;
 	draw_set_colour(_on ? _fill_on : (_hot ? make_colour_rgb(52, 64, 88) : _fill_idle));
 	draw_rectangle(_box.x, _box.y, _box.x + _box.w, _box.y + _box.h, false);
@@ -791,25 +1020,31 @@ function settings_gui_draw_tab(_box, _hot, _on, _label, _scale, _fill_on, _fill_
 	draw_text_transformed(_box.x + _box.w * 0.5, _box.y + _box.h * 0.5, _label, text_scale, text_scale, 0);
 }
 
+///@desc 设置界面是否正挡住操作
+///@returns {Bool} oSettings 是否存在
 function settings_gui_blocking() {
 	return instance_exists(oSettings);
 }
 
+///@desc 打开设置界面，避免刚关闭又被同一次点击打开
+///@returns {Undefined} 无
 function settings_gui_open() {
+	// 已经打开或正在选文件时不再创建
 	if (instance_exists(oSettings) || instance_exists(oFilePicker)) then return;
-	// The tap that closes the panel is still a press on the next step. The
-	// menu button sits under that same finger on a phone, which would open
-	// the panel again before the finger lifts.
+	// 关掉面板的那一下在下一步仍是按下。手机上菜单按钮就在这根手指下面，松手前会把面板再次打开。
 	if (variable_global_exists("settings_closed_at") && is_real(global.settings_closed_at)) {
 		if (current_time - global.settings_closed_at < 400) then return;
 	};
 	instance_create_depth(0, 0, -2000000, oSettings);
 }
 
+///@desc 记录关闭时间并销毁设置界面
+///@returns {Undefined} 无
 function settings_gui_close() {
 	global.settings_closed_at = current_time;
 	if (!instance_exists(oSettings)) then return;
 	with (oSettings) {
+		// 先取消导入、卸预览并释放表面
 		try { skin_import_cancel(); } catch (cancel_err) { delete(cancel_err); };
 		try { skin_preview_unload(); } catch (unload_err) { delete(unload_err); };
 		try { settings_skin_preview_surface_free(); } catch (surf_err) { delete(surf_err); };
@@ -820,15 +1055,21 @@ function settings_gui_close() {
 	};
 }
 
+///@desc 返回进入开发者设置时的警告文案
+///@returns {String} 警告文本
 function settings_developer_warning_text() {
 	return "You have entered developer settings. Changing these options may prevent the simulator from starting. If it cannot start, delete resource/config.ini. On other platforms, tap Clear data to reset.";
 }
 
+///@desc 每个设置实例只警告一次开发者选项风险
+///@returns {Undefined} 无
 function settings_warn_developer() {
+	// 已经警告过则返回
 	if (variable_instance_exists(id, "developer_warned") && developer_warned) then return;
 	developer_warned = true;
 	var msg = settings_developer_warning_text();
 	var buttons = [msgbox_button("OK")];
+	// 原生对话框可用时同步弹出
 	if (i_wbox_native_ready()) {
 		msgbox_warning_sync(msg, "Warning", buttons, MSGBOX_BUTTON_ALIGN.RIGHT);
 	} else {
@@ -836,8 +1077,11 @@ function settings_warn_developer() {
 	};
 }
 
+///@desc 把菜单上的设置按钮摆到右上角
+///@returns {Undefined} 无
 function settings_menu_button_layout() {
 	var s = variable_global_exists("global_scales") ? global_scales : 1.0;
+	// 全局缩放无效时按 1 处理
 	if (!is_real(s) || s <= 0) then s = 1.0;
 	var rw = max(1, room_width);
 	var pad = max(12, 20 * s);
@@ -851,12 +1095,22 @@ function settings_menu_button_layout() {
 	btn_settings.y = pad;
 }
 
+///@desc 判断指针是否点中菜单设置按钮
+///@param {Real} _mx 指针 x
+///@param {Real} _my 指针 y
+///@returns {Bool} 是否命中
 function settings_menu_button_hit(_mx, _my) {
+	// 按钮还没摆好则不算命中
 	if (!variable_instance_exists(id, "btn_settings") || !is_struct(btn_settings)) then return false;
 	return point_in_rectangle(_mx, _my, btn_settings.x, btn_settings.y, btn_settings.x + btn_settings.w, btn_settings.y + btn_settings.h);
 }
 
+///@desc 绘制菜单上的设置按钮并恢复绘制状态
+///@param {Bool} _hover 是否悬停
+///@param {Real} _s 界面缩放，当前未使用
+///@returns {Undefined} 无
 function settings_menu_button_draw(_hover, _s) {
+	// 按钮不存在则不画
 	if (!variable_instance_exists(id, "btn_settings") || !is_struct(btn_settings)) then return;
 	var b = btn_settings;
 	var old_font = draw_get_font();
@@ -879,27 +1133,39 @@ function settings_menu_button_draw(_hover, _s) {
 	draw_set_colour(old_colour);
 }
 
+///@desc 在抗锯齿档位 0、2、4、8 之间按方向切换
+///@param {Real} _current 当前值
+///@param {Real} _dir 方向，负为上一档
+///@returns {Real} 新的抗锯齿等级
 function settings_aa_cycle(_current, _dir) {
 	var vals = [0, 2, 4, 8];
 	var idx = 0;
 	var best = 999;
 	for (var i = 0; i < array_length(vals); i++) {
 		var d = abs(vals[i] - _current);
+		// 先吸附到最近档位再加减
 		if (d < best) { best = d; idx = i; };
 	};
 	idx = clamp(idx + _dir, 0, array_length(vals) - 1);
 	return vals[idx];
 }
 
+///@desc 返回数字项每次加减的步长
+///@param {String} _key 设置键
+///@returns {Real} 步长
 function settings_number_step(_key) {
 	switch (_key) {
+		// 大步长的项单独指定，其余每次 1
 		case "rpeWorkerProfileFrames": return 60;
 		case "refreshFPSCount": return 5;
 		default: return 1;
 	};
 }
 
+///@desc 把正在编辑的键盘文本写回草稿
+///@returns {Undefined} 无
 function settings_gui_commit_edit() {
+	// 没有编辑中的键则返回
 	if (!is_string(editing_key) || !string_length(editing_key)) then return;
 	var key = editing_key;
 	var text = string(keyboard_string);
@@ -907,6 +1173,7 @@ function settings_gui_commit_edit() {
 	if (os_type == os_android) {
 		try { keyboard_virtual_hide(); } catch (hide_err) { delete(hide_err); };
 	};
+	// 字符串原样保存，其他键先解析
 	if (settings_kind(key) == "string") {
 		settings_gui_draft_set(key, text);
 	} else {
@@ -915,24 +1182,32 @@ function settings_gui_commit_edit() {
 	};
 }
 
+///@desc 结束上一项编辑并开始编辑指定键
+///@param {String} _key 设置键
+///@returns {Undefined} 无
 function settings_gui_begin_edit(_key) {
 	settings_gui_commit_edit();
 	editing_key = _key;
 	keyboard_string = string(settings_gui_draft()[$ _key] ?? "");
+	// Android 上弹出虚拟键盘
 	if (os_type == os_android) {
 		try { keyboard_virtual_show(0, 0, 0, false); }
 		catch (show_err) { delete(show_err); };
 	};
 }
 
+///@desc 按房间尺寸计算设置面板、页签、列表和皮肤区布局
+///@returns {Undefined} 无
 function settings_gui_layout() {
 	var s = variable_global_exists("global_scales") ? global_scales : 1.0;
+	// 全局缩放无效时按 1 处理
 	if (!is_real(s) || s <= 0) then s = 1.0;
 	layout_s = s;
 	var rw = max(1, room_width);
 	var rh = max(1, room_height);
 	panel_w = min(rw - 40 * s, 980 * s);
 	panel_h = min(rh - 36 * s, 680 * s);
+	// 面板不超过房间并居中
 	panel_x = (rw - panel_w) * 0.5;
 	panel_y = (rh - panel_h) * 0.5;
 	var pad = 18 * s;
@@ -963,6 +1238,7 @@ function settings_gui_layout() {
 	clear_h = 40 * s;
 	clear_x = panel_x + pad;
 	clear_y = panel_y + panel_h - pad - clear_h;
+	// 非 Windows 才显示清除数据
 	show_clear = (os_type != os_windows);
 	layout_w = rw;
 	layout_h = rh;
@@ -975,20 +1251,28 @@ function settings_gui_layout() {
 	skin_delete = { x:skin_preview_x + skin_preview_w - 140 * s, y:list_y + list_h - 40 * s, w:140 * s, h:40 * s };
 }
 
+///@desc 按当前页签决定右上角动作是重置、重载还是没有
+///@returns {String} reset、reload 或空串
 function settings_gui_action_kind() {
 	if (!variable_instance_exists(id, "tab")) then return "";
+	// 常规页是重置，语言页是重载，皮肤页没有动作
 	if (tab == 0) then return "reset";
 	if (tab == 1) then return "reload";
 	return "";
 }
 
+///@desc 返回右上角动作按钮的文字
+///@returns {String} 按钮文字，无动作时为空
 function settings_gui_action_label() {
 	var kind = settings_gui_action_kind();
+	// 没有动作种类时返回空文字
 	if (kind == "reset") then return lang("settings.reset");
 	if (kind == "reload") then return lang("settings.reloadLanguage");
 	return "";
 }
 
+///@desc 按文字测量右上角动作按钮并排在丢弃按钮左侧
+///@returns {Undefined} 无
 function settings_gui_action_layout() {
 	var s = layout_s;
 	if (!is_real(s) || s <= 0) then s = 1.0;
@@ -996,6 +1280,7 @@ function settings_gui_action_layout() {
 	show_action = (kind != "");
 	action_h = discard_h;
 	action_y = discard_y;
+	// 没有动作时宽度为 0 并提前返回
 	if (!show_action) {
 		action_w = 0;
 		action_x = discard_x;
@@ -1012,6 +1297,7 @@ function settings_gui_action_layout() {
 			text_w = string_width(label) * text_scale;
 			draw_set_font(old_font);
 		} else {
+			// 字体不存在时用字数粗略估算
 			text_w = string_length(label) * action_h * 0.45;
 		};
 	};
@@ -1019,15 +1305,25 @@ function settings_gui_action_layout() {
 	action_x = discard_x - 8 * s - action_w;
 }
 
+///@desc 返回当前可见的设置行
+///@returns {Array} 行描述
 function settings_gui_rows() {
 	return settings_gui_visible_rows();
 }
 
+///@desc 判断指针是否在矩形盒子内
+///@param {Struct} _box 含 x、y、w、h 的矩形
+///@param {Real} _mx 指针 x
+///@param {Real} _my 指针 y
+///@returns {Bool} 是否命中
 function settings_gui_hit(_box, _mx, _my) {
+	// 矩形无效则不算命中
 	if (!is_struct(_box)) then return false;
 	return point_in_rectangle(_mx, _my, _box.x, _box.y, _box.x + _box.w, _box.y + _box.h);
 }
 
+///@desc 初始化设置界面的页签、草稿、皮肤导入和命中缓存
+///@returns {Undefined} 无
 function settings_gui_init() {
 	depth = -2000000;
 	tab = 0;
@@ -1040,6 +1336,7 @@ function settings_gui_init() {
 	drag_start_scroll = 0;
 	editing_key = "";
 	hover_save = false;
+	// Android 忽略打开瞬间的那次松开
 	ignore_release = (os_type == os_android);
 	hover_discard = false;
 	hover_action = false;
@@ -1086,12 +1383,15 @@ function settings_gui_init() {
 	settings_gui_layout();
 }
 
+///@desc 在布局或折叠变化时重建各页签的点击区域
+///@returns {Undefined} 无
 function settings_gui_refresh_hits() {
 	var rows = (tab == 0) ? settings_gui_rows() : [];
 	var lang_rows = lang_packs();
 	var skin_rows = skin_menu_items();
 	var skin_visible = max(1, floor(skin_list_h / row_h));
 	var fold = settings_gui_fold_sig();
+	// 签名没变则沿用旧命中区
 	if (hits_tab == tab && hits_scroll == scroll && hits_visible == visible_rows
 		&& hits_w == layout_w && hits_h == layout_h && hits_s == layout_s && hits_fold == fold) then return;
 	hits_tab = tab;
@@ -1104,6 +1404,7 @@ function settings_gui_refresh_hits() {
 	row_hits = [];
 	lang_hits = [];
 	skin_hits = [];
+	// 皮肤、语言和设置页分别生成命中盒
 	if (tab == 2) {
 		var skin_last = min(array_length(skin_rows), scroll + skin_visible);
 		for (var si = scroll; si < skin_last; si++) {
@@ -1132,6 +1433,7 @@ function settings_gui_refresh_hits() {
 		for (var i = scroll; i < last; i++) {
 			var entry = rows[i];
 			var row_y = list_y + (i - scroll) * row_h;
+			// 分组行整行可点，用来展开或收起
 			if (entry.type == "group") {
 				array_add(row_hits, {
 					row_type:"group",
@@ -1147,6 +1449,7 @@ function settings_gui_refresh_hits() {
 			var ctrl_y = row_y + (row_h - ctrl_h) * 0.5;
 			var kind = settings_kind(item.key);
 			var hit = { row_type:"field", key:item.key, kind:kind, row:i, y:row_y, minus:undefined, plus:undefined, toggle:undefined, field:undefined };
+			// 布尔是整条开关，数字拆成减号、输入和加号
 			if (kind == "bool") {
 				hit.toggle = { x:ctrl_x, y:ctrl_y, w:ctrl_w, h:ctrl_h };
 			} else if (kind == "number") {
@@ -1162,17 +1465,19 @@ function settings_gui_refresh_hits() {
 	};
 }
 
+///@desc 读取指针坐标和按键边沿，Android 上合并多指
+///@returns {Struct} x、y、pressed、released、held
 function settings_gui_pointer() {
 	var px = mouse_x;
 	var py = mouse_y;
 	var pressed = mouse_check_button_pressed(mb_left);
 	var released = mouse_check_button_released(mb_left);
 	var held = mouse_check_button(mb_left);
+	// 非 Android 直接用鼠标
 	if (os_type != os_android) {
 		return { x: px, y: py, pressed: pressed, released: released, held: held };
 	};
-	// mouse_x stays on the finger that opened the panel. A later tap is
-	// another touch index, so Save / Discard never see it.
+	// mouse_x 停在打开面板的那根手指上。之后的点击是另一个触摸序号，保存和丢弃因此收不到。
 	pressed = false;
 	released = false;
 	held = false;
@@ -1182,6 +1487,7 @@ function settings_gui_pointer() {
 		var up = device_mouse_check_button_released(device, mb_left);
 		var down = device_mouse_check_button(device, mb_left);
 		if (!edge && !up && !down) then continue;
+		// 优先采用刚按下的那根手指
 		if (!found || edge) {
 			px = device_mouse_x(device);
 			py = device_mouse_y(device);
@@ -1201,17 +1507,20 @@ function settings_gui_pointer() {
 	return { x: px, y: py, pressed: pressed, released: released, held: held };
 }
 
+///@desc 处理设置界面的布局、导入、拖动和点击
+///@returns {Undefined} 无
 function settings_gui_step() {
 	var scale_now = variable_global_exists("global_scales") ? global_scales : 1.0;
+	// 房间或缩放变了就重算布局
 	if (layout_w != room_width || layout_h != room_height || layout_s != scale_now) {
 		settings_gui_layout();
 	};
 	var pointer = settings_gui_pointer();
 	if (!armed) {
-		// Android can leave mb_left held after the finger lifts. Waiting for
-		// that release never arms the panel, so neither close button runs.
+		// Android 松手后 mb_left 可能仍为按住。一直等这次松开，面板就永远不会武装，两个关闭按钮都不会执行。
 		if (os_type == os_android || !pointer.held) then armed = true;
 	};
+	// 文件选择器打开时不处理点击
 	if (instance_exists(oFilePicker)) then exit;
 	skin_import_poll();
 	if (is_string(skin_import_path ?? "") && string_length(skin_import_path)) {
@@ -1249,11 +1558,13 @@ function settings_gui_step() {
 	scroll = clamp(scroll, 0, max_scroll);
 
 	if (is_string(editing_key) && string_length(editing_key)) {
+		// 回车提交；Esc 先还原再提交
 		if (keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_escape)) {
 			if (keyboard_check_pressed(vk_escape)) then keyboard_string = string(settings_gui_draft()[$ editing_key] ?? "");
 			settings_gui_commit_edit();
 			exit;
 		};
+	// 没在编辑时 Esc 直接丢弃并关闭
 	} else if (keyboard_check_pressed(vk_escape)) {
 		settings_gui_discard_close();
 		exit;
@@ -1285,13 +1596,14 @@ function settings_gui_step() {
 			drag_start_y = my;
 			drag_start_scroll = scroll;
 		} else {
-			// A list drag used to stay "moved" and swallow the next Save tap.
+			// 列表拖动曾一直保持已移动，从而吞掉下一次保存点击。
 			dragging = false;
 			drag_moved = false;
 		};
 	};
 	if (dragging && pointer.held) {
 		var dy = drag_start_y - my;
+		// 拖动超过阈值才滚动，避免把点击当成拖动
 		if (abs(dy) > max(8, 10 * layout_s)) then drag_moved = true;
 		if (drag_moved) {
 			scroll = clamp(drag_start_scroll + dy / row_h, 0, max_scroll);
@@ -1301,16 +1613,17 @@ function settings_gui_step() {
 
 	settings_gui_refresh_hits();
 
-	// Android reports the tap position on release. The press frame still has
-	// the previous finger's coordinates, so the header buttons miss.
-	// The finger-up that opened the panel is not a click on Save or Discard.
+	// Android 在松开时才给出点击位置。按下那一帧仍是上一根手指的坐标，顶栏按钮会对不准。
+	// 打开面板的那次松手不算点了保存或丢弃。
 	if (ignore_release) {
 		if (pointer.released || !pointer.held) then ignore_release = false;
 		if (pointer.released) then exit;
 	};
 	var activate = pointer.pressed;
+	// Android 用松开作为点击
 	if (os_type == os_android) then activate = pointer.released;
 	if (!armed || !activate) then exit;
+	// 这次是拖动列表，不触发按钮
 	if (drag_moved) then exit;
 
 	if (hover_save) {
@@ -1365,6 +1678,7 @@ function settings_gui_step() {
 		skin_preview_set(skin_selected_id());
 		exit;
 	};
+	// 皮肤页只处理添加、删除和选择
 	if (tab == 2) {
 		if (hover_skin_add) {
 			skin_log("add button clicked");
@@ -1445,6 +1759,8 @@ function settings_gui_step() {
 	if (is_string(editing_key) && string_length(editing_key)) then settings_gui_commit_edit();
 }
 
+///@desc 绘制设置面板、页签、列表和底部提示
+///@returns {Undefined} 无
 function settings_gui_draw() {
 	var old_font = draw_get_font();
 	var old_halign = draw_get_halign();
@@ -1472,6 +1788,7 @@ function settings_gui_draw() {
 	var fill_tab = make_colour_rgb(28, 34, 48);
 	var fill_on = make_colour_rgb(46, 120, 92);
 
+	// 先铺暗底，再画面板
 	draw_set_alpha(0.62);
 	draw_set_colour(c_black);
 	draw_rectangle(0, 0, room_width, room_height, false);
@@ -1516,6 +1833,7 @@ function settings_gui_draw() {
 	settings_gui_draw_tab(tab_lang, hover_tab_lang, tab == 1, lang("settings.language"), tab_scale, fill_hot, fill_tab);
 	settings_gui_draw_tab(tab_skin, hover_tab_skin, tab == 2, lang("settings.skin", "Skin"), tab_scale, fill_hot, fill_tab);
 
+	// 皮肤页单独画，语言页画语言包，否则画分组和字段
 	if (tab == 2) {
 		settings_gui_draw_skins(s, body_scale, small_scale, fill_idle, fill_hot, fill_on);
 	} else {
@@ -1566,6 +1884,7 @@ function settings_gui_draw() {
 	for (var i = scroll; i < last; i++) {
 		var entry = rows[i];
 		var row_y = list_y + (i - scroll) * row_h;
+		// 分组行用加减号表示展开
 		if (entry.type == "group") {
 			var group_open_now = bool(fold[$ entry.id]);
 			draw_set_colour(entry.id == "deprecated" ? make_colour_rgb(64, 40, 48) : make_colour_rgb(32, 44, 68));
@@ -1602,6 +1921,7 @@ function settings_gui_draw() {
 		var rh = row_hits[h];
 		if (rh.row_type == "group") then continue;
 		var cur = store[$ rh.key];
+		// 按控件种类画开关、加减或文本框
 		if (rh.kind == "bool" && is_struct(rh.toggle)) {
 			var on = bool(cur);
 			draw_set_colour(on ? fill_on : fill_idle);
@@ -1663,6 +1983,7 @@ function settings_gui_draw() {
 	draw_set_halign(fa_right);
 	draw_set_colour(c_gray);
 	var hint = lang("settings.hintNormal");
+	// 底部提示随页签切换
 	if (tab == 1) then hint = lang_current_label();
 	else if (tab == 2) then hint = lang("settings.hintSkin", "Add a resource pack, then select it. It applies when you enter a chart.");
 	var hint_left = panel_x + 18 * s;

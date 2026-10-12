@@ -1,4 +1,4 @@
-/// @description Initialize a normalized PEC note.
+///@desc 初始化规范化后的 PEC 音符和判定窗口
 depth = DEPTH.NOTE;
 canDraw = false;
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then visible = false;
@@ -14,7 +14,7 @@ if (!variable_instance_exists(id, "note_speed")) {
 };
 note_speed = real(note_speed);
 if (!is_finite(note_speed)) then note_speed = 1;
-// GameMaker applies built-in `speed` after Step; never use it as note velocity.
+// GameMaker 会在 Step 之后应用内置 speed，不能拿它当音符速度。
 speed = 0;
 direction = 0;
 if (!variable_instance_exists(id, "widthScale")) then widthScale = 1;
@@ -29,6 +29,7 @@ if (!variable_instance_exists(id, "angleOffset")) then angleOffset = isAbove ? 0
 speedFloorStart = note_speed * floorPosition;
 speedFloorEnd = note_speed * endFloorPosition;
 speedHoldFloorLength = note_speed * (endFloorPosition - floorPosition);
+// 判定线不存在就停用。
 if (!is_array(game_2.line_group) || line_id < 0 || line_id >= array_length(game_2.line_group)) {
 	instance_deactivate_object(self);
 	exit;
@@ -43,6 +44,7 @@ if (variable_global_exists("BYD_COLOR_MODE") && BYD_COLOR_MODE && type != 2) the
 if (variable_instance_exists(id, "_hl") && _hl == 1) then hl = 1;
 use_acc_judgment = bool(game.settings.enableAccJudgment ?? true);
 hold_body_height = max(1, sprite_get_height(note_hold_body));
+// PEC 类型编号和官谱不同，这里映射贴图与判定类型。
 switch (type) {
 	case 1: sprite_index = note_tap; sound = skin_note_sound("tap", snd_note_tap); judge_type = 1; break;
 	case 2: depth = DEPTH.LINE - 1; sprite_index = note_hold_head; sound = skin_note_sound("tap", snd_note_tap); judge_type = 3; break;

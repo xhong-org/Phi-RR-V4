@@ -1,4 +1,4 @@
-/// @description Rebuild menu layout from Camera_View.global_scales
+///@desc 按 global_scales 重算 Windows 菜单按钮位置
 if (!variable_global_exists("global_scales")) {
         globalvar global_scales;
         global_scales = 1.0;
@@ -10,7 +10,7 @@ if (!is_real(s) || s <= 0) then s = 1.0;
 var rw = max(1, room_width);
 var rh = max(1, room_height);
 
-// Design-space button size (1366x768), scaled by global_scales.
+// 按 1366x768 设计尺寸乘 global_scales。
 var btn_w = 440 * s;
 var btn_h = 56 * s;
 var gap = 20 * s;

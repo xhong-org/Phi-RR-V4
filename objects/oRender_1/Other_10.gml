@@ -1,4 +1,5 @@
-/// @description Resolve the current BPM from the canonical RPE timeline.
+///@desc 从 RPE 时间轴解析当前 BPM
+// 时间轴还没建好就退出。
 if (!variable_global_exists("game_1") || !is_struct(game_1) || !is_struct(game_1.Math)) then exit;
 
 var timeline = game_1.Math.ensureBpmTimeline();

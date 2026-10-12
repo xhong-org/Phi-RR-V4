@@ -1,11 +1,18 @@
+///@desc 判断精灵是不是默认长条音符
+///@param {Any} _spr 精灵
+///@returns {Bool} 属于默认头、身或尾时为真
 function hold_sprite_is_default_note(_spr) {
 	return _spr == note_hold_head || _spr == note_hold_body || _spr == note_hold_end;
 }
 
+///@desc 判断精灵每一帧的纹理是否都已就绪
+///@param {Any} _spr 精灵
+///@returns {Bool} 可安全烘焙时为真
 function hold_sprite_frames_ready(_spr) {
 	if (!sprite_exists(_spr)) then return false;
 	if (pls_is_html5()) then return true;
 	var frames = sprite_get_number(_spr);
+	// 任一帧纹理未就绪就不能烘焙
 	for (var f = 0; f < frames; f++) {
 		var tex = sprite_get_texture(_spr, f);
 		if (is_undefined(tex) || (is_real(tex) && tex < 0)) then return false;
@@ -14,9 +21,11 @@ function hold_sprite_frames_ready(_spr) {
 	return true;
 }
 
-/// DefaultNotes is dynamicpages. Baking a hold before its page is fetched copies the fallback page.
+///@desc 预先拉取默认音符纹理页
+///@returns {Undefined} 无
 function hold_default_notes_prefetch() {
 	if (pls_is_html5() || !texturegroup_exists("DefaultNotes")) then return;
+	// DefaultNotes 是动态纹理页，取回前烘焙会复制到回退页
 	var status = texturegroup_get_status("DefaultNotes");
 	if (status == texturegroup_status_unloaded) {
 		if (texturegroup_load("DefaultNotes", true) >= 0) {
@@ -30,6 +39,8 @@ function hold_default_notes_prefetch() {
 	if (sprite_exists(note_hold_end)) then sprite_prefetch(note_hold_end);
 }
 
+///@desc 判断默认长条三段精灵是否都可烘焙
+///@returns {Bool} 头、身、尾纹理都就绪时为真
 function hold_default_notes_ready() {
 	if (pls_is_html5()) then return true;
 	return hold_sprite_frames_ready(note_hold_head)
@@ -37,6 +48,8 @@ function hold_default_notes_ready() {
 		&& hold_sprite_frames_ready(note_hold_end);
 }
 
+///@desc 取得或创建长条条带缓存
+///@returns {Struct} 以精灵组合为键的缓存
 function hold_strip_cache() {
 	if (!variable_global_exists("__hold_strip_cache") || !is_struct(global.__hold_strip_cache)) {
 		global.__hold_strip_cache = {};
@@ -44,10 +57,20 @@ function hold_strip_cache() {
 	return global.__hold_strip_cache;
 }
 
+///@desc 用头、身、尾精灵拼出缓存键
+///@param {Any} _head 头部精灵
+///@param {Any} _body 身体精灵
+///@param {Any} _tail 尾部精灵
+///@returns {String} 缓存键
 function hold_strip_key(_head, _body, _tail) {
 	return string(_head) + ":" + string(_body) + ":" + string(_tail);
 }
 
+///@desc 删掉一组头身尾对应的条带缓存
+///@param {Any} _head 头部精灵
+///@param {Any} _body 身体精灵
+///@param {Any} _tail 尾部精灵
+///@returns {Undefined} 无
 function hold_strip_forget(_head, _body, _tail) {
 	if (!variable_global_exists("__hold_strip_cache") || !is_struct(global.__hold_strip_cache)) then return;
 	var _key = hold_strip_key(_head, _body, _tail);
@@ -60,11 +83,33 @@ function hold_strip_forget(_head, _body, _tail) {
 	variable_struct_remove(_cache, _key);
 }
 
+///@desc 把条带上的纵向像素换算成纹理坐标
+///@param {Array} _uvs 精灵的纹理坐标矩形
+///@param {Real} _y 条带内的纵向位置
+///@param {Real} _h 条带高度
+///@returns {Real} 对应的纵向纹理坐标
 function hold_strip_v(_uvs, _y, _h) {
 	return lerp(_uvs[1], _uvs[3], clamp(_y / max(1, _h), 0, 1));
 }
 
+///@desc 按长条角度提交一个贴图四边形
+///@param {Real} _hx 参考点横坐标
+///@param {Real} _hy 参考点纵坐标
+///@param {Real} _c 角度余弦
+///@param {Real} _s 角度正弦
+///@param {Real} _left 左边界相对参考点的横向距离
+///@param {Real} _right 右边界相对参考点的横向距离
+///@param {Real} _d0 近端沿长条方向的距离
+///@param {Real} _d1 远端沿长条方向的距离
+///@param {Real} _u0 左缘纹理横坐标
+///@param {Real} _v0 近端纹理纵坐标
+///@param {Real} _u1 右缘纹理横坐标
+///@param {Real} _v1 远端纹理纵坐标
+///@param {Real} _col 混合颜色
+///@param {Real} _alpha 透明度
+///@returns {Undefined} 无
 function hold_strip_emit_quad(_hx, _hy, _c, _s, _left, _right, _d0, _d1, _u0, _v0, _u1, _v1, _col, _alpha) {
+	// 用正弦和余弦把左右边、纵向距离旋到屏幕坐标
 	var _x00 = _hx + _left * _c - _d0 * _s;
 	var _y00 = _hy - _left * _s - _d0 * _c;
 	var _x10 = _hx + _right * _c - _d0 * _s;
@@ -79,7 +124,11 @@ function hold_strip_emit_quad(_hx, _hy, _c, _s, _left, _right, _d0, _d1, _u0, _v
 	draw_vertex_texture_colour(_x11, _y11, _u1, _v1, _col, _alpha);
 }
 
-/// @description Bake tail+body+head (all hl frames) into one strip so joins are interior texels.
+///@desc 把头、身、尾各帧烘焙成一条纹理，衔接落在纹理内部
+///@param {Any} _head 头部精灵
+///@param {Any} _body 身体精灵
+///@param {Any} _tail 尾部精灵
+///@returns {Any} 条带信息；失败时无
 function hold_strip_compose(_head, _body, _tail) {
 	if (!sprite_exists(_head) || !sprite_exists(_body) || !sprite_exists(_tail)) then return undefined;
 	if ((hold_sprite_is_default_note(_head) || hold_sprite_is_default_note(_body) || hold_sprite_is_default_note(_tail))
@@ -106,10 +155,11 @@ function hold_strip_compose(_head, _body, _tail) {
 	var _surf = surface_create(_w, _h);
 	if (!surface_exists(_surf)) then return undefined;
 	var _spr = -1;
-	// Baking must not inherit a note clip shader. Uniforms stay on that shader.
+	// 烘焙不能继承音符裁剪着色器，uniform 仍留在原着色器上
 	var _prev_shader = shader_current();
 	if (_prev_shader != -1) then shader_reset();
 	skin_copy_surface_begin();
+	// 按帧把尾、身、头叠到同一条表面
 	for (var _f = 0; _f < _frames; _f++) {
 		surface_set_target(_surf);
 		draw_clear_alpha(c_black, 0);
@@ -142,6 +192,11 @@ function hold_strip_compose(_head, _body, _tail) {
 	};
 }
 
+///@desc 读取或烘焙指定头身尾的条带
+///@param {Any} _head 头部精灵
+///@param {Any} _body 身体精灵
+///@param {Any} _tail 尾部精灵
+///@returns {Any} 条带信息；失败时无
 function hold_strip_get(_head, _body, _tail) {
 	var _cache = hold_strip_cache();
 	var _key = hold_strip_key(_head, _body, _tail);
@@ -154,6 +209,21 @@ function hold_strip_get(_head, _body, _tail) {
 	return _info;
 }
 
+///@desc 用烘焙条带画出长条的尾、身和可选的头
+///@param {Struct} _info 条带信息
+///@param {Real} _x 参考点横坐标
+///@param {Real} _y 参考点纵坐标
+///@param {Real} _xscale 横向缩放
+///@param {Real} _yscale 纵向缩放
+///@param {Real} _body_len 身体长度
+///@param {Real} _angle 旋转角度
+///@param {Real} _subimg 子图帧
+///@param {Real} _colour 混合颜色
+///@param {Real} _alpha 透明度
+///@param {Bool} _draw_head 是否绘制头部
+///@param {Bool} _attach_head 身体是否接到头部
+///@param {Real} _tail_trim 尾部叠进身体的长度
+///@returns {Bool} 成功绘制时为真
 function hold_strip_draw(_info, _x, _y, _xscale, _yscale, _body_len, _angle, _subimg, _colour, _alpha, _draw_head, _attach_head, _tail_trim) {
 	if (!is_struct(_info) || !sprite_exists(_info.spr)) then return false;
 	var _frame = clamp(real(_subimg), 0, max(0, sprite_get_number(_info.spr) - 1));
@@ -166,6 +236,7 @@ function hold_strip_draw(_info, _x, _y, _xscale, _yscale, _body_len, _angle, _su
 	var _right = (_info.w - _info.ox) * _xscale;
 	var _u0 = _uvs[0];
 	var _u1 = _uvs[2];
+	// 条带从上到下是尾、身、头，身体段按长度拉伸
 	var _y_tail0 = 0;
 	var _y_body0 = _info.tail_h;
 	var _y_head0 = _info.tail_h + _info.body_h;
@@ -197,8 +268,24 @@ function hold_strip_draw(_info, _x, _y, _xscale, _yscale, _body_len, _angle, _su
 	return true;
 }
 
-/// @function draw_hold_fit(x, y, scalex, scaley, hold_body_scale, angle, subimg, colour, alpha, draw_head, attach_head, tail_trim, head_attach_scale, head_spr, body_spr, end_spr)
-/// @description Hold draw from one baked strip (default + custom skin, including hl frames).
+///@desc 优先用烘焙条带绘制长条，失败时退回三段精灵
+///@param {Real} x 头部参考点横坐标
+///@param {Real} y 头部参考点纵坐标
+///@param {Real} scalex 横向缩放
+///@param {Real} scaley 纵向缩放
+///@param {Real} hold_body_scale 身体长度缩放
+///@param {Real} angle 旋转角度
+///@param {Real} subimg 子图帧
+///@param {Real} colour 混合颜色
+///@param {Real} alpha 透明度
+///@param {Bool} draw_head 是否绘制头部
+///@param {Bool} attach_head 身体是否接到头部
+///@param {Real} tail_trim 尾部叠进身体的屏幕像素
+///@param {Real} head_attach_scale 头部衔接比例
+///@param {Any} head_spr 头部精灵，无效时用默认
+///@param {Any} body_spr 身体精灵，无效时用默认
+///@param {Any} end_spr 尾部精灵，无效时用默认
+///@returns {Undefined} 无
 function draw_hold_fit(x, y, scalex, scaley, hold_body_scale, angle = 0, subimg = 0,
 		colour = c_white, alpha = 1, draw_head = true, attach_head = draw_head,
 		tail_trim = 0, head_attach_scale = 1, head_spr = -1, body_spr = -1, end_spr = -1) {
@@ -224,6 +311,7 @@ function draw_hold_fit(x, y, scalex, scaley, hold_body_scale, angle = 0, subimg 
 		return;
 	};
 
+	// 条带不可用时退回三段精灵拼接
 	var _frame = sprite_exists(head_spr) ? clamp(real(subimg), 0, max(0, sprite_get_number(head_spr) - 1)) : 0;
 	var _axis_x = -dsin(angle);
 	var _axis_y = -dcos(angle);

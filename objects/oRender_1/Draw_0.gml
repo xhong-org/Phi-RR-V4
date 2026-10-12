@@ -1,4 +1,4 @@
-/// @description
+///@desc 绘制 RPE 界面，并处理染色模式
 if (!chart_hud_ready()) then exit;
 draw_set_font(game.font);
 event_user(_draw_user_count);

@@ -1,8 +1,8 @@
 /* began */
-/// @desc Camera / scale owner. Must run before UI objects.
-// Keep this object first in room instance order.
+///@desc 创建：相机与全局缩放的主人，必须早于界面对象
+// 房间实例顺序里应排在最前。
 
-// Design resolution snapshot for global_scales.
+// 记下设计分辨率，供 global_scales 使用。
 start_width = room_width;
 start_height = room_height;
 if (start_width <= 0) then start_width = 1366;
@@ -10,8 +10,7 @@ if (start_height <= 0) then start_height = 768;
 
 var _archive_sizing = variable_global_exists("pls_archive_test") && global.pls_archive_test;
 if ((variable_global_exists("render_mode") && global.render_mode) || _archive_sizing) {
-	// Keep gameplay coordinates proportional to the original 1366x768 design.
-	// Archive tests honor -resolution the same way, so text size can be compared.
+	// 玩法坐标仍按最初的 1366x768 比例。归档测试同样遵守 -resolution，方便对比文字大小。
 	start_width = 1366;
 	start_height = 768;
 	room_width = global.render_width;
@@ -25,13 +24,13 @@ gx_last_room_h = room_height;
 gx_gui_w = -1;
 gx_gui_h = -1;
 
-// Global UI/world scale. Other objects should read this, not recompute window scale.
+// 全局界面与世界缩放。其他对象应读它，不要自己再算窗口缩放。
 globalvar global_scales;
 global_scales = 1.0;
-// Aspect ratio of the effective chart area. Keep this global so the mask,
-// chart layout, and custom judge-line textures use the same viewport.
+// 有效谱面区域的宽高比。遮罩、谱面布局和自定义判定线贴图共用这一视口。
 globalvar chart_aspect_ratio;
 chart_aspect_ratio = 16 / 9;
+// 谱面会话里的宽高比优先于默认 16:9。
 if (variable_global_exists("chart_session") && is_struct(global.chart_session)) {
 	var _session_aspect = chart_parse_aspect_ratio(global.chart_session[$ "aspect_ratio"] ?? (16 / 9), 16 / 9);
 	if (is_finite(_session_aspect) && _session_aspect > 0) then chart_aspect_ratio = _session_aspect;
@@ -42,14 +41,15 @@ chart_surface_active = false;
 globalvar chart_background_surface;
 chart_background_surface = -1;
 
-// Immediate scale for current room size.
+// 按当前房间尺寸立刻算出缩放。
 if (start_width > 0 && start_height > 0) {
         global_scales = min(room_width / start_width, room_height / start_height);
 };
 chart_view_refresh(room_width, room_height);
 
-depth = -100000; // run early relative to normal gameplay objects when possible
+depth = -100000; // 尽量早于普通玩法对象执行
 
+// Windows 下按设置安装无阻塞拖动，避免拖窗口时卡住。
 _prevent_move_freeze_applied = undefined;
 if (os_type == os_windows && extension_exists("I_Pulse")) {
 	var render_window = variable_global_exists("render_mode") && global.render_mode;
@@ -67,10 +67,10 @@ if (os_type == os_windows && extension_exists("I_Pulse")) {
 };
 
 
-/// @function    camera_zoom_out_centered(cam, zoom_factor)
-/// @description 将指定摄像机缩放并居中
-/// @param {camera} cam           摄像机ID，通常是 view_camera[0]
-/// @param {real}   zoom_factor   缩放系数，0.5即为缩小一半
+///@desc 将指定摄像机缩放并保持画面中心不变
+///@param {Id.Camera} cam 摄像机，通常是 view_camera[0]
+///@param {Real} zoom_factor 缩放系数，小于 1 为缩小
+///@returns {Undefined} 无
 function camera_zoom_out_centered(cam, zoom_factor) {
     // 1. 获取摄像机当前的宽度和高度
     var _cam_w = camera_get_view_width(cam);

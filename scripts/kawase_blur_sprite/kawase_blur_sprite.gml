@@ -24,14 +24,14 @@ enum SPRITE_OFFSET {
 	BOTTOM_RIGHT, // 右下
 };
 
-/// @desc 图像偏移位置获取
-/// @function sprite_get_offset_enum(w , h , offset_type)
-/// @param		{float} w							- 图像的长
-/// @param		{float} h							- 图像的宽
-/// @param		{enum} offset_type					- 图像偏移枚举
-/// @returns	{array[int]}						- 图像偏移坐标
+///@desc 按锚点枚举计算精灵原点
+///@param {Real} w 图像宽度
+///@param {Real} h 图像高度
+///@param {Real} offset_type 图像偏移枚举
+///@returns {Array} 原点的横坐标和纵坐标
 function sprite_get_offset_enum(w , h , offset_type){
 	if(offset_type == SPRITE_OFFSET.CUSTOM)	then	return([ 0 , 0 ]);
+	// 锚点落在对应边或中心
 	switch(offset_type){
 		case SPRITE_OFFSET.BOTTOM_LEFT:				return([ 0 , h ]);
 		case SPRITE_OFFSET.BOTTOM_RIGHT:			return([ w , h ]);
@@ -46,11 +46,23 @@ function sprite_get_offset_enum(w , h , offset_type){
 	};
 };
 
+///@desc 释放一对模糊表面
+///@param {Real} surf_a 第一张表面
+///@param {Real} surf_b 第二张表面
+///@returns {Undefined} 无
 function kawase_blur_free_pair(surf_a, surf_b) {
 	if (surface_exists(surf_a)) then surface_free(surf_a);
 	if (surface_exists(surf_b)) then surface_free(surf_b);
 }
 
+///@desc 无着色器时用缩小表面和四向叠加做模糊
+///@param {Any} sprite_id 源精灵
+///@param {Real} subimg 子图帧
+///@param {Real} dw 目标宽度
+///@param {Real} dh 目标高度
+///@param {Real} offset_x 原点横坐标
+///@param {Real} offset_y 原点纵坐标
+///@returns {Any} 新精灵，失败时为 -1
 function kawase_blur_downsample_fallback(sprite_id, subimg, dw, dh, offset_x, offset_y) {
 	var surf_a = surface_create(dw, dh);
 	var surf_b = surface_create(dw, dh);
@@ -67,6 +79,7 @@ function kawase_blur_downsample_fallback(sprite_id, subimg, dw, dh, offset_x, of
 	draw_sprite_stretched(sprite_id, subimg, 0, 0, dw, dh);
 	surface_reset_target();
 	var passes = pls_is_gxgames() ? 5 : 6;
+	// 四向错位叠加，偏移随遍数增大
 	for (var i = 0; i < passes; i++) {
 		var off = 1 + i;
 		surface_set_target(surf_b);
@@ -89,6 +102,15 @@ function kawase_blur_downsample_fallback(sprite_id, subimg, dw, dh, offset_x, of
 	return sprite_exists(spr) ? spr : -1;
 }
 
+///@desc 用 Kawase 着色器迭代模糊并生成精灵
+///@param {Any} sprite_id 源精灵
+///@param {Real} subimg 子图帧
+///@param {Real} dw 目标宽度
+///@param {Real} dh 目标高度
+///@param {Real} iterations 迭代次数
+///@param {Real} offset_x 原点横坐标
+///@param {Real} offset_y 原点纵坐标
+///@returns {Any} 新精灵，失败时为 -1
 function kawase_blur_shader_pass(sprite_id, subimg, dw, dh, iterations, offset_x, offset_y) {
 	var surf_src = surface_create(dw, dh);
 	var surf_dst = surface_create(dw, dh);
@@ -109,6 +131,7 @@ function kawase_blur_shader_pass(sprite_id, subimg, dw, dh, iterations, offset_x
 		var u_offset = shader_get_uniform(shd_kawase_blur, "offset");
 		var u_texsize = shader_get_uniform(shd_kawase_blur, "tex_size");
 		shader_set_uniform_f(u_texsize, dw, dh);
+		// 逐次加大偏移，并交换源表面与目标表面
 		for (var i = 1; i <= iterations; i++) {
 			surface_set_target(surf_dst);
 			draw_clear_alpha(c_black, 0);
@@ -134,21 +157,21 @@ function kawase_blur_shader_pass(sprite_id, subimg, dw, dh, iterations, offset_x
 	return sprite_exists(spr) ? spr : -1;
 }
 
-/// @function kawase_blur_sprite(image_uri , image_count , subing , iterations , offset_type , custom_offset , [save_path])
-/// @param		{string} image_uri					- 图像地址 (假如这里填的不是地址 , 则这里会被认为ref sprite)
-/// @param		{real} image_count					- 图像分割数量 (如果是ref sprite则没用)
-/// @param		{real} subimg						- 子图索引（0开始）
-/// @param		{real} iterations					- 迭代次数(越大越模糊，建议 3~8)
-/// @param		{enum} offset_type					- 图像偏移枚举 (SPRITE_OFFSET)
-/// @param		{array[int]} custom_offset			- 自定义图像偏移坐标 (仅有offset_type为SPRITE_OFFSET.CUSTOM才会生效)
-/// @param		{string} [save_path]				- 可选，保存 PNG 的文件路径(如 "blur.png"), 如果不保存则保存sprite索引
-/// @returns	{ref}								- 新的精灵索引 , 失败返回 -1
+///@desc 对图像做 Kawase 模糊，返回精灵或按路径保存
+///@param {Any} image_uri 图像地址，或已有精灵
+///@param {Real} image_count 图像分割数量，传入精灵时忽略
+///@param {Real} subimg 子图索引，从 0 开始
+///@param {Real} iterations 迭代次数，越大越模糊
+///@param {Real} offset_type 图像偏移枚举
+///@param {Array} custom_offset 自定义原点，仅自定义锚点时生效
+///@param {Any} save_path 要保存的文件路径，省略则返回精灵
+///@returns {Any} 新精灵、保存成功时的真值，或失败时的 -1
 function kawase_blur_sprite(image_uri, image_count , subimg , iterations, offset_type = SPRITE_OFFSET.TOP_LEFT , custom_offset = [0 , 0]  , save_path = undefined) {
 	var sprite_id = -1;
 	var owns_source_sprite = false;
 
-	// GM 2024+ sprite_add returns "ref sprite", not "ref". Treat any live
-	// sprite handle as a source; only strings go through sprite_add.
+	// GM 2024 起 sprite_add 返回的是精灵引用而不是旧句柄。
+	// 存活的精灵直接当源，只有字符串才去加载。
 	if (is_string(image_uri)) {
 		if (!file_exists(image_uri) && !(pls_is_html5() && (string_pos("blob:", image_uri) == 1 || string_pos("data:", image_uri) == 1 || string_pos("http", image_uri) == 1))) then return(-1);
 		sprite_id = sprite_add(image_uri, image_count, false, false, 0, 0);
@@ -169,6 +192,7 @@ function kawase_blur_sprite(image_uri, image_count , subimg , iterations, offset
 	var max_dim = pls_is_gxgames() ? 480 : 1920;
 	var blur_w = w;
 	var blur_h = h;
+	// 边长超过平台上限时先缩小再模糊
 	if (max(w, h) > max_dim) {
 		var sc = max_dim / max(w, h);
 		blur_w = max(8, round(w * sc));
@@ -192,6 +216,7 @@ function kawase_blur_sprite(image_uri, image_count , subimg , iterations, offset
 	};
 
 	var new_sprite = -1;
+	// 着色器不可用或失败时，改走缩小表面的四向模糊
 	if (use_shader) then new_sprite = kawase_blur_shader_pass(sprite_id, subimg, blur_w, blur_h, iter, ox, oy);
 	if (!sprite_exists(new_sprite)) then new_sprite = kawase_blur_downsample_fallback(sprite_id, subimg, blur_w, blur_h, ox, oy);
 

@@ -1,4 +1,4 @@
-/// @description 变量初始化
+///@desc 用户事件 0：变量初始化
 use_stream = false;
 self[$ "isExists"] = false;
 self[$ "success"] = false;

@@ -1,10 +1,11 @@
-/// @description Menu interactions
-// Rebuild when Camera_View changes room size / global_scales.
+///@desc 处理 Windows 菜单点击、快捷键和工具面板
+// Camera_View 改变房间尺寸或 global_scales 时重建布局。
 var scale_now = (variable_global_exists("global_scales") ? global_scales : 1.0);
 if (layout_w != room_width || layout_h != room_height || layout_scale != scale_now) {
         event_user(0);
 };
 
+// 设置界面打开时不响应菜单。
 if (settings_gui_blocking()) {
         hover_open = false;
         hover_sample = false;
@@ -13,6 +14,7 @@ if (settings_gui_blocking()) {
         exit;
 };
 
+// 工具面板独占输入：选任务、关面板，或按 X 去渲染设置。
 if (tools_open) {
         hover_open = false;
         hover_sample = false;
@@ -45,6 +47,7 @@ if (tools_open) {
                         var tool_jobs = phi_tools_jobs();
                         if (tools_hover >= array_length(tool_jobs)) then tools_hover = -1;
                 };
+                // 选中任务后弹出文件框，并按任务把谱面转成目标格式。
                 if (tools_hover >= 0 && mouse_check_button_pressed(mb_left) && !hover_tools_close) {
                         var tool_job = phi_tools_jobs()[tools_hover];
                         phi_tools_log("open dialog job=" + string(tools_hover) + " label=" + string(tool_job.label) + " source=" + string(tool_job.source) + " target=" + string(tool_job.target));
@@ -72,6 +75,7 @@ hover_sample = (mx >= btn_sample.x && mx <= btn_sample.x + btn_sample.w && my >=
 hover_render = (mx >= btn_render.x && mx <= btn_render.x + btn_render.w && my >= btn_render.y && my <= btn_render.y + btn_render.h);
 hover_settings = settings_menu_button_hit(mx, my);
 
+// 主菜单：设置、打开谱面、示例，或打开工具面板。
 if (mouse_check_button_pressed(mb_left)) {
         if (hover_settings) {
                 settings_gui_open();
@@ -105,6 +109,7 @@ if (mouse_check_button_pressed(mb_left)) {
         };
 };
 
+// O 打开谱面，S 载入示例，X 进入渲染设置。
 if (keyboard_check_pressed(ord("O"))) {
         var path2 = get_open_filename(lang("menu.filterChart"), "");
         if (string_length(path2)) {

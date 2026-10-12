@@ -1,3 +1,4 @@
+// 推进开场、游玩、结束和结算的过场状态机。
 if (!instance_exists(owner) || !variable_global_exists("game") || !is_struct(game)) {
 	instance_destroy();
 	exit;
@@ -6,6 +7,7 @@ if (variable_global_exists("pls_probe_until") && global.pls_probe_until > 0
 	&& variable_global_exists("pls_probe_t0")
 	&& !(variable_global_exists("pls_probe_exit_sent") && global.pls_probe_exit_sent)
 	&& !(variable_global_exists("pls_chromatic_front_logged") && global.pls_chromatic_front_logged)
+	// 探针超时仍没写到色差日志就退出。
 	&& (get_timer() - global.pls_probe_t0) >= 240000000) {
 	global.pls_probe_exit_sent = true;
 	print("[RPE Probe] wall timeout before chromatic front log");
@@ -27,6 +29,7 @@ if (state == PLAY_TRANSITION_STATE.PLAYING && chart_instances_activation_request
 var _now = get_timer();
 var _elapsed = max(0, _now - state_started_at);
 
+// 录像用帧号计时，不跟墙钟。
 if (variable_global_exists("render_mode") && global.render_mode) {
 	if (state == PLAY_TRANSITION_STATE.WAIT_MEDIA) {
 		game.paused = true;
@@ -37,7 +40,7 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 		if (!bool(variable_instance_get(_render_media, "isExists"))
 			|| !bool(variable_instance_get(_render_media, "success"))) then exit;
 		render_started_frame = global.render_frame;
-		// Recording starts with the start animation; skip the pre-animation wait.
+		// 录像从开场动画开始，跳过动画前的等待。
 		state = PLAY_TRANSITION_STATE.INTRO;
 	};
 	var _render_elapsed = max(0, (global.render_frame - render_started_frame) / max(1, global.render_fps));
@@ -52,6 +55,7 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 		_intro_play_delay = global.render_intro_start_delay_seconds;
 	};
 	var _intro_total = _intro_animation + _intro_play_delay;
+	// 谱面帧走完就进入结束过场。
 	if (state == PLAY_TRANSITION_STATE.PLAYING
 		&& variable_global_exists("render_chart_frames")
 		&& global.render_frame >= global.render_chart_frames) {
@@ -67,6 +71,7 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 			(global.render_frame - render_outro_started_frame) / max(1, global.render_fps));
 		var _render_phase_elapsed = _render_outro_elapsed - end_phase_origin_s;
 		var _render_end_signal = play_transition_step_end_phase(_render_phase_elapsed, 1.0);
+		// 1 切到下一小段，2 进入退出等待。
 		if (_render_end_signal == 1) {
 			end_phase_origin_s = _render_outro_elapsed;
 		} else if (_render_end_signal == 2) {
@@ -77,6 +82,7 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 	};
 	if (state == PLAY_TRANSITION_STATE.EXIT_DELAY) {
 		game.paused = true;
+		// 需要结算时等一秒再创建结算界面。
 		if (render_wants_settlement()) {
 			var _wait_s = max(0, (global.render_frame - render_exit_delay_started_frame)
 				/ max(1, global.render_fps));
@@ -94,6 +100,11 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 		game.paused = true;
 		exit;
 	};
+	// 噪域还在加载界面里收，录像帧先别往下走。
+	if (owner.object_index == oRender && official_block_pack_pending()) {
+		game.paused = true;
+		exit;
+	};
 	if (_render_elapsed < _intro_animation) {
 		game.paused = true;
 		progress = clamp(_render_elapsed / max(0.000001, _intro_animation), 0, 1);
@@ -104,6 +115,7 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 		play_transition_apply(1);
 		state = PLAY_TRANSITION_STATE.START_DELAY;
 	} else {
+		// 开场和等待都结束后才真正开播。
 		if (state != PLAY_TRANSITION_STATE.PLAYING) {
 			play_transition_activate_gameplay();
 			play_transition_activate_chart_instances();
@@ -130,6 +142,7 @@ switch (state) {
 		var _pcm_pending = variable_instance_exists(_media, "gx_pcm_id") && is_real(_media.gx_pcm_id) && _media.gx_pcm_id >= 0;
 		var _success_value = variable_instance_exists(_media, "success") ? variable_instance_get(_media, "success") : false;
 		var _waiting_pcm = _pcm_pending || is_undefined(_success_value);
+		// GX 等 PCM 解码，超时就继续开场。
 		if (pls_is_gxgames() && _waiting_pcm) {
 			if (_elapsed < 45000000) then break;
 			print("[L-Sound] GX WAIT_MEDIA PCM timeout; continuing without forcing audio success.");
@@ -158,6 +171,7 @@ switch (state) {
 
 	case PLAY_TRANSITION_STATE.INTRO_DELAY:
 		game.paused = true;
+		// 短延迟结束后开始扫线。
 		if (_elapsed >= intro_delay) {
 			state = PLAY_TRANSITION_STATE.INTRO;
 			state_started_at = _now;
@@ -168,6 +182,7 @@ switch (state) {
 		game.paused = true;
 		progress = clamp(_elapsed / animation_duration, 0, 1);
 		play_transition_apply(Easings.InOutExpo(progress));
+		// 扫线走完后停一下再开播。
 		if (progress >= 1) {
 			play_transition_apply(1);
 			state = PLAY_TRANSITION_STATE.START_DELAY;
@@ -177,7 +192,13 @@ switch (state) {
 
 	case PLAY_TRANSITION_STATE.START_DELAY:
 		game.paused = true;
+		// 开场等待结束，激活音符并开始播放。
 		if (_elapsed >= play_delay) {
+			// 官谱大噪域没收完就继续等，开播时开头的噪区已经就位。
+			if (owner.object_index == oRender && official_block_pack_pending()) {
+				official_blocks_pack_pump();
+				break;
+			};
 			play_transition_activate_gameplay();
 			play_transition_activate_chart_instances();
 			if (owner.object_index == oRender) then with (oNote) canDraw = true;
@@ -192,11 +213,13 @@ switch (state) {
 	break;
 
 	case PLAY_TRANSITION_STATE.PLAYING:
+		// 谱面请求退出时转入结束动画。
 		if (owner.chart_exit_started) then play_transition_begin_exit();
 	break;
 
 	case PLAY_TRANSITION_STATE.OUTRO:
 		var _end_signal = play_transition_step_end_phase(_elapsed, animation_duration);
+		// 结束小段切换或进入退出等待。
 		if (_end_signal == 1) {
 			state_started_at = _now;
 		} else if (_end_signal == 2) {
@@ -207,6 +230,7 @@ switch (state) {
 
 	case PLAY_TRANSITION_STATE.EXIT_DELAY:
 		game.paused = true;
+		// 环境测试直接结束，否则进入结算。
 		if (_elapsed >= exit_delay) {
 			if (variable_global_exists("pls_environment_run") && global.pls_environment_run) {
 				play_transition_finish_exit();

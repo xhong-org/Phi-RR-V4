@@ -1,10 +1,11 @@
-/// @description Evaluate the four cached event streams without per-frame arrays.
+///@desc 用户事件 2：求值四条已缓存的事件流，不每帧分配数组
 var now_time = (game.__time[1] * _beat_per_second),
 	next_x = __x,
 	next_y = __y,
 	next_alpha = __a,
 	next_rotation = __r;
 
+// 位移、透明度、旋转各自按当前事件插值。
 if(_event_lengths[0] > 0){
 	var move_event = (_move_events[_counts[0]]);
 	var move_progress = (move_event.startTime == move_event.endTime ? 1 : clamp((now_time - move_event.startTime) / (move_event.endTime - move_event.startTime), 0, 1));
@@ -25,19 +26,19 @@ if(_event_lengths[1] > 0){
 };
 
 if(_event_lengths[3] > 0){
-	// floorPosition is the float32 base at this event's start. Before the
-	// start this is the next event, extended backward. Past the last end
-	// the last value continues.
+	// floorPosition 是该事件起点的 float32 基准。开始前用下一条向前延伸。
+	// 超过最后一条的结束时间后，沿用最后一个值。
 	var speed_event = (_speed_events[_counts[3]]);
 	__value[0] = ((game.__time[1] - speed_event.startTime * _seconds_per_beat) * speed_event.value + __value[1]);
 };
 
+// NaN 不写回，避免坏事件把线坐标打飞。
 if(!is_nan(next_x)) then __x = next_x;
 if(!is_nan(next_y)) then __y = next_y;
 if(!is_nan(next_alpha)) then __a = next_alpha;
 if(!is_nan(next_rotation)) then __r = next_rotation;
 
-// The previous scale expression algebraically reduced to these two products.
+// 原先的缩放式子化简后就是这两个乘积。
 x = (chart_view_left + chart_view_width * __x);
 y = (chart_view_height * (1 - __y));
 image_alpha = __a;

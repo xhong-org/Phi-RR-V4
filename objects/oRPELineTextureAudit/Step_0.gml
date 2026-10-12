@@ -1,5 +1,7 @@
+// 判定线就绪后审计自定义纹理、透明度和文字位置。
 if (audit_complete) {
         wait_frames++;
+        // 退出测试回到菜单算通过，等太久算失败。
         if (exit_test_mode && room == room_menu) {
                 print("[ChartExitTest][PASS] Returned to room_menu with bound UI alpha <= 0.");
                 game_end();
@@ -19,6 +21,7 @@ if (room != room_play_rpe
         || !variable_global_exists("game_1")
         || !is_struct(game_1)
         || instance_number(oLine_1) <= 0) {
+        // 等不到 RPE 判定线就失败。
         if (wait_frames >= 21600) {
                 print("[RPETextureAudit][FAIL] Timed out waiting for RPE judge lines.");
                 audit_complete = true;
@@ -28,6 +31,7 @@ if (room != room_play_rpe
         exit;
 };
 
+// 判定线还在分帧创建，或房间尺寸还没切到渲染分辨率。
 if (test_mode && rpe_lines_creating()) {
         exit;
 };
@@ -53,6 +57,7 @@ var line_alpha_min = infinity;
 var line_alpha_max = -infinity;
 
 var line_count = instance_number(oLine_1);
+// 逐线核对透明度和自定义纹理是否真正绑定。
 for (var instance_i = 0; instance_i < line_count; instance_i++) {
         var line_instance = instance_find(oLine_1, instance_i);
         if (!instance_exists(line_instance)) then continue;
@@ -67,6 +72,7 @@ for (var instance_i = 0; instance_i < line_count; instance_i++) {
 		print($"[RPEAlphaAudit][LINE_MISMATCH] line={line_i} raw={raw_alpha} actual={line_instance.image_alpha} expected={expected_line_alpha}");
 	};
 	var texture_name = string(line_instance.image ?? "line.png");
+        // 默认 line.png 不计入自定义纹理。
         if (!string_length(texture_name) || texture_name == "line.png") then continue;
         referenced_lines++;
 
@@ -82,6 +88,7 @@ for (var instance_i = 0; instance_i < line_count; instance_i++) {
         var bound_ok = sprite_ok && (line_instance.sprite_index == sprite_id);
         if (bound_ok) then lines_bound++;
 
+        // 每种纹理只统计一次文件和精灵。
         if (!struct_exists(unique_textures, texture_name)) {
                 struct_set(unique_textures, texture_name, true);
                 unique_count++;
@@ -101,6 +108,7 @@ var note_alpha_min = infinity;
 var note_alpha_max = -infinity;
 if (is_struct(game_1._note_activation_records)) {
 	var note_keys = struct_get_names(game_1._note_activation_records);
+	// 音符透明度必须落在 0 到 1。
 	for (var note_i = 0; note_i < array_length(note_keys); note_i++) {
 		var note_record = game_1._note_activation_records[$ note_keys[note_i]];
 		if (!is_struct(note_record)) then continue;
@@ -129,6 +137,7 @@ if (test_mode && !text_probe_done) {
 };
 audit_complete = true;
 
+// 退出测试把绑定界面透明度打成 -1，并缩短音频以便离开。
 if (exit_test_mode) {
         var exit_renderer = instance_find(oRender_1, 0);
         if (instance_exists(exit_renderer) && is_struct(exit_renderer.bindUI)) {

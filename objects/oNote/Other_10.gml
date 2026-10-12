@@ -1,4 +1,4 @@
-/// @description Initialise note state and cache time conversions.
+///@desc 初始化官谱音符贴图、判定时间和连击计数
 if(inition) then exit;
 
 realHitTime = (self.time * _seconds_per_beat);
@@ -10,9 +10,10 @@ if (is_struct(_skin_hold) && sprite_exists(_skin_hold.body)) {
 	_hold_body_height = max(1, sprite_get_height(_skin_hold.body));
 };
 max_visible_position = official_max_visible_pos(self.yOffset);
-// Official holds hide when the head reaches the line. The body is not a floor span.
+// 官谱 Hold 在头碰到判定线后隐藏，身体不算地板跨度。
 maximum_visual_length = max_visible_position;
 
+// 按音符类型绑定贴图和打击音。
 switch(self.type){
 	case 1:
 		sprite_index = note_tap;
@@ -65,8 +66,7 @@ hitTime2 = chart_auto_hit_offset_ms(self.type);
 
 judgeTime = (self.time + hitTime2 * 0.001 * _beat_per_second);
 judgeRealTime = (judgeTime * _seconds_per_beat);
-// GX audio length is often still -1/0 here (JS decode / PCM HTTP). Treat
-// unknown length as "count this note" so official score is not 0/0 = NaN.
+// GX 此时音频长度常还是 -1/0。未知长度也计入，避免官谱分数 0/0 变成 NaN。
 var _media_len = 0;
 if (instance_exists(oMedia) && is_real(oMedia.length) && is_finite(oMedia.length) && oMedia.length > 0) then _media_len = oMedia.length;
 if (_media_len <= 0 || (realHitTime * 1000000) <= _media_len) then maxcombo ++;

@@ -1,2 +1,2 @@
-/// @description Pause menu is drawn in Draw End, after the chart blit.
+///@desc 暂停菜单改在绘制结束画，普通绘制事件直接退出
 exit;

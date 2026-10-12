@@ -1,1 +1,1 @@
-/// @description legacy draw path disabled; Draw_0 owns background rendering
+///@desc 用户事件 1：旧绘制路径已停用，背景由绘制事件负责

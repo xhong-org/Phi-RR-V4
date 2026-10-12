@@ -1,24 +1,31 @@
-/// @desc Spread RPE line+note construction across loading frames.
-/// Each line and note finishes Create + force-Step init, then freeze.
-/// Thaw happens before music; GM activate is deferred one event.
+// 把 RPE 判定线与音符的创建摊到多个加载帧。
+// 每条线和每个音符完成 Create 与强制 Step 初始化后再冻结。
+// 音乐开始前解冻；GameMaker 的激活推迟一个事件。
 
 #macro RPE_LINE_CREATE_BUDGET_US 8000
 
+///@desc 判断 RPE 判定线是否仍在分帧创建
+///@returns {Bool} 正在创建时为真
 function rpe_lines_creating() {
 	return variable_global_exists("game_1") && is_struct(game_1)
 		&& bool(game_1[$ "_rpe_lines_creating"] ?? false);
 }
 
+///@desc 隐藏刚创建、尚未参与播放的实例
+///@param {Id.Instance} _inst 实例
+///@returns {Undefined} 无
 function rpe_lines_hide_created(_inst) {
 	chart_lines_hide_created(_inst);
 }
 
+///@desc 准备 RPE 创建任务、字体与 BPM，并隐藏游玩画面
+///@returns {Undefined} 无
 function rpe_lines_begin() {
 	var rpe = game_1;
 	var judge_lines = rpe.chart[$ "judgeLineList"] ?? [];
 	if (!is_array(judge_lines)) then judge_lines = [];
-	// PhiZone zIndex / targetRange share one depth map. Charts that omit both
-	// keep the legacy zOrder spacing so Phira line order does not move.
+	// PhiZone 的 zIndex 与 targetRange 共用一张深度表。两者都没有的谱
+	// 仍用旧的 zOrder 间距，避免 Phira 判定线顺序被挪动。
 	global.chart_layer_mode = false;
 	if (instance_exists(oExtraPlay)
 		&& variable_instance_exists(oExtraPlay, "requests_chart_layers")
@@ -26,6 +33,7 @@ function rpe_lines_begin() {
 	for (var layer_line_i = 0; layer_line_i < array_length(judge_lines) && !global.chart_layer_mode; layer_line_i++) {
 		var layer_line = judge_lines[layer_line_i];
 		if (!is_struct(layer_line)) then continue;
+		// 线或音符带 zIndex 就启用图层深度
 		if (is_real(layer_line[$ "zIndex"])) {
 			global.chart_layer_mode = true;
 			break;
@@ -66,6 +74,7 @@ function rpe_lines_begin() {
 			var font_event = font_events[font_event_i];
 			if (!is_struct(font_event)) then continue;
 			var font_name = string(font_event[$ "font"] ?? "cmdysj");
+			// 默认字体和已经加载过的字体不再读文件
 			if (!string_length(font_name) || string_lower(font_name) == "cmdysj"
 				|| struct_exists(rpe.Fonts, font_name)) then continue;
 
@@ -100,10 +109,11 @@ function rpe_lines_begin() {
 	print($"Lines Count: {line_group_size}");
 	var eff_line_count = 0;
 	if (chart_file_exists_any(chart_path_join(InChartPath, "extra.json"))) {
-		// reserved extra-effect line count
+		// 预留给额外特效的判定线数量
 	};
 	print(eff_line_count);
 	var line_limit = line_group_size - eff_line_count;
+	// 特效线占满时不再创建普通线
 	if (line_limit < 0) then line_limit = 0;
 	rpe._rpe_line_job = {
 		judge_lines: judge_lines,
@@ -117,6 +127,9 @@ function rpe_lines_begin() {
 	chart_set_gameplay_visible(false);
 }
 
+///@desc 创建一条 RPE 判定线及其上的全部音符
+///@param {Real} i 判定线序号
+///@returns {Undefined} 无
 function rpe_lines_create_one(i) {
 	var rpe = game_1;
 	var job = rpe._rpe_line_job;
@@ -124,6 +137,7 @@ function rpe_lines_create_one(i) {
 	var _note_preload = job.note_preload;
 	var _chart_offset_sec = job.chart_offset_sec;
 	var l_s = judge_lines[i];
+	// 空槽不创建实例
 	if (!is_struct(l_s)) then return;
 	var events = [];
 	global._id = i;
@@ -133,6 +147,7 @@ function rpe_lines_create_one(i) {
 	};
 
 	var _isFather = (l_s[$ "father"] ?? -1);
+	// 父线 id 非法时视为没有父线
 	if (!is_real(_isFather)) then _isFather = -1;
 	print($"Line[{i}]FatherID->{_isFather >= 0 ? _isFather : "undefined"}", game.settings.enableDebug);
 	var line_override = chart_line_override(i);
@@ -163,7 +178,7 @@ function rpe_lines_create_one(i) {
 	rpe.line_list[i] = l;
 	array_add(rpe.runtime_line_instances, l);
 	rpe_lines_hide_created(l);
-	// Force Step so event cursors and raw transform exist before freeze.
+	// 冻结前强制 Step，让事件游标和原始变换先存在。
 	if (instance_exists(l)) {
 		with (l) {
 			rpe_force_event_init = true;
@@ -176,12 +191,14 @@ function rpe_lines_create_one(i) {
 	if (!is_array(line_notes)) then line_notes = [];
 	for (var n = 0; n < array_length(line_notes); n++) {
 		var n_s = line_notes[n];
+		// 坏音符数据跳过
 		if (!is_struct(n_s)) then continue;
 		var isFake = bool(n_s[$ "isFake"] ?? false);
 		if (!isFake) then maxcombo++;
 
 		var rpe_type = real(n_s[$ "type"] ?? 1);
 		var off_type = rpe_type;
+		// RPE 类型 2/3/4 换成播放端的 Hold/Flick/Drag
 		if (rpe_type == 2) then off_type = 3;
 		else if (rpe_type == 3) then off_type = 4;
 		else if (rpe_type == 4) then off_type = 2;
@@ -232,6 +249,7 @@ function rpe_lines_create_one(i) {
 		var custom_fmod_sound = -1;
 		var custom_hitsound_path = "";
 		var hitsound_name = string(n_s[$ "hitsound"] ?? "");
+		// 内置打击音名直接用资源，其余尝试从谱面目录加载
 		if (hitsound_name == "tap.mp3") {
 			custom_sound = snd_note_tap;
 		} else if (hitsound_name == "drag.mp3") {
@@ -292,6 +310,7 @@ function rpe_lines_create_one(i) {
 		});
 		rpe_lines_hide_created(note_instance);
 		var note_factor = real(l.bpmfactor);
+		// 线的 BPM 倍率无效时按 1
 		if (!is_real(note_factor) || note_factor <= 0) then note_factor = 1;
 		var note_hit_sec = _chart_offset_sec + note_factor * note_start_sec;
 		var note_end_hit_sec = _chart_offset_sec + note_factor * note_end_sec;
@@ -305,6 +324,7 @@ function rpe_lines_create_one(i) {
 				note_instance, note_hitsound_time, custom_hitsound_path, isFake);
 		};
 		var note_lead = _note_preload;
+		// 谱面写了可见时间时，提前量不能超过它
 		if (is_finite(n_vis) && n_vis >= 0 && n_vis < 999999) then note_lead = min(note_lead, note_factor * n_vis);
 		array_add(rpe._notes, {
 			id: note_instance,
@@ -318,10 +338,14 @@ function rpe_lines_create_one(i) {
 	};
 }
 
+///@desc 在时间预算内继续创建 RPE 判定线
+///@param {Real} _budget_us 本帧预算，微秒
+///@returns {Bool} 本批已全部建完
 function rpe_lines_pump(_budget_us = CHART_LINE_CREATE_BUDGET_US) {
 	if (!rpe_lines_creating()) then return true;
 	var rpe = game_1;
 	var job = rpe._rpe_line_job;
+	// 任务丢失则结束创建
 	if (!is_struct(job)) {
 		rpe._rpe_lines_creating = false;
 		return true;
@@ -332,6 +356,7 @@ function rpe_lines_pump(_budget_us = CHART_LINE_CREATE_BUDGET_US) {
 		rpe_lines_create_one(job.next_index);
 		job.next_index++;
 		created++;
+		// 至少创建一条后，超时就留到下一帧
 		if (_budget_us > 0 && (get_timer() - t0) >= _budget_us && created >= 1) then break;
 	};
 	if (job.next_index >= job.line_limit) {
@@ -341,10 +366,17 @@ function rpe_lines_pump(_budget_us = CHART_LINE_CREATE_BUDGET_US) {
 	return false;
 }
 
+///@desc 排序音符、校验父线并按层级设置深度
+///@returns {Undefined} 无
 function rpe_lines_finish() {
 	var rpe = game_1;
 	rpe._rpe_lines_creating = false;
-	array_sort(rpe._notes, function(a, b) {
+	array_sort(rpe._notes, 
+	///@desc 按开始秒比较音符
+	///@param {Struct} a 左项
+	///@param {Struct} b 右项
+	///@returns {Real} 小于为 -1，大于为 1，相等为 0
+	function(a, b) {
 		if (a.startSec < b.startSec) then return -1;
 		if (a.startSec > b.startSec) then return 1;
 		return 0;
@@ -355,6 +387,7 @@ function rpe_lines_finish() {
 		var _group_time = rpe._notes[_group_start].startSec;
 		while (_group_end < array_length(rpe._notes)
 			&& rpe._notes[_group_end].startSec == _group_time) _group_end++;
+		// 同一时刻多于一颗时打开同时音高亮
 		if (_group_end - _group_start > 1) {
 			for (var _hi = _group_start; _hi < _group_end; _hi++) {
 				var _highlight_note = rpe._notes[_hi].id;
@@ -363,7 +396,12 @@ function rpe_lines_finish() {
 		};
 		_group_start = _group_end;
 	};
-	array_sort(rpe._notes, function(a, b) {
+	array_sort(rpe._notes, 
+	///@desc 先按激活时间、再按打击时间比较音符
+	///@param {Struct} a 左项
+	///@param {Struct} b 右项
+	///@returns {Real} 小于为 -1，大于为 1，相等为 0
+	function(a, b) {
 		if (a.activateSec < b.activateSec) then return -1;
 		if (a.activateSec > b.activateSec) then return 1;
 		if (a.hitSec < b.hitSec) then return -1;
@@ -372,10 +410,11 @@ function rpe_lines_finish() {
 	});
 	var _note_preload = 15;
 	if (is_struct(rpe._rpe_line_job)) then _note_preload = real(rpe._rpe_line_job.note_preload ?? 15);
+	// 预加载为 0 时视为音符一开始就全部激活
 	rpe._note_activation_enabled = (_note_preload > 0);
 	rpe._note_activation_index = (rpe._note_activation_enabled ? 0 : array_length(rpe._notes));
 	rpe._note_activation_last_time = -infinity;
-	// Freeze every note only after Create + spatial records finished.
+	// 创建和空间记录都完成后才冻结每个音符。
 	for (var _di = 0; _di < array_length(rpe._notes); _di++) {
 		instance_deactivate_object(rpe._notes[_di].id);
 	};
@@ -389,6 +428,7 @@ function rpe_lines_finish() {
 		while (is_real(_parent) && _parent >= 0) {
 			if (_parent >= array_length(rpe.line_list) || _parent == _fi || _seen[_parent]
 				|| !instance_exists(rpe.line_list[_parent])) {
+				// 父链越界、自环或断掉则这条线不再挂父线
 				_valid_parent = false;
 				break;
 			};
@@ -399,6 +439,7 @@ function rpe_lines_finish() {
 		_fl._father_chain = [];
 		_parent = _fl.isFather;
 		var _chain_guard = 0;
+		// 父链最多记 16 层，防止异常数据死循环
 		while (is_real(_parent) && _parent >= 0 && _chain_guard < 16) {
 			var _parent_line = rpe.line_list[_parent];
 			if (!instance_exists(_parent_line)) then break;
@@ -436,6 +477,7 @@ function rpe_lines_finish() {
 				} else if (_dz == 0 && real(_prev.line_id) > real(_cur.line_id)) {
 					_swap = true;
 				};
+				// 已按 zOrder、再按 line_id 排好则停止插入
 				if (!_swap) then break;
 				_order[_j + 1] = _prev;
 				_j--;
@@ -448,6 +490,7 @@ function rpe_lines_finish() {
 			var unique_orders = [];
 			for (var _ui = 0; _ui < _line_count; _ui++) {
 				var _unique_line = _order[_ui];
+				// 已有 zIndex 的线不参与旧 zOrder 均分
 				if (variable_instance_exists(_unique_line, "zIndex") && is_real(_unique_line.zIndex)) then continue;
 				var _raw_order = real(_unique_line.z_order_raw ?? _unique_line.zOrder);
 				var _raw_seen = false;
@@ -459,7 +502,12 @@ function rpe_lines_finish() {
 				};
 				if (!_raw_seen) then array_add(unique_orders, _raw_order);
 			};
-			array_sort(unique_orders, function(a, b) { return sign(a - b); });
+			array_sort(unique_orders, 
+			///@desc 按原始层级数值升序
+			///@param {Real} a 左值
+			///@param {Real} b 右值
+			///@returns {Real} 比较符号
+			function(a, b) { return sign(a - b); });
 			var precedence_step = 1 / max(1, array_length(unique_orders));
 			for (var _ri = 0; _ri < _line_count; _ri++) {
 				var _layer_line = _order[_ri];
@@ -493,6 +541,7 @@ function rpe_lines_finish() {
 		} else {
 			var _depth_span = DEPTH.LINE - (DEPTH.NOTE + 2);
 			var _depth_step = 1;
+			// 线比深度槽多时压缩间距，避免盖住音符
 			if (_line_count > _depth_span + 1) {
 				_depth_step = _depth_span / max(1, _line_count - 1);
 			};
@@ -519,13 +568,20 @@ function rpe_lines_finish() {
 	rpe._rpe_line_job = undefined;
 }
 
+///@desc 排序空间分组并补登记绑定到界面的判定线
+///@returns {Undefined} 无
 function rpe_lines_post_bind() {
 	var rpe = game_1;
 	var _spatial_groups = rpe._note_spatial_groups;
 	if (is_array(_spatial_groups)) {
 		var _spatial_group_count = array_length(_spatial_groups);
 		for (var _spatial_i = 0; _spatial_i < _spatial_group_count; _spatial_i++) {
-			array_sort(_spatial_groups[_spatial_i].notes, function(a, b) {
+			array_sort(_spatial_groups[_spatial_i].notes, 
+			///@desc 按空间地板比较音符
+			///@param {Struct} a 左项
+			///@param {Struct} b 右项
+			///@returns {Real} 小于为 -1，大于为 1，相等为 0
+			function(a, b) {
 				if (a.spatialFloor < b.spatialFloor) then return -1;
 				if (a.spatialFloor > b.spatialFloor) then return 1;
 				return 0;
@@ -542,6 +598,7 @@ function rpe_lines_post_bind() {
 			array_copy(_hold_group.originalNotes, 0, _hold_group.notes, 0, _hold_group.count);
 		};
 	};
+	// 线表缺失时从仍存在的实例重新收集
 	if (!struct_exists(rpe, "line_list") || !is_array(rpe.line_list)) {
 		rpe.line_list = [];
 		with (oLine_1) array_add(rpe.line_list, id);
@@ -557,19 +614,26 @@ function rpe_lines_post_bind() {
 	};
 }
 
+///@desc 初始化结束后冻结 RPE 判定线对象
+///@returns {Undefined} 无
 function rpe_lines_freeze_after_init() {
 	chart_lines_freeze_object(oLine_1);
 }
 
+///@desc 完成收尾、绑定并冻结 RPE 判定线
+///@returns {Undefined} 无
 function rpe_lines_complete() {
 	rpe_lines_finish();
 	rpe_lines_post_bind();
 	rpe_lines_freeze_after_init();
 }
 
+///@desc 解冻后对 RPE 判定线再强制跑普通 Step 与 Step End
+///@returns {Undefined} 无
 function rpe_lines_thaw_force_init() {
 	if (!variable_global_exists("game_1") || !is_struct(game_1) || !is_array(game_1.line_list)) then return;
 	var lines = game_1.line_list;
+	// 第一轮补普通 Step
 	for (var i = 0; i < array_length(lines); i++) {
 		var l = lines[i];
 		if (!instance_exists(l)) then continue;
@@ -579,6 +643,7 @@ function rpe_lines_thaw_force_init() {
 			rpe_force_event_init = false;
 		};
 	};
+	// 第二轮补 Step End，父子变换才完整
 	for (var j = 0; j < array_length(lines); j++) {
 		var line_end = lines[j];
 		if (!instance_exists(line_end)) then continue;

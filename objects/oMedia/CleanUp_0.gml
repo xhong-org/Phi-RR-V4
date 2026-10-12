@@ -1,5 +1,6 @@
-/// @description Release audio resources when the room or game ends.
+///@desc 清理：房间或游戏结束时释放音频资源
 if(!resources_released){
+	// GX 走自己的释放，不再动 FMOD。
 	if (media_use_gx()) {
 		gx_media_release(id);
 		resources_released = true;

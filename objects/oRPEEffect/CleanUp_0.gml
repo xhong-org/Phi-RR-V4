@@ -1,5 +1,6 @@
-/// @description Release post-processing surfaces.
+///@desc 释放后期表面、外部着色器和区间捕获
 if (variable_instance_exists(id, "effect_boundary_role")) {
+	// 只有开始哨兵负责释放共享的区间表面。
 	if (effect_boundary_role == "start" && surface_exists(effect_boundary_state.surface)) {
 		surface_free(effect_boundary_state.surface);
 		effect_boundary_state.surface = -1;
@@ -10,6 +11,7 @@ shader_reset();
 if ((extension_exists("I_Shaders") || rpe_ext_shader_gx())
 	&& variable_instance_exists(id, "external_hlsl_handles") && is_struct(external_hlsl_handles)) {
 	var external_names = struct_get_names(external_hlsl_handles);
+	// 逐个释放外部、GLES 和内置原生句柄。
 	for (var external_i = 0; external_i < array_length(external_names); external_i++) {
 		rpe_ext_release(external_hlsl_handles[$ external_names[external_i]]);
 	};

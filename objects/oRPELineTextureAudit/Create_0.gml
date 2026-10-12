@@ -1,4 +1,4 @@
-/// @description Wait for RPE lines, then audit custom texture loading once.
+///@desc 等待 RPE 判定线，并准备一次性纹理与文字探针
 persistent = true;
 wait_frames = 0;
 audit_complete = false;
@@ -7,9 +7,12 @@ exit_test_mode = variable_global_exists("pls_exit_test") && global.pls_exit_test
 text_probe_done = false;
 print($"[RPETextureAudit] Created testMode={test_mode}");
 
+///@desc 把判定线事件游标清回起点
+///@returns {Undefined} 无
 function rpe_text_probe_reset_cursors() {
 	with (oLine_1) {
 		if (is_array(events_count)) {
+			// 每层计数和扩展计数都归零。
 			for (var layer_i = 0; layer_i < array_length(events_count); layer_i++) {
 				var layer_counts = events_count[layer_i];
 				if (!is_struct(layer_counts)) then continue;
@@ -28,7 +31,11 @@ function rpe_text_probe_reset_cursors() {
 	};
 }
 
+///@desc 把谱面时间跳到指定秒并强制刷新判定线
+///@param {Real} _sec 目标谱面秒
+///@returns {Bool} 成功推进时为真
 function rpe_text_probe_seek(_sec) {
+	// 没有谱面时钟就无法跳转。
 	if (!variable_global_exists("game") || !is_struct(game) || !is_array(game.__time)) then return false;
 	var offset_sec = 0;
 	if (variable_global_exists("game_1") && is_struct(game_1) && is_struct(game_1.chart_info)) {
@@ -45,6 +52,8 @@ function rpe_text_probe_seek(_sec) {
 	return true;
 }
 
+///@desc 抽样文字和默认判定线，返回位置或尺寸不符的数量
+///@returns {Real} 不匹配的样本数
 function rpe_text_probe_run() {
 	chart_view_refresh(room_width, room_height);
 	var view_w = chart_view_width;
@@ -63,6 +72,7 @@ function rpe_text_probe_run() {
 
 	var samples = [];
 	var line_count = instance_number(oLine_1);
+	// 每条有文字事件的线最多抽三条有空格或换行的样本。
 	for (var instance_i = 0; instance_i < line_count; instance_i++) {
 		var line_instance = instance_find(oLine_1, instance_i);
 		if (!instance_exists(line_instance) || !line_instance.has_text_events) then continue;
@@ -71,6 +81,7 @@ function rpe_text_probe_run() {
 		var picked = 0;
 		var saw_space = false;
 		var saw_break = false;
+		// 已经有普通样本后，只再收带空格或换行的。
 		for (var event_i = 0; event_i < array_length(text_events) && picked < 3; event_i++) {
 			var text_event = text_events[event_i];
 			if (!is_struct(text_event)) then continue;
@@ -92,9 +103,11 @@ function rpe_text_probe_run() {
 			if (sample_break) then saw_break = true;
 		};
 	};
+	// 按时间插入排序，方便顺序跳转。
 	for (var sort_i = 1; sort_i < array_length(samples); sort_i++) {
 		var sort_item = samples[sort_i];
 		var sort_j = sort_i - 1;
+		// 把更晚的样本向后挪。
 		while (sort_j >= 0 && samples[sort_j].sec > sort_item.sec) {
 			samples[sort_j + 1] = samples[sort_j];
 			sort_j--;
@@ -105,6 +118,7 @@ function rpe_text_probe_run() {
 	var mismatch = 0;
 	for (var sample_i = 0; sample_i < array_length(samples); sample_i++) {
 		var sample = samples[sample_i];
+		// 跳转失败就跳过这条样本。
 		if (!rpe_text_probe_seek(sample.sec)) then continue;
 		var line_instance = sample.line;
 		if (!instance_exists(line_instance)) then continue;
@@ -119,6 +133,7 @@ function rpe_text_probe_run() {
 		var pos_ok = abs(dx) <= 0.6 && abs(dy) <= 0.6;
 		var size_ratio = (view_w > 0) ? (em_x / view_w) : 0;
 		var size_ok = abs(size_ratio - (50 / 1350) * abs(line_instance.__scale_x)) <= 0.00001;
+		// 位置或字号比例不对就记一次不匹配。
 		if (!pos_ok || !size_ok) then mismatch++;
 		var norm_x = (view_w > 0) ? ((line_instance.x - view_left - view_w * 0.5) / view_w) : 0;
 		var norm_y = (view_h > 0) ? ((line_instance.y - view_h * 0.5) / view_h) : 0;
@@ -130,6 +145,7 @@ function rpe_text_probe_run() {
 	var judge_count = instance_number(oLine_1);
 	for (var line_i = 0; line_i < judge_count && logged_lines < 4; line_i++) {
 		var judge = instance_find(oLine_1, line_i);
+		// 只抽默认、没有文字、也没绑界面的判定线。
 		if (!instance_exists(judge) || !judge.is_default_line || judge.has_text_events || judge.is_attach_ui) then continue;
 		if (abs(judge.__scale_x) < 0.2) then continue;
 		var half_rpe = chart_line_pixel_width(judge);
@@ -141,6 +157,7 @@ function rpe_text_probe_run() {
 		print($"[LineProbe] line={judge.line_id} scaleX={judge.__scale_x} widthPx={half_rpe} expect={expect_half} view={view_w}x{view_h} widthOk={half_ok}");
 		logged_lines++;
 	};
+	// 一个文字样本都没有也算失败。
 	if (array_length(samples) <= 0) then mismatch = 1;
 	print($"[TextProbe][SUMMARY] samples={array_length(samples)} mismatch={mismatch} room={room_width}x{room_height} view={view_w}x{view_h}");
 	return mismatch;

@@ -1,5 +1,6 @@
-/// @description 
+///@desc 创建：旧版打击粒子系统，图层模式时放在 PhiZone z 7
 
+// 图层模式用谱面 z 7，否则用打击特效深度。
 depth = (variable_global_exists("chart_layer_mode") && global.chart_layer_mode) ? chart_layer_depth(7) : DEPTH.HEF;
 note_scale = 1;
 image_blend = #ffeca0;
@@ -38,6 +39,7 @@ part_type_speed(part , (_spd - 15) * note_scale , (_spd * note_scale) , (-3.2 * 
 
 //part_
 
+// 粒子和打击图都活 30 帧。
 part_type_life(part,30,30);
 part_type_life(_hitFX,30,30);
 

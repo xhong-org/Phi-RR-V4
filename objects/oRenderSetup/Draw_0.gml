@@ -1,4 +1,4 @@
-/// @description Render settings GUI.
+///@desc 绘制渲染设置面板、输入框和选项
 if (font_exists(ui_font)) then draw_set_font(ui_font);
 var scale = variable_global_exists("global_scales") ? max(0.01, global_scales) : 1.0;
 var panel_width = 980 * scale;
@@ -14,6 +14,7 @@ draw_text_transformed(left, top + 42 * scale, lang("render.hint"), 0.42 * scale,
 var labels = [lang("render.chartPath"), lang("render.videoOutput"), lang("render.fps"), lang("render.quality"), lang("render.aspect")];
 var values = [path_text, output_text, fps_text, quality_text, aspect_text];
 var row = top + 92 * scale;
+// 五行输入框，当前字段高亮。
 for (var i = 0; i < 5; i++) {
     draw_set_colour(make_colour_rgb(190, 198, 218)); draw_text_transformed(left, row + i * 62 * scale, labels[i], 0.48 * scale, 0.48 * scale, 0);
     var hot = (field == i); draw_set_colour(hot ? make_colour_rgb(38, 75, 104) : make_colour_rgb(22, 29, 45));

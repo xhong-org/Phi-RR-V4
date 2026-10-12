@@ -1,4 +1,4 @@
-/// @description In-game host filesystem picker (GX.games has no OS dialog)
+///@desc 创建：游戏内宿主文件系统选择器（GX.games 没有系统对话框）
 depth = -2000000;
 on_ok = gx_file_picker_queue_chart;
 on_cancel = undefined;
@@ -23,6 +23,7 @@ api_job = "";
 api_unpack_files = [];
 api_unpack_index = 0;
 items = [];
+// GX 没有本地盘符，根目录留空；其他平台直接列盘。
 roots = pls_is_gxgames() ? [] : gx_file_picker_roots();
 root_rects = [];
 selected = 0;
@@ -49,6 +50,7 @@ layout_scale = -1;
 layout_s = 1;
 ui_font = pls_ui_font_add(24);
 keyboard_string = "";
+// 读上次目录缓存，再排一次界面。
 gx_fp_cache_load();
 if (string_length(last_dir_cached)) then current_dir = last_dir_cached;
 gx_fp_layout();

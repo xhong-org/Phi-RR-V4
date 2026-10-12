@@ -1,1 +1,1 @@
-/// @description The outer background is owned by oBG.
+///@desc 绘制开始：外层背景由 oBG 负责，此处不画

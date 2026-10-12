@@ -1,4 +1,4 @@
-/// @description 
+///@desc 媒体就绪后开始 PEC 播放
 var is_exists = false,
 	success = false;
 with(oMedia){
@@ -6,6 +6,7 @@ with(oMedia){
 	success = (self[$ "success"]);
 };
 //with(oNote){ canDraw = true; };
+// 音频还没准备好就先不开播。
 if(!is_exists || !success) then exit;
 
 print("Playing" , game.settings.enableDebug);

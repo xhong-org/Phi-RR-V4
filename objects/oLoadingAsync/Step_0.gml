@@ -1,6 +1,6 @@
-/// @description Stepwise loading with non-blocking ZIP extraction.
-// Resolve the package and illustration first. Expensive default resources wait
-// until the black cover has crossed the screen.
+///@desc 步进：分阶段加载，ZIP 解压不阻塞
+// 先解析包和插图。费时的默认资源等到黑幕扫过屏幕后再加载。
+// 探针超时就结束游戏。
 if (variable_global_exists("pls_probe_until") && global.pls_probe_until > 0
         && variable_global_exists("pls_probe_t0")
         && !(variable_global_exists("pls_probe_exit_sent") && global.pls_probe_exit_sent)
@@ -10,8 +10,10 @@ if (variable_global_exists("pls_probe_until") && global.pls_probe_until > 0
         game_end();
         exit;
 };
+// 黑幕还没扫完时，阶段 2 先停住。
 if (variable_global_exists("loading_animation_load_start")
         && !global.loading_animation_load_start && phase == 2) exit;
+// 结束或失败后只等按键返回。
 if (done || failed) {
         if (keyboard_check_pressed(vk_escape) || keyboard_check_pressed(vk_enter) || mouse_check_button_pressed(mb_left)) {
                 if (failed) {
@@ -23,12 +25,14 @@ if (done || failed) {
 };
 
 phase_timer++;
+// 先留一帧给出画面。
 if (phase == 0 && phase_timer < 2) {
         message = lang("loading.queued");
         detail = source_path;
         exit;
 };
 
+// 阶段 0：进入解析。
 if (phase == 0) {
         message = lang("loading.resolving");
         detail = source_path;
@@ -37,6 +41,7 @@ if (phase == 0) {
         exit;
 };
 
+// 阶段 1：示例、压缩包或直接扫描。
 if (phase == 1) {
         var ok = false;
         if (source_path == "__sample__") {
@@ -47,6 +52,7 @@ if (phase == 1) {
                 message = lang("loading.unicodeExtract");
                 detail = source_path;
                 ok = chart_session_zip_begin(source_path);
+                // 压缩包改走异步轮询。
                 if (ok) {
                         phase = 10;
                         phase_timer = 0;
@@ -58,6 +64,7 @@ if (phase == 1) {
                 ok = chart_session_begin_source(source_path);
         };
 
+        // 解析失败：探针模式直接退出，否则弹窗并返回。
         if (!ok) {
                 failed = true;
                 var session_fail = chart_session_ensure();
@@ -86,14 +93,17 @@ if (phase == 1) {
         exit;
 };
 
+// 阶段 10：轮询解压。0 表示还在进行。
 if (phase == 10) {
         var poll_result = chart_session_zip_poll();
+        // 还在解压就留在这一阶段。
         if (poll_result == 0) {
                 var unzip_session = chart_session_ensure();
                 message = lang("loading.extractingPackage");
                 detail = $"{chart_path_file_name(source_path)} -> {unzip_session.extract_dir}";
                 exit;
         };
+        // 解压失败。
         if (poll_result < 0) {
                 failed = true;
                 var zip_fail = chart_session_ensure();
@@ -125,6 +135,7 @@ if (phase == 10) {
         exit;
 };
 
+// 阶段 2：绑定路径，可选转换，并确认目标房间。
 if (phase == 2) {
         var session2 = chart_session_ensure();
         chart_session_bind_paths();
@@ -133,6 +144,7 @@ if (phase == 2) {
                 global.pls_convert_out = "";
                 var convert_ok = phi_convert_package(convert_dir);
                 print(convert_ok ? "[ConvertPlay][PASS]" : "[ConvertPlay][FAIL]");
+                // 只转换时不进入房间。
                 if (variable_global_exists("pls_convert_only") && global.pls_convert_only) {
                         game_end(convert_ok ? 0 : 1);
                         exit;
@@ -140,6 +152,7 @@ if (phase == 2) {
         };
         message = lang("loading.preparingRoom");
         detail = session2.format_name + " -> " + string(session2.play_room);
+        // 没有可进入的房间。
         if (session2.play_room < 0) {
                 failed = true;
                 message = lang("loading.unsupportedFormat");
@@ -166,7 +179,9 @@ if (phase == 2) {
         exit;
 };
 
+// 阶段 3：默认资源就绪后进入游玩房间，加载动画继续盖住。
 if (phase == 3) {
+		// 默认资源还在加载就留在这一阶段。
 		if (!chart_default_resources_ready()) {
 			message = lang("loading.defaultResources");
 			detail = langf("loading.hitSounds", string_format(chart_default_resources_progress() * 100, 0, 0));
@@ -180,7 +195,6 @@ if (phase == 3) {
                 var _animator = instance_find(oLoadAnimator, 0);
                 _animator.target_room = session3.play_room;
         };
-        // Enter the render room now so its lines and notes can be built under
-        // the persistent loading overlay. The overlay decides when to reveal it.
+        // 现在就进渲染房间，让判定线和音符在常驻加载遮罩下建好。何时揭开由遮罩决定。
         room_goto(session3.play_room);
 };

@@ -1,11 +1,15 @@
-/// @desc Spread Official line+note construction across loading frames.
-/// Lines exist before notes (notes bind by line_id). Freeze after full init.
+// 把官谱判定线与音符的创建摊到多个加载帧。
+// 先建线再放音符（音符按 line_id 绑定），全部初始化后再冻结。
 
+///@desc 判断官谱判定线是否仍在分帧创建
+///@returns {Bool} 正在创建时为真
 function official_lines_creating() {
 	return variable_global_exists("game") && is_struct(game)
 		&& bool(game[$ "_chart_lines_creating"] ?? false);
 }
 
+///@desc 读取当前谱面视口的宽高与对角线余量
+///@returns {Struct} 视口左、宽、高、右、对角线与缩放
 function official_view_metrics() {
 	var view_h = (variable_global_exists("chart_view_height") && is_real(chart_view_height) && chart_view_height > 1)
 		? chart_view_height : room_height;
@@ -17,12 +21,17 @@ function official_view_metrics() {
 		view_w: view_w,
 		view_h: view_h,
 		view_r: view_l + view_w,
-		// 1.25 covers the note sprite and a line sitting on the viewport edge.
+		// 1.25 覆盖音符精灵，以及贴在视口边缘的判定线
 		diag: point_distance(0, 0, view_w, view_h) * 1.25,
 		scale: max(1, view_h * 0.6)
 	};
 }
 
+///@desc 计算归一化坐标到视口外的像素距离
+///@param {Real} _x_norm 横向归一化坐标
+///@param {Real} _y_norm 纵向归一化坐标，向上为正
+///@param {Struct} _metrics 视口度量
+///@returns {Real} 视口内为 0，否则为到边界的距离
 function official_norm_gap(_x_norm, _y_norm, _metrics) {
 	var px = _metrics.view_l + _metrics.view_w * _x_norm;
 	var py = _metrics.view_h * (1 - _y_norm);
@@ -32,12 +41,18 @@ function official_norm_gap(_x_norm, _y_norm, _metrics) {
 	var dy = 0;
 	if (py < 0) then dy = -py;
 	else if (py > _metrics.view_h) then dy = py - _metrics.view_h;
+	// 点在视口内则没有空隙
 	if (dx == 0 && dy == 0) then return 0;
 	return point_distance(0, 0, dx, dy);
 }
 
+///@desc 预计算判定线速度段与位移空隙，供可见性判断
+///@param {Struct} _line_data 判定线数据
+///@param {Struct} _metrics 视口度量
+///@returns {Struct} 分段时间、地板、速度与空隙
 function official_line_vis_cache(_line_data, _metrics) {
 	var bpm = real(_line_data[$ "bpm"] ?? 60);
+	// 无效 BPM 按 60 处理
 	if (bpm <= 0) then bpm = 60;
 	var spb = 1.875 / bpm;
 	var speed_events = is_array(_line_data[$ "speedEvents"]) ? _line_data.speedEvents : [];
@@ -64,7 +79,7 @@ function official_line_vis_cache(_line_data, _metrics) {
 		var sec1 = beat1 * spb;
 		if (sec1 < sec0) then sec1 = sec0;
 		var speed_value = real(speed_event.value ?? 0);
-		// Before the first event the line uses that event, extended back to time 0.
+		// 首事件之前沿用该事件，并回溯到时间 0
 		if (seg_i == 0 && sec0 > 0) {
 			event_floor -= sec0 * speed_value;
 			sec0 = 0;
@@ -72,7 +87,7 @@ function official_line_vis_cache(_line_data, _metrics) {
 		floors[seg_i] = event_floor;
 		values[seg_i] = speed_value;
 		t0s[seg_i] = sec0;
-		// A gap belongs to the next event. Only the final speed runs past its end.
+		// 空隙算到下一事件；只有最后一段速度会越过结束时间
 		t1s[seg_i] = (seg_i == seg_n - 1) ? max(sec1, 10000000) : sec1;
 		floor_acc = event_floor + max(0, sec1 - sec0) * speed_value;
 		seg_i++;
@@ -109,6 +124,7 @@ function official_line_vis_cache(_line_data, _metrics) {
 	for (var gap_i = 0; gap_i < seg_n; gap_i++) {
 		var seg_t0 = t0s[gap_i];
 		var seg_t1 = t1s[gap_i];
+		// 跳过在本速度段开始前已经结束的位移
 		while (cursor < move_count && mt1[cursor] < seg_t0) cursor++;
 		var held = def_gap;
 		if (cursor > 0) then held = mg1[cursor - 1];
@@ -141,10 +157,18 @@ function official_line_vis_cache(_line_data, _metrics) {
 	};
 }
 
-/// Earliest second this note can be judged or seen.
-/// Holds use the whole body span: the head can sit outside the viewport while the body still crosses it.
+// 长条用整段身体跨度：头部在视口外时，身体仍可能穿过视口。
+///@desc 计算音符最早可判定或进入视野的秒
+///@param {Struct} _cache 判定线可见性缓存
+///@param {Real} _floor 音符地板位置
+///@param {Real} _speed 音符速度
+///@param {Real} _hit_sec 打击时刻
+///@param {Real} _hold_len 长条地板长度
+///@param {Bool} _is_hold 是否为长条
+///@returns {Real} 激活秒，不早于 0
 function official_note_activate_sec(_cache, _floor, _speed, _hit_sec, _hold_len, _is_hold) {
 	var judge_at = max(0, _hit_sec - 0.5);
+	// 静止短音立即可见；零长度长条只按判定时刻
 	if (!_is_hold && abs(_speed) < 0.0000001) then return 0;
 	if (_is_hold && (_speed == 0 || abs(_hold_len) < 0.0000001)) then return judge_at;
 	var metrics = _cache.metrics;
@@ -176,6 +200,7 @@ function official_note_activate_sec(_cache, _floor, _speed, _hit_sec, _hold_len,
 		var vis_lo = note_lo - pad;
 		var vis_hi = note_hi + pad;
 		var floor1 = floor0 + (t1 - t0) * speed_value;
+		// 本段地板区间碰不到可见带则跳过
 		if (max(floor0, floor1) < vis_lo || min(floor0, floor1) > vis_hi) then continue;
 		if (abs(speed_value) < 0.0000001 || (floor0 >= vis_lo && floor0 <= vis_hi)) {
 			visual = min(visual, max(t0, 0));
@@ -186,14 +211,18 @@ function official_note_activate_sec(_cache, _floor, _speed, _hit_sec, _hold_len,
 		if (enter_sec >= t0 && enter_sec <= t1) then visual = min(visual, enter_sec);
 	};
 	var activate_sec = min(judge_at, visual);
+	// 无穷或负值都钳到 0
 	if (!is_real(activate_sec) || activate_sec < 0) then return 0;
 	return activate_sec;
 }
 
+///@desc 清空旧纹理并开始官谱分帧创建
+///@returns {Undefined} 无
 function official_lines_begin() {
 	var owner = game;
 	var old_texture_names = (struct_get_names(owner.TextureGroup));
 	for (var texture_i = 0; texture_i < array_length(old_texture_names); texture_i++) {
+		// 默认线贴图保留，其余纹理释放
 		if (old_texture_names[texture_i] == "default") then continue;
 		var old_texture = (owner.TextureGroup[$ old_texture_names[texture_i]]);
 		if (sprite_exists(old_texture)) then sprite_delete(old_texture);
@@ -224,11 +253,15 @@ function official_lines_begin() {
 	chart_set_gameplay_visible(false);
 }
 
+///@desc 创建一条官谱判定线并缓存其可见性
+///@param {Real} i 判定线序号
+///@returns {Undefined} 无
 function official_lines_create_line(i) {
 	var owner = game;
 	var job = owner._chart_line_job;
 	var line_override = chart_line_override(i);
 	var img = chart_line_override_sprite(i);
+	// 覆盖贴图无效时用默认判定线
 	if (!sprite_exists(img)) then img = line_2;
 	var scales = is_struct(line_override) ? real(line_override.Scale ?? 1) : 1;
 	var l = (instance_create_depth(room_width / 2, room_height / 2, 0, oLine, {
@@ -244,6 +277,8 @@ function official_lines_create_line(i) {
 	job.line_vis[i] = official_line_vis_cache(is_struct(line_data) ? line_data : {}, job.view);
 }
 
+///@desc 对已创建的官谱判定线强制执行普通 Step
+///@returns {Undefined} 无
 function official_lines_force_init() {
 	if (!variable_global_exists("game") || !is_struct(game) || !is_array(game.line_list)) then return;
 	var lines = game.line_list;
@@ -251,6 +286,7 @@ function official_lines_force_init() {
 		var l = lines[i];
 		if (!instance_exists(l)) then continue;
 		with (l) {
+			// 强制跑一遍普通 Step，初始化事件游标
 			chart_force_event_init = true;
 			event_perform(ev_step, ev_step_normal);
 			chart_force_event_init = false;
@@ -258,6 +294,9 @@ function official_lines_force_init() {
 	};
 }
 
+///@desc 创建一颗官谱音符并计算其激活秒
+///@param {Real} i 音符序号
+///@returns {Undefined} 无
 function official_lines_create_note(i) {
 	var owner = game;
 	var job = owner._chart_line_job;
@@ -279,17 +318,20 @@ function official_lines_create_note(i) {
 	});
 	chart_lines_hide_created(note_instance);
 	array_add(owner.runtime_note_instances, note_instance);
+	// 录像模式按音符类型预约打击音
 	if (variable_global_exists("render_mode") && global.render_mode && instance_exists(note_instance)) {
 		var note_hitsound_time = (note_instance.type == 2 || note_instance.type == 4)
 			? note_instance.realHitTime : note_instance.judgeRealTime;
 		note_instance.render_hitsound_scheduled = render_schedule_note_hitsound(
 			note_instance, note_hitsound_time);
 	};
+	// 实例已不存在则不再计算激活时间
 	if (!instance_exists(note_instance)) then return;
 	var line_index = real(na[$ "id"] ?? 0);
 	var line_cache = undefined;
 	if (line_index >= 0 && line_index < array_length(job.line_vis)) {
 		line_cache = job.line_vis[line_index];
+		// 该线还没有可见性缓存时补算一份
 		if (!is_struct(line_cache)) {
 			var line_data = (is_array(job.judge_lines) && line_index < array_length(job.judge_lines))
 				? job.judge_lines[line_index] : {};
@@ -315,16 +357,21 @@ function official_lines_create_note(i) {
 	});
 }
 
+///@desc 在时间预算内继续创建官谱判定线与音符
+///@param {Real} _budget_us 本帧预算，微秒
+///@returns {Bool} 本批已全部建完
 function official_lines_pump(_budget_us = CHART_LINE_CREATE_BUDGET_US) {
 	if (!official_lines_creating()) then return true;
 	var owner = game;
 	var job = owner._chart_line_job;
+	// 任务丢失则结束创建
 	if (!is_struct(job)) {
 		owner._chart_lines_creating = false;
 		return true;
 	};
 	var t0 = get_timer();
 	var created = 0;
+	// 阶段 0 先建判定线，超时则留到下一帧
 	if (job.phase == 0) {
 		while (job.next_line < job.line_count) {
 			official_lines_create_line(job.next_line);
@@ -332,9 +379,11 @@ function official_lines_pump(_budget_us = CHART_LINE_CREATE_BUDGET_US) {
 			created++;
 			if (_budget_us > 0 && (get_timer() - t0) >= _budget_us && created >= 1) then return false;
 		};
+		// 线建完后强制初始化，再进入音符阶段
 		official_lines_force_init();
 		job.phase = 1;
 	};
+	// 阶段 1 创建音符，超时则留到下一帧
 	while (job.next_note < job.note_count) {
 		official_lines_create_note(job.next_note);
 		job.next_note++;
@@ -345,17 +394,24 @@ function official_lines_pump(_budget_us = CHART_LINE_CREATE_BUDGET_US) {
 	return true;
 }
 
+///@desc 排序并冻结官谱音符，预加载方块后结束任务
+///@returns {Undefined} 无
 function official_lines_finish() {
 	var owner = game;
 	owner._chart_lines_creating = false;
-	array_sort(owner._notes, function(a, b) {
+	array_sort(owner._notes, 
+	///@desc 先按激活时间、再按打击时间比较音符
+	///@param {Struct} a 左项
+	///@param {Struct} b 右项
+	///@returns {Real} 小于为 -1，大于为 1，相等为 0
+	function(a, b) {
 		if (a.activateSec < b.activateSec) then return -1;
 		if (a.activateSec > b.activateSec) then return 1;
 		if (a.hitSec < b.hitSec) then return -1;
 		if (a.hitSec > b.hitSec) then return 1;
 		return 0;
 	});
-	// Official ignores notePreloadSeconds. Notes wake when their body can meet the view.
+	// 官谱忽略 notePreloadSeconds，音符在本体可能进入视野时唤醒
 	owner._note_activation_enabled = true;
 	owner._note_activation_index = 0;
 	for (var _di = 0; _di < array_length(owner._notes); _di++) {
@@ -368,12 +424,16 @@ function official_lines_finish() {
 	chart_lines_freeze_object(oLine);
 }
 
+///@desc 按当前时间唤醒已到激活点的官谱音符
+///@param {Real} _now_sec 谱面时间，缺省为媒体时间
+///@returns {Undefined} 无
 function official_sync_note_activation(_now_sec = undefined) {
 	if (!variable_global_exists("game") || !is_struct(game)) then return;
 	if (_now_sec == undefined) {
 		_now_sec = is_array(game.__time) ? real(game.__time[1]) : 0;
 	};
 	var _enabled = bool(game._note_activation_enabled ?? false);
+	// 未启用分帧激活时一次唤醒全部音符
 	if (!_enabled) {
 		if (is_array(game.runtime_note_instances)) {
 			for (var _i = 0; _i < array_length(game.runtime_note_instances); _i++) {
@@ -387,6 +447,7 @@ function official_sync_note_activation(_now_sec = undefined) {
 	if (!is_array(_notes)) then return;
 	var _index = 0;
 	var _count = array_length(_notes);
+	// 激活时间已排序，遇到未到点的项即可停止
 	while (_index < _count) {
 		var _item = _notes[_index];
 		if (!is_struct(_item) || real(_item.activateSec ?? infinity) > _now_sec) then break;
@@ -396,6 +457,8 @@ function official_sync_note_activation(_now_sec = undefined) {
 	game._note_activation_index = _index;
 }
 
+///@desc 重试后把尚未到点的官谱音符重新停用
+///@returns {Undefined} 无
 function official_notes_refreeze_after_retry() {
 	if (!variable_global_exists("game") || !is_struct(game)) then return;
 	game._note_activation_index = 0;

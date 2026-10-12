@@ -1,4 +1,4 @@
-/// @description Modal file picker overlay
+///@desc 绘制：模态文件选择器遮罩与列表面板
 var old_font = draw_get_font();
 var old_halign = draw_get_halign();
 var old_valign = draw_get_valign();
@@ -13,6 +13,7 @@ if (!is_real(s) || s <= 0) then s = 1.0;
 var body_scale = 0.38 * s;
 var small_scale = 0.32 * s;
 
+// 半透明底，再画面板和盘符按钮。
 draw_set_alpha(0.62);
 draw_set_colour(c_black);
 draw_rectangle(0, 0, room_width, room_height, false);
@@ -40,6 +41,7 @@ draw_set_halign(fa_left);
 draw_set_valign(fa_middle);
 draw_set_colour(c_ltgray);
 var path_draw = current_dir;
+// 路径太长就只留末尾。
 if (string_width(path_draw) * small_scale > path_w && string_length(path_draw) > 8) {
         path_draw = "..." + string_copy(path_draw, max(1, string_length(path_draw) - 56), 56);
 };
@@ -50,6 +52,7 @@ draw_rectangle(list_x, list_y, list_x + list_w, list_y + list_h, false);
 draw_set_colour(make_colour_rgb(70, 80, 96));
 draw_rectangle(list_x, list_y, list_x + list_w, list_y + list_h, true);
 
+// 空目录给提示，否则只画当前滚动窗口里的行。
 if (array_length(items) <= 0) {
         draw_set_halign(fa_center);
         draw_set_valign(fa_middle);
@@ -68,6 +71,7 @@ if (array_length(items) <= 0) {
                 draw_set_valign(fa_middle);
                 draw_set_colour(item.is_dir ? make_colour_rgb(180, 210, 255) : c_white);
                 var label = (item.is_dir ? lang("picker.dirPrefix") : "") + item.name;
+                // 名字超出列表宽度就逐字截短。
                 while (string_width(label) * body_scale > list_w - 20 * s && string_length(label) > 4) {
                         label = string_copy(label, 1, string_length(label) - 1);
                 };

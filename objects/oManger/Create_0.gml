@@ -1,3 +1,4 @@
+// 创建：初始化全局判定统计
 globalvar phi_state_list;
 
 // 1145141919810

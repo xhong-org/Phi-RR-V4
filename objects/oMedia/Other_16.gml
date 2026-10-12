@@ -1,5 +1,6 @@
-/// @description 完全销毁
+///@desc 用户事件 6：完全销毁
 event_user(7);
+// 释放后销毁实例。
 if (media_use_gx()) {
 	gx_media_release(id);
 } else {

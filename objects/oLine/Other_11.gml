@@ -1,11 +1,10 @@
-/// @description Precompute the accumulated floor position at each speed event.
+///@desc 用户事件 1：预计算每个速度事件起点的累计 floor
 var value = 0;
 speedValueList = [0];
 for(var i = 0 ; i < _event_lengths[3] ; i ++){
 	var speed_event = (_speed_events[i]),
 		duration = ((speed_event.endTime - speed_event.startTime) * _seconds_per_beat);
-	// Use the official event floor base when it is present. Older charts may
-	// omit it, so keep the cumulative value as a fallback.
+	// 有官方 floorPosition 就用它。旧谱可能没有，这时退回累计值。
 	var event_floor = value;
 	if (struct_exists(speed_event, "floorPosition") && is_real(speed_event.floorPosition)) {
 		event_floor = speed_event.floorPosition;

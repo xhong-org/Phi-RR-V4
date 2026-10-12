@@ -1,4 +1,4 @@
-/// @description Rebuild GX menu button layout
+///@desc 按屏幕宽度重排 GX 菜单按钮
 if (!variable_global_exists("global_scales")) {
         globalvar global_scales;
         global_scales = 1.0;
@@ -11,6 +11,7 @@ var rw = max(1, room_width);
 var rh = max(1, room_height);
 var gap = max(12, 18 * s);
 var btn_h = min(rh * 0.13, 92 * s);
+// 远程少一个 API 按钮。
 var remote = pls_is_gx_remote();
 var count = remote ? 2 : 3;
 var btn_w = min((rw - gap * (count + 1)) / count, 280 * s);

@@ -1,7 +1,8 @@
-/// @description Judge a non-hold note using cached beat/time values.
+///@desc 用缓存节拍判定非 Hold 官谱音符
 var now_time = _now_beat,
 	now_hit_time = judgeTime;
 
+// 非自动播放只处理超时 Miss。
 if (!chart_autoplay_active()) {
 	if (now_time > self.time + lateHitTime && !isBad && !isJudge) {
 		judgeCalc(self.time, now_time, self.bpm, 0, 0, self.type, false);
@@ -10,12 +11,14 @@ if (!chart_autoplay_active()) {
 	exit;
 };
 
+// 关闭准度判定时，过窗口直接记 Miss。
 if(now_time > self.time + lateHitTime && !isBad && !game.settings.enableAccJudgment){
 	judgeCalc(self.time, now_time, self.bpm, 0, 0, self.type, false);
 	instance_deactivate_object(self);
 	exit;
 };
 
+// Drag 和 Flick 到点即判，不等 Tap 的击中时刻。
 if ((self.type == 2 || self.type == 4) && !isJudge && now_time >= self.time
 	&& now_hit_time >= self.time && now_hit_time <= self.time + lateHitTime) {
 	event_user(1);

@@ -1,5 +1,6 @@
-/// @description Android menu draw using Camera_View.global_scales
+///@desc 按 global_scales 绘制 Android 菜单标题、按钮和状态
 var scale_now = (variable_global_exists("global_scales") ? global_scales : 1.0);
+// 房间尺寸或缩放变了就重建布局。
 if (layout_w != room_width || layout_h != room_height || layout_scale != scale_now) {
         event_user(0);
 };

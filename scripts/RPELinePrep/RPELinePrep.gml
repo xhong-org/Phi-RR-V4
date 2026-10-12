@@ -1,21 +1,26 @@
-/// @desc Shared RPE line event preprocess.
-/// META.RPEVersion >= 170 uses PhiEdit 1.7 floorPositionAt: each layer
-/// integrates eased speed (linear closed form, otherwise 20-step Simpson).
-/// Older charts, including files with no RPEVersion, use the pre-170 player
-/// table: overlap cut, linear speed between the cuts, then a time trapezoid.
-/// Playback divides by 4.5 so note distance stays in the existing floor unit.
-/// The old native trapezoid fit does not implement either integral.
+// RPE 判定线事件的共用预处理。
+// META.RPEVersion >= 170 使用 PhiEdit 1.7 的 floorPositionAt：每层对缓动速度积分
+// （线性用闭式，其余用 20 步辛普森）。
+// 更旧的谱，以及没有 RPEVersion 的文件，使用 170 之前的播放器表：
+// 切开重叠、切点之间按线性速度，再对时间做梯形积分。
+// 播放时再除以 4.5，使音符距离仍落在原有 floor 单位。
+// 旧的原生梯形拟合没有实现这两种积分。
 
 #macro RPE_LINE_PREP_NATIVE false
 
+///@desc 把谱面缓动号映射到播放用的缓动序号
+///@param {Real} raw 谱面 easingType
+///@returns {Real} 播放缓动序号，无法识别时为 1
 function rpe_map_easing_id(raw) {
 	static map = [ 0, 1, 3, 2, 6, 5, 4, 7, 9, 8, 12, 11, 10, 13, 15, 14, -1, 17, 16, -1, 19, 18, 22, 21, 20, 23, 25, 24, -1, 27, 26, 28 ];
 	var t = floor(real(raw ?? 1));
+	// 线性及更小的号不需要映射
 	if (!is_real(t) || t <= 1) then return 1;
 	var n = array_length(map);
 	for (var i = 0; i < n; i++) {
 		if (is_real(map[i]) && map[i] == t) {
 			if (i <= 1) then return 1;
+			// 表外或占位项退回线性
 			if (i >= 32) then return 1;
 			return i;
 		};
@@ -23,6 +28,10 @@ function rpe_map_easing_id(raw) {
 	return 1;
 }
 
+///@desc 按开始时间、再按结束时间比较事件
+///@param {Struct} a 左事件
+///@param {Struct} b 右事件
+///@returns {Real} 小于为 -1，大于为 1，相等为 0
 function rpe_event_time_cmp(a, b) {
 	if (a.startTime < b.startTime) then return -1;
 	if (a.startTime > b.startTime) then return 1;
@@ -31,11 +40,14 @@ function rpe_event_time_cmp(a, b) {
 	return 0;
 }
 
+///@desc 整理事件数组；速度事件保留缓动，其余换成绝对秒
+///@param {Array} arr 原始事件
+///@param {Bool} is_speed 是否为速度事件
+///@returns {Array} 整理后的事件
 function rpe_prep_event_array(arr, is_speed) {
 	if (!is_array(arr)) then return [];
 	if (is_speed) {
-		// Keep the chart easing. PhiEdit integrates each event in order and
-		// does not retarget overlaps onto a straight line between the cuts.
+		// 保留谱面缓动。PhiEdit 按事件顺序积分，不会把重叠改成切点间的直线。
 		var prepared = [];
 		for (var si = 0; si < array_length(arr); si++) {
 			var src = arr[si];
@@ -67,6 +79,7 @@ function rpe_prep_event_array(arr, is_speed) {
 		if (struct_exists(ev, "endTime")) then ev.endTime = game_1.Math.beatToAbsSec(game_1.Math.arrToBeat(ev.endTime));
 		var el = ev[$ "easingLeft"] ?? 0;
 		var er = ev[$ "easingRight"] ?? 1;
+		// 窗口非法或左右重合时退回整段缓动
 		if ((el == er) || (el < 0) || (el > 1) || (er < 0) || (er > 1)) {
 			el = 0; er = 1;
 		};
@@ -82,10 +95,14 @@ function rpe_prep_event_array(arr, is_speed) {
 	return arr;
 }
 
-// PhiEdit Easing.cpp. Type numbers are the chart's easingType, not the
-// playback tween table (that table swaps several in/out pairs).
+// 对应 PhiEdit 的 Easing.cpp。类型号是谱面 easingType，不是播放 tween 表（那张表交换了若干 in/out）。
+///@desc 小整数指数用连乘，负底的非整数指数返回 0
+///@param {Real} base 底数
+///@param {Real} exp 指数
+///@returns {Real} 幂
 function rpe_ease_pow(base, exp) {
 	var n = floor(exp);
+	// 0 到 8 的整数指数避免 power 的符号问题
 	if (n == exp && n >= 0 && n <= 8) {
 		var value = 1;
 		repeat (n) value *= base;
@@ -95,6 +112,9 @@ function rpe_ease_pow(base, exp) {
 	return power(base, exp);
 }
 
+///@desc 计算 ease-out 弹跳曲线
+///@param {Real} x 0 到 1 的进度
+///@returns {Real} 缓动结果
 function rpe_ease_out_bounce(x) {
 	var n1 = 7.5625;
 	if (x < 0.36363636363636365) then return n1 * x * x;
@@ -110,6 +130,10 @@ function rpe_ease_out_bounce(x) {
 	return n1 * x * x + 0.984375;
 }
 
+///@desc 按谱面缓动号计算未裁剪的缓动值
+///@param {Real} type 谱面 easingType
+///@param {Real} x 0 到 1 的进度
+///@returns {Real} 缓动结果，未知类型返回 x
 function rpe_ease_value(type, x) {
 	var ease_pi = 3.14159265358979;
 	var c1 = 1.70158;
@@ -117,6 +141,7 @@ function rpe_ease_value(type, x) {
 	var c3 = 2.70158;
 	var c4 = 2.0943951023931935;
 	var c5 = 1.3962634015954623;
+	// 未知类型落到函数末尾，按线性返回 x
 	switch (type) {
 		case 1: return x;
 		case 2: return sin(x * ease_pi * 0.5);
@@ -161,43 +186,68 @@ function rpe_ease_value(type, x) {
 	return x;
 }
 
-// Charts saved before RPE 1.7 (and files with no RPEVersion) did not integrate
-// non-linear speed easings. PhiEdit 1.7 itself always uses floorPositionAt;
-// players keep the older fit when META.RPEVersion < 170.
+// RPE 1.7 之前保存的谱（以及没有 RPEVersion 的文件）不对非线性速度缓动做积分。
+// PhiEdit 1.7 本身始终用 floorPositionAt；META.RPEVersion < 170 时播放器仍用旧拟合。
+///@desc 判断速度是否走 170 之前的旧表
+///@returns {Bool} 版本低于 170 时为真
 function rpe_speed_uses_legacy() {
 	var version = 0;
 	if (variable_global_exists("game_1") && is_struct(game_1)) {
 		version = real(game_1[$ "version"] ?? 0);
 	};
+	// 读不到版本时按旧谱处理
 	if (!is_finite(version)) then version = 0;
 	return version < 170;
 }
 
-// Normalized easeClipped: (ease(left + (right-left)*p) - ease(left)) / (ease(right) - ease(left)).
+// 归一化 easeClipped：(ease(left + (right-left)*p) - ease(left)) / (ease(right) - ease(left))。
+///@desc 在缓动窗口内把进度归一化到 0 到 1
+///@param {Real} type 缓动号
+///@param {Real} p 事件进度
+///@param {Real} left 窗口左端
+///@param {Real} right 窗口右端
+///@returns {Real} 归一化缓动值，窗口无变化时返回 p
 function rpe_ease_clipped(type, p, left, right) {
 	var f0 = rpe_ease_value(type, left);
 	var f1 = rpe_ease_value(type, right);
 	var denom = f1 - f0;
+	// 窗口两端缓动值相同则无法归一化
 	if (abs(denom) < 0.000000000000001) then return p;
 	var unit_x = clamp(p, 0, 1);
 	return (rpe_ease_value(type, left + (right - left) * unit_x) - f0) / denom;
 }
 
+///@desc 用中心差分估计裁剪缓动的导数
+///@param {Real} type 缓动号
+///@param {Real} p 事件进度
+///@param {Real} left 窗口左端
+///@param {Real} right 窗口右端
+///@returns {Real} 导数值，步长消失时为 0
 function rpe_ease_clipped_derivative(type, p, left, right) {
 	var eps = 0.000001;
 	var x0 = clamp(p - eps, 0, 1);
 	var x1 = clamp(p + eps, 0, 1);
 	var span = x1 - x0;
+	// 进度贴在端点时差分跨度为 0
 	if (span < 0.0000000001) then return 0;
 	return (rpe_ease_clipped(type, x1, left, right) - rpe_ease_clipped(type, x0, left, right)) / span;
 }
 
-// Pre-1.7 speed easing. Fit k, b so k*ease'(0)+b = v0 and k*ease'(1)+b = v1,
-// then integrate that speed. A flat derivative falls back to the average speed.
-// Constant events (v0 == v1) return v0*p*duration for every easing.
+// 1.7 之前的速度缓动。拟合 k、b，使 k*ease'(0)+b = v0 且 k*ease'(1)+b = v1，再对速度积分。
+// 导数太平则退回平均速度。常量事件（v0 == v1）对任何缓动都返回 v0*p*duration。
+///@desc 用导数拟合计算旧版速度事件的位移切片
+///@param {Real} v0 起始速度
+///@param {Real} v1 结束速度
+///@param {Real} duration 时长
+///@param {Real} p 进度
+///@param {Real} easing 缓动号
+///@param {Real} left 窗口左端
+///@param {Real} right 窗口右端
+///@returns {Real} 该切片的原始积分
 function rpe_speed_legacy_slice(v0, v1, duration, p, easing, left, right) {
 	var f0 = rpe_ease_value(easing, left);
 	var f1 = rpe_ease_value(easing, right);
+	// 缓动窗口没有变化时按起始速度匀速
 	if (abs(f1 - f0) < 0.000000000000001) then return v0 * p * duration;
 	var df0 = rpe_ease_clipped_derivative(easing, 0, left, right);
 	var df1 = rpe_ease_clipped_derivative(easing, 1, left, right);
@@ -208,6 +258,7 @@ function rpe_speed_legacy_slice(v0, v1, duration, p, easing, left, right) {
 		k = (v1 - v0) / denom;
 		b = v0 - k * df0;
 	};
+	// 拟合出非数时退回平均速度
 	if (!is_finite(k) || !is_finite(b)) {
 		k = 0;
 		b = (v0 + v1) * 0.5;
@@ -215,15 +266,26 @@ function rpe_speed_legacy_slice(v0, v1, duration, p, easing, left, right) {
 	return (k * rpe_ease_clipped(easing, p, left, right) + b * p) * duration;
 }
 
-// Integral of speed from the event start through progress p (0..1 of the event).
-// Easing type 1 is the closed form and ignores the easing window, matching
-// floorPositionAt. RPE 1.7 integrates every other easing with Simpson's rule.
-// Older charts use the derivative fit above instead of that integral.
+// 从事件起点积到进度 p（事件的 0 到 1）。
+// 缓动 1 用闭式并忽略窗口，与 floorPositionAt 一致。RPE 1.7 对其余缓动用辛普森公式。
+// 更旧的谱改用上面的导数拟合，而不是这个积分。
+///@desc 计算速度事件从起点到进度 p 的积分
+///@param {Real} v0 起始速度
+///@param {Real} v1 结束速度
+///@param {Real} duration 时长
+///@param {Real} p 进度
+///@param {Real} easing 缓动号
+///@param {Real} left 窗口左端
+///@param {Real} right 窗口右端
+///@returns {Real} 原始积分，无效进度为 0
 function rpe_speed_slice_integral(v0, v1, duration, p, easing, left, right) {
+	// 非正进度或零时长没有位移
 	if (!(p > 0) || !(duration > 0.000000001)) then return 0;
+	// 线性缓动用闭式，不看窗口
 	if (easing == 1) {
 		return ((v1 - v0) * p * p * 0.5 + v0 * p) * duration;
 	};
+	// 旧谱不走辛普森积分
 	if (rpe_speed_uses_legacy()) {
 		return rpe_speed_legacy_slice(v0, v1, duration, p, easing, left, right);
 	};
@@ -247,17 +309,25 @@ function rpe_speed_slice_integral(v0, v1, duration, p, easing, left, right) {
 	return ((v1 - v0) * integral + v0 * p) * duration;
 }
 
+///@desc 把原始速度积分换成播放用的 floor 单位
+///@param {Real} raw_integral 原始积分
+///@returns {Real} 除以 4.5 后的地板增量
 function rpe_speed_player_floor(raw_integral) {
 	return raw_integral / 4.5;
 }
 
+///@desc 判断原生速度预处理扩展是否可用
+///@returns {Bool} Windows 且扩展存在、宏开启时为真
 function rpe_prep_native_ready() {
 	return RPE_LINE_PREP_NATIVE && (os_type == os_windows) && extension_exists("I_RPEPrep");
 }
 
+///@desc 把 BPM 时间轴上传给原生预处理
+///@returns {Bool} 已就绪或上传成功
 function rpe_prep_upload_bpm() {
 	if (!rpe_prep_native_ready()) then return false;
 	if (variable_global_exists("game_1") && is_struct(game_1)
+		// 本局已经上传过则不再写缓冲
 		&& bool(game_1[$ "_rpe_prep_bpm_ready"] ?? false)) then return true;
 	var tl = game_1.Math.ensureBpmTimeline();
 	if (!is_array(tl) || array_length(tl) <= 0) then return false;
@@ -275,6 +345,9 @@ function rpe_prep_upload_bpm() {
 	return ok;
 }
 
+///@desc 把一层速度事件积分成带地板的秒时间段
+///@param {Array} events 已整理的速度事件
+///@returns {Struct} 事件段、尾部时间、尾速与尾地板
 function rpe_build_speed_layer(events) {
 	var built = [];
 	var acc = 0;
@@ -285,6 +358,7 @@ function rpe_build_speed_layer(events) {
 		var src = events[ei];
 		var start_sec = game_1.Math.beatToAbsSec(src.startTime);
 		var end_sec = game_1.Math.beatToAbsSec(src.endTime);
+		// 时间无效的事件不参与积分
 		if (!is_finite(start_sec) || !is_finite(end_sec)) then continue;
 		var v0 = real(src.start);
 		var v1 = real(src.stop);
@@ -300,6 +374,7 @@ function rpe_build_speed_layer(events) {
 			prevValue: prev_value,
 			floorBefore: acc
 		});
+		// 事件之间的空隙沿用上一段结束速度
 		if (start_sec > prev_end) then acc += rpe_speed_player_floor((start_sec - prev_end) * prev_value);
 		var duration = end_sec - start_sec;
 		if (duration > 0.000000001) {
@@ -316,6 +391,10 @@ function rpe_build_speed_layer(events) {
 	};
 }
 
+///@desc 求一层速度在绝对秒 t 处的地板
+///@param {Struct} layer rpe_build_speed_layer 的结果
+///@param {Real} t 绝对秒
+///@returns {Real} 地板位置
 function rpe_layer_floor_at(layer, t) {
 	if (!is_struct(layer)) then return 0;
 	var events = layer.events;
@@ -323,10 +402,10 @@ function rpe_layer_floor_at(layer, t) {
 	var n = array_length(events);
 	if (n <= 0) then return 0;
 	if (!is_finite(t)) then return 0;
-	// The source walks events in order and stops at the first one that has not
-	// ended. A later event can finish earlier, so this cannot be a binary search.
+	// 按顺序走到第一个尚未结束的事件。后面的事件可能更早结束，所以不能二分。
 	var lo = 0;
 	while (lo < n && events[lo].startSec < t && events[lo].endSec < t) lo++;
+	// 全部事件都已结束，用尾速外推
 	if (lo >= n) {
 		return layer.tailFloor + rpe_speed_player_floor((t - layer.tailEnd) * layer.tailSpeed);
 	};
@@ -336,6 +415,7 @@ function rpe_layer_floor_at(layer, t) {
 		var gap_end = min(ev.startSec, t);
 		if (gap_end > ev.prevEnd) then acc += rpe_speed_player_floor((gap_end - ev.prevEnd) * ev.prevValue);
 	};
+	// 还没进入本事件，只含空隙位移
 	if (ev.startSec >= t) then return acc;
 	var duration = ev.endSec - ev.startSec;
 	if (duration > 0.000000001) {
@@ -345,16 +425,23 @@ function rpe_layer_floor_at(layer, t) {
 	return acc;
 }
 
+///@desc 用 GML 把各速度层积分成播放层
+///@param {Array} speed_layers 每层的速度事件
+///@returns {Array} 积分后的速度层
 function rpe_build_speed_events_gml(speed_layers) {
 	var out = [];
 	for (var sli = 0; sli < array_length(speed_layers); sli++) {
 		var speed_layer = speed_layers[sli];
+		// 空层不生成积分
 		if (!is_array(speed_layer) || array_length(speed_layer) <= 0) then continue;
 		array_add(out, rpe_build_speed_layer(speed_layer));
 	};
 	return out;
 }
 
+///@desc 用原生扩展拟合速度事件
+///@param {Array} speed_layers 每层的速度事件
+///@returns {Array} 拟合段，失败为 undefined
 function rpe_build_speed_events_native(speed_layers) {
 	if (!rpe_prep_native_ready()) then return undefined;
 	if (!rpe_prep_upload_bpm()) then return undefined;
@@ -377,6 +464,7 @@ function rpe_build_speed_events_native(speed_layers) {
 	if (out_cap < 4096) then out_cap = 4096;
 	var out_buf = buffer_create(out_cap, buffer_fixed, 1);
 	var written = i_rpe_prep_speed_fit(buffer_get_address(in_buf), buffer_tell(in_buf), buffer_get_address(out_buf), buffer_get_size(out_buf));
+	// 输出缓冲不够时放大一次再试
 	if (!(is_real(written) && written >= 4)) {
 		buffer_delete(out_buf);
 		out_cap *= 4;
@@ -390,6 +478,7 @@ function rpe_build_speed_events_native(speed_layers) {
 	};
 	buffer_seek(out_buf, buffer_seek_start, 0);
 	var n = buffer_read(out_buf, buffer_u32);
+	// 声明的段数和实际写入长度对不上则放弃
 	if (!(is_real(n) && n >= 0 && (4 + n * 40) <= written)) {
 		buffer_delete(out_buf);
 		return undefined;
@@ -408,16 +497,22 @@ function rpe_build_speed_events_native(speed_layers) {
 	return out;
 }
 
-// Pre-170 speed table. Cuts overlaps, samples each layer linearly in beats
-// (speed easing is not integrated), sums the layers, then trapezoid-integrates
-// in seconds. Values stored on the segments are already divided by 4.5.
+// 170 之前的速度表。切开重叠，按拍在每层上线性取样（不积分速度缓动），
+// 各层相加，再按秒做梯形积分。段上保存的值已经除以 4.5。
+///@desc 在给定拍上线性取样一层旧速度
+///@param {Array} layer 已截断的速度事件
+///@param {Real} beat 拍
+///@param {Bool} use_left_limit 恰好在起点时是否取左极限
+///@returns {Real} 该层速度
 function rpe_legacy_speed_value(layer, beat, use_left_limit) {
 	if (!is_array(layer) || array_length(layer) <= 0) then return 0;
 	var result = real(layer[0][$ "start"] ?? 0);
 	var count = array_length(layer);
 	for (var i = 0; i < count; i++) {
 		var ev = layer[i];
+		// 事件已按时间排序，更晚的不会再覆盖
 		if (beat < ev.startTime) then break;
+		// 左极限停在本事件开始之前
 		if (use_left_limit && beat == ev.startTime) then break;
 		if (beat >= ev.endTime) {
 			result = real(ev.stop);
@@ -430,6 +525,9 @@ function rpe_legacy_speed_value(layer, beat, use_left_limit) {
 	return result;
 }
 
+///@desc 按时间切开重叠的旧速度事件
+///@param {Array} arr 一层速度事件
+///@returns {Array} 截断后的事件
 function rpe_legacy_truncate_speed(arr) {
 	var truncated = [];
 	if (!is_array(arr)) then return truncated;
@@ -462,6 +560,7 @@ function rpe_legacy_truncate_speed(arr) {
 			var old = truncated[ti];
 			var old_end = old.endTime;
 			var old_stop = old.stop;
+			// 旧段在新起点之前结束，补一段匀速空隙
 			if (old_end < st) {
 				array_set(truncated, ti + 1, {
 					startTime: old_end, endTime: st,
@@ -471,10 +570,12 @@ function rpe_legacy_truncate_speed(arr) {
 				break;
 			};
 			var old_start = old.startTime;
+			// 起点重合则丢掉这条旧段
 			if (old_start == st) {
 				array_resize(truncated, ti);
 				break;
 			};
+			// 新事件从旧段中部开始，把旧段截到该点
 			if (old_start < st) {
 				var old_value = old.start;
 				var duration = st - old_start;
@@ -492,6 +593,7 @@ function rpe_legacy_truncate_speed(arr) {
 			};
 		};
 
+		// 零长度事件记成瞬时速度
 		if (st >= et) {
 			array_add(truncated, {
 				startTime: st, endTime: st, start: end_value, stop: end_value, delta: 0,
@@ -508,6 +610,9 @@ function rpe_legacy_truncate_speed(arr) {
 	return truncated;
 }
 
+///@desc 把多层旧速度合成梯形积分后的播放段
+///@param {Array} event_layers 含 speedEvents 的事件层
+///@returns {Array} 已除以 4.5 的速度段
 function rpe_build_legacy_speed_table(event_layers) {
 	var speed_layers = [];
 	var speed_splits = [];
@@ -525,7 +630,12 @@ function rpe_build_legacy_speed_table(event_layers) {
 		};
 	};
 	if (array_length(speed_splits) <= 0) then return [];
-	array_sort(speed_splits, function(a, b) {
+	array_sort(speed_splits, 
+	///@desc 按拍比较切点
+	///@param {Real} a 左切点
+	///@param {Real} b 右切点
+	///@returns {Real} 小于为 -1，大于为 1，相等为 0
+	function(a, b) {
 		if (a < b) then return -1;
 		if (a > b) then return 1;
 		return 0;
@@ -535,6 +645,7 @@ function rpe_build_legacy_speed_table(event_layers) {
 	for (var ssi = 0; ssi < array_length(speed_splits) - 1; ssi++) {
 		var split_start = speed_splits[ssi];
 		var split_end = speed_splits[ssi + 1];
+		// 重合切点不构成一段
 		if (split_start == split_end) then continue;
 		var value_start = 0;
 		var value_end = 0;
@@ -562,6 +673,7 @@ function rpe_build_legacy_speed_table(event_layers) {
 				sample_end_sec = next_start_sec;
 			};
 		};
+		// 秒时间无效或倒退的段丢掉
 		if (!is_finite(sample_end_sec) || sample_end_sec <= sample_start_sec) then continue;
 		var v0 = real(fitted.start) / 4.5;
 		var v1 = real(fitted.stop) / 4.5;
@@ -572,6 +684,7 @@ function rpe_build_legacy_speed_table(event_layers) {
 			endValue: v1,
 			floorPosition: speed_floor
 		});
+		// 梯形积分：时间乘两端速度的平均
 		speed_floor += (sample_end_sec - sample_start_sec) * (v0 + v1) * 0.5;
 	};
 	if (array_length(segments) > 0) {
@@ -580,6 +693,7 @@ function rpe_build_legacy_speed_table(event_layers) {
 		if (is_finite(last_speed_ev.endTime)) {
 			array_add(segments, {
 				startTime: last_speed_ev.endTime,
+				// 末段之后用结束速度一直延伸
 				endTime: infinity,
 				value: last_end_value,
 				endValue: last_end_value,
@@ -590,11 +704,16 @@ function rpe_build_legacy_speed_table(event_layers) {
 	return segments;
 }
 
+///@desc 用梯形公式求旧速度段在时刻 t 的地板
+///@param {Struct} ev 速度段
+///@param {Real} t 绝对秒
+///@returns {Real} 地板位置
 function rpe_legacy_event_floor(ev, t) {
 	var elapsed = max(0, real(t) - real(ev.startTime));
 	var v0 = real(ev.value);
 	var v1 = real(ev[$ "endValue"] ?? v0);
 	var duration = real(ev.endTime) - real(ev.startTime);
+	// 无时长时按起点速度外推
 	if (!is_finite(duration) || duration <= 0) {
 		return real(ev.floorPosition) + elapsed * v0;
 	};
@@ -603,17 +722,26 @@ function rpe_legacy_event_floor(ev, t) {
 	return real(ev.floorPosition) + elapsed * (v0 + vt) * 0.5;
 }
 
+///@desc 在旧速度段表上求时刻 t 的地板
+///@param {Array} segments 速度段
+///@param {Real} t 绝对秒
+///@returns {Real} 地板位置，早于首段为 0
 function rpe_legacy_floor_at(segments, t) {
 	if (!is_array(segments)) then return 0;
 	var n = array_length(segments);
 	if (n <= 0 || !is_real(t)) then return 0;
+	// 首段之前没有地板
 	if (t < segments[0].startTime) then return 0;
 	var idx = 0;
 	while (idx < n - 1 && t > segments[idx].endTime) idx++;
 	return rpe_legacy_event_floor(segments[idx], t);
 }
 
+///@desc 按谱面版本选择旧表或积分速度层
+///@param {Array} event_layers 含 speedEvents 的事件层
+///@returns {Array} 播放用速度数据
 function rpe_build_speed_events(event_layers) {
+	// 旧谱走梯形表，新谱走每层积分
 	if (rpe_speed_uses_legacy()) then return rpe_build_legacy_speed_table(event_layers);
 	var speed_layers = [];
 	if (is_array(event_layers)) {
