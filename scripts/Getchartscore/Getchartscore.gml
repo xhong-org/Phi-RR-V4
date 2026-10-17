@@ -218,7 +218,7 @@ function chart_score_get(_md5 = undefined) {
 	if (!struct_exists(book.records, score_key)) then return 0;
 	var value = real(book.records[$ score_key]);
 	if (!is_finite(value) || value < 0) then return 0;
-	return value | 0;
+	return floor(value);
 }
 
 ///@desc 仅在新分数更高时写回成绩簿
@@ -228,8 +228,8 @@ function chart_score_get(_md5 = undefined) {
 function chart_score_set(_md5, _score) {
 	var score_key = string_lower(string(_md5));
 	if (string_length(score_key) != 32) then return false;
-	var stored_score = (is_real(_score) && is_finite(_score)) ? (_score | 0) : 0;
-	if (stored_score < 0) then stored_score = 0;
+	var stored_score = is_numeric(_score) ? floor(real(_score)) : 0;
+	if (!is_finite(stored_score) || stored_score < 0) then stored_score = 0;
 	var prev = chart_score_get(score_key);
 	// 不覆盖已经更高的记录
 	if (stored_score <= prev) then return false;

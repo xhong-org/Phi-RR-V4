@@ -259,6 +259,59 @@ function chart_draw_recorded_version() {
 	draw_set_font(_font);
 }
 
+///@desc 在应用表面最上层画版本号和帧率。Draw GUI 会被谱面遮罩盖掉，谱面着色器也已经结束。
+///@returns {Undefined} 无
+function chart_hud_draw_overlay() {
+	if (!chart_hud_ready()) then return;
+	if (!variable_global_exists("game") || !is_struct(game) || !asset_font_valid(game.font)) then return;
+	if (variable_global_exists("render_mode") && global.render_mode) then return;
+	var _scale = variable_global_exists("global_scales") ? global_scales : 1;
+	if (!is_real(_scale) || _scale <= 0) then _scale = 1;
+	var _left = variable_global_exists("chart_view_left") ? chart_view_left : 0;
+	var _right = variable_global_exists("chart_view_right") ? chart_view_right : room_width;
+	chart_hud_draw_prepare();
+	draw_set_font(game.font);
+	draw_set_valign(fa_center);
+	if (chart_fps_draw_allowed()) {
+		draw_set_halign(fa_right);
+		draw_set_colour(c_white);
+		draw_set_alpha(1);
+		var _fps_now = variable_global_exists("fpsReal") ? fpsReal : fps_real;
+		draw_text_transformed(_right, 30 * _scale, $"{ceil(_fps_now)}({fps})", 0.35 * _scale, 0.35 * _scale, 0);
+	};
+	draw_set_colour(c_gray);
+	draw_set_halign(fa_left);
+	draw_set_alpha(1);
+	draw_text_transformed(_left + 5 * _scale, room_height - (10 * _scale), chart_version_label(), 0.3 * _scale, 0.3 * _scale, 0);
+	draw_set_valign(fa_top);
+	draw_set_halign(fa_left);
+	draw_set_colour(c_white);
+	draw_set_alpha(1);
+}
+
+///@desc 画版本号和帧率前清掉谱面留下的裁剪和混合
+///@returns {Undefined} 无
+function chart_hud_draw_prepare() {
+	// scaleOnNotes 会留下线宽剪刀。画之前先解开，否则字会被裁没。
+	pls_draw_flush();
+	var _hud_target = surface_get_target();
+	var _hud_held = surface_exists(_hud_target) && _hud_target != application_surface;
+	if (_hud_held) then surface_reset_target();
+	shader_reset();
+	gpu_set_blendenable(true);
+	gpu_set_blendmode(bm_normal);
+	gpu_set_colourwriteenable(true, true, true, true);
+	gpu_set_alphatestenable(false);
+	gpu_set_texfilter(true);
+	gpu_set_texrepeat(false);
+	gpu_set_ztestenable(false);
+	gpu_set_zwriteenable(false);
+	gpu_set_cullmode(cull_noculling);
+	chart_mask_scissor_clear();
+	draw_set_alpha(1);
+	draw_set_colour(c_white);
+}
+
 ///@desc 判断现在能否画帧率
 ///@returns {Bool} 允许时为真
 function chart_fps_draw_allowed() {

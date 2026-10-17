@@ -26,7 +26,7 @@
 #macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
 #macro VerReal { "windows": 40542, "android": 40534, "gxgames": 40532 } // 各平台版本号(独立)
-#macro VerStr "v.4.1.1-fin"
+#macro VerStr "v.4.1.1r"
 
 ///@desc 按当前操作系统从 VerReal 取出对应版本号
 ///@returns {Real} 平台版本号，未知平台为 40500
@@ -434,7 +434,12 @@ function chart_note_scale_clip_end(active) {
 	if (active == 1) {
 		chart_mask_scissor_set();
 	} else if (active == 2) {
+		// 表面还绑着就 shader_reset，会把字体图集采坏，后面的版本号和帧率变成空字。
+		var _clip_target = surface_get_target();
+		var _clip_held = surface_exists(_clip_target) && _clip_target != application_surface;
+		if (_clip_held) then surface_reset_target();
 		shader_reset();
+		if (_clip_held) then surface_set_target(_clip_target);
 	};
 }
 
@@ -1212,9 +1217,11 @@ function ScoreSystemValue(_mode = undefined) {
 	} else {
 		_s = (int64(1000000 * ((prefect + (good * 0.65)) / maxcombo)));
 	};
-	if (is_finite(_s)) then _s = (_s | 0);
-	else _s = 0;
-	return _s;
+	// int64 过不了 is_real / is_finite，不能因此把分数写成 0。
+	if (!is_numeric(_s)) then return 0;
+	var score_num = real(_s);
+	if (!is_finite(score_num) || score_num < 0) then return 0;
+	return floor(score_num);
 };
 
 ///@desc 把分数补成七位数字字符串
@@ -1222,8 +1229,10 @@ function ScoreSystemValue(_mode = undefined) {
 ///@returns {String} 左侧补零后的七位文本
 /// 作者的话: 傻逼
 function ScoreSystemPad(_value) {
-	var _s = is_real(_value) && is_finite(_value) ? (_value | 0) : 0;
-	if (_s < 0) then _s = 0;
+	// int64 不是 real。用 is_real 会把有效分数变成 0。
+	var _s = is_numeric(_value) ? real(_value) : 0;
+	if (!is_finite(_s) || _s < 0) then _s = 0;
+	_s = floor(_s);
 	var _t = string(_s);
 	while (string_length(_t) < 7) {
 		_t = "0" + _t;
@@ -3837,7 +3846,8 @@ function phi_pec_parse(pec_text) {
 }
 
 // META.RPEVersion 为 160，播放用 1.7 前速度表，除数 4.5 与这里一致
-// 音符 X 为 fileX * 75.375 / 115.2，速度为 fileSpeed * 4.5 / 7。播放器多出来的 -0.175 秒不写进 offset
+// 音符 X 为 fileX * 75.375 / 115.2，速度为 fileSpeed * 4.5 / 7
+// PEC 播放是 headerMs/1000 - 0.175。0.175 秒就是文件里那种 175 的毫秒。RPE 只把 META.offset 当毫秒再除以 1000
 ///@desc 把 PEC 文本转换成 RPE 谱面
 ///@param {String} pec_text PEC 文本
 ///@param {Any} meta 曲目信息，默认未定义时读当前会话
@@ -3953,9 +3963,11 @@ function phi_pec_to_rpe(pec_text, meta = undefined) {
 			chart_aspect = real(global.chart_session[$ "aspect_ratio"] ?? 0);
 		};
 	};
+	// 与 pec_reader_load 同一条秒偏移，再乘 1000 写成 RPE 毫秒。信息偏移仍留在 info，两边播放时各自相加
+	var pec_play_sec = real(parsed.offsetMs) / 1000 - 0.175;
 	var chart_meta = {
 		RPEVersion: 160,
-		offset: real(parsed.offsetMs),
+		offset: pec_play_sec * 1000,
 		name: chart_name,
 		level: chart_level,
 		song: chart_song,

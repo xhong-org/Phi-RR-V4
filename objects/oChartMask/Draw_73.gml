@@ -107,3 +107,5 @@ draw_surface_part(surface_id, _copy_left, 0, _copy_width, _copy_height, _copy_le
 gpu_set_blendmode(bm_normal);
 pls_draw_flush();
 gpu_pop_state();
+// pop 会把 scaleOnNotes 推进去的线宽剪刀还原。版本号和帧率在 Draw GUI 再画，这里先放开。
+chart_mask_scissor_clear();

@@ -32,9 +32,7 @@ cont_x = 0;
 cont_y = 0;
 box_alpha = [0, 0, 0];
 score_show = 0;
-best_show = 0;
-delta_show = 0;
-gap_show = 0;
+score_record_line = "";
 rank_alpha = 0;
 rank_scale = 2;
 rank_started = false;
@@ -156,19 +154,33 @@ function settlement_ending_index(_level) {
 	return chart_ending_index(_level);
 }
 
-///@desc 读取当前谱面的历史最高分
-///@returns {Real} 历史最高分
-function settlement_best_read() {
-	return chart_score_get(chart_score_md5());
+///@desc 把分数收成非负整数。按位结果是 int64，不能用 is_real 判断
+///@param {Any} _value 分数
+///@returns {Real} 非负整数，无效时为 0
+function settlement_score_int(_value) {
+	if (!is_numeric(_value)) then return 0;
+	var n = real(_value);
+	if (!is_finite(n) || n < 0) then return 0;
+	return floor(n);
 }
 
-///@desc 写入当前谱面的最高分，自动播放不记
+///@desc 读取当前谱面的历史最高分。没有记录时为 0，显示成 0000000
+///@returns {Real} 已保存的最高分
+function settlement_best_read() {
+	return settlement_score_int(chart_score_get(chart_score_md5()));
+}
+
+///@desc 仅在本局高于已读取的历史分时写回。自动播放不记
 ///@param {Real} _score 本局分数
+///@param {Real} _prev 写之前读到的历史最高分
 ///@returns {Undefined} 无
-function settlement_best_write(_score) {
-	// 自动播放不覆盖成绩。
+function settlement_best_write(_score, _prev) {
 	if (chart_autoplay_active()) then return;
-	chart_score_set(chart_score_md5(), _score);
+	var now_score = settlement_score_int(_score);
+	var prev_score = settlement_score_int(_prev);
+	// 平分或更低不覆盖。chart_score_set 还会再比一次已存分数。
+	if (now_score <= prev_score) then return;
+	chart_score_set(chart_score_md5(), now_score);
 }
 
 ///@desc 按窗口缩放重算结算面板位置
@@ -391,12 +403,25 @@ if (variable_global_exists("phi_state_list") && is_struct(phi_state_list)) {
 	acc_value = real(phi_state_list.acc ?? 0);
 };
 score_autoplay = chart_autoplay_active();
+// 先读历史分，再用这次读到的值决定文案。写回发生在文案确定之后。
 best_prev = settlement_best_read();
-score_is_best = (!score_autoplay && score_value > best_prev);
-score_gap = max(0, best_prev - score_value);
-score_delta = max(0, score_value - best_prev);
-// 本局超过历史最高才写回。
-if (score_is_best) then settlement_best_write(score_value);
+score_value = settlement_score_int(score_value);
+score_is_best = false;
+score_delta = 0;
+score_gap = 0;
+score_record_line = "";
+if (score_autoplay) {
+	score_record_line = "AUTOPLAY";
+} else if (score_value > best_prev) {
+	// 没有历史记录时 best_prev 为 0，右侧就是 0000000 +本局分数。
+	score_is_best = true;
+	score_delta = score_value - best_prev;
+	score_record_line = "NEW BEST " + ScoreSystemPad(best_prev) + " +" + ScoreSystemPad(score_delta);
+	settlement_best_write(score_value, best_prev);
+} else if (score_value < best_prev) {
+	score_gap = best_prev - score_value;
+	score_record_line = "BEST " + ScoreSystemPad(best_prev) + " -" + ScoreSystemPad(score_gap);
+};
 
 var bg_path = "";
 if (variable_global_exists("game") && is_struct(game) && is_struct(game.folder_chart)

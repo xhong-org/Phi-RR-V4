@@ -367,6 +367,7 @@ function paused_ui_reset_official() {
                 _note_x = 0; _note_y = 0;
                 _now_seconds = 0; _now_beat = 0;
                 judgeRealTime = 0;
+                image_alpha = 1;
                 if (_is_hold) {
                         isHold = false;
                         notJudge = true;
@@ -405,6 +406,7 @@ function paused_ui_reset_pec() {
                 canDraw = false;
                 judged = false;
                 hold_started = false;
+                isMiss = false;
                 hit_status = TYPE.NONE;
                 hold_effect_sec = -infinity;
                 hold_bpm_index = 0;

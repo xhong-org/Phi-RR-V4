@@ -77,4 +77,3 @@ if (show_head) {
 
 image_angle = (-180 * (!isAbove) + rotation);
 canDraw = (show_head || hold_length > 0);
-if (isMiss) then image_alpha = 0.45;

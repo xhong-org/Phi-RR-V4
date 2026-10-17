@@ -51,16 +51,10 @@ draw_set_alpha(a0);
 var score_tx = score_x + 28 * s;
 draw_text_transformed(score_tx, score_bottom - score_h * 0.50, ScoreSystemPad(score_show), 0.72 * s, 0.72 * s, 0);
 draw_set_alpha(a0 * 0.85);
-var rec_line = "";
-// 自动播放、新纪录和普通纪录用不同的一行字。
-if (score_autoplay) {
-	rec_line = "AUTOPLAY";
-} else if (score_is_best) {
-	rec_line = "NEW BEST " + ScoreSystemPad(score_show);
-} else {
-	rec_line = "BEST " + ScoreSystemPad(best_show) + " -" + ScoreSystemPad(gap_show);
+// 这行在创建时按读取到的历史分定稿。平分留空，不跟滚分动画改数字。
+if (string_length(score_record_line)) {
+	draw_text_transformed(score_tx, score_bottom - score_h * 0.22, score_record_line, 0.22 * s, 0.22 * s, 0);
 };
-draw_text_transformed(score_tx, score_bottom - score_h * 0.22, rec_line, 0.22 * s, 0.22 * s, 0);
 
 if (asset_sprite_valid(rank_sprite) && rank_alpha > 0) {
 	draw_sprite_ext(rank_sprite, 0, rank_cx, rank_cy, rank_base_scale * rank_scale, rank_base_scale * rank_scale, 0, c_white, rank_alpha);

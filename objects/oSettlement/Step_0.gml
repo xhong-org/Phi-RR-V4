@@ -50,15 +50,9 @@ if (score_tween_at >= 0) {
 	box_alpha[@ 0] = Easings.OutCubic(score_raw);
 	var score_k = box_alpha[0];
 	score_show = score_value * score_k;
-	best_show = best_prev * score_k;
-	delta_show = score_delta * score_k;
-	gap_show = score_gap * score_k;
 } else {
 	box_alpha[@ 0] = 0;
 	score_show = 0;
-	best_show = 0;
-	delta_show = 0;
-	gap_show = 0;
 };
 
 // 分数块满透明度后再淡入后面两块。
