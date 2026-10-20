@@ -25,7 +25,7 @@
 #macro func function
 #macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal { "windows": 40543, "android": 40534, "gxgames": 40532 } // 各平台版本号(独立)
+#macro VerReal { "windows": 40544, "android": 40534, "gxgames": 40532 } // 各平台版本号(独立)
 #macro VerStr "v.4.1.1r"
 
 ///@desc 按当前操作系统从 VerReal 取出对应版本号
@@ -1481,6 +1481,232 @@ function official_max_visible_pos(_value) {
 	return buffer_peek(float_buffer, 0, buffer_f32) * prime;
 }
 
+// 播放用官谱。原文件的 formatVersion 留在 game.version，角标继续显示 1、2、3。
+// 事件缓动号用 RPE 的谱面编号。缺省号是线性。不把缓动再切成许多直线。
+///@desc 用缓动号和窗口直接折进度，热路径不再临时组结构
+///@param {Real} _ease 缓动号，1 及以下按线性
+///@param {Real} _progress 0 到 1 的时间进度
+///@param {Real} _left 窗口左端
+///@param {Real} _right 窗口右端
+///@returns {Real} 插值系数
+function official_ease_at(_ease, _progress, _left, _right) {
+	if (!is_finite(_ease) || _ease <= 1) {
+		if (_left == 0 && _right == 1) then return _progress;
+	};
+	if (_left == 0 && _right == 1) then return rpe_ease_value(_ease, _progress);
+	return rpe_ease_clipped(_ease, _progress, _left, _right);
+}
+
+///@desc 把事件进度按 RPE 缓动号折成插值系数
+///@param {Struct} _event 播放事件
+///@param {Real} _progress 0 到 1 的时间进度
+///@param {Real} _axis 0 读 easeType，1 读 easeType2
+///@returns {Real} 插值系数
+function official_sim_progress(_event, _progress, _axis) {
+	var ease_id = 1;
+	var left = 0;
+	var right = 1;
+	if (_axis == 1) {
+		if (is_real(_event[$ "easeType2"])) then ease_id = _event.easeType2;
+		if (is_real(_event[$ "easeLeft2"])) then left = _event.easeLeft2;
+		if (is_real(_event[$ "easeRight2"])) then right = _event.easeRight2;
+	} else {
+		if (is_real(_event[$ "easeType"])) then ease_id = _event.easeType;
+		if (is_real(_event[$ "easeLeft"])) then left = _event.easeLeft;
+		if (is_real(_event[$ "easeRight"])) then right = _event.easeRight;
+	};
+	if (!is_finite(ease_id) || ease_id <= 1) {
+		if (left == 0 && right == 1) then return _progress;
+	};
+	if (left == 0 && right == 1) then return rpe_ease_value(ease_id, _progress);
+	return rpe_ease_clipped(ease_id, _progress, left, right);
+}
+
+///@desc 有限实数，否则用后备值。json_parse 会把不带小数的数字收成 int64
+///@param {Any} _value 候选值
+///@param {Real} _fallback 后备值
+///@returns {Real} 实数
+function official_sim_real(_value, _fallback) {
+	if (is_int64(_value) || is_int32(_value)) then _value = real(_value);
+	if (is_real(_value) && is_finite(_value)) then return _value;
+	return _fallback;
+}
+
+///@desc 把 v2 的缓动号换成 RPE 谱面缓动号。保持和瞬移在结构里表达，这里返回线性
+///@param {Real} _ease v2 的 easeType
+///@returns {Real} RPE 缓动号
+function official_v2_rpe_ease(_ease) {
+	if (_ease == 1) then return 5;
+	if (_ease == 3) then return 7;
+	if (_ease == 4) then return 9;
+	if (_ease == 5) then return 8;
+	if (_ease == 6) then return 12;
+	return 1;
+}
+
+///@desc 一条轴从本帧到下一帧的播放值。13 保持本帧，14 整段用下一帧
+///@param {Real} _ease v2 缓动号
+///@param {Real} _from 本帧值
+///@param {Real} _to 下一帧值
+///@returns {Array} 起点、终点、RPE 缓动号
+function official_v2_axis(_ease, _from, _to) {
+	if (_ease == 13) then return [_from, _from, 1];
+	if (_ease == 14) then return [_to, _to, 1];
+	return [_from, _to, official_v2_rpe_ease(_ease)];
+}
+
+///@desc 读 v2 事件上的缓动号，缺省为 0。文件里的号是整数，不能用 is_real 挡掉
+///@param {Struct} _event 原始事件
+///@param {String} _key 字段名
+///@returns {Real} 整数缓动号
+function official_v2_ease_id(_event, _key) {
+	return floor(official_sim_real(_event[$ _key], 0));
+}
+
+///@desc 按开始时间排序事件副本。end 为 (2, 2) 只是没启用的终点，关键帧仍要保留
+///@param {Array} _events 原始事件
+///@returns {Array} 排序后的事件
+function official_v2_sorted(_events) {
+	var src = [];
+	if (!is_array(_events)) then return src;
+	var count = array_length(_events);
+	for (var i = 0; i < count; i++) {
+		var ev = _events[i];
+		if (!is_struct(ev)) then continue;
+		var start_time = official_sim_real(ev[$ "startTime"], undefined);
+		if (!is_real(start_time)) then continue;
+		array_add(src, ev);
+	};
+	array_sort(src, function(a, b) { return a.startTime - b.startTime; });
+	return src;
+}
+
+///@desc 写入一条播放事件。线性且窗口是整段时不写缓动字段
+///@param {Array} _out 输出数组
+///@param {Real} _t0 起点
+///@param {Real} _t1 终点
+///@param {Real} _x0 横起点
+///@param {Real} _x1 横终点
+///@param {Real} _y0 纵起点
+///@param {Real} _y1 纵终点
+///@param {Real} _ease_x 横轴 RPE 缓动号
+///@param {Real} _ease_y 纵轴 RPE 缓动号
+///@param {Bool} _with_y 是否写纵轴
+///@returns {Bool} 这条事件需要运行时缓动时为真
+function official_sim_push(_out, _t0, _t1, _x0, _x1, _y0, _y1, _ease_x, _ease_y, _with_y) {
+	var ev = {
+		startTime: _t0,
+		endTime: _t1,
+		"start": _x0,
+		"end": _x1
+	};
+	var live = false;
+	if (_ease_x > 1) {
+		ev.easeType = _ease_x;
+		live = true;
+	};
+	if (_with_y) {
+		ev.start2 = _y0;
+		ev.end2 = _y1;
+		if (_ease_y > 1) {
+			ev.easeType2 = _ease_y;
+			live = true;
+		};
+	};
+	array_add(_out, ev);
+	return live;
+}
+
+///@desc 把 v2 关键帧收成一段一缓动的播放事件
+///@param {Array} _events 原始事件
+///@param {Bool} _move 移动事件带纵轴
+///@returns {Struct} events 与 live
+function official_v2_channel(_events, _move) {
+	var src = official_v2_sorted(_events);
+	var out = [];
+	var live = false;
+	var count = array_length(src);
+	var tail = 1000000000;
+	if (count <= 0) then return { events: out, live: false };
+	for (var i = 0; i < count - 1; i++) {
+		var cur = src[i];
+		var nxt = src[i + 1];
+		var t0 = cur.startTime;
+		var t1 = nxt.startTime;
+		if (!(t1 >= t0)) then continue;
+		if (_move) {
+			var axis_x = official_v2_axis(official_v2_ease_id(cur, "easeType"), official_sim_real(cur[$ "start"], 0), official_sim_real(nxt[$ "start"], 0));
+			var axis_y = official_v2_axis(official_v2_ease_id(cur, "easeType2"), official_sim_real(cur[$ "start2"], 0), official_sim_real(nxt[$ "start2"], 0));
+			if (official_sim_push(out, t0, t1, axis_x[0], axis_x[1], axis_y[0], axis_y[1], axis_x[2], axis_y[2], true)) then live = true;
+		} else {
+			var axis = official_v2_axis(official_v2_ease_id(cur, "easeType"), official_sim_real(cur[$ "start"], 0), official_sim_real(nxt[$ "start"], 0));
+			if (official_sim_push(out, t0, t1, axis[0], axis[1], 0, 0, axis[2], 1, false)) then live = true;
+		};
+	};
+	var last = src[count - 1];
+	var last_x = official_sim_real(last[$ "start"], 0);
+	var last_y = _move ? official_sim_real(last[$ "start2"], 0) : 0;
+	official_sim_push(out, last.startTime, tail, last_x, last_x, last_y, last_y, 1, 1, _move);
+	return { events: out, live: live };
+}
+
+///@desc v2 速度只记起点。终点改成下一条的起点，开头的空档补速度 1
+///@param {Array} _events 速度事件
+///@returns {Array} 播放用速度事件
+function official_v2_speed(_events) {
+	var src = official_v2_sorted(_events);
+	var out = [];
+	var tail = 1000000000;
+	var count = array_length(src);
+	if (count <= 0) {
+		array_add(out, { startTime: 0, endTime: tail, value: 1 });
+		return out;
+	};
+	if (src[0].startTime > 0) then array_add(out, { startTime: 0, endTime: src[0].startTime, value: 1 });
+	for (var i = 0; i < count; i++) {
+		var ev = src[i];
+		var t1 = (i + 1 < count) ? src[i + 1].startTime : tail;
+		if (t1 < ev.startTime) then t1 = ev.startTime;
+		array_add(out, {
+			startTime: ev.startTime,
+			endTime: t1,
+			value: official_sim_real(ev[$ "value"], 0)
+		});
+	};
+	return out;
+}
+
+///@desc v2 长按的身体速度写在 headSpeed，点按拖动滑动仍用 speed
+///@param {Array} _notes 音符数组
+///@returns {Undefined} 无
+function official_v2_holds(_notes) {
+	if (!is_array(_notes)) then return;
+	var count = array_length(_notes);
+	for (var i = 0; i < count; i++) {
+		var note = _notes[i];
+		if (!is_struct(note)) then continue;
+		if (real(note[$ "type"] ?? 0) != 3) then continue;
+		var head = note[$ "headSpeed"];
+		if (is_real(head) && is_finite(head)) then note.speed = head;
+	};
+}
+
+///@desc 把一条 v2 判定线收成播放事件。坐标已经是 0 到 1，不再平移缩放
+///@param {Struct} _line 判定线
+///@returns {Undefined} 无
+function official_v2_prepare_line(_line) {
+	var move = official_v2_channel(_line.judgeLineMoveEvents, true);
+	var rotate = official_v2_channel(_line.judgeLineRotateEvents, false);
+	var alpha = official_v2_channel(_line.judgeLineDisappearEvents, false);
+	_line.judgeLineMoveEvents = move.events;
+	_line.judgeLineRotateEvents = rotate.events;
+	_line.judgeLineDisappearEvents = alpha.events;
+	_line.speedEvents = official_v2_speed(_line.speedEvents);
+	if (move.live || rotate.live || alpha.live) then _line.simEase = true;
+	official_v2_holds(_line.notesAbove);
+	official_v2_holds(_line.notesBelow);
+}
+
 // sim-phi 用 Number(t)|0 截成 1/32 拍整数，导出不能带小数 tick
 // floorPosition 是 float32 积分：从首事件起点秒数起，存 y 后再加上时长乘速度
 // 负的首起点是 v1 预滚哨兵，夹到 0。重复运行结果相同，_line_floor 不使用
@@ -1751,8 +1977,8 @@ function Phigros() constructor { // 仅仅结构
 			show_debug_message("[R-Chart] Missing or invalid formatVersion.");
 			return(false);
 		};
+		// 角标读 game.version，这里留文件里的 1、2、3。播放结构稍后写成 version 5
 		game.version = real(self.chart.formatVersion);
-		// 只接受 1 到 3 的整数格式版本
 		if (game.version != floor(game.version) || game.version < 1 || game.version > 3) {
 			show_debug_message($"[R-Chart] Unsupported Official formatVersion: {game.version}");
 			return(false);
@@ -1777,8 +2003,8 @@ function Phigros() constructor { // 仅仅结构
 			if (!struct_exists(line_data, "notesBelow") || !is_array(line_data.notesBelow)) then line_data.notesBelow = [];
 			if (!is_real(line_data.bpm) || line_data.bpm <= 0) then line_data.bpm = 60;
 
-			// v1 与 v2 的移动坐标是旧的打包或居中形式，v3 已归一化，Y 翻转在 oLine
-			if(game.version == 1 || game.version == 2){
+			// v1 只拆打包坐标。v2 收成带缓动的播放事件。v3 本来就是直线，不再拟合
+			if (game.version == 1) {
 				for(var m = 0 ; m < array_length(line_data.judgeLineMoveEvents) ; m ++){
 					var l_m = line_data.judgeLineMoveEvents[m];
 					if (!is_struct(l_m) || !struct_exists(l_m, "start") || !struct_exists(l_m, "end")) then continue;
@@ -1788,14 +2014,15 @@ function Phigros() constructor { // 仅仅结构
 						"start2" : l_m[$ "start2"],
 						"end2" : l_m[$ "end2"]
 					};
-					if (game.version == 2 && (!is_real(move_source.start2) || !is_real(move_source.end2))) then continue;
-					var r_m = (game.version == 1 ? game.Math.posCovert(move_source) : game.Math.posCovert2(move_source));
+					var r_m = game.Math.posCovert(move_source);
 					if (!is_struct(r_m)) then continue;
 					line_data.judgeLineMoveEvents[m][$ "start"] = r_m.start;
 					line_data.judgeLineMoveEvents[m][$ "end"] = r_m[$ "end"];
 					line_data.judgeLineMoveEvents[m][$ "start2"] = r_m.start2;
 					line_data.judgeLineMoveEvents[m][$ "end2"] = r_m.end2;
 				};
+			} else if (game.version == 2) {
+				official_v2_prepare_line(line_data);
 			};
 			
 			var bpm = line_data.bpm;
@@ -1820,6 +2047,9 @@ function Phigros() constructor { // 仅仅结构
 			//delete(self.chart.judgeLineList[i].notesBelow);
 		};
 		array_set(game.__time, 5, self.chart.offset * 1000000);
+		if (!is_array(self.chart[$ "blockAreaList"])) then self.chart.blockAreaList = [];
+		self.chart.version = 5;
+		struct_remove(self.chart, "formatVersion");
 		print("[R-Chart] Done." , game.settings.enableDebug);
 		return(true);
 	});
@@ -2313,7 +2543,7 @@ function Phigros() constructor { // 仅仅结构
 			});
 		}),
 		
-		///@desc 把格式 2 的居中坐标换成格式 3 的归一化坐标
+		///@desc 旧的格式 2 猜测。实测 v2 坐标已是 0 到 1，播放不再调用
 		///@param {Struct} pos_struct 含 start、end、start2、end2
 		///@returns {Any} 转换后的结构，字段缺失时未定义
 		posCovert2 : (func(pos_struct){

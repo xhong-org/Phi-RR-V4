@@ -69,6 +69,7 @@ judgeRealTime = (judgeTime * _seconds_per_beat);
 // GX 此时音频长度常还是 -1/0。未知长度也计入，避免官谱分数 0/0 变成 NaN。
 var _media_len = 0;
 if (instance_exists(oMedia) && is_real(oMedia.length) && is_finite(oMedia.length) && oMedia.length > 0) then _media_len = oMedia.length;
-if (_media_len <= 0 || (realHitTime * 1000000) <= _media_len) then maxcombo ++;
+var combo_ready = variable_instance_exists(id, "combo_added") && combo_added;
+if (!combo_ready && (_media_len <= 0 || (realHitTime * 1000000) <= _media_len)) then maxcombo ++;
 
 inition = true;

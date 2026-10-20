@@ -1,4 +1,12 @@
 ///@desc 用户事件 1：预计算每个速度事件起点的累计 floor
+if (events_flat) {
+	var flat_n = _event_lengths[3];
+	speedValueList = array_create(max(1, flat_n), 0);
+	for (var flat_i = 0; flat_i < flat_n; flat_i++) {
+		speedValueList[flat_i] = _speed_pack[flat_i * OFF_EV_SPEED + 3];
+	};
+	exit;
+};
 var value = 0;
 speedValueList = [0];
 for(var i = 0 ; i < _event_lengths[3] ; i ++){

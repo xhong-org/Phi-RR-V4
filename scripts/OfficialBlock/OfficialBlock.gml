@@ -246,6 +246,7 @@ function official_block_free_rt(_state) {
 	}
 	_state.surf_w = 0;
 	_state.surf_h = 0;
+	_state.mask_valid = false;
 }
 
 ///@desc 判断谱面是否正在结束、结算或退出
@@ -687,6 +688,14 @@ function official_blocks_pack_large(_chart) {
 		return true;
 	}
 	var count = array_length(source);
+	// 没有字段时读谱会补成 []。空表不能再读 source[0]
+	if (count <= 0) {
+		state.packed = true;
+		state.pack_phase = 4;
+		state.pack_count = 0;
+		state.pack_complex = [];
+		return true;
+	}
 	var stride = OFFICIAL_BLOCK_PACK;
 	if (state.pack_phase == 0) {
 		var created = buffer_create(max(1, count * stride), buffer_fixed, 1);
@@ -1197,7 +1206,9 @@ function official_block_refresh_ok(_state) {
 ///@desc 提前确保噪声区资源已加载
 ///@returns {Undefined} 无
 function official_blocks_preload() {
-	official_blocks_ensure();
+	var state = official_blocks_ensure();
+	// 着色器编译放到加载里。播放第一帧再编译会掉一截帧
+	if (!state.gpu_warm && official_block_pixels(state)) official_block_gpu_warm(state);
 }
 
 ///@desc 取谱面宽高比，缺失时用视口或 16:9
@@ -1981,7 +1992,14 @@ function official_block_fullscreen_end(_state, _dest) {
 ///@param {Real} _sx 横向缩放到目标纹素
 ///@param {Real} _sy 纵向缩放到目标纹素
 ///@returns {Undefined} 无
-function official_block_draw_quad(_corners, _sx, _sy) {
+///@desc 按原来的混合把一个方块画进当前遮罩。不能并进同一次顶点色提交
+///@param {Array} _corners 八个屏幕坐标
+///@param {Real} _sx 横向缩放到目标纹素
+///@param {Real} _sy 纵向缩放到目标纹素
+///@param {Bool} _subtract 相减区用绿色通道携带淡入
+///@param {Real} _fade 淡入
+///@returns {Undefined} 无
+function official_block_draw_quad(_corners, _sx, _sy, _subtract, _fade) {
 	var x0 = _corners[0] * _sx;
 	var y0 = _corners[1] * _sy;
 	var x1 = _corners[2] * _sx;
@@ -1990,6 +2008,13 @@ function official_block_draw_quad(_corners, _sx, _sy) {
 	var y2 = _corners[5] * _sy;
 	var x3 = _corners[6] * _sx;
 	var y3 = _corners[7] * _sy;
+	if (_subtract) {
+		draw_set_colour(make_colour_rgb(255, floor(clamp(_fade, 0, 1) * 255), 255));
+		draw_set_alpha(0.1);
+	} else {
+		draw_set_colour(c_white);
+		draw_set_alpha(_fade);
+	}
 	draw_primitive_begin(pr_trianglelist);
 	draw_vertex(x0, y0);
 	draw_vertex(x1, y1);
@@ -1998,6 +2023,92 @@ function official_block_draw_quad(_corners, _sx, _sy) {
 	draw_vertex(x2, y2);
 	draw_vertex(x3, y3);
 	draw_primitive_end();
+}
+
+///@desc 遮罩和上一帧是否同一形状。噪声动画不看这里
+///@param {Struct} _block 方块
+///@returns {Bool} 没变时为真
+function official_block_mask_same(_block) {
+	if (!variable_struct_exists(_block, "mask_on") || _block.mask_on != _block.on) return false;
+	if (!_block.on) return true;
+	if (_block.mask_phase != _block.phase || _block.mask_sub != _block.subtract) return false;
+	var fade_i = floor(clamp(_block.fade, 0, 1) * 255);
+	if (_block.mask_fade != fade_i) return false;
+	var prev = _block[$ "mask_corners"];
+	if (!is_array(prev)) return false;
+	var cur = _block.corners;
+	return cur[0] == prev[0] && cur[1] == prev[1] && cur[2] == prev[2] && cur[3] == prev[3]
+		&& cur[4] == prev[4] && cur[5] == prev[5] && cur[6] == prev[6] && cur[7] == prev[7];
+}
+
+///@desc 记下这一帧已经画进遮罩的形状
+///@param {Struct} _block 方块
+///@returns {Undefined} 无
+function official_block_mask_store(_block) {
+	_block.mask_on = _block.on;
+	if (!_block.on) return;
+	_block.mask_phase = _block.phase;
+	_block.mask_sub = _block.subtract;
+	_block.mask_fade = floor(clamp(_block.fade, 0, 1) * 255);
+	var prev = _block[$ "mask_corners"];
+	if (!is_array(prev)) {
+		prev = array_create(8, 0);
+		_block.mask_corners = prev;
+	}
+	var cur = _block.corners;
+	prev[0] = cur[0];
+	prev[1] = cur[1];
+	prev[2] = cur[2];
+	prev[3] = cur[3];
+	prev[4] = cur[4];
+	prev[5] = cur[5];
+	prev[6] = cur[6];
+	prev[7] = cur[7];
+}
+
+///@desc 各组遮罩是否还能沿用。方块在动或淡入淡出时为假
+///@param {Struct} _state 噪声区状态
+///@returns {Bool} 可沿用时为真
+function official_block_masks_match(_state) {
+	if (!variable_struct_exists(_state, "mask_valid") || !_state.mask_valid) return false;
+	if (_state.mask_n != _state.block_n || _state.mask_bw != _state.bw || _state.mask_bh != _state.bh) return false;
+	if (_state.mask_norm_active != _state.norm_active || _state.mask_sub_active != _state.sub_active) return false;
+	if (_state.mask_norm_ready != _state.norm_ready || _state.mask_sub_ready != _state.sub_ready) return false;
+	if (_state.mask_norm_disabled != _state.norm_disabled || _state.mask_sub_disabled != _state.sub_disabled) return false;
+	var blocks = _state.blocks;
+	var count = official_block_iter_count(_state);
+	for (var i = 0; i < count; i++) {
+		if (!official_block_mask_same(blocks[i])) return false;
+	}
+	var complex = _state.pack_complex;
+	var complex_n = array_length(complex);
+	if (_state.mask_complex_n != complex_n) return false;
+	for (var ci = 0; ci < complex_n; ci++) {
+		if (!official_block_mask_same(complex[ci])) return false;
+	}
+	return true;
+}
+
+///@desc 遮罩画完后记下形状，下一帧没变就不再提交这些四边形
+///@param {Struct} _state 噪声区状态
+///@returns {Undefined} 无
+function official_block_masks_commit(_state) {
+	_state.mask_valid = true;
+	_state.mask_n = _state.block_n;
+	_state.mask_bw = _state.bw;
+	_state.mask_bh = _state.bh;
+	_state.mask_norm_active = _state.norm_active;
+	_state.mask_sub_active = _state.sub_active;
+	_state.mask_norm_ready = _state.norm_ready;
+	_state.mask_sub_ready = _state.sub_ready;
+	_state.mask_norm_disabled = _state.norm_disabled;
+	_state.mask_sub_disabled = _state.sub_disabled;
+	var blocks = _state.blocks;
+	var count = official_block_iter_count(_state);
+	for (var i = 0; i < count; i++) official_block_mask_store(blocks[i]);
+	var complex = _state.pack_complex;
+	_state.mask_complex_n = array_length(complex);
+	for (var ci = 0; ci < _state.mask_complex_n; ci++) official_block_mask_store(complex[ci]);
 }
 
 ///@desc 把同一相位、同一相减属性的方块画进一张遮罩
@@ -2019,29 +2130,14 @@ function official_block_paint_group(_state, _index, _phase, _subtract, _sx, _sy)
 	var count = official_block_iter_count(_state);
 	for (var i = 0; i < count; i++) {
 		var block = blocks[i];
-		// 相减区用低透明度着色，普通区用淡入透明度
 		if (!block.on || block.phase != _phase || block.subtract != _subtract) continue;
-		if (_subtract) {
-			draw_set_colour(make_colour_rgb(255, floor(clamp(block.fade, 0, 1) * 255), 255));
-			draw_set_alpha(0.1);
-		} else {
-			draw_set_colour(c_white);
-			draw_set_alpha(block.fade);
-		}
-		official_block_draw_quad(block.corners, _sx, _sy);
+		official_block_draw_quad(block.corners, _sx, _sy, _subtract, block.fade);
 	}
 	var complex = _state.pack_complex;
 	for (var ci = 0; ci < array_length(complex); ci++) {
 		var extra = complex[ci];
 		if (!extra.on || extra.phase != _phase || extra.subtract != _subtract) continue;
-		if (_subtract) {
-			draw_set_colour(make_colour_rgb(255, floor(clamp(extra.fade, 0, 1) * 255), 255));
-			draw_set_alpha(0.1);
-		} else {
-			draw_set_colour(c_white);
-			draw_set_alpha(extra.fade);
-		}
-		official_block_draw_quad(extra.corners, _sx, _sy);
+		official_block_draw_quad(extra.corners, _sx, _sy, _subtract, extra.fade);
 	}
 	draw_set_alpha(1);
 	surface_reset_target();
@@ -2540,23 +2636,27 @@ function official_block_offscreen(_state, _chart, _now) {
 	gpu_set_cullmode(cull_noculling);
 	gpu_set_zwriteenable(false);
 	gpu_set_ztestenable(false);
-	// 先画各组遮罩，再做相减、合成、辉光、悬停和打包
-	if (_state.norm_active) official_block_paint_group(_state, BLOCK_RT_ACTIVE_N, 0, false, sx, sy);
-	if (_state.sub_active) official_block_paint_group(_state, BLOCK_RT_ACTIVE_H, 0, true, sx, sy);
-	if (_state.norm_ready) official_block_paint_group(_state, BLOCK_RT_READY_N, 1, false, sx, sy);
-	if (_state.sub_ready) official_block_paint_group(_state, BLOCK_RT_READY_H, 1, true, sx, sy);
-	if (_state.norm_disabled) official_block_paint_group(_state, BLOCK_RT_OFF_N, 2, false, sx, sy);
-	if (_state.sub_disabled) official_block_paint_group(_state, BLOCK_RT_OFF_H, 2, true, sx, sy);
-	if (_state.sub_active && _state.ok_subtract) official_block_subtract_pass(_state, shd_block_subtract, BLOCK_RT_ACTIVE_HP, BLOCK_RT_ACTIVE_H);
-	if (_state.sub_ready && _state.ok_subtract_soft) official_block_subtract_pass(_state, shd_block_subtract_soft, BLOCK_RT_READY_HP, BLOCK_RT_READY_H);
-	if (_state.sub_disabled && _state.ok_subtract_soft) official_block_subtract_pass(_state, shd_block_subtract_soft, BLOCK_RT_OFF_HP, BLOCK_RT_OFF_H);
+	// 形状没变就沿用遮罩。噪声、辉光仍每帧按时间重画
+	var masks_same = official_block_masks_match(_state);
+	if (!masks_same) {
+		if (_state.norm_active) official_block_paint_group(_state, BLOCK_RT_ACTIVE_N, 0, false, sx, sy);
+		if (_state.sub_active) official_block_paint_group(_state, BLOCK_RT_ACTIVE_H, 0, true, sx, sy);
+		if (_state.norm_ready) official_block_paint_group(_state, BLOCK_RT_READY_N, 1, false, sx, sy);
+		if (_state.sub_ready) official_block_paint_group(_state, BLOCK_RT_READY_H, 1, true, sx, sy);
+		if (_state.norm_disabled) official_block_paint_group(_state, BLOCK_RT_OFF_N, 2, false, sx, sy);
+		if (_state.sub_disabled) official_block_paint_group(_state, BLOCK_RT_OFF_H, 2, true, sx, sy);
+		if (_state.sub_active && _state.ok_subtract) official_block_subtract_pass(_state, shd_block_subtract, BLOCK_RT_ACTIVE_HP, BLOCK_RT_ACTIVE_H);
+		if (_state.sub_ready && _state.ok_subtract_soft) official_block_subtract_pass(_state, shd_block_subtract_soft, BLOCK_RT_READY_HP, BLOCK_RT_READY_H);
+		if (_state.sub_disabled && _state.ok_subtract_soft) official_block_subtract_pass(_state, shd_block_subtract_soft, BLOCK_RT_OFF_HP, BLOCK_RT_OFF_H);
+		if (_state.on_ready && _state.sub_ready && _state.ok_compose_plain) {
+			official_block_compose_plain(_state, BLOCK_RT_READY_C, _state.norm_ready ? BLOCK_RT_READY_N : -1, BLOCK_RT_READY_HP);
+		}
+		if (_state.on_disabled && _state.sub_disabled && _state.ok_compose_plain) {
+			official_block_compose_plain(_state, BLOCK_RT_OFF_C, _state.norm_disabled ? BLOCK_RT_OFF_N : -1, BLOCK_RT_OFF_HP);
+		}
+		official_block_masks_commit(_state);
+	}
 	if (_state.on_active && _state.ok_compose) official_block_compose_active(_state, _now);
-	if (_state.on_ready && _state.sub_ready && _state.ok_compose_plain) {
-		official_block_compose_plain(_state, BLOCK_RT_READY_C, _state.norm_ready ? BLOCK_RT_READY_N : -1, BLOCK_RT_READY_HP);
-	}
-	if (_state.on_disabled && _state.sub_disabled && _state.ok_compose_plain) {
-		official_block_compose_plain(_state, BLOCK_RT_OFF_C, _state.norm_disabled ? BLOCK_RT_OFF_N : -1, BLOCK_RT_OFF_HP);
-	}
 	if (_state.on_active && _state.ok_compose && _state.ok_glow) official_block_glow(_state);
 	if (_state.hover_live && _state.ok_hover) official_block_paint_hover(_state);
 	if ((_state.on_active || _state.on_ready || _state.hover_live) && _state.ok_pack_m && _state.ok_pack_e) {

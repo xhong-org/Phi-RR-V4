@@ -1,5 +1,211 @@
 // 把官谱判定线与音符的创建摊到多个加载帧。
-// 先建线再放音符（音符按 line_id 绑定），全部初始化后再冻结。
+// 先建线再放音符。加载时建好并冻结，开播前只解冻一开始会用到的一段。
+// 后门：进谱面前写 global.official_array_pack = false，事件和音符都退回结构体，并且上万颗也全部实例化。
+
+#macro OFF_EV_MOVE 8
+#macro OFF_EV_AXIS 5
+#macro OFF_EV_SPEED 4
+#macro OFFICIAL_NOTE_DEFER_AT 8000
+#macro OFFICIAL_NOTE_THAW_SEC 1.5
+#macro OFFICIAL_NOTE_BUILD_AHEAD 2.5
+#macro OFFICIAL_NOTE_BUILD_BUDGET_US 1200
+#macro OFFICIAL_NOTE_WINDOW_SEC 8
+#macro OFFICIAL_NOTE_WINDOW_CAP 1500
+
+///@desc 官谱是否把事件和音符收成数组。默认开，写 false 整段撤回
+///@returns {Bool} 启用时为真
+function official_array_pack_enabled() {
+	if (!variable_global_exists("official_array_pack")) then global.official_array_pack = true;
+	return global.official_array_pack == true;
+}
+
+///@desc 移动事件收成定长数组。每条 8 个数：起止时间、起止坐标、两条缓动号
+///@param {Array} _events 结构体事件
+///@returns {Array} 扁平实数
+function official_pack_move(_events) {
+	if (!is_array(_events)) then return [];
+	var count = array_length(_events);
+	var pack = array_create(count * OFF_EV_MOVE, 0);
+	for (var i = 0; i < count; i++) {
+		var ev = _events[i];
+		var at = i * OFF_EV_MOVE;
+		if (!is_struct(ev)) then continue;
+		pack[at] = official_sim_real(ev[$ "startTime"], 0);
+		pack[at + 1] = official_sim_real(ev[$ "endTime"], pack[at]);
+		pack[at + 2] = official_sim_real(ev[$ "start"], 0);
+		pack[at + 3] = official_sim_real(ev[$ "end"], pack[at + 2]);
+		pack[at + 4] = official_sim_real(ev[$ "start2"], 0);
+		pack[at + 5] = official_sim_real(ev[$ "end2"], pack[at + 4]);
+		pack[at + 6] = official_sim_real(ev[$ "easeType"], 1);
+		pack[at + 7] = official_sim_real(ev[$ "easeType2"], 1);
+	};
+	return pack;
+}
+
+///@desc 旋转或透明度收成定长数组。每条 5 个数
+///@param {Array} _events 结构体事件
+///@returns {Array} 扁平实数
+function official_pack_axis(_events) {
+	if (!is_array(_events)) then return [];
+	var count = array_length(_events);
+	var pack = array_create(count * OFF_EV_AXIS, 0);
+	for (var i = 0; i < count; i++) {
+		var ev = _events[i];
+		var at = i * OFF_EV_AXIS;
+		if (!is_struct(ev)) then continue;
+		pack[at] = official_sim_real(ev[$ "startTime"], 0);
+		pack[at + 1] = official_sim_real(ev[$ "endTime"], pack[at]);
+		pack[at + 2] = official_sim_real(ev[$ "start"], 0);
+		pack[at + 3] = official_sim_real(ev[$ "end"], pack[at + 2]);
+		pack[at + 4] = official_sim_real(ev[$ "easeType"], 1);
+	};
+	return pack;
+}
+
+///@desc 速度事件收成定长数组。每条 4 个数，最后一项是地板基准
+///@param {Array} _events 结构体事件
+///@param {Real} _seconds_per_beat 每拍秒数
+///@returns {Array} 扁平实数
+function official_pack_speed(_events, _seconds_per_beat) {
+	if (!is_array(_events)) then return [];
+	var count = array_length(_events);
+	var pack = array_create(count * OFF_EV_SPEED, 0);
+	var acc = 0;
+	var spb = real(_seconds_per_beat);
+	if (!(spb > 0) || !is_finite(spb)) then spb = 1.875 / 60;
+	for (var i = 0; i < count; i++) {
+		var ev = _events[i];
+		var at = i * OFF_EV_SPEED;
+		if (!is_struct(ev)) then continue;
+		var st = official_sim_real(ev[$ "startTime"], 0);
+		var en = official_sim_real(ev[$ "endTime"], st);
+		var val = official_sim_real(ev[$ "value"], 0);
+		var fl = acc;
+		if (is_real(ev[$ "floorPosition"]) && is_finite(ev.floorPosition)) then fl = ev.floorPosition;
+		pack[at] = st;
+		pack[at + 1] = en;
+		pack[at + 2] = val;
+		pack[at + 3] = fl;
+		acc = fl + (en - st) * spb * val;
+	};
+	return pack;
+}
+
+///@desc 数组事件上二分或前移游标
+///@returns {Undefined} 无
+function official_line_seek_flat() {
+	var now_time = (game.__time[1] * _beat_per_second);
+	var is_seek = (now_time < _last_event_time || abs(now_time - _last_event_time) > _beat_per_second * 2);
+	var packs = [_move_pack, _rotate_pack, _alpha_pack, _speed_pack];
+	var strides = [OFF_EV_MOVE, OFF_EV_AXIS, OFF_EV_AXIS, OFF_EV_SPEED];
+	for (var i = 0; i < 4; i++) {
+		var event_length = _event_lengths[i];
+		if (event_length <= 0) then continue;
+		var pack = packs[i];
+		var stride = strides[i];
+		var count = clamp(_counts[i], 0, event_length - 1);
+		if (i == 3) {
+			if (is_seek) {
+				var low = 0;
+				var high = event_length - 1;
+				var found = event_length - 1;
+				while (low <= high) {
+					var middle = (low + high) >> 1;
+					if (pack[middle * stride + 1] < now_time) then low = middle + 1;
+					else {
+						found = middle;
+						high = middle - 1;
+					};
+				};
+				count = found;
+			} else {
+				while (count < event_length - 1 && pack[count * stride + 1] < now_time) count++;
+			};
+		} else if (is_seek) {
+			var low_m = 0;
+			var high_m = event_length - 1;
+			var found_m = 0;
+			while (low_m <= high_m) {
+				var middle_m = (low_m + high_m) >> 1;
+				if (pack[middle_m * stride] <= now_time) {
+					found_m = middle_m;
+					low_m = middle_m + 1;
+				} else high_m = middle_m - 1;
+			};
+			count = found_m;
+		} else {
+			while (count < event_length - 1 && pack[count * stride + 1] < now_time) count++;
+			while (count > 0 && pack[count * stride] > now_time) count--;
+		};
+		_counts[i] = count;
+		if (i == 3) then __value[1] = speedValueList[count];
+	};
+	_last_event_time = now_time;
+}
+
+///@desc 用数组事件求本帧判定线
+///@returns {Undefined} 无
+function official_line_eval_flat() {
+	var now_time = (game.__time[1] * _beat_per_second);
+	var next_x = __x;
+	var next_y = __y;
+	var next_alpha = __a;
+	var next_rotation = __r;
+	if (_event_lengths[0] > 0) {
+		var at = _counts[0] * OFF_EV_MOVE;
+		var st = _move_pack[at];
+		var en = _move_pack[at + 1];
+		var prog = (st == en) ? 1 : clamp((now_time - st) / (en - st), 0, 1);
+		var move_x = prog;
+		var move_y = prog;
+		if (ease_live) {
+			var ease_x = _move_pack[at + 6];
+			var ease_y = _move_pack[at + 7];
+			if (ease_x > 1) then move_x = official_ease_at(ease_x, prog, 0, 1);
+			if (ease_y > 1) then move_y = official_ease_at(ease_y, prog, 0, 1);
+		};
+		var x0 = _move_pack[at + 2];
+		var x1 = _move_pack[at + 3];
+		var y0 = _move_pack[at + 4];
+		var y1 = _move_pack[at + 5];
+		next_x = (x0 == x1) ? x1 : lerp(x0, x1, move_x);
+		next_y = (y0 == y1) ? y1 : lerp(y0, y1, move_y);
+	};
+	if (_event_lengths[2] > 0) {
+		var at_a = _counts[2] * OFF_EV_AXIS;
+		var st_a = _alpha_pack[at_a];
+		var en_a = _alpha_pack[at_a + 1];
+		var prog_a = (st_a == en_a) ? 1 : clamp((now_time - st_a) / (en_a - st_a), 0, 1);
+		if (ease_live && _alpha_pack[at_a + 4] > 1) then prog_a = official_ease_at(_alpha_pack[at_a + 4], prog_a, 0, 1);
+		var a0 = _alpha_pack[at_a + 2];
+		var a1 = _alpha_pack[at_a + 3];
+		next_alpha = (a0 == a1) ? a1 : lerp(a0, a1, prog_a);
+	};
+	if (_event_lengths[1] > 0) {
+		var at_r = _counts[1] * OFF_EV_AXIS;
+		var st_r = _rotate_pack[at_r];
+		var en_r = _rotate_pack[at_r + 1];
+		var prog_r = (st_r == en_r) ? 1 : clamp((now_time - st_r) / (en_r - st_r), 0, 1);
+		if (ease_live && _rotate_pack[at_r + 4] > 1) then prog_r = official_ease_at(_rotate_pack[at_r + 4], prog_r, 0, 1);
+		var r0 = _rotate_pack[at_r + 2];
+		var r1 = _rotate_pack[at_r + 3];
+		next_rotation = (r0 == r1) ? r1 : lerp(r0, r1, prog_r);
+	};
+	if (_event_lengths[3] > 0) {
+		var at_s = _counts[3] * OFF_EV_SPEED;
+		__value[0] = ((game.__time[1] - _speed_pack[at_s] * _seconds_per_beat) * _speed_pack[at_s + 2] + __value[1]);
+	};
+	if (!is_nan(next_x)) then __x = next_x;
+	if (!is_nan(next_y)) then __y = next_y;
+	if (!is_nan(next_alpha)) then __a = next_alpha;
+	if (!is_nan(next_rotation)) then __r = next_rotation;
+	x = (chart_view_left + chart_view_width * __x);
+	y = (chart_view_height * (1 - __y));
+	image_alpha = __a;
+	image_angle = __r;
+	__cos = dcos(__r);
+	__sin = dsin(__r);
+}
 
 ///@desc 判断官谱判定线是否仍在分帧创建
 ///@returns {Bool} 正在创建时为真
@@ -236,6 +442,9 @@ function official_lines_begin() {
 	owner.runtime_line_instances = [];
 	owner.runtime_note_instances = [];
 	owner._notes = [];
+	owner._note_rows = [];
+	owner._note_defer = false;
+	owner._note_realize_cursor = 0;
 	owner._note_activation_enabled = false;
 	owner._note_activation_index = 0;
 	owner._chart_line_job = {
@@ -294,7 +503,115 @@ function official_lines_force_init() {
 	};
 }
 
-///@desc 创建一颗官谱音符并计算其激活秒
+///@desc 上万颗音符不全建实例。录像模式仍全部创建，打击音要在开播前排好
+///@param {Real} _count 音符总数
+///@returns {Bool} 延迟创建时为真
+function official_note_defer_count(_count) {
+	if (!official_array_pack_enabled()) then return false;
+	if (variable_global_exists("render_mode") && global.render_mode) then return false;
+	return _count >= OFFICIAL_NOTE_DEFER_AT;
+}
+
+///@desc 读激活项的实例、激活秒、打击秒。数组和结构体都能读
+///@param {Any} _item 激活项
+///@param {Real} _field 0 实例，1 激活秒，2 打击秒
+///@returns {Any} 字段值
+function official_note_field(_item, _field) {
+	if (is_array(_item)) then return _item[_field];
+	if (!is_struct(_item)) then return (_field == 0) ? noone : infinity;
+	if (_field == 0) then return _item.id;
+	if (_field == 1) then return real(_item.activateSec ?? infinity);
+	return real(_item.hitSec ?? infinity);
+}
+
+///@desc 把音符栏收成 12 个实数，供稍后实例化
+///@param {Struct} _owner 谱面宿主
+///@param {Struct} _na 打包音符
+///@returns {Real} 行号
+function official_note_push_row(_owner, _na) {
+	if (!is_array(_owner._note_rows)) then _owner._note_rows = [];
+	var row = array_length(_owner._note_rows) div 12;
+	var above = bool(_na.isAbove) ? 1 : 0;
+	var mark = bool(_na[$ "hl"]) ? 1 : 0;
+	var row_vals = [
+		real(_na.type ?? 1), above, real(_na.time ?? 0), real(_na.holdTime ?? 0),
+		real(_na[$ "holdFloorLength"] ?? 0), real(_na.xOffset ?? 0), real(_na.yOffset ?? 0),
+		real(_na[$ "id"] ?? 0), real(_na.bpm ?? 60), real(_na[$ "speed"] ?? 1),
+		real(_na[$ "bodySpeed"] ?? 1), mark
+	];
+	for (var row_i = 0; row_i < 12; row_i++) array_add(_owner._note_rows, row_vals[row_i]);
+	return row;
+}
+
+///@desc 按数组行创建一颗音符并记到激活项上。创建后先冻结
+///@param {Any} _item 激活项
+///@returns {Bool} 已有实例或创建成功时为真
+function official_note_realize(_item) {
+	if (!is_array(_item) || array_length(_item) < 4) then return false;
+	if (_item[0] != noone) then return true;
+	var rows = game._note_rows;
+	var row = _item[3];
+	var at = row * 12;
+	if (!is_array(rows) || at + 11 >= array_length(rows)) then return false;
+	var note_bpm = rows[at + 8];
+	if (!(note_bpm > 0) || !is_finite(note_bpm)) then note_bpm = 60;
+	var note_instance = instance_create_depth(-999, -999, 0, oNote, {
+		"type": rows[at],
+		"isAbove": rows[at + 1] > 0.5,
+		"time": rows[at + 2],
+		"holdTime": rows[at + 3],
+		"holdFloorLength": rows[at + 4],
+		"xOffset": rows[at + 5],
+		"yOffset": rows[at + 6],
+		"line_id": rows[at + 7],
+		"bpm": note_bpm,
+		"speed": rows[at + 9],
+		"bodySpeed": rows[at + 10],
+		"_hl": rows[at + 11] > 0.5,
+		"combo_added": true
+	});
+	if (!instance_exists(note_instance)) then return false;
+	chart_lines_hide_created(note_instance);
+	array_add(game.runtime_note_instances, note_instance);
+	if (variable_global_exists("render_mode") && global.render_mode) {
+		var hitsound_at = (note_instance.type == 2 || note_instance.type == 4)
+			? note_instance.realHitTime : note_instance.judgeRealTime;
+		note_instance.render_hitsound_scheduled = render_schedule_note_hitsound(note_instance, hitsound_at);
+	};
+	_item[0] = note_instance;
+	instance_deactivate_object(note_instance);
+	return true;
+}
+
+///@desc 开播前或播放中，把即将用到、尚未实例化的音符建出来
+///@param {Real} _until_sec 激活时间上限
+///@param {Real} _cap 最多新建几颗
+///@param {Real} _budget_us 时间预算，0 表示不限
+///@returns {Undefined} 无
+function official_notes_realize_until(_until_sec, _cap, _budget_us) {
+	var notes = game._notes;
+	if (!is_array(notes)) then return;
+	var count = array_length(notes);
+	var cursor = clamp(real(game._note_realize_cursor ?? 0), 0, count);
+	var made = 0;
+	var t0 = get_timer();
+	while (cursor < count) {
+		var item = notes[cursor];
+		if (!is_array(item)) {
+			cursor++;
+			continue;
+		};
+		if (item[1] > _until_sec) then break;
+		if (item[0] == noone && !official_note_realize(item)) then break;
+		cursor++;
+		if (item[0] != noone) then made++;
+		if (_cap > 0 && made >= _cap) then break;
+		if (_budget_us > 0 && made >= 1 && (get_timer() - t0) >= _budget_us) then break;
+	};
+	game._note_realize_cursor = cursor;
+}
+
+///@desc 创建一颗官谱音符并计算其激活秒。实例在加载时建好，播放只做激活
 ///@param {Real} i 音符序号
 ///@returns {Undefined} 无
 function official_lines_create_note(i) {
@@ -302,6 +619,37 @@ function official_lines_create_note(i) {
 	var job = owner._chart_line_job;
 	var na = job.source_notes[i];
 	if (!is_struct(na)) then return;
+	if (official_array_pack_enabled()) {
+		var line_index = real(na[$ "id"] ?? 0);
+		var line_cache = undefined;
+		if (line_index >= 0 && line_index < array_length(job.line_vis)) {
+			line_cache = job.line_vis[line_index];
+			if (!is_struct(line_cache)) {
+				var line_data = (is_array(job.judge_lines) && line_index < array_length(job.judge_lines))
+					? job.judge_lines[line_index] : {};
+				line_cache = official_line_vis_cache(is_struct(line_data) ? line_data : {}, job.view);
+				job.line_vis[line_index] = line_cache;
+			};
+		};
+		if (!is_struct(line_cache)) then line_cache = official_line_vis_cache({}, job.view);
+		var note_bpm = real(na.bpm ?? 60);
+		if (!(note_bpm > 0) || !is_finite(note_bpm)) then note_bpm = 60;
+		var hit_sec = real(na.time ?? 0) * (1.875 / note_bpm);
+		var is_hold = (real(na.type ?? 0) == 3);
+		var hold_len = is_hold ? real(na[$ "holdFloorLength"] ?? 0) : 0;
+		var approach = real(na[$ "speed"] ?? 1);
+		if (!is_finite(approach)) then approach = 1;
+		var activate_sec = official_note_activate_sec(line_cache, real(na.yOffset ?? 0), approach, hit_sec, hold_len, is_hold);
+		var row = official_note_push_row(owner, na);
+		var packed_note = [noone, activate_sec, hit_sec, row];
+		array_add(owner._notes, packed_note);
+		owner._note_defer = official_note_defer_count(job.note_count);
+		var media_len = 0;
+		if (instance_exists(oMedia) && is_real(oMedia.length) && is_finite(oMedia.length) && oMedia.length > 0) then media_len = oMedia.length;
+		if (media_len <= 0 || (hit_sec * 1000000) <= media_len) then maxcombo++;
+		if (!owner._note_defer) then official_note_realize(packed_note);
+		return;
+	};
 	var note_instance = instance_create_depth(-999, -999, 0, oNote, {
 		"type": na.type,
 		"isAbove": na.isAbove,
@@ -318,20 +666,17 @@ function official_lines_create_note(i) {
 	});
 	chart_lines_hide_created(note_instance);
 	array_add(owner.runtime_note_instances, note_instance);
-	// 录像模式按音符类型预约打击音
 	if (variable_global_exists("render_mode") && global.render_mode && instance_exists(note_instance)) {
 		var note_hitsound_time = (note_instance.type == 2 || note_instance.type == 4)
 			? note_instance.realHitTime : note_instance.judgeRealTime;
 		note_instance.render_hitsound_scheduled = render_schedule_note_hitsound(
 			note_instance, note_hitsound_time);
 	};
-	// 实例已不存在则不再计算激活时间
 	if (!instance_exists(note_instance)) then return;
 	var line_index = real(na[$ "id"] ?? 0);
 	var line_cache = undefined;
 	if (line_index >= 0 && line_index < array_length(job.line_vis)) {
 		line_cache = job.line_vis[line_index];
-		// 该线还没有可见性缓存时补算一份
 		if (!is_struct(line_cache)) {
 			var line_data = (is_array(job.judge_lines) && line_index < array_length(job.judge_lines))
 				? job.judge_lines[line_index] : {};
@@ -394,6 +739,43 @@ function official_lines_pump(_budget_us = CHART_LINE_CREATE_BUDGET_US) {
 	return true;
 }
 
+///@desc 开播前解冻已经到点的音符。还没到激活时间的保持冻结
+///@param {Real} _ahead 从 0 秒起算的解冻窗口
+///@returns {Undefined} 无
+function official_notes_thaw_window(_ahead) {
+	var notes = game._notes;
+	if (!is_array(notes)) then return;
+	var count = array_length(notes);
+	var index = 0;
+	while (index < count) {
+		var item = notes[index];
+		if (official_note_field(item, 1) > _ahead) then break;
+		var built_id = official_note_field(item, 0);
+		if (built_id == noone || built_id == undefined) then break;
+		chart_note_activate(built_id);
+		index++;
+	};
+	game._note_activation_index = index;
+}
+
+///@desc 把音符贴图先送进显存。否则进播放第一下绘制会卡一下
+///@returns {Undefined} 无
+function official_note_prefetch() {
+	var sprites = [note_tap, note_drag, note_flick, note_hold_head, note_hold_body, note_hold_end];
+	var sprite_n = array_length(sprites);
+	for (var sprite_i = 0; sprite_i < sprite_n; sprite_i++) {
+		if (sprite_exists(sprites[sprite_i])) sprite_prefetch(sprites[sprite_i]);
+	}
+	if (!skin_active()) return;
+	var kinds = ["tap", "drag", "flick"];
+	for (var kind_i = 0; kind_i < 3; kind_i++) {
+		var plain = skin_note_sprite(kinds[kind_i], 0);
+		var marked = skin_note_sprite(kinds[kind_i], 1);
+		if (sprite_exists(plain)) sprite_prefetch(plain);
+		if (sprite_exists(marked)) sprite_prefetch(marked);
+	}
+}
+
 ///@desc 排序并冻结官谱音符，预加载方块后结束任务
 ///@returns {Undefined} 无
 function official_lines_finish() {
@@ -401,22 +783,31 @@ function official_lines_finish() {
 	owner._chart_lines_creating = false;
 	array_sort(owner._notes, 
 	///@desc 先按激活时间、再按打击时间比较音符
-	///@param {Struct} a 左项
-	///@param {Struct} b 右项
+	///@param {Any} a 左项
+	///@param {Any} b 右项
 	///@returns {Real} 小于为 -1，大于为 1，相等为 0
 	function(a, b) {
-		if (a.activateSec < b.activateSec) then return -1;
-		if (a.activateSec > b.activateSec) then return 1;
-		if (a.hitSec < b.hitSec) then return -1;
-		if (a.hitSec > b.hitSec) then return 1;
+		var a_act = official_note_field(a, 1);
+		var b_act = official_note_field(b, 1);
+		if (a_act < b_act) then return -1;
+		if (a_act > b_act) then return 1;
+		var a_hit = official_note_field(a, 2);
+		var b_hit = official_note_field(b, 2);
+		if (a_hit < b_hit) then return -1;
+		if (a_hit > b_hit) then return 1;
 		return 0;
 	});
-	// 官谱忽略 notePreloadSeconds，音符在本体可能进入视野时唤醒
+	// 上万颗只先建开场窗口，其余播放中提前几秒补上
+	if (owner._note_defer) then official_notes_realize_until(OFFICIAL_NOTE_WINDOW_SEC, OFFICIAL_NOTE_WINDOW_CAP, 0);
 	owner._note_activation_enabled = true;
 	owner._note_activation_index = 0;
 	for (var _di = 0; _di < array_length(owner._notes); _di++) {
-		instance_deactivate_object(owner._notes[_di].id);
+		var built = official_note_field(owner._notes[_di], 0);
+		if (built != undefined && built != noone) then instance_deactivate_object(built);
 	};
+	// 只解冻 0 秒就已经该出现的。提前解冻会让还没到激活时间的音符被画出来
+	official_notes_thaw_window(0);
+	official_note_prefetch();
 	print("[C-Lines] Done.", owner.settings.enableDebug);
 	print("[C-Notes] Done.", owner.settings.enableDebug);
 	official_blocks_preload();
@@ -450,8 +841,10 @@ function official_sync_note_activation(_now_sec = undefined) {
 	// 激活时间已排序，遇到未到点的项即可停止
 	while (_index < _count) {
 		var _item = _notes[_index];
-		if (!is_struct(_item) || real(_item.activateSec ?? infinity) > _now_sec) then break;
-		chart_note_activate(_item.id);
+		if (official_note_field(_item, 1) > _now_sec) then break;
+		var built_id = official_note_field(_item, 0);
+		if (built_id == noone || built_id == undefined) then break;
+		chart_note_activate(built_id);
 		_index++;
 	};
 	game._note_activation_index = _index;
@@ -464,7 +857,8 @@ function official_notes_refreeze_after_retry() {
 	game._note_activation_index = 0;
 	if (bool(game._note_activation_enabled ?? false) && is_array(game._notes)) {
 		for (var _i = 0; _i < array_length(game._notes); _i++) {
-			instance_deactivate_object(game._notes[_i].id);
+			var built_id = official_note_field(game._notes[_i], 0);
+			if (built_id != undefined && built_id != noone) then instance_deactivate_object(built_id);
 		};
 	};
 }

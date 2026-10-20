@@ -6,13 +6,33 @@ image_blend = chart_line_judge_blend();
 // 拆出四条事件流并记下长度，避免每帧再查结构。
 _events = self.events;
 delete(self.events);
+// 只有收成播放谱后仍带缓动的线才走缓动。v1 和纯线性线保持原来的插值
+ease_live = (_events[$ "simEase"] == true);
 
 _move_events = _events.judgeLineMoveEvents;
 _rotate_events = _events.judgeLineRotateEvents;
 _alpha_events = _events.judgeLineDisappearEvents;
 _speed_events = _events.speedEvents;
+events_flat = false;
+_move_pack = [];
+_rotate_pack = [];
+_alpha_pack = [];
+_speed_pack = [];
+// 后门关闭时继续用结构体。打开时热路径只读数组
+if (official_array_pack_enabled()) {
+	_move_pack = official_pack_move(_move_events);
+	_rotate_pack = official_pack_axis(_rotate_events);
+	_alpha_pack = official_pack_axis(_alpha_events);
+	_speed_pack = official_pack_speed(_speed_events, (1 / (_events.bpm / 1.875)));
+	events_flat = true;
+};
 _event_groups = [_move_events, _rotate_events, _alpha_events, _speed_events];
-_event_lengths = [
+_event_lengths = events_flat ? [
+	array_length(_move_pack) div OFF_EV_MOVE,
+	array_length(_rotate_pack) div OFF_EV_AXIS,
+	array_length(_alpha_pack) div OFF_EV_AXIS,
+	array_length(_speed_pack) div OFF_EV_SPEED
+] : [
 	array_length(_move_events),
 	array_length(_rotate_events),
 	array_length(_alpha_events),

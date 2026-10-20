@@ -14,8 +14,11 @@ if(!game.paused && !chart_os_hold && !official_block_pack_pending()){
 		var _off_count = array_length(_off_notes);
 		var _off_index = clamp(real(game._note_activation_index ?? 0), 0, _off_count);
 		// 按预加载时间依次激活音符。
-		while (_off_index < _off_count && _off_notes[_off_index].activateSec <= _off_now) {
-			chart_note_activate(_off_notes[_off_index].id);
+		if (bool(game._note_defer ?? false)) then official_notes_realize_until(_off_now + OFFICIAL_NOTE_BUILD_AHEAD, 0, OFFICIAL_NOTE_BUILD_BUDGET_US);
+		while (_off_index < _off_count && official_note_field(_off_notes[_off_index], 1) <= _off_now) {
+			var _off_id = official_note_field(_off_notes[_off_index], 0);
+			if (_off_id == noone || _off_id == undefined) then break;
+			chart_note_activate(_off_id);
 			_off_index++;
 		};
 		game._note_activation_index = _off_index;

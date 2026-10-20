@@ -1,4 +1,8 @@
 ///@desc 用户事件 3：推进事件游标；回放或大跳转时二分查找
+if (events_flat) {
+	official_line_seek_flat();
+	exit;
+};
 var now_time = (game.__time[1] * _beat_per_second),
 	is_seek = (now_time < _last_event_time || abs(now_time - _last_event_time) > _beat_per_second * 2);
 

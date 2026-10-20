@@ -194,6 +194,7 @@ function chart_version_label() {
 		_kind = "PECVersion";
 		_value = game_2.chart.version;
 	} else if (variable_global_exists("game") && is_struct(game) && variable_struct_exists(game, "version")) {
+		// 播放谱内部是 version 5。角标仍用读入时留下的原 formatVersion
 		_value = game.version;
 	};
 	return $"@{VerStr}[{ver_real()}] - Code By XTHX({_kind}->{_value})";

@@ -39,14 +39,32 @@ function mus_system_clean(){
 ///@returns {Undefined} 无
 function chart_media_on_length_ready(_len_us) {
 	if (!(is_real(_len_us) && is_finite(_len_us) && _len_us > 0)) then return;
-	if (!instance_exists(oNote)) then return;
 	var counted = 0;
-	// 只统计判定时间仍落在音频长度内的音符
-	with (oNote) {
-		if (!variable_instance_exists(id, "realHitTime") || !is_real(realHitTime)) then continue;
-		if ((realHitTime * 1000000) <= _len_us) then counted++;
+	var counted_from_chart = false;
+	// 官谱音符按激活时间才实例化，曲长就绪时用登记表
+	if (instance_exists(oRender) && variable_global_exists("game") && is_struct(game) && is_array(game[$ "_notes"])) {
+		var note_list = game._notes;
+		var note_n = array_length(note_list);
+		for (var note_i = 0; note_i < note_n; note_i++) {
+			var note_item = note_list[note_i];
+			if (is_array(note_item)) {
+				counted_from_chart = true;
+				var hit_sec = real(note_item[2]);
+			} else if (is_struct(note_item) && variable_struct_exists(note_item, "hitSec")) {
+				counted_from_chart = true;
+				var hit_sec = real(note_item.hitSec);
+			} else continue;
+			if (is_finite(hit_sec) && (hit_sec * 1000000) <= _len_us) then counted++;
+		};
 	};
-	// 计数为 0 时不覆盖已经有效的官谱或 RPE 音符数
+	if (!counted_from_chart) {
+		if (!instance_exists(oNote)) then return;
+		with (oNote) {
+			if (!variable_instance_exists(id, "realHitTime") || !is_real(realHitTime)) then continue;
+			if ((realHitTime * 1000000) <= _len_us) then counted++;
+		};
+	};
+	// 计数为 0 时不覆盖已经有效的音符数
 	if (counted > 0) then maxcombo = counted;
 }
 
