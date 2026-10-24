@@ -5,15 +5,7 @@ var now_time = _now_seconds;
 var now_hit = judgeTime;
 
 // 非自动播放只处理超时 Miss。
-if (!chart_autoplay_active()) {
-	if (now_time > start_sec + lateHitTime && !isBad && !isJudge) {
-		if (is_real_note) {
-			judgeCalc(start_sec, now_time, 0, _note_x, _note_y, type, false, true, true);
-		};
-		instance_deactivate_object(self);
-	};
-	exit;
-};
+if (!chart_autoplay_active()) then exit;
 
 if (now_time > start_sec + lateHitTime && !isBad && !isJudge && !game.settings.enableAccJudgment) {
 	if (is_real_note) {

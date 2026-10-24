@@ -29,7 +29,7 @@ if(!game.paused && !chart_os_hold){
 			if (is_struct(_activation_records)) {
 				var _time_note_key = string(_time_note_id);
 				if (struct_exists(_activation_records, _time_note_key)) {
-					_activation_records[$ _time_note_key].activated = true;
+					rpe_note_mark_active(_activation_records[$ _time_note_key]);
 				};
 			};
 			_note_index++;
@@ -43,6 +43,7 @@ if(!game.paused && !chart_os_hold){
 			var _spatial_group_count = array_length(_spatial_groups);
 			for (var _sgi = 0; _sgi < _spatial_group_count; _sgi++) {
 				var _sg = _spatial_groups[_sgi];
+				if (_sg.remaining <= 0) continue;
 				var _sg_line = _sg.line;
 				// 判定线不在或速度为 0 时跳过这一组。
 				if (!instance_exists(_sg_line)) then continue;
@@ -80,6 +81,10 @@ if(!game.paused && !chart_os_hold){
 				};
 				var _sg_note_count = array_length(_sg_notes);
 				for (var _sni = _lo; _sni < _sg_note_count; _sni++) {
+					if (_sg.blockLive[_sni div 64] <= 0) {
+						_sni = ((_sni div 64) + 1) * 64 - 1;
+						continue;
+					}
 					var _sn = _sg_notes[_sni];
 					// 超出地板区间就不用再看后面的音符。
 					if (_sn.spatialFloor > _floor_max) then break;
@@ -90,7 +95,7 @@ if(!game.paused && !chart_os_hold){
 					if (is_finite(_sn.visibleTime) && _sn.visibleTime < 999999
 						&& _sn_to_hit_real > _sn.visibleTime) then continue;
 					chart_note_activate(_sn.id);
-					_sn.activated = true;
+					rpe_note_mark_active(_sn);
 				};
 			};
 		};
@@ -116,43 +121,47 @@ if(!game.paused && !chart_os_hold){
 				var _hproj_max = max(_hp0, _hp1, _hp2, _hp3) + _screen_margin;
 				var _sh_floor = real(_sh_line.__value[0]);
 				var _sh_line_sec = real(_sh_line.line_sec);
+				if (_hg.remaining <= 0) continue;
 				var _hold_notes = _hg.notes;
-				var _hold_count = real(_hg.count);
+				var _hold_count = array_length(_hold_notes);
+				var _floor_min = -infinity;
+				var _floor_max = infinity;
 				var _shi = 0;
-				// 已激活或已结束的 Hold 从有效前缀里换出去。
-				while (_shi < _hold_count) {
-					var _sh = _hold_notes[_shi];
-					if (_sh.activated || _sh.endSec <= _sh_line_sec) {
-						_hold_count--;
-						_hold_notes[@ _shi] = _hold_notes[_hold_count];
+				if (_hg.spatialSafe) {
+					var _offset_px = _hg.yOrigin * _room_h;
+					var _scale = _hg.speed * _notes_h;
+					var _fa = _sh_floor + (_hproj_min - _offset_px) / _scale;
+					var _fb = _sh_floor + (_hproj_max - _offset_px) / _scale;
+					// 只增加少量候选，避免代数换算的末位误差把边界 Hold 漏掉。
+					var _epsilon = max(1, abs(_fa), abs(_fb)) * 0.0000001;
+					_floor_min = min(_fa, _fb) - _epsilon;
+					_floor_max = max(_fa, _fb) + _epsilon;
+					var _hi = _hold_count;
+					while (_shi < _hi) {
+						var _mid = (_shi + _hi) div 2;
+						if (_hg.tailMax[_mid] < _floor_min) _shi = _mid + 1;
+						else _hi = _mid;
+					}
+				}
+				for (; _shi < _hold_count; _shi++) {
+					if (_hg.blockLive[_shi div 64] <= 0) {
+						_shi = ((_shi div 64) + 1) * 64 - 1;
 						continue;
-					};
+					}
+					var _sh = _hold_notes[_shi];
+					if (min(_sh.spatialFloor, _sh.endSpatialFloor) > _floor_max) break;
+					if (_sh.activated || _sh.endSec <= _sh_line_sec) continue;
 					var _sh_to_hit = _sh.startSec - _sh_line_sec;
-				var _sh_to_hit_real = _sh_to_hit * real(_sh.timeFactor);
-				if (is_finite(_sh.visibleTime) && _sh.visibleTime < 999999
-						&& _sh_to_hit_real > _sh.visibleTime) { _shi++; continue; };
-				if (_sh_to_hit <= 0) {
+					if (is_finite(_sh.visibleTime) && _sh.visibleTime < 999999
+						&& _sh_to_hit * _sh.timeFactor > _sh.visibleTime) continue;
+					if (_sh_to_hit > 0 && _sh.spatialSafe) {
+						var _head_px = _sh.speed * (_sh.spatialFloor - _sh_floor) * _notes_h + _sh.yOrigin * _room_h;
+						var _tail_px = _head_px + _sh.speed * (_sh.endSpatialFloor - _sh.spatialFloor) * _notes_h;
+						if (max(_head_px, _tail_px) < _hproj_min || min(_head_px, _tail_px) > _hproj_max) continue;
+					}
 					chart_note_activate(_sh.id);
-					_sh.activated = true;
-					_hold_count--;
-					_hold_notes[@ _shi] = _hold_notes[_hold_count];
-					continue;
-				};
-				if (_sh.spatialSafe) {
-					var _hold_speed = real(_sh.speed);
-					var _hold_head_px = _hold_speed * (real(_sh.spatialFloor) - _sh_floor)
-						* _notes_h + real(_sh.yOrigin) * _room_h;
-					var _hold_tail_px = _hold_head_px + _hold_speed
-						* (real(_sh.endSpatialFloor) - real(_sh.spatialFloor)) * _notes_h;
-					if (max(_hold_head_px, _hold_tail_px) < _hproj_min
-						|| min(_hold_head_px, _hold_tail_px) > _hproj_max) { _shi++; continue; };
-				};
-				chart_note_activate(_sh.id);
-				_sh.activated = true;
-				_hold_count--;
-				_hold_notes[@ _shi] = _hold_notes[_hold_count];
-				};
-				_hg.count = _hold_count;
+					rpe_note_mark_active(_sh);
+				}
 			};
 		};
 	};

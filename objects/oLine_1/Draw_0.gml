@@ -137,41 +137,53 @@ image_blend = __color;
 			if (variable_global_exists("chart_view_width") && is_real(chart_view_width) && chart_view_width > 0) {
 				text_view_w = chart_view_width;
 			};
-			var text_em_px = string_width("■");
-			// 方块测不出宽度时用字号兜底。
-			if (text_em_px < 1) then text_em_px = max(1, font_get_size(draw_get_font()));
+			var text_font = draw_get_font();
+			if (_text_layout_source != line_text || _text_layout_font != text_font) {
+				var text_em_px = string_width("■");
+				// 方块测不出宽度时用字号兜底。
+				if (text_em_px < 1) then text_em_px = max(1, font_get_size(draw_get_font()));
+				var text_body = string_replace_all(line_text, "\r\n", "\n");
+				text_body = string_replace_all(text_body, "\r", "");
+				var text_rows = string_split(text_body, "\n");
+				var text_row_n = array_length(text_rows);
+				// 拆不出行时仍画整段。
+				if (text_row_n < 1) {
+					text_rows = [text_body];
+					text_row_n = 1;
+				};
+				var text_w = 0;
+				for (var text_i = 0; text_i < text_row_n; text_i++) {
+					var row = text_rows[text_i];
+					var row_width = 0;
+					// 多行时最后一行去掉尾部空白再量宽。
+					if (text_row_n > 1 && text_i == text_row_n - 1) {
+						var row_len = string_length(row);
+						var trail_n = row_len;
+						while (trail_n > 0) {
+							var trail_ch = string_char_at(row, trail_n);
+							// 遇到非空白就停。
+							if (trail_ch != " " && trail_ch != "\t") then break;
+							trail_n--;
+						};
+						if (trail_n > 0) then row_width = string_width(string_copy(row, 1, trail_n));
+					} else if (string_length(row) > 0) {
+						row_width = string_width(row);
+					};
+					if (row_width > text_w) then text_w = row_width;
+				};
+				_text_layout_source = line_text;
+				_text_layout_font = text_font;
+				_text_layout_em = text_em_px;
+				_text_layout_rows = text_rows;
+				_text_layout_width = text_w;
+			}
+			var text_em_px = _text_layout_em;
+			var text_rows = _text_layout_rows;
+			var text_row_n = array_length(text_rows);
+			var text_w = _text_layout_width;
 			var text_unit = (50 * (text_view_w / 1350)) / text_em_px;
 			var text_scale_x = text_unit * __scale_x;
 			var text_scale_y = text_unit * __scale_y;
-			var text_body = string_replace_all(line_text, "\r\n", "\n");
-			text_body = string_replace_all(text_body, "\r", "");
-			var text_rows = string_split(text_body, "\n");
-			var text_row_n = array_length(text_rows);
-			// 拆不出行时仍画整段。
-			if (text_row_n < 1) {
-				text_rows = [text_body];
-				text_row_n = 1;
-			};
-			var text_w = 0;
-			for (var text_i = 0; text_i < text_row_n; text_i++) {
-				var row = text_rows[text_i];
-				var row_width = 0;
-				// 多行时最后一行去掉尾部空白再量宽。
-				if (text_row_n > 1 && text_i == text_row_n - 1) {
-					var row_len = string_length(row);
-					var trail_n = row_len;
-					while (trail_n > 0) {
-						var trail_ch = string_char_at(row, trail_n);
-						// 遇到非空白就停。
-						if (trail_ch != " " && trail_ch != "\t") then break;
-						trail_n--;
-					};
-					if (trail_n > 0) then row_width = string_width(string_copy(row, 1, trail_n));
-				} else if (string_length(row) > 0) {
-					row_width = string_width(row);
-				};
-				if (row_width > text_w) then text_w = row_width;
-			};
 			var text_h = text_row_n * text_em_px;
 			var pen_x = -anchor_x * text_w;
 			var pen_top = -(1 - anchor_y) * text_h;
@@ -196,13 +208,14 @@ image_blend = __color;
 	// GIF 按累计延迟选出当前帧，绘制子图固定为 0。
 	if (has_gif_events && is_struct(gif_data) && is_array(gif_data.frames) && array_length(gif_data.frames) > 0) {
 		var gif_time = frac(__gif_progress) * max(0.000001, real(gif_data.total));
-		var gif_accum = 0;
-		for (var gif_i = 0; gif_i < array_length(gif_data.frames); gif_i++) {
-			gif_accum += max(0.000001, real(gif_data.delays[gif_i]));
-			frame = gif_i;
-			// 累计延迟超过当前进度就停在这一帧。
-			if (gif_time < gif_accum) then break;
-		};
+		var lo = 0;
+		var hi = array_length(gif_data.ends);
+		while (lo < hi) {
+			var mid = (lo + hi) div 2;
+			if (gif_data.ends[mid] <= gif_time) lo = mid + 1;
+			else hi = mid;
+		}
+		frame = min(lo, array_length(gif_data.frames) - 1);
 		var gif_sprite = gif_data.frames[frame];
 		if (sprite_exists(gif_sprite)) then sprite_index = gif_sprite;
 		frame = 0;

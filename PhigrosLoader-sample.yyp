@@ -174,6 +174,7 @@
     {"id":{"name":"array_add","path":"scripts/array_add/array_add.yy",},},
     {"id":{"name":"ChartRuntimeLoad","path":"scripts/ChartRuntimeLoad/ChartRuntimeLoad.yy",},},
     {"id":{"name":"ChartSession","path":"scripts/ChartSession/ChartSession.yy",},},
+    {"id":{"name":"KeyboardJudge","path":"scripts/KeyboardJudge/KeyboardJudge.yy",},},
     {"id":{"name":"display_custom","path":"scripts/display_custom/display_custom.yy",},},
     {"id":{"name":"draw_chart_mask","path":"scripts/draw_chart_mask/draw_chart_mask.yy",},},
     {"id":{"name":"draw_hold_fit","path":"scripts/draw_hold_fit/draw_hold_fit.yy",},},

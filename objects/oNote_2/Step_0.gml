@@ -3,6 +3,11 @@ if (variable_global_exists("loading_animation_active") && global.loading_animati
 // 暂停或判定线丢失时不更新。
 if (game.paused || !instance_exists(line_ref)) then exit;
 var chart_sec = game.__time[1] - game_2.chart.offsetSeconds;
+if (isBad) {
+	canDraw = true;
+	if (chart_sec - judgeRealTime >= 1) instance_deactivate_object(self);
+	exit;
+}
 var line_floor = line_ref.floor_position;
 var current_scale = (variable_global_exists("global_scales") ? global_scales : 1) / 6;
 image_xscale = current_scale * widthScale;
@@ -54,6 +59,7 @@ if (type == 2) {
 	};
 	yscale = body_scale;
 	canDraw = line_notes_visible && (hold_length > 0 || before) && (before ? !behind_line : true);
+	if (!isFake && !chart_autoplay_active()) then exit;
 	// 自动播放到判定秒开始 Hold，超时则记 Miss。
 	if (chart_autoplay_active()) {
 		if (!hold_started && chart_sec >= judge_sec) {
@@ -74,7 +80,7 @@ if (type == 2) {
 		hit_status = judgeCalc(startSec, chart_sec, 0, base_x, base_y, judge_type, false, true, true);
 	};
 	if (hold_started && !isFake && !isMiss && (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT)
-		&& (chart_autoplay_active() || chart_kb_hold_alive())) {
+		&& chart_autoplay_active()) {
 		var bpm_events = game_2.chart.bpmList;
 		if (chart_sec < hold_bpm_last_sec) then hold_bpm_index = pec_bpm_index_at_sec(bpm_events, chart_sec);
 		// BPM 事件向前走到当前秒，按间隔刷尾迹。
@@ -109,6 +115,7 @@ y = note_y;
 
 
 canDraw = line_notes_visible && !judged && (chart_sec < startSec ? !behind_line : image_alpha > 0);
+if (!isFake && !chart_autoplay_active()) then exit;
 // 非 Hold：到触发秒判定，超时则记 Miss。
 if (chart_autoplay_active()) {
 	if (chart_sec >= trigger_sec && !judged) {

@@ -7,6 +7,9 @@ judged = false;
 hold_started = false;
 isMiss = false;
 hit_status = TYPE.NONE;
+isBad = false;
+judgeRealTime = 0;
+_bad_x = 0; _bad_y = 0; _bad_angle = 0;
 hold_effect_sec = -infinity;
 image_alpha = 1;
 if (!variable_instance_exists(id, "note_speed")) {
@@ -68,3 +71,4 @@ judge_sec = startSec + hit_offset;
 trigger_sec = ((judge_type == 2 || judge_type == 4) ? startSec : judge_sec);
 late_deadline_sec = startSec + late_window_sec;
 hx0 = 0; hy0 = 0; hx1 = 0; hy1 = 0; hx2 = 0; hy2 = 0;
+chart_kb_register_note();

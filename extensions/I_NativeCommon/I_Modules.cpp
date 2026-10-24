@@ -893,6 +893,9 @@ ID3D11ShaderResourceView* rpeSnapshotRenderTarget() {
     }
     ID3D11ShaderResourceView* previousSrvs[4] = {};
     g_context->PSGetShaderResources(0, 4, previousSrvs);
+    // Copying slot 0 must not discard any other colour attachment of the caller.
+    ID3D11RenderTargetView* previousTargets[D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT] = {};
+    g_context->OMGetRenderTargets(D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT, previousTargets, nullptr);
     ID3D11ShaderResourceView* unbound[4] = {};
     g_context->PSSetShaderResources(0, 4, unbound);
     g_context->OMSetRenderTargets(0, nullptr, nullptr);
@@ -905,7 +908,10 @@ ID3D11ShaderResourceView* rpeSnapshotRenderTarget() {
     }
     const UINT sourceSubresource = D3D11CalcSubresource(0, 0, copyMips);
     g_context->CopySubresourceRegion(g_captureTexture, 0, 0, 0, 0, copySource, sourceSubresource, nullptr);
-    g_context->OMSetRenderTargets(1, &targetView, depthView);
+    g_context->OMSetRenderTargets(D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT, previousTargets, depthView);
+    for (ID3D11RenderTargetView* previousTarget : previousTargets) {
+        if (previousTarget) previousTarget->Release();
+    }
     g_context->PSSetShaderResources(0, 4, previousSrvs);
     for (ID3D11ShaderResourceView* previousSrv : previousSrvs) {
         if (previousSrv) previousSrv->Release();

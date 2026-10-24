@@ -326,6 +326,7 @@ function paused_ui_back() {
 ///@desc 清空分数、连击和打击特效
 ///@returns {Undefined} 无
 function paused_ui_reset_score() {
+		chart_kb_reset();
         combo = 0;
         if (variable_global_exists("phi_state_list") && is_struct(phi_state_list)) {
                 phi_state_list.prefect = 0;
@@ -377,6 +378,7 @@ function paused_ui_reset_official() {
                         _hx0 = 0; _hy0 = 0; _hx1 = 0; _hy1 = 0; _hx2 = 0; _hy2 = 0;
                         yscale = hold_time_length * room_height * 0.6 / max(1, _hold_body_height) * speed;
                 };
+				chart_kb_register_note();
         };
         official_notes_refreeze_after_retry();
 }
@@ -407,6 +409,8 @@ function paused_ui_reset_pec() {
                 judged = false;
                 hold_started = false;
                 isMiss = false;
+                isBad = false;
+                judgeRealTime = 0;
                 hit_status = TYPE.NONE;
                 hold_effect_sec = -infinity;
                 hold_bpm_index = 0;
@@ -414,6 +418,8 @@ function paused_ui_reset_pec() {
                 hx0 = 0; hy0 = 0; hx1 = 0; hy1 = 0; hx2 = 0; hy2 = 0;
                 yscale = 0;
                 image_alpha = 1;
+                judge_sec = startSec + hit_offset;
+                chart_kb_register_note();
         };
         owner.bpm_count = 0;
         owner.pec_bpm_last_sec = -infinity;
@@ -494,7 +500,7 @@ function paused_ui_reset_rpe() {
                 _control_position_speed = 0;
                 outside = false;
                 __first__ = false;
-                rpe_control_cursors = [0, 0, 0, 0];
+                rpe_control_cursors = [0, 0, 0, 0, 0];
                 _pause_lock_active = false;
                 image_alpha = alpha;
                 image_blend = note_tint;
@@ -506,6 +512,7 @@ function paused_ui_reset_rpe() {
                         _hx0 = 0; _hy0 = 0; _hx1 = 0; _hy1 = 0; _hx2 = 0; _hy2 = 0;
                         yscale = 0;
                 };
+				chart_kb_register_note();
         };
         owner.bpm_count = 0;
         if (variable_global_exists("game_1") && is_struct(game_1)) {
@@ -536,6 +543,7 @@ function paused_ui_reset_rpe() {
                                 };
                         };
                 };
+                rpe_note_queries_reset();
                 if (bool(game_1._note_activation_enabled ?? false) && is_array(game_1._notes)) {
                         for (var activation_i = 0; activation_i < array_length(game_1._notes); activation_i++) {
                                 var activation_note = game_1._notes[activation_i];
@@ -544,7 +552,7 @@ function paused_ui_reset_rpe() {
                                         var activation_key = string(activation_note.id);
                                         if (is_struct(game_1._note_activation_records)
                                                 && struct_exists(game_1._note_activation_records, activation_key)) {
-                                                game_1._note_activation_records[$ activation_key].activated = true;
+                                                rpe_note_mark_active(game_1._note_activation_records[$ activation_key]);
                                         };
                                 } else {
                                         instance_deactivate_object(activation_note.id);

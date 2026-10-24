@@ -40,6 +40,19 @@ function rpe_event_time_cmp(a, b) {
 	return 0;
 }
 
+///@desc 识别整条数值通道的常量；动态通道返回 undefined
+///@param {Array} _events 已整理的事件
+///@returns {Any} 常量或 undefined
+function rpe_event_constant(_events) {
+	if (!is_array(_events) || array_length(_events) <= 0) return 0;
+	var value = _events[0].start;
+	if (!is_real(value) || !is_finite(value)) return undefined;
+	for (var i = 0; i < array_length(_events); i++) {
+		if (_events[i].start != value || _events[i][$ "end"] != value) return undefined;
+	}
+	return value;
+}
+
 ///@desc 整理事件数组；速度事件保留缓动，其余换成绝对秒
 ///@param {Array} arr 原始事件
 ///@param {Bool} is_speed 是否为速度事件
@@ -72,6 +85,7 @@ function rpe_prep_event_array(arr, is_speed) {
 		array_sort(prepared, rpe_event_time_cmp);
 		return prepared;
 	};
+	var cleaned = [];
 	for (var i = 0; i < array_length(arr); i++) {
 		var ev = arr[i];
 		if (!is_struct(ev)) then continue;
@@ -90,9 +104,10 @@ function rpe_prep_event_array(arr, is_speed) {
 		if (!struct_exists(ev, "bezierPoints")) then ev.bezierPoints = [0, 0, 0, 0];
 		if (!struct_exists(ev, "start")) then ev.start = 0;
 		if (!struct_exists(ev, "end")) then ev[$ "end"] = ev.start;
+		array_push(cleaned, ev);
 	};
-	array_sort(arr, rpe_event_time_cmp);
-	return arr;
+	array_sort(cleaned, rpe_event_time_cmp);
+	return cleaned;
 }
 
 // 对应 PhiEdit 的 Easing.cpp。类型号是谱面 easingType，不是播放 tween 表（那张表交换了若干 in/out）。
@@ -277,8 +292,9 @@ function rpe_speed_legacy_slice(v0, v1, duration, p, easing, left, right) {
 ///@param {Real} easing 缓动号
 ///@param {Real} left 窗口左端
 ///@param {Real} right 窗口右端
+///@param {Any} integrate 逐线积分开关，undefined 按谱面版本选择
 ///@returns {Real} 原始积分，无效进度为 0
-function rpe_speed_slice_integral(v0, v1, duration, p, easing, left, right) {
+function rpe_speed_slice_integral(v0, v1, duration, p, easing, left, right, integrate = undefined) {
 	// 非正进度或零时长没有位移
 	if (!(p > 0) || !(duration > 0.000000001)) then return 0;
 	// 线性缓动用闭式，不看窗口
@@ -286,7 +302,7 @@ function rpe_speed_slice_integral(v0, v1, duration, p, easing, left, right) {
 		return ((v1 - v0) * p * p * 0.5 + v0 * p) * duration;
 	};
 	// 旧谱不走辛普森积分
-	if (rpe_speed_uses_legacy()) {
+	if (is_undefined(integrate) ? rpe_speed_uses_legacy() : !integrate) {
 		return rpe_speed_legacy_slice(v0, v1, duration, p, easing, left, right);
 	};
 	var h = p / 20;
@@ -350,6 +366,8 @@ function rpe_prep_upload_bpm() {
 ///@returns {Struct} 事件段、尾部时间、尾速与尾地板
 function rpe_build_speed_layer(events) {
 	var built = [];
+	var search_ends = [];
+	var search_end = -infinity;
 	var acc = 0;
 	var prev_end = 0;
 	var prev_value = real(events[0].start);
@@ -360,6 +378,9 @@ function rpe_build_speed_layer(events) {
 		var end_sec = game_1.Math.beatToAbsSec(src.endTime);
 		// 时间无效的事件不参与积分
 		if (!is_finite(start_sec) || !is_finite(end_sec)) then continue;
+		// 前缀最大值单调；即使事件重叠，也能保留原来首个未结束项的选择。
+		search_end = max(search_end, start_sec, end_sec);
+		array_push(search_ends, search_end);
 		var v0 = real(src.start);
 		var v1 = real(src.stop);
 		array_add(built, {
@@ -378,13 +399,14 @@ function rpe_build_speed_layer(events) {
 		if (start_sec > prev_end) then acc += rpe_speed_player_floor((start_sec - prev_end) * prev_value);
 		var duration = end_sec - start_sec;
 		if (duration > 0.000000001) {
-			acc += rpe_speed_player_floor(rpe_speed_slice_integral(v0, v1, duration, 1, real(src.easingType), real(src.easingLeft), real(src.easingRight)));
+			acc += rpe_speed_player_floor(rpe_speed_slice_integral(v0, v1, duration, 1, real(src.easingType), real(src.easingLeft), real(src.easingRight), true));
 		};
 		prev_value = v1;
 		prev_end = end_sec;
 	};
 	return {
 		events: built,
+		searchEnds: search_ends,
 		tailEnd: prev_end,
 		tailSpeed: prev_value,
 		tailFloor: acc
@@ -402,9 +424,16 @@ function rpe_layer_floor_at(layer, t) {
 	var n = array_length(events);
 	if (n <= 0) then return 0;
 	if (!is_finite(t)) then return 0;
-	// 按顺序走到第一个尚未结束的事件。后面的事件可能更早结束，所以不能二分。
+	// 原循环跳过的前缀满足 startSec < t 且 endSec < t。
+	// 对两者的前缀最大值取 lower_bound，边界和重叠顺序都不变。
 	var lo = 0;
-	while (lo < n && events[lo].startSec < t && events[lo].endSec < t) lo++;
+	var hi = n;
+	var search_ends = layer.searchEnds;
+	while (lo < hi) {
+		var mid = (lo + hi) div 2;
+		if (search_ends[mid] < t) then lo = mid + 1;
+		else hi = mid;
+	}
 	// 全部事件都已结束，用尾速外推
 	if (lo >= n) {
 		return layer.tailFloor + rpe_speed_player_floor((t - layer.tailEnd) * layer.tailSpeed);
@@ -420,7 +449,7 @@ function rpe_layer_floor_at(layer, t) {
 	var duration = ev.endSec - ev.startSec;
 	if (duration > 0.000000001) {
 		var p = (min(ev.endSec, t) - ev.startSec) / duration;
-		acc += rpe_speed_player_floor(rpe_speed_slice_integral(ev.v0, ev.v1, duration, p, ev.easingType, ev.easingLeft, ev.easingRight));
+		acc += rpe_speed_player_floor(rpe_speed_slice_integral(ev.v0, ev.v1, duration, p, ev.easingType, ev.easingLeft, ev.easingRight, true));
 	};
 	return acc;
 }
@@ -733,16 +762,24 @@ function rpe_legacy_floor_at(segments, t) {
 	// 首段之前没有地板
 	if (t < segments[0].startTime) then return 0;
 	var idx = 0;
-	while (idx < n - 1 && t > segments[idx].endTime) idx++;
+	var hi = n - 1;
+	// 旧表由已排序的切点生成，结束时间单调；等于终点仍选前一段。
+	while (idx < hi) {
+		var mid = (idx + hi) div 2;
+		if (segments[mid].endTime < t) then idx = mid + 1;
+		else hi = mid;
+	}
 	return rpe_legacy_event_floor(segments[idx], t);
 }
 
-///@desc 按谱面版本选择旧表或积分速度层
+///@desc 按逐线开关或谱面版本选择旧表或积分速度层
 ///@param {Array} event_layers 含 speedEvents 的事件层
+///@param {Any} integrate PhiZone 逐线开关，省略时按版本选择
 ///@returns {Array} 播放用速度数据
-function rpe_build_speed_events(event_layers) {
+function rpe_build_speed_events(event_layers, integrate = undefined) {
 	// 旧谱走梯形表，新谱走每层积分
-	if (rpe_speed_uses_legacy()) then return rpe_build_legacy_speed_table(event_layers);
+	var use_legacy = is_undefined(integrate) ? rpe_speed_uses_legacy() : !integrate;
+	if (use_legacy) then return rpe_build_legacy_speed_table(event_layers);
 	var speed_layers = [];
 	if (is_array(event_layers)) {
 		for (var sli = 0; sli < array_length(event_layers); sli++) {

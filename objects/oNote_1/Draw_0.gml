@@ -13,6 +13,28 @@ var _yscale = image_yscale;
 var _angle = image_angle;
 var _blend = image_blend;
 var _alpha = image_alpha;
+var _skew_world = undefined;
+if (!_is_hold && _note_skew_degrees != 0 && _yscale != 0) {
+	// 与 Rex SkewImage 一样，把局部 Y 乘 tan(skewX) 后加到局部 X。
+	// 先变换现有世界坐标，再保留调用者矩阵；零倾斜不分配矩阵。
+	var _shear = dtan(_note_skew_degrees) * _xscale / _yscale;
+	if (is_finite(_shear)) {
+		var _skew_angle = isBad ? _bad_angle : _angle;
+		var _skew_x = isBad ? _bad_x : x;
+		var _skew_y = isBad ? _bad_y : y;
+		var _c = dcos(_skew_angle);
+		var _s = dsin(_skew_angle);
+		var _matrix = matrix_build_identity();
+		_matrix[0] = 1 + _shear * _c * _s;
+		_matrix[1] = -_shear * _s * _s;
+		_matrix[4] = _shear * _c * _c;
+		_matrix[5] = 1 - _shear * _s * _c;
+		_matrix[12] = _skew_x - _matrix[0] * _skew_x - _matrix[4] * _skew_y;
+		_matrix[13] = _skew_y - _matrix[1] * _skew_x - _matrix[5] * _skew_y;
+		_skew_world = matrix_get(matrix_world);
+		matrix_set(matrix_world, matrix_multiply(_matrix, _skew_world));
+	};
+};
 if (!_is_hold && !isBad && !rpe_skip_pass_fade) {
 	_alpha *= chart_note_pass_fade(_now_seconds, start_sec, chart_note_miss_window_sec(type, false));
 };
@@ -62,4 +84,5 @@ if (skin_active()) {
 		_angle, _frame, _blend, a, _is_out, _is_out && !compactHold, _tail_trim);
 };
 
+if (is_array(_skew_world)) then matrix_set(matrix_world, _skew_world);
 chart_note_scale_clip_end(_clip);

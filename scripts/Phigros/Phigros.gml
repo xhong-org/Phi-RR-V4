@@ -25,7 +25,7 @@
 #macro func function
 #macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal { "windows": 40544, "android": 40534, "gxgames": 40532 } // 各平台版本号(独立)
+#macro VerReal { "windows": 40545, "android": 40534, "gxgames": 40532 } // 各平台版本号(独立)
 #macro VerStr "v.4.1.1r"
 
 ///@desc 按当前操作系统从 VerReal 取出对应版本号
@@ -113,6 +113,23 @@ enum DEPTH {
 ///@returns {Real} 深度，为 -1000 乘以 Z
 /// 作者的话: 诺,刚说完
 function chart_layer_depth(z) {
+	if (variable_global_exists("chart_layer_layout") && is_struct(global.chart_layer_layout)) {
+		var layout = global.chart_layer_layout;
+		var epsilon = math_get_epsilon();
+		math_set_epsilon(0);
+		try {
+			var lo = 0;
+			var hi = array_length(layout.z);
+			while (lo < hi) {
+				var mid = (lo + hi) div 2;
+				if (sign(layout.z[mid] - z) < 0) lo = mid + 1;
+				else hi = mid;
+			}
+			if (lo < array_length(layout.z) && sign(layout.z[lo] - z) == 0) return layout.depth[lo];
+		} finally {
+			math_set_epsilon(epsilon);
+		}
+	}
 	return (-1000 * z);
 }
 
@@ -144,6 +161,31 @@ function chart_note_layer_z(rpe_type, explicit_z = undefined) {
 	return priority + 2;
 }
 
+///@desc 取得指定 Z 的打击特效绘制器；每个图层独立保存事件和粒子
+///@param {Id.Object} _object 新版或旧版特效对象
+///@param {Any} _z 谱面指定的 Z，省略时为 7
+///@returns {Id.Instance} 该层的绘制器
+function chart_hit_effect_renderer(_object, _z = undefined) {
+	var target_z = is_real(_z) && is_finite(_z) ? _z : 7;
+	var renderer = noone;
+	var epsilon = math_get_epsilon();
+	math_set_epsilon(0);
+	try {
+		with (_object) {
+			if (hit_effect_layer_z == target_z) {
+				renderer = id;
+				break;
+			}
+		}
+	} finally {
+		math_set_epsilon(epsilon);
+	}
+	if (!instance_exists(renderer)) {
+		renderer = instance_create_depth(0, 0, DEPTH.HEF, _object, { hit_effect_layer_z:target_z });
+	}
+	return renderer;
+}
+
 ///@desc 沿父判定线链折算 RPE 判定线的视图位置与旋转
 ///@param {Id.Instance} _line 判定线实例
 ///@param {Real} _sx 横坐标缩放
@@ -151,83 +193,50 @@ function chart_note_layer_z(rpe_type, explicit_z = undefined) {
 ///@returns {Array} x、y 与旋转角
 /// 作者的话: 傻逼玩意,和oLine_1沾一块摘不掉了
 function rpe_line_view_pose(_line, _sx, _sy) {
-	// 变量
-	var local_x = 0;
-	var local_y = 0;
-	var local_r = 0;
+	if (!instance_exists(_line)) return [0, 0, 0];
+	var epoch = game_1._pose_epoch;
+	if (_line.pose_epoch == epoch
+		&& sign(_line.pose_scale_x - _sx) == 0 && sign(_line.pose_scale_y - _sy) == 0) return _line.pose_value;
 
-	// 检查实例是否暴毙
-	if (!instance_exists(_line)) then return [local_x, local_y, local_r];
-	if (variable_instance_exists(_line, "__raw_x") && is_real(_line.__raw_x)) then local_x = _line.__raw_x * _sx;
-	if (variable_instance_exists(_line, "__raw_y") && is_real(_line.__raw_y)) then local_y = _line.__raw_y * _sy;
-	if (variable_instance_exists(_line, "__raw_r") && is_real(_line.__raw_r)) then local_r = _line.__raw_r;
-	if (!variable_instance_exists(_line, "_father_chain") || !is_array(_line._father_chain)) {
-		_line._father_chain = [];
-	};
-
-	// 父链为空时按 isFather 向上补最多 16 层
-	var chain = _line._father_chain;
-	if (array_length(chain) == 0 && is_real(_line.isFather) && _line.isFather >= 0
-			&& variable_global_exists("game_1") && is_struct(game_1) && is_array(game_1.line_list)) {
-		var lazy_parent = _line.isFather;
-		var lazy_guard = 0;
-		var line_list = game_1.line_list;
-		while (lazy_parent >= 0 && lazy_parent < array_length(line_list) && lazy_guard < 16) {
-			var lazy_line = line_list[lazy_parent];
-			if (!instance_exists(lazy_line)) then break;
-			array_add(chain, lazy_line);
-			lazy_parent = is_real(lazy_line.isFather) ? lazy_line.isFather : -1;
-			lazy_guard++;
-		};
-	};
-
-	// 没有父线就只用本地坐标
-	if (array_length(chain) <= 0) then return [local_x, local_y, local_r];
-
-	var parent_x = 0;
-	var parent_y = 0;
-	var parent_r = 0;
-	var have_parent = false;
-
-	// 从最外层祖先往下叠旋转和平移
-	for (var ai = array_length(chain) - 1; ai >= 0; ai--) {
-		var ancestor = chain[ai];
-		if (!instance_exists(ancestor) || !variable_instance_exists(ancestor, "__raw_x")) {
-			have_parent = false;
-			break;
-		};
-
-		// 换算
-		var ancestor_x = ancestor.__raw_x * _sx;
-		var ancestor_y = ancestor.__raw_y * _sy;
-
-		// 爸爸
-		if (!have_parent) {
-			parent_x = ancestor_x;
-			parent_y = ancestor_y;
-			parent_r = ancestor.__raw_r;
-			have_parent = true;
-		} else {
-			var parent_cos = dcos(parent_r);
-			var parent_sin = dsin(parent_r);
-			parent_x += ancestor_x * parent_cos + ancestor_y * parent_sin;
-			parent_y += ancestor_y * parent_cos - ancestor_x * parent_sin;
-			parent_r = ancestor.__raw_r + (bool(ancestor.rotFatherLine) ? parent_r : 0);
-		};
-	};
-
-	if (!have_parent) then return [local_x, local_y, local_r];
-
-	// 把本线坐标旋进父线空间
-	var child_cos = dcos(parent_r);
-	var child_sin = dsin(parent_r);
-	var out_r = local_r;
-	if (bool(_line.rotFatherLine)) then out_r += parent_r;
-	return [
-		parent_x + local_x * child_cos + local_y * child_sin,
-		parent_y + local_y * child_cos - local_x * child_sin,
-		out_r
-	];
+	var local_x = is_real(_line.__raw_x) ? _line.__raw_x * _sx : 0;
+	var local_y = is_real(_line.__raw_y) ? _line.__raw_y * _sy : 0;
+	var local_r = is_real(_line.__raw_r) ? _line.__raw_r : 0;
+	var prefix_x = local_x;
+	var prefix_y = local_y;
+	// 加载收尾会校验父图。这个保护只处理初始化途中或外部修改形成的环。
+	if (_line.pose_visiting) return [local_x, local_y, local_r];
+	_line.pose_visiting = true;
+	var parent_index = _line.isFather;
+	if (is_real(parent_index) && parent_index >= 0 && parent_index < array_length(game_1.line_list)) {
+		var parent_line = game_1.line_list[parent_index];
+		if (instance_exists(parent_line) && parent_line != _line && !parent_line.pose_visiting) {
+			rpe_line_view_pose(parent_line, _sx, _sy);
+			var parent_pose = parent_line.pose_parent_value;
+			var parent_cos = dcos(parent_pose[2]);
+			var parent_sin = dsin(parent_pose[2]);
+			var world_x = parent_pose[0] + local_x * parent_cos + local_y * parent_sin;
+			var world_y = parent_pose[1] + local_y * parent_cos - local_x * parent_sin;
+			// 原路径累加祖先和最后一层子线时的括号不同，分别缓存以保留运算次序。
+			prefix_x = parent_pose[0] + (local_x * parent_cos + local_y * parent_sin);
+			prefix_y = parent_pose[1] + (local_y * parent_cos - local_x * parent_sin);
+			local_x = world_x;
+			local_y = world_y;
+			if (bool(_line.rotFatherLine)) local_r += parent_pose[2];
+		}
+	}
+	var result = _line.pose_value;
+	result[0] = local_x;
+	result[1] = local_y;
+	result[2] = local_r;
+	var prefix = _line.pose_parent_value;
+	prefix[0] = prefix_x;
+	prefix[1] = prefix_y;
+	prefix[2] = local_r;
+	_line.pose_visiting = false;
+	_line.pose_epoch = epoch;
+	_line.pose_scale_x = _sx;
+	_line.pose_scale_y = _sy;
+	return result;
 }
 
 ///@desc 按 PhiEdit 1.7 的宽高比计算预览宽高
@@ -287,15 +296,10 @@ function rpe_custom_texture_pixel_size(scale_x, scale_y, sprite_w, sprite_h, vie
 	if (variable_global_exists("chart_view_height") && is_real(chart_view_height) && chart_view_height > 0) {
 		view_h = chart_view_height;
 	};
-	var fit_x = view_w / preview_w;
-	var fit_y = view_h / preview_h;
-	// 竖屏共用一份缩放，避免高于 PhiEdit 预览时两轴各自拉伸
-	if (view_w < view_h) {
-		var fit = min(fit_x, fit_y);
-		fit_x = fit;
-		fit_y = fit;
-	};
-	return [sprite_w * scale_x * fit_x, sprite_h * scale_y * fit_y];
+	// 视口可能比谱面窄（例如 16:10 全屏），始终等比适配。
+	// 谱面自身的 scaleX/scaleY 仍分别保留，窗口变化不再额外拉伸纹理。
+	var fit = min(view_w / preview_w, view_h / preview_h);
+	return [sprite_w * scale_x * fit, sprite_h * scale_y * fit];
 }
 
 ///@desc 计算判定线当前的像素宽度
@@ -644,7 +648,10 @@ function judgeCalc(oHTime , nHTime , bpm , xx , yy , _type , isFHitEf = true, in
 		
 	};
 	
-	if(isFHitEf && (status == TYPE.GOOD || status == TYPE.PREFECT)) then _eff_c(xx , yy , is_undefined(effectColor) ? color : effectColor);
+	if (isFHitEf && (status == TYPE.GOOD || status == TYPE.PREFECT)) {
+		var hit_z = variable_instance_exists(id, "hit_effect_z") ? hit_effect_z : undefined;
+		_eff_c(xx, yy, is_undefined(effectColor) ? color : effectColor, undefined, hit_z);
+	}
 	
 	return(status);
 };
@@ -679,6 +686,7 @@ function chart_note_pass_fade(_now_sec, _hit_sec, _miss_sec) {
 ///@returns {Real} 窗口秒数
 /// 作者的话: 何求极
 function chart_note_miss_window_sec(_jtype, _is_hold) {
+	if (!chart_autoplay_active()) then return KB_GOOD_SECONDS;
 	// Hold 与类型 3 为 161ms，Drag/Flick 为 160ms
 	if (_is_hold || _jtype == 3) then return 0.161;
 	if (_jtype == 2 || _jtype == 4) then return 0.160;
@@ -743,417 +751,6 @@ function chart_auto_hit_offset_ms(_jtype = undefined) {
 	// Drag/Flick 不能提前，也不能落到 Bad 或 Miss
 	if (!is_undefined(_jtype) && (_jtype == 2 || _jtype == 4)) then return clamp(off, 0, 160);
 	return off;
-}
-
-///@desc 判断是否为桌面系统，用于键盘判定
-///@returns {Bool} Windows、Linux 或 macOS 为真
-/// 作者的话: 文本
-function chart_kb_desktop() {
-	return (os_type == os_windows || os_type == os_linux || os_type == os_macosx);
-}
-
-///@desc 取得键盘判定的静态状态
-///@returns {Struct} 宽限时间、按住数、新按下数与上一帧按键
-/// 作者的话: 还得重写键盘判定，这个你当滚木用吧，但是别删了，否则屎山爆炸
-function chart_kb_state_get() {
-	static st = undefined;
-	// 首次调用时建立 A 到 Z 的按键记录
-	if (is_undefined(st)) then st = { grace_until: -1, held: 0, pressed: 0, prev: array_create(26, false) };
-	return st;
-}
-
-///@desc 读取单个虚拟键是否按下
-///@param {Real} _vk 虚拟键码
-///@returns {Bool} 按下为真
-/// 作者的话: 这个也是，别删了
-function chart_kb_key_down(_vk) {
-	// Windows 用直接键态，避免输入法吃掉按键
-	if (os_type == os_windows) then return keyboard_check_direct(_vk);
-	return keyboard_check(_vk);
-}
-
-///@desc 轮询 A 到 Z 的原始键态，使十余个键同时按下也能识别
-///@returns {Struct} 更新后的键盘状态
-/// 作者的话: 傻逼。
-function chart_kb_poll() {
-	var st = chart_kb_state_get();
-	st.held = 0;
-	st.pressed = 0;
-	// 统计按住数量，以及相对上一帧新按下的键
-	for (var i = 0; i < 26; i++) {
-		var down = chart_kb_key_down(65 + i);
-		if (down) then st.held++;
-		if (down && !st.prev[i]) then st.pressed++;
-		st.prev[i] = down;
-	};
-	return st;
-}
-
-///@desc 判断 A 到 Z 是否有任意键按下
-///@returns {Bool} 有键按下为真
-/// 作者的话: 。
-function chart_kb_any_down() {
-	for (var i = 0; i < 26; i++) {
-		if (chart_kb_key_down(65 + i)) then return true;
-	};
-	return false;
-}
-
-///@desc 判断 Hold 是否仍应保持，含松键后的 80 毫秒宽限
-///@returns {Bool} 仍按住或处于宽限内为真
-/// 作者的话: 。
-function chart_kb_hold_alive() {
-	if (chart_kb_any_down()) then return true;
-	var st = chart_kb_state_get();
-	// 没有松键宽限时间则视为已经断开
-	if (st.grace_until < 0) then return false;
-	if (!(variable_global_exists("game") && is_struct(game))) then return false;
-	return (game.__time[1] < st.grace_until);
-}
-
-///@desc 判断现在是否允许用键盘做全屏判定
-///@returns {Bool} 允许为真
-/// 作者的话: 。
-function chart_player_keyboard_judge_active() {
-	// 自动演奏、非桌面、暂停、加载或结算时关闭
-	if (chart_autoplay_active()) then return false;
-	if (!chart_kb_desktop()) then return false;
-	if (!(variable_global_exists("game") && is_struct(game)) || game.paused) then return false;
-	if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return false;
-	if (instance_exists(oSettlement)) then return false;
-	if (instance_exists(oPlayTransition)) {
-		var _transition = instance_find(oPlayTransition, 0);
-		if (variable_instance_exists(_transition, "state")
-			&& _transition.state != PLAY_TRANSITION_STATE.PLAYING) then return false;
-	};
-	return true;
-}
-
-///@desc 读取当前音符的判定时间，单位秒
-///@returns {Real} 命中时间
-/// 作者的话: 。
-function chart_kb_note_hit_sec() {
-	if (object_index == oNote) then return realHitTime;
-	if (object_index == oNote_1) then return start_sec;
-	return startSec;
-}
-
-///@desc 读取当前谱面时间，单位秒
-///@returns {Real} 当前时间
-/// 作者的话: 幽默。
-function chart_kb_note_now_sec() {
-	if (object_index == oNote || object_index == oNote_1) then return _now_seconds;
-	var _off = 0;
-	// oNote_2 需要扣掉谱面偏移
-	if (variable_global_exists("game_2") && is_struct(game_2) && is_struct(game_2.chart)) {
-		_off = real(game_2.chart.offsetSeconds ?? 0);
-	};
-	return game.__time[1] - _off;
-}
-
-///@desc 读取当前音符的判定类型
-///@returns {Real} 判定类型
-/// 作者的话: 干脆把我Phigros()全拆一个全局函数了
-function chart_kb_note_judge_type() {
-	if (object_index == oNote_2) then return judge_type;
-	return type;
-}
-
-///@desc 判断当前音符是否为 Hold
-///@returns {Bool} 是 Hold 为真
-/// 作者的话: 。
-function chart_kb_note_is_hold() {
-	if (object_index == oNote_2) then return (type == 2);
-	return (type == 3);
-}
-
-///@desc 判断当前时间是否落在该音符的键盘判定窗口
-///@param {Real} _now 当前时间，秒
-///@param {Real} _hit 命中时间，秒
-///@param {Real} _jtype 判定类型
-///@param {Bool} _hold 是否为 Hold
-///@returns {Bool} 在窗口内为真
-/// 作者的话: 。
-function chart_kb_note_in_window(_now, _hit, _jtype, _hold) {
-	// Drag/Flick 不能提前，最晚只到 Perfect 的 160ms，不含 Bad 或 Miss
-	if (!_hold && (_jtype == 2 || _jtype == 4)) {
-		return (_now >= _hit && _now <= _hit + 0.160);
-	};
-	var early = 0.200;
-	var late = _hold ? 0.161 : 0.201;
-	return (_now >= _hit - early && _now <= _hit + late);
-}
-
-///@desc 判断音符能否被本帧键盘选中
-///@param {Real} _mode 0 为单击 Tap/Hold，1 为按住时的 Drag/Flick
-///@returns {Bool} 可以选中为真
-/// 作者的话: 不想理
-function chart_kb_note_eligible(_mode) {
-	if (variable_instance_exists(id, "kb_ignore") && kb_ignore) then return false;
-	if (object_index == oNote && !inition) then return false;
-	if (object_index == oNote_1 && (!inition || isFake)) then return false;
-	if (object_index == oNote_2 && isFake) then return false;
-	var jtype = chart_kb_note_judge_type();
-	var hold = chart_kb_note_is_hold();
-	if (!chart_kb_note_in_window(chart_kb_note_now_sec(), chart_kb_note_hit_sec(), jtype, hold)) then return false;
-	// 单击只接未开始的 Hold 或未判定的 Tap
-	if (_mode == 0) {
-		if (hold) {
-			if (object_index == oNote_2) then return !hold_started;
-			return (notJudge && hit_status == TYPE.NONE);
-		};
-		if (jtype != 1) then return false;
-		if (object_index == oNote_2) then return !judged;
-		return (!isJudge && !isBad && hit_status == TYPE.NONE);
-	};
-	if (hold || (jtype != 2 && jtype != 4)) then return false;
-	if (object_index == oNote_2) then return !judged;
-	return !isJudge;
-}
-
-///@desc 判断 Hold 是否已经按下且尚未结束
-///@returns {Bool} 仍在按住为真
-/// 作者的话: 最弱智最出生的来了
-function chart_kb_hold_active() {
-	if (!chart_kb_note_is_hold()) then return false;
-	if (object_index == oNote_1 && isFake) then return false;
-	if (object_index == oNote_2 && isFake) then return false;
-	var now = chart_kb_note_now_sec();
-	if (!(hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT)) then return false;
-	if (object_index == oNote) {
-		return (!notJudge && !isMiss && now < realHitTime + hold_time_length);
-	};
-	if (object_index == oNote_1) {
-		return (!notJudge && !isMiss && now < end_sec);
-	};
-	return (hold_started && !isMiss && now < endSec);
-}
-
-///@desc 在同类音符里挑选离判定点最近的一个
-///@param {Id.Instance} _obj 音符对象索引
-///@param {Real} _mode 传给资格判断的模式
-///@returns {Id.Instance} 选中的音符，没有时为 noone
-/// 作者的话: 傻逼
-function chart_kb_pick(_obj, _mode) {
-	var best_note = noone;
-	var best_dt = infinity;
-	var best_hit = infinity;
-	with (_obj) {
-		if (!chart_kb_note_eligible(_mode)) then continue;
-		var hit = chart_kb_note_hit_sec();
-		var dt = abs(chart_kb_note_now_sec() - hit);
-		// 时间差更小优先；一样时取更早的判定点
-		if (dt < best_dt || (dt == best_dt && hit < best_hit)) {
-			best_dt = dt;
-			best_hit = hit;
-			best_note = id;
-		};
-	};
-	return best_note;
-}
-
-///@desc 对选中的音符执行一次键盘判定
-///@param {Id.Instance} _note 音符实例
-///@returns {Real} TYPE 判定结果，无效音符为 NONE
-/// 作者的话: 2B
-function chart_kb_apply_hit(_note) {
-	if (_note == noone || !instance_exists(_note)) then return TYPE.NONE;
-	var status = TYPE.NONE;
-	with (_note) status = chart_kb_apply_hit_self();
-	return status;
-}
-
-///@desc 在音符自己的作用域里完成键盘判定
-///@returns {Real} TYPE 判定结果
-/// 作者的话: 瞎几把判
-function chart_kb_apply_hit_self() {
-	var hold = chart_kb_note_is_hold();
-	// 官方谱面音符
-	if (object_index == oNote) {
-		if (hold) {
-			event_user(2);
-			var status_h = judgeCalc(self.time, _now_beat, self.bpm, _hx0, _hy0, self.type, true, false);
-			if (status_h == TYPE.NONE) then return TYPE.NONE;
-			hit_status = status_h;
-			notJudge = false;
-			isHold = true;
-			judgeTime = _now_beat;
-			judgeRealTime = _now_seconds;
-			if (status_h == TYPE.MISS) {
-				isMiss = true;
-				judgeCalc(self.time, _now_beat, self.bpm, _hx0, _hy0, self.type, true, true);
-			} else {
-				_bak_time = _now_seconds;
-				skin_play_note_hitsound();
-			};
-			return status_h;
-		};
-		event_user(1);
-		var line_x = _line_ref.x;
-		var local_x = (_note_x - line_x);
-		var hit_x = (line_x + local_x * _line_ref.__cos);
-		var hit_y = (_line_ref.y - local_x * _line_ref.__sin);
-		var status_n = judgeCalc(self.time, _now_beat, self.bpm, hit_x, hit_y, self.type);
-		if (status_n == TYPE.NONE) then return TYPE.NONE;
-		hit_status = status_n;
-		isJudge = true;
-		judgeRealTime = _now_seconds;
-		if (status_n == TYPE.GOOD || status_n == TYPE.PREFECT) then skin_play_note_hitsound();
-		if (status_n == TYPE.BAD && type == 1) {
-			isBad = true;
-			_bad_x = _note_x;
-			_bad_y = _note_y;
-			_bad_angle = image_angle;
-		} else {
-			instance_deactivate_object(self);
-		};
-		return status_n;
-	};
-	// RPE 音符
-	if (object_index == oNote_1) {
-		var tint = has_hit_tint ? hit_tint : undefined;
-		if (hold) {
-			var hold_xy = rpe_note_hit_effect_xy();
-			var status_rh = judgeCalc(start_sec, _now_seconds, 0, hold_xy[0], hold_xy[1], type, true, false, true, tint);
-			if (status_rh == TYPE.NONE) then return TYPE.NONE;
-			hit_status = status_rh;
-			notJudge = false;
-			isHold = true;
-			__first__ = true;
-			judgeTime = _now_seconds;
-			judgeRealTime = _now_seconds;
-			if (status_rh == TYPE.MISS) {
-				isMiss = true;
-				judgeCalc(start_sec, _now_seconds, 0, hold_xy[0], hold_xy[1], type, true, true, true);
-			} else if (is_real_note) {
-				_bak_time = _now_seconds;
-				skin_play_note_hitsound();
-			};
-			return status_rh;
-		};
-		var tap_xy = rpe_note_hit_effect_xy();
-		var status_rn = judgeCalc(start_sec, _now_seconds, 0, tap_xy[0], tap_xy[1], type, true, true, true, tint);
-		if (status_rn == TYPE.NONE) then return TYPE.NONE;
-		hit_status = status_rn;
-		isJudge = true;
-		judgeRealTime = _now_seconds;
-		if (is_real_note && (status_rn == TYPE.GOOD || status_rn == TYPE.PREFECT)) then skin_play_note_hitsound();
-		if (status_rn == TYPE.BAD && type == 1) {
-			isBad = true;
-			_bad_x = x;
-			_bad_y = y;
-			_bad_angle = image_angle;
-		} else {
-			instance_deactivate_object(self);
-		};
-		return status_rn;
-	};
-	// PEC 音符
-	var pec_now = chart_kb_note_now_sec();
-	var pec_xy = pec_note_hit_effect_xy();
-	if (hold) {
-		var status_ph = judgeCalc(startSec, pec_now, 0, pec_xy[0], pec_xy[1], judge_type, true, false, true);
-		if (status_ph == TYPE.NONE) then return TYPE.NONE;
-		hit_status = status_ph;
-		hold_started = true;
-		judge_sec = pec_now;
-		if (status_ph == TYPE.MISS) {
-			isMiss = true;
-			judgeCalc(startSec, pec_now, 0, pec_xy[0], pec_xy[1], judge_type, true, true, true);
-		} else {
-			hold_effect_sec = pec_now;
-			skin_play_note_hitsound();
-		};
-		return status_ph;
-	};
-	var status_pn = judgeCalc(startSec, pec_now, 0, pec_xy[0], pec_xy[1], judge_type, true, true, true);
-	if (status_pn == TYPE.NONE) then return TYPE.NONE;
-	hit_status = status_pn;
-	judged = true;
-	if (status_pn == TYPE.GOOD || status_pn == TYPE.PREFECT) then skin_play_note_hitsound();
-	canDraw = false;
-	instance_deactivate_object(self);
-	return status_pn;
-}
-
-///@desc 把仍按着的 Hold 强制记为 Miss
-///@returns {Undefined} 无
-/// 作者的话: 傻逼
-function chart_kb_force_miss_hold() {
-	if (!chart_kb_hold_active()) then return;
-	isMiss = true;
-	hit_status = TYPE.MISS;
-	if (object_index == oNote) {
-		judgeCalc(self.time, self.time + 1, self.bpm, _hx0, _hy0, self.type, false, true);
-	} else if (object_index == oNote_1) {
-		if (is_real_note) then judgeCalc(start_sec, start_sec + 1, 0, _hx0, _hy0, type, false, true, true);
-	} else {
-		judgeCalc(startSec, startSec + 1, 0, hx0, hy0, judge_type, false, true, true);
-	};
-}
-
-///@desc 桌面 A 到 Z 全屏判定，单击打 Tap/Hold，按住接 Drag/Flick
-///@returns {Undefined} 无
-/// 作者的话: 傻逼
-function chart_kb_judge_step() {
-	var st = chart_kb_poll();
-	if (!chart_player_keyboard_judge_active()) {
-		st.grace_until = -1;
-		exit;
-	};
-	var note_obj = noone;
-	if (instance_exists(oNote)) then note_obj = oNote;
-	else if (instance_exists(oNote_1)) then note_obj = oNote_1;
-	else if (instance_exists(oNote_2)) then note_obj = oNote_2;
-	else exit;
-	with (note_obj) kb_ignore = false;
-	var pressed = st.pressed;
-	var held = st.held;
-	var now = game.__time[1];
-	var guard = 32;
-	// 每个新按下的键消耗一张 Tap 或 Hold 头
-	while (pressed > 0 && guard > 0) {
-		guard--;
-		var click_note = chart_kb_pick(note_obj, 0);
-		if (click_note == noone) then break;
-		if (chart_kb_apply_hit(click_note) == TYPE.NONE) {
-			click_note.kb_ignore = true;
-			continue;
-		};
-		pressed--;
-	};
-	// 仍有键按住时连续接 Drag/Flick，并清掉松键宽限
-	if (held > 0) {
-		st.grace_until = -1;
-		guard = instance_number(note_obj);
-		while (guard > 0) {
-			guard--;
-			var catch_note = chart_kb_pick(note_obj, 1);
-			if (catch_note == noone) then break;
-			if (chart_kb_apply_hit(catch_note) == TYPE.NONE) {
-				catch_note.kb_ignore = true;
-				continue;
-			};
-		};
-	} else {
-		var has_hold = false;
-		with (note_obj) {
-			if (chart_kb_hold_active()) {
-				has_hold = true;
-				break;
-			};
-		};
-		if (has_hold) {
-			// 松键后给 80ms，超时仍未按下就断 Hold
-			if (st.grace_until < 0) then st.grace_until = now + 0.080;
-			if (now >= st.grace_until) {
-				with (note_obj) chart_kb_force_miss_hold();
-				st.grace_until = -1;
-			};
-		} else {
-			st.grace_until = -1;
-		};
-	};
 }
 
 ///@desc 按准确率与连击计算七位分数字符串
@@ -1577,7 +1174,7 @@ function official_v2_sorted(_events) {
 		if (!is_real(start_time)) then continue;
 		array_add(src, ev);
 	};
-	array_sort(src, function(a, b) { return a.startTime - b.startTime; });
+	array_sort(src, function(a, b) { return sign(a.startTime - b.startTime); });
 	return src;
 }
 
@@ -2027,7 +1624,7 @@ function Phigros() constructor { // 仅仅结构
 			
 			var bpm = line_data.bpm;
 			var line_speed_events = line_data.speedEvents;
-			array_sort(line_speed_events, function(a, b) { return a.startTime - b.startTime; });
+			array_sort(line_speed_events, function(a, b) { return sign(a.startTime - b.startTime); });
 			var line_seconds_per_beat = 1.875 / bpm;
 			var line_floor = line_data[$ "floorPosition"];
 			if (!is_real(line_floor) || !is_finite(line_floor)) then line_floor = undefined;
@@ -2047,7 +1644,11 @@ function Phigros() constructor { // 仅仅结构
 			//delete(self.chart.judgeLineList[i].notesBelow);
 		};
 		array_set(game.__time, 5, self.chart.offset * 1000000);
-		if (!is_array(self.chart[$ "blockAreaList"])) then self.chart.blockAreaList = [];
+		if (!is_array(self.chart[$ "blockAreaList"])) {
+			var block_source = self.chart[$ "block_area_list"];
+			if (!is_array(block_source)) block_source = self.chart[$ "block_area"];
+			self.chart.blockAreaList = is_array(block_source) ? block_source : [];
+		};
 		self.chart.version = 5;
 		struct_remove(self.chart, "formatVersion");
 		print("[R-Chart] Done." , game.settings.enableDebug);
@@ -2060,16 +1661,16 @@ function Phigros() constructor { // 仅仅结构
 		//print(array_length(game.__time));
 		for(var i = 0 ; i < array_length(self.chart.judgeLineList) ; i ++){
 			array_sort(self.chart.judgeLineList[i].judgeLineMoveEvents , func(x1 , x2){
-				return(x1.startTime - x2.startTime);
+				return(sign(x1.startTime - x2.startTime));
 			});	
 			array_sort(self.chart.judgeLineList[i].judgeLineRotateEvents , func(x1 , x2){
-				return(x1.startTime - x2.startTime);
+				return(sign(x1.startTime - x2.startTime));
 			});
 			array_sort(self.chart.judgeLineList[i].judgeLineDisappearEvents , func(x1 , x2){
-				return(x1.startTime - x2.startTime);
+				return(sign(x1.startTime - x2.startTime));
 			});
 			array_sort(self.chart.judgeLineList[i].speedEvents , func(x1 , x2){
-				return(x1.startTime - x2.startTime);
+				return(sign(x1.startTime - x2.startTime));
 			});
 			
 			//array_sort(self.chart.judgeLineList[i].notesBelow , func(x1 , x2){
@@ -2080,15 +1681,26 @@ function Phigros() constructor { // 仅仅结构
 			//	return(x1.time - x2.time);
 			//});
 		};
-		// 同一时刻的音符互相打上多押高亮
-		if(game.settings.enableNoteHightLight){
-			array_sort(self._notes , func(x1 , x2){
-				if(x1.time == x2.time){
-					struct_set(x1 , "hl" , true);
-					struct_set(x2 , "hl" , true);
-				};
-				return(x1.time - x2.time);
+		// 先按真实秒数排序，再分组；比较器只比较，不修改音符。
+		if (game.settings.enableNoteHightLight) {
+			array_sort(self._notes, function(a, b) {
+				return sign(a.time * 1.875 / a.bpm - b.time * 1.875 / b.bpm);
 			});
+			var first = 0;
+			while (first < array_length(self._notes)) {
+				var note = self._notes[first];
+				var hit_sec = note.time * 1.875 / note.bpm;
+				var last = first + 1;
+				while (last < array_length(self._notes)) {
+					var next_note = self._notes[last];
+					if (next_note.time * 1.875 / next_note.bpm != hit_sec) break;
+					last++;
+				}
+				if (last - first > 1) {
+					for (var ni = first; ni < last; ni++) self._notes[ni].hl = true;
+				}
+				first = last;
+			}
 		};
 		print("[S-Sort] Done." , game.settings.enableDebug);
 		
@@ -8493,7 +8105,7 @@ function rpe_sync_note_activation(_now_sec = undefined) {
 			chart_note_activate(_note.id);
 			var _key = string(_note.id);
 			if (is_struct(_records) && struct_exists(_records, _key)) {
-				_records[$ _key].activated = true;
+				rpe_note_mark_active(_records[$ _key]);
 			};
 		};
 		game_1._note_activation_index = array_length(_notes);
@@ -8513,7 +8125,7 @@ function rpe_sync_note_activation(_now_sec = undefined) {
 		chart_note_activate(_item.id);
 		var _item_key = string(_item.id);
 		if (is_struct(_records) && struct_exists(_records, _item_key)) {
-			_records[$ _item_key].activated = true;
+			rpe_note_mark_active(_records[$ _item_key]);
 		};
 		_index++;
 	};
@@ -8523,7 +8135,7 @@ function rpe_sync_note_activation(_now_sec = undefined) {
 		chart_note_activate(_late.id);
 		var _late_key = string(_late.id);
 		if (is_struct(_records) && struct_exists(_records, _late_key)) {
-			_records[$ _late_key].activated = true;
+			rpe_note_mark_active(_records[$ _late_key]);
 		};
 	};
 	game_1._note_activation_index = _index;

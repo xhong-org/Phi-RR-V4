@@ -87,23 +87,21 @@ var sum_y = 0;
 var sum_a = 0;
 var sum_r = 0;
 
-if (_event_layer_count > 0) {
-        for (var i = 0; i < _event_layer_count; i++) {
-                // 坏层跳过。
-                if (!is_struct(_events[i])) then continue;
-                // RPE 层可以省略没用到的通道。层仍然有效，
-                // 求值器用默认值，避免第一帧去索引不存在的键。
-                if (struct_exists(_events[i], "moveXEvents")) then sum_x += rpe_eval_events(i, "moveXEvents", 0);
-                if (struct_exists(_events[i], "moveYEvents")) then sum_y += rpe_eval_events(i, "moveYEvents", 0);
-                if (struct_exists(_events[i], "alphaEvents")) then sum_a += rpe_eval_events(i, "alphaEvents", 0);
-                if (struct_exists(_events[i], "rotateEvents")) then sum_r += rpe_eval_events(i, "rotateEvents", 0);
-        };
-};
+for (var route_i = 0; route_i < array_length(rpe_event_routes); route_i++) {
+	var route = rpe_event_routes[route_i];
+	var i = route[0];
+	sum_x += is_undefined(route[1]) ? rpe_eval_events(i, "moveXEvents", 0) : route[1];
+	sum_y += is_undefined(route[2]) ? rpe_eval_events(i, "moveYEvents", 0) : route[2];
+	sum_a += is_undefined(route[3]) ? rpe_eval_events(i, "alphaEvents", 0) : route[3];
+	sum_r += is_undefined(route[4]) ? rpe_eval_events(i, "rotateEvents", 0) : route[4];
+}
 var speed_floor = rpe_speed_floor();
 
 __raw_x = sum_x;
 __raw_y = sum_y;
 __raw_r = sum_r;
+// 同一轮局部事件全部结束后，世界姿态缓存可供所有 Step End 共用。
+game_1._pose_epoch++;
 // attachUI 把真实透明度留给界面写入；线本身在步进结束和绘制里隐藏。
 __raw_a = sum_a;
 // PCR 的 _alpha_decimal 是未夹取的 RPE 透明度之和，可以是负数或大于 255。

@@ -150,6 +150,7 @@ function chart_playback_teardown_for_menu() {
                 return true;
         };
         global.chart_playback_torn_down = true;
+		chart_kb_reset();
         chart_playback_prepare_exit();
 
         if (instance_exists(oExtraPlay)) {

@@ -113,10 +113,11 @@ if (game.settings.useOldFX && !pls_is_gxgames() && !skin_active()) {
 	///@param {Real} _y 世界坐标 Y
 	///@param {Real} color 粒子颜色，默认浅金
 	///@returns {Undefined} 无
-	_eff_c = method(self, function(_x, _y, color = #ffeca0) {
+	_eff_c = method(self, function(_x, _y, color = #ffeca0, time = undefined, z = undefined) {
 		// 关闭打击特效时直接返回。
 		if (!game.settings.enableHitEffect) then return;
-		with (oEffect) {
+		var renderer = chart_hit_effect_renderer(oEffect, z);
+		with (renderer) {
 			_x = floor(_x);
 			_y = floor(_y);
 			part_particles_create_color(p1, _x, _y, _hitFX, color, 1);

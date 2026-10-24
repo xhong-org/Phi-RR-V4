@@ -27,7 +27,7 @@ function rpe_effect_beat_value(value, fallback = 0) {
 	return fallback;
 }
 
-///@desc 按种类读取标量、二维或四维数值
+///@desc 按种类读取标量或向量
 ///@param {Any} raw 原始值
 ///@param {Real} kind 1 为标量，2 为二维，4 为四维
 ///@param {Bool} normalize_color 四维颜色是否除以 255
@@ -35,7 +35,7 @@ function rpe_effect_beat_value(value, fallback = 0) {
 function rpe_effect_value(raw, kind, normalize_color = false) {
 	// 标量不走数组
 	if (kind == 1) then return real(raw ?? 0);
-	var count = (kind == 2 ? 2 : 4);
+	var count = clamp(kind, 2, 4);
 	var result = array_create(count, 0);
 	if (is_array(raw)) {
 		for (var value_i = 0; value_i < min(count, array_length(raw)); value_i++) {
@@ -43,8 +43,8 @@ function rpe_effect_value(raw, kind, normalize_color = false) {
 		};
 	};
 	// 颜色从 0–255 收成 0–1
-	if (normalize_color && kind == 4) {
-		for (var color_i = 0; color_i < 4; color_i++) result[@ color_i] /= 255;
+	if (normalize_color && kind >= 3) {
+		for (var color_i = 0; color_i < count; color_i++) result[@ color_i] /= 255;
 	};
 	return result;
 }
@@ -74,10 +74,10 @@ function rpe_effect_easing_type(value) {
 ///@param {Real} kind 值的种类
 ///@param {Array} bpm_points BPM 锚点
 ///@returns {Struct} 动画
-function rpe_effect_parse_anim(raw, fallback, kind, bpm_points) {
+function rpe_effect_parse_anim(raw, fallback, kind, bpm_points, normalize_color = false) {
 	// 不是事件列表时当成常量；向量长度恰好等于种类也是常量
 	if (!is_array(raw) || (kind > 1 && array_length(raw) == kind && (array_length(raw) <= 0 || !is_struct(raw[0])))) {
-		return rpe_effect_anim_fixed(rpe_effect_value(raw ?? fallback, kind, kind == 4), kind);
+		return rpe_effect_anim_fixed(rpe_effect_value(raw ?? fallback, kind, normalize_color), kind);
 	};
 	var result = { kind:kind, fixed:false, value:fallback, events:[] };
 	for (var anim_i = 0; anim_i < array_length(raw); anim_i++) {
@@ -88,8 +88,8 @@ function rpe_effect_parse_anim(raw, fallback, kind, bpm_points) {
 		array_add(result.events, {
 			startTime:rpe_effect_beat_to_second(bpm_points, start_beat),
 			endTime:rpe_effect_beat_to_second(bpm_points, end_beat),
-			start:rpe_effect_value(source_event[$ "start"] ?? fallback, kind, kind == 4),
-			"end":rpe_effect_value(source_event[$ "end"] ?? fallback, kind, kind == 4),
+			start:rpe_effect_value(source_event[$ "start"] ?? fallback, kind, normalize_color),
+			"end":rpe_effect_value(source_event[$ "end"] ?? fallback, kind, normalize_color),
 			easingType:rpe_effect_easing_type(source_event[$ "easingType"] ?? 1),
 			easingLeft:real(source_event[$ "easingLeft"] ?? 0),
 			easingRight:real(source_event[$ "easingRight"] ?? 1)
@@ -137,22 +137,37 @@ function rpe_effect_tween_value(now, start_time, end_time, start_value, end_valu
 function rpe_effect_sample_anim(anim, chart_time) {
 	// 固定值或没有事件时不再插值
 	if (anim.fixed || !is_array(anim.events) || array_length(anim.events) <= 0) then return anim.value;
+	var last_time = anim[$ "sampleTime"];
+	if (!is_undefined(last_time) && sign(last_time - chart_time) == 0) then return anim.sampleValue;
 	var events = anim.events;
 	// PhiZone 保持最近一个已经开始的事件，并在结束后钳住。
 	// 若用下一段去填空隙，一拍的脉冲会被抹到整段休止，色差和故障就会被拉花。
-	if (chart_time < events[0].startTime) then return events[0].start;
-	var chosen = 0;
-	for (var event_i = 0; event_i < array_length(events); event_i++) {
-		// 事件已按开始时间排序
-		if (chart_time < events[event_i].startTime) then break;
-		chosen = event_i;
-	};
+	var count = array_length(events);
+	var chosen = clamp(anim[$ "sampleIndex"] ?? 0, 0, count - 1);
+	if (is_undefined(last_time) || chart_time < last_time) {
+		var lo = 0;
+		var hi = count;
+		while (lo < hi) {
+			var mid = (lo + hi) div 2;
+			if (events[mid].startTime <= chart_time) then lo = mid + 1;
+			else hi = mid;
+		}
+		chosen = max(0, lo - 1);
+	} else {
+		while (chosen + 1 < count && events[chosen + 1].startTime <= chart_time) chosen++;
+	}
 	var current_event = events[chosen];
+	var value;
+	if (chart_time < events[0].startTime) value = events[0].start;
 	// 超过本段结束时间则保持结束值，不提前进入下一段
-	if (chart_time >= current_event.endTime) then return current_event[$ "end"];
-	return rpe_effect_tween_value(chart_time, current_event.startTime, current_event.endTime,
+	else if (chart_time >= current_event.endTime) value = current_event[$ "end"];
+	else value = rpe_effect_tween_value(chart_time, current_event.startTime, current_event.endTime,
 		current_event.start, current_event[$ "end"], anim.kind,
 		current_event.easingType, current_event.easingLeft, current_event.easingRight);
+	anim.sampleTime = chart_time;
+	anim.sampleIndex = chosen;
+	anim.sampleValue = value;
+	return value;
 }
 
 // 本遍不会改变像素时为真，从而可以跳过抓帧和整帧回读。
@@ -495,7 +510,8 @@ function rpe_effect_preserve_frag_alpha(source) {
 	var replacement = "{vec4 _rpeBase=texture2D(screenTexture,uv);float _rpeW=sum.x+sum.y+sum.z;gl_FragColor=(_rpeW>0.001)?vec4(c/max(sum,vec3(0.0001)),_rpeBase.a):_rpeBase;}";
 	source = string_replace_all(source, "gl_FragColor.rgb=c/sum;", replacement);
 	source = string_replace_all(source, "gl_FragColor.rgb = c/sum;", replacement);
-	return rpe_effect_clip_output_coverage(source);
+	// 位移、相机和模糊可以把非透明像素移到原位置之外，不能按原像素的 alpha 裁剪。
+	return source;
 }
 
 // 谱面暗角用 uv*(1-uv)。打在打击精灵上时这些 UV 是图集矩形，软盘会被再染一次。
@@ -522,27 +538,75 @@ function rpe_effect_vignette_screen_falloff(source) {
 }
 
 // patch、暗角一类会混向不透明颜色，空白抓取像素就会变实。
-// 把覆盖钳回未着色像素，但不要再缩放 RGB：采样已经预乘，再缩放会把软打击盘染成黑块。
-///@desc 把片元 alpha 钳到原始采样的覆盖范围
-///@param {String} source 着色器源码
-///@returns {String} 改写后的源码
-function rpe_effect_clip_output_coverage(source) {
-	if (!is_string(source)) then return source;
-	// 没有片元输出或 uv 时无法插入收尾
-	if (string_pos("gl_FragColor", source) <= 0 || string_pos("uv", source) <= 0) then return source;
-	var main_at = string_pos("void main", source);
-	if (main_at <= 0) then return source;
-	var brace_scan = string_pos("{", string_delete(source, 1, main_at - 1));
-	if (brace_scan <= 0) then return source;
-	var brace_at = main_at + brace_scan - 1;
-	source = string_insert("vec4 _rpeFrag;", source, brace_at + 1);
-	source = string_replace_all(source, "gl_FragColor", "_rpeFrag");
-	var epilogue = "vec4 _rpeCover=texture2D(screenTexture,uv);float _rpeA=min(_rpeFrag.a,_rpeCover.a);vec3 _rpeRgb=(_rpeA>0.001)?_rpeFrag.rgb:vec3(0.0);gl_FragColor=vec4(_rpeRgb,_rpeA);";
-	var last = string_length(source);
-	// 收尾插在 main 的最后一个花括号之前
-	while (last > 0 && string_char_at(source, last) != "}") last -= 1;
-	if (last <= 0) then return source;
-	return string_insert(epilogue, source, last);
+///@desc 为所有实际 Z 和效果边界预留有序深度槽，极窄范围也能正确开闭
+///@returns {Undefined} 无
+function rpe_effect_layer_layout_prepare() {
+	var epsilon = math_get_epsilon();
+	math_set_epsilon(0);
+	try {
+		var z_values = [0, 1, 2, 3, 4, 5, 6, 7, 8, 24, 64];
+		var rpe = game_1;
+		var lines = rpe.line_list;
+		for (var li = 0; li < array_length(lines); li++) {
+			if (instance_exists(lines[li])) array_push(z_values, lines[li].layer_z);
+		}
+		// 音符此时已休眠，使用创建记录，不能依赖 instance_exists。
+		for (var ni = 0; ni < array_length(rpe._notes); ni++) {
+			array_push(z_values, rpe._notes[ni].layerZ, rpe._notes[ni].hitZ);
+		}
+		var range_count = 0;
+		var controller = noone;
+		var passes = [];
+		if (instance_exists(oExtraPlay)) {
+			var extra = instance_find(oExtraPlay, 0);
+			controller = extra.effect_controller;
+			passes = extra.effect_layer_passes;
+			for (var vi = 0; vi < array_length(extra.videos); vi++) {
+				var video_z = extra.videos[vi].zIndex;
+				if (is_real(video_z) && is_finite(video_z)) array_push(z_values, video_z);
+			}
+		}
+		range_count = array_length(passes);
+		for (var pass_i = 0; pass_i < range_count; pass_i++) {
+			if (is_finite(passes[pass_i].targetMin)) array_push(z_values, passes[pass_i].targetMin);
+			if (is_finite(passes[pass_i].targetMax)) array_push(z_values, passes[pass_i].targetMax);
+		}
+		array_sort(z_values, function(a, b) { return sign(a - b); });
+		var unique_z = [];
+		var depths = [];
+		var spacing = 4 * range_count + 16;
+		var previous_z = undefined;
+		var previous_depth = 0;
+		for (var zi = 0; zi < array_length(z_values); zi++) {
+			var current_z = z_values[zi];
+			if (!is_finite(current_z)) continue;
+			if (!is_undefined(previous_z) && sign(current_z - previous_z) == 0) continue;
+			var next_depth = -1000 * current_z;
+			if (!is_undefined(previous_z)) next_depth = previous_depth - max(spacing, 1000 * (current_z - previous_z));
+			array_push(unique_z, current_z);
+			array_push(depths, next_depth);
+			previous_z = current_z;
+			previous_depth = next_depth;
+		}
+		global.chart_layer_layout = { z:unique_z, depth:depths };
+		for (var li = 0; li < array_length(lines); li++) {
+			var line_instance = lines[li];
+			if (instance_exists(line_instance)) chart_set_instance_depth(line_instance,
+				chart_layer_depth(line_instance.layer_z) - line_instance.line_id * 0.0001);
+		}
+		if (instance_exists(oExtraPlay)) {
+			var extra = instance_find(oExtraPlay, 0);
+			for (var vi = 0; vi < array_length(extra.video_layers); vi++) {
+				var video_layer = extra.video_layers[vi];
+				if (!instance_exists(video_layer)) continue;
+				chart_set_instance_depth(video_layer, chart_layer_depth(extra.videos[video_layer.video_layer_index].zIndex));
+			}
+		}
+		// 无范围通道也必须在所有图层画完之后运行。
+		if (instance_exists(controller)) chart_set_instance_depth(controller, previous_depth - spacing);
+	} finally {
+		math_set_epsilon(epsilon);
+	}
 }
 
 ///@desc 从外部着色器注释里读取 uniform 默认值
@@ -596,8 +660,8 @@ function rpe_effect_external_defaults(shader_name) {
 			for (var component_i = 0; component_i < kind; component_i++) {
 				value[@ component_i] = real(string_trim(values[component_i]));
 			};
-		} else if (uniform_type == "vec4" || uniform_type == "float4") {
-			kind = 4;
+		} else if (uniform_type == "vec3" || uniform_type == "float3" || uniform_type == "vec4" || uniform_type == "float4") {
+			kind = (uniform_type == "vec3" || uniform_type == "float3") ? 3 : 4;
 			var values = string_split(default_text, ",");
 			if (array_length(values) < kind) then continue;
 			value = array_create(kind, 0);
@@ -651,25 +715,48 @@ function rpe_effect_parse(extra, bpm_points) {
 					var raw_probe = raw_uniform;
 					if (is_array(raw_probe) && array_length(raw_probe) > 0 && is_struct(raw_probe[0])) raw_probe = raw_probe[0][$ "start"];
 					if (is_array(raw_probe) && array_length(raw_probe) == 2) { kind = 2; fallback = [0,0]; }
+					else if (is_array(raw_probe) && array_length(raw_probe) == 3) { kind = 3; fallback = [0,0,0]; }
 					else if (is_array(raw_probe) && array_length(raw_probe) == 4) { kind = 4; fallback = [0,0,0,0]; };
 				};
 				if (is_undefined(raw_uniform)) {
 					defaults[$ uniform_name] = rpe_effect_anim_fixed(kind == 1 ? 0 : array_create(kind, 0), kind);
 				} else {
-					defaults[$ uniform_name] = rpe_effect_parse_anim(raw_uniform, fallback, kind, bpm_points);
+					var normalize_color = false;
+					var lower_name = string_lower(uniform_name);
+					if (kind >= 3 && is_array(raw_uniform)
+						&& (string_pos("color", lower_name) > 0 || string_pos("tint", lower_name) > 0 || string_pos("rgb", lower_name) > 0)) {
+						var color_values = raw_uniform;
+						if (array_length(raw_uniform) > 0 && is_struct(raw_uniform[0])) {
+							color_values = [];
+							for (var ei = 0; ei < array_length(raw_uniform); ei++) {
+								if (!is_struct(raw_uniform[ei])) continue;
+								array_push(color_values, raw_uniform[ei].start, raw_uniform[ei][$ "end"]);
+							}
+						} else color_values = [raw_uniform];
+						for (var vi = 0; vi < array_length(color_values); vi++) {
+							var color_value = color_values[vi];
+							if (!is_array(color_value)) continue;
+							for (var ci = 0; ci < min(kind, array_length(color_value)); ci++) normalize_color = normalize_color || color_value[ci] > 1;
+						}
+					}
+					defaults[$ uniform_name] = rpe_effect_parse_anim(raw_uniform, fallback, kind, bpm_points, normalize_color);
 				};
 			};
 		};
 		var start_beat = rpe_effect_beat_value(source[$ "start"], 0);
 		var end_beat = rpe_effect_beat_value(source[$ "end"], start_beat);
-		// targetRange 是 PhiZone 的图层字段。没有它时，即使省略了 global，
-		// 这个着色器也不是图层特效，而是渲染整帧。
-		var has_layer_range = is_struct(source[$ "targetRange"]);
+		// PhiZone 显式声明局部效果但省略范围时使用 [0, 8)。
+		// Phira 省略 global 和 targetRange 的文件仍走原来的全屏效果。
+		var default_layer_range = !is_undefined(source[$ "global"]) && source[$ "global"] == false;
+		var has_layer_range = is_struct(source[$ "targetRange"]) || default_layer_range;
 		var target_min = -infinity;
 		var target_max = infinity;
-		if (has_layer_range) {
+		if (is_struct(source[$ "targetRange"])) {
 			target_min = real(source.targetRange[$ "minZIndex"] ?? -infinity);
 			target_max = real(source.targetRange[$ "maxZIndex"] ?? infinity);
+		} else if (default_layer_range) {
+			target_min = 0;
+			target_max = 8;
 		};
 		var effect_record = {
 			shaderName:shader_name,

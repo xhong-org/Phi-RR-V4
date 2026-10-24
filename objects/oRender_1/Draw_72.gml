@@ -23,6 +23,19 @@ var line_layout_changed = !variable_instance_exists(id, "_rpe_layout_width")
 	|| _rpe_layout_width != worker_window_width || _rpe_layout_height != worker_window_height;
 _rpe_layout_width = worker_window_width;
 _rpe_layout_height = worker_window_height;
+// Step End 已经用同一批局部事件求出世界姿态时，不再打包、等待原生工作器和回写。
+var poses_ready = !line_layout_changed;
+for (var ready_i = 0; ready_i < line_count && poses_ready; ready_i++) {
+	var ready_line = game_1.line_list[ready_i];
+	if (!instance_exists(ready_line)) continue;
+	poses_ready = ready_line.pose_epoch == game_1._pose_epoch
+		&& sign(ready_line.pose_scale_x - worker_scale_x) == 0
+		&& sign(ready_line.pose_scale_y - worker_scale_y) == 0;
+}
+if (poses_ready) {
+	rpe_notes_refresh_geometry(false);
+	exit;
+}
 var line_resolve_start = get_timer();
 // 线够多时用并行工作器解析，否则走本机回退。
 if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") && line_count >= worker_min_lines) {
@@ -185,11 +198,5 @@ if (!worker_resolved) {
 	};
 };
 
-// 音符在 Step 里更新时父变换还没完成。线的世界变换就绪后再刷新外观。
-// 暂停时只有窗口尺寸带动判定线移动才刷新。
-var line_game_paused = variable_global_exists("game") && is_struct(game) && game.paused;
-if (!line_game_paused || line_layout_changed) {
-	with (oNote_1) {
-		if (inition && instance_exists(_line_ref)) then event_user(_step_user_count);
-	};
-};
+// 窗口尺寸变化时世界姿态会重算，音符跟随最终视口刷新。
+rpe_notes_refresh_geometry(line_layout_changed);

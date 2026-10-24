@@ -109,7 +109,7 @@ if (variable_instance_exists(id, "effect_boundary_role")) {
 				};
 			};
 			if (instance_exists(effect_boundary_controller)) {
-				var _grade_key = $"layer-blit@{_layer_fast[0]}@{_layer_fast[1]}@{_layer_fast[2]}";
+				var _grade_key = $"layer-blit@{effect_boundary_depth}";
 				with (effect_boundary_controller) {
 					if (!struct_exists(external_draw_logged, _grade_key)) {
 						external_draw_logged[$ _grade_key] = true;

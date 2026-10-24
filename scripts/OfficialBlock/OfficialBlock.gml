@@ -23,7 +23,7 @@
 #macro BLOCK_RT_SCENE 16
 #macro BLOCK_RT_OFF_C 17
 #macro BLOCK_RT_COUNT 18
-// 超过这个数量就不再为每一块建结构体。百万级噪域会在加载画面结束后把内存吃满并卡住。
+// 静态噪域每条记录占 48 字节，含 12 个 float32。
 #macro OFFICIAL_BLOCK_PACK 48
 
 ///@desc 创建噪声区运行状态，含悬停槽和包围盒
@@ -108,6 +108,14 @@ function official_block_state_create() {
 			pack_last: 0,
 			pack_dt: 0.001,
 			pack_complex: [],
+			complex_order: [],
+			complex_live: [],
+			complex_cursor: 0,
+			complex_now: -infinity,
+			complex_version: 0,
+			pack_bucket_ends: [],
+			pack_bucket_max_end: [],
+			scan_bucket: 0,
 			pack_phase: 0,
 			pack_cursor: 0,
 			pack_kept: 0,
@@ -247,6 +255,7 @@ function official_block_free_rt(_state) {
 	_state.surf_w = 0;
 	_state.surf_h = 0;
 	_state.mask_valid = false;
+	_state.uniform_cache = {};
 }
 
 ///@desc 判断谱面是否正在结束、结算或退出
@@ -578,6 +587,14 @@ function official_block_pack_free(_state) {
 	_state.packed = false;
 	_state.pack_tried = false;
 	_state.pack_complex = [];
+	_state.complex_order = [];
+	_state.complex_live = [];
+	_state.complex_cursor = 0;
+	_state.complex_now = -infinity;
+	_state.complex_version = 0;
+	_state.pack_bucket_ends = [];
+	_state.pack_bucket_max_end = [];
+	_state.scan_bucket = 0;
 	_state.pack_phase = 0;
 	_state.pack_cursor = 0;
 	_state.pack_kept = 0;
@@ -671,6 +688,111 @@ function official_block_iter_count(_state) {
 	return max(0, _state.block_n);
 }
 
+///@desc 比较同桶紧凑记录，时间相同时保持文件顺序
+///@param {Real} _a 记录下标
+///@param {Real} _b 记录下标
+///@returns {Real} 比较符号
+function official_block_record_cmp(_a, _b) {
+	var buf = official_block_state().pack_buf;
+	var ta = buffer_peek(buf, _a * OFFICIAL_BLOCK_PACK + 16, buffer_f32);
+	var tb = buffer_peek(buf, _b * OFFICIAL_BLOCK_PACK + 16, buffer_f32);
+	var order = sign(ta - tb);
+	if (order != 0) return order;
+	return sign(_a - _b);
+}
+
+///@desc 分帧补齐桶内精确顺序，同时记录各桶最晚结束时间
+///@param {Struct} _state 噪声区状态
+///@returns {Bool} 全部桶完成时为真
+function official_block_sort_buckets(_state) {
+	var order = _state.pack_order;
+	var ends = _state.pack_bucket_ends;
+	var max_ends = _state.pack_bucket_max_end;
+	var buf = _state.pack_buf;
+	var t0 = get_timer();
+	for (var bucket = _state.pack_cursor; bucket < array_length(ends); bucket++) {
+		var first = bucket > 0 ? ends[bucket - 1] : 0;
+		var last = ends[bucket];
+		var previous = -infinity;
+		var max_end = -infinity;
+		var sorted = true;
+		for (var i = first; i < last; i++) {
+			var at = order[i] * OFFICIAL_BLOCK_PACK;
+			var appear = buffer_peek(buf, at + 16, buffer_f32);
+			if (sign(appear - previous) < 0) sorted = false;
+			previous = appear;
+			max_end = max(max_end, buffer_peek(buf, at + 28, buffer_f32));
+		}
+		if (!sorted) {
+			var part = array_create(last - first);
+			array_copy(part, 0, order, first, last - first);
+			array_sort(part, official_block_record_cmp);
+			array_copy(order, first, part, 0, last - first);
+		}
+		max_ends[bucket] = max_end;
+		_state.pack_cursor = bucket + 1;
+		if ((bucket mod 128) == 0 && get_timer() - t0 >= 4000) return false;
+	}
+	return true;
+}
+
+///@desc 为动画块建立出现顺序，保留原表以便重试
+///@param {Struct} _state 噪声区状态
+///@returns {Undefined} 无
+function official_block_complex_index(_state) {
+	var complex = _state.pack_complex;
+	var order = array_create(array_length(complex));
+	array_copy(order, 0, complex, 0, array_length(complex));
+	array_sort(order, function(a, b) {
+		var order = sign(a.appear - b.appear);
+		if (order != 0) return order;
+		return sign(a.ord - b.ord);
+	});
+	_state.complex_order = order;
+	_state.complex_live = [];
+	_state.complex_cursor = 0;
+	_state.complex_now = -infinity;
+	_state.complex_version++;
+}
+
+///@desc 只保留当前可见的动画块，按原文件顺序交给材质和命中路径
+///@param {Struct} _state 噪声区状态
+///@param {Real} _now 谱面秒
+///@returns {Undefined} 无
+function official_block_complex_gather(_state, _now) {
+	var live = _state.complex_live;
+	var changed = false;
+	if (_now < _state.complex_now) {
+		array_resize(live, 0);
+		_state.complex_cursor = 0;
+		changed = true;
+	}
+	_state.complex_now = _now;
+	var write = 0;
+	var old_count = array_length(live);
+	for (var i = 0; i < old_count; i++) {
+		if (live[i].disappear <= _now) continue;
+		live[write++] = live[i];
+	}
+	if (write != old_count) {
+		array_resize(live, write);
+		changed = true;
+	}
+	var order = _state.complex_order;
+	var cursor = _state.complex_cursor;
+	while (cursor < array_length(order) && order[cursor].appear <= _now) {
+		var block = order[cursor++];
+		if (block.disappear <= _now) continue;
+		array_push(live, block);
+		changed = true;
+	}
+	_state.complex_cursor = cursor;
+	if (changed) {
+		array_sort(live, function(a, b) { return sign(a.ord - b.ord); });
+		_state.complex_version++;
+	}
+}
+
 ///@desc 分帧把超大噪域收成缓冲。本帧没做完返回假，调用方要下帧再来。
 ///@param {Struct} _chart 谱面
 ///@returns {Bool} 已经结束（含不需要压缩）时为真
@@ -700,13 +822,14 @@ function official_blocks_pack_large(_chart) {
 	if (state.pack_phase == 0) {
 		var created = buffer_create(max(1, count * stride), buffer_fixed, 1);
 		if (!buffer_exists(created)) {
-			struct_remove(_chart, "blockAreaList");
-			struct_remove(_chart, "block_area_list");
-			struct_remove(_chart, "block_area");
+			// 保留原数据并明确中止加载，分配失败不能伪装成正常的空噪域。
+			chart_session_fail("Unable to allocate blockArea records", false);
+			chart_loading_animation_abort();
+			room_goto(room_menu);
 			state.packed = true;
 			state.pack_phase = 4;
 			state.pack_count = 0;
-			gc_collect();
+			state.skipped = true;
 			return true;
 		}
 		state.pack_buf = created;
@@ -716,11 +839,6 @@ function official_blocks_pack_large(_chart) {
 		state.pack_first = infinity;
 		state.pack_last = -infinity;
 		state.pack_max_appear = 0;
-		state.pack_plain = true;
-		if (is_struct(source[0])) {
-			var sample = source[0];
-			state.pack_plain = !(is_array(sample[$ "moveEvents"]) || is_array(sample[$ "scaleEvents"]) || is_array(sample[$ "rotateEvents"]));
-		}
 		state.pack_phase = 1;
 	}
 	var buf = state.pack_buf;
@@ -732,7 +850,6 @@ function official_blocks_pack_large(_chart) {
 	if (state.pack_phase == 1) {
 	// 固定批量，避免 4 毫秒预算把百万块拖过整首歌
 	var fill_end = min(count, state.pack_cursor + 8000);
-	var plain = state.pack_plain;
 	for (var i = state.pack_cursor; i < fill_end; i++) {
 		var area = source[i];
 		if (!is_struct(area)) continue;
@@ -753,14 +870,12 @@ function official_blocks_pack_large(_chart) {
 		disable = max(disable, enable);
 		disappear = max(disappear, disable);
 		var animated = false;
-		if (!plain) {
-			var move = area[$ "moveEvents"];
-			var scale = area[$ "scaleEvents"];
-			var rotate = area[$ "rotateEvents"];
-			animated = (is_array(move) && array_length(move) > 0)
-				|| (is_array(scale) && array_length(scale) > 0)
-				|| (is_array(rotate) && array_length(rotate) > 0);
-		}
+		var move = area[$ "moveEvents"];
+		var scale = area[$ "scaleEvents"];
+		var rotate = area[$ "rotateEvents"];
+		animated = (is_array(move) && array_length(move) > 0)
+			|| (is_array(scale) && array_length(scale) > 0)
+			|| (is_array(rotate) && array_length(rotate) > 0);
 		if (animated) {
 			var rgb_complex = official_block_read_color(area);
 			array_push(complex, {
@@ -846,6 +961,7 @@ function official_blocks_pack_large(_chart) {
 	var bucket_n = floor(max_appear / dt) + 2;
 	if (bucket_n < 2) bucket_n = 2;
 	if (bucket_n > buckets + 2) bucket_n = buckets + 2;
+	if (kept <= 0) bucket_n = 0;
 	if (state.pack_phase == 2) {
 		state.pack_dt = dt;
 		state.pack_bucket_n = bucket_n;
@@ -883,23 +999,32 @@ function official_blocks_pack_large(_chart) {
 	dt = state.pack_dt;
 	buf = state.pack_buf;
 	kept = state.pack_kept;
-	var place_end = min(kept, state.pack_cursor + 40000);
-	for (var oi = state.pack_cursor; oi < place_end; oi++) {
-		var appear_o = buffer_peek(buf, oi * stride + 16, buffer_f32);
-		var place_bucket = floor(appear_o / dt);
-		if (place_bucket < 0) place_bucket = 0;
-		if (place_bucket >= bucket_n) place_bucket = bucket_n - 1;
-		var place = counts[place_bucket];
-		counts[place_bucket] = place + 1;
-		order[place] = oi;
+	if (state.pack_phase == 5) {
+		var place_end = min(kept, state.pack_cursor + 40000);
+		for (var oi = state.pack_cursor; oi < place_end; oi++) {
+			var appear_o = buffer_peek(buf, oi * stride + 16, buffer_f32);
+			var place_bucket = floor(appear_o / dt);
+			if (place_bucket < 0) place_bucket = 0;
+			if (place_bucket >= bucket_n) place_bucket = bucket_n - 1;
+			var place = counts[place_bucket];
+			counts[place_bucket] = place + 1;
+			order[place] = oi;
+		}
+		state.pack_cursor = place_end;
+		if (place_end < kept) return false;
+		// counts 已成为各桶的右边界；保留它用于播放时跳过过期桶。
+		state.pack_bucket_ends = counts;
+		state.pack_bucket_max_end = array_create(bucket_n, -infinity);
+		state.pack_phase = 6;
+		state.pack_cursor = 0;
 	}
-	state.pack_cursor = place_end;
-	if (place_end < kept) return false;
+	if (!official_block_sort_buckets(state)) return false;
 	state.pack_buf = buf;
 	state.pack_order = order;
 	state.pack_count = kept;
 	state.pack_dt = dt;
 	state.pack_complex = complex;
+	official_block_complex_index(state);
 	state.packed = true;
 	state.pack_first = is_finite(first_t) ? first_t : 0;
 	state.pack_last = is_finite(last_t) ? last_t : 0;
@@ -925,7 +1050,7 @@ function official_blocks_pack_large(_chart) {
 function official_block_pack_pending() {
 	var state = official_block_state();
 	if (state.packed || state.pack_phase == 4) return false;
-	if (state.pack_phase == 1 || state.pack_phase == 2 || state.pack_phase == 3 || state.pack_phase == 5) return true;
+	if (state.pack_phase == 1 || state.pack_phase == 2 || state.pack_phase == 3 || state.pack_phase == 5 || state.pack_phase == 6) return true;
 	if (state.pack_tried) return false;
 	if (!variable_global_exists("game") || !is_struct(game) || !is_struct(game[$ "chart"])) return false;
 	var source = game.chart[$ "blockAreaList"];
@@ -1262,6 +1387,10 @@ function official_block_pixel_to_world(_x, _y, _aspect) {
 ///@param {Real} _aspect 宽高比
 ///@returns {Array} 中心、宽高和弧度
 function official_block_pose(_block, _now, _aspect) {
+	var reset = is_undefined(_block[$ "pose_aspect"])
+		|| sign(_block.pose_aspect - _aspect) != 0
+		|| is_undefined(_block[$ "pose_now"]) || sign(_now - _block.pose_now) < 0;
+	if (!reset && (sign(_block.pose_now - _now) == 0 || _block.pose_static)) return _block.pose_result;
 	var lo = official_block_world(_block.x0, _block.y0, _aspect);
 	var hi = official_block_world(_block.x1, _block.y1, _aspect);
 	var base_x = (lo[0] + hi[0]) * 0.5;
@@ -1274,11 +1403,22 @@ function official_block_pose(_block, _now, _aspect) {
 	var scale_count = array_length(scales);
 	// Phira 在第一个关键帧之前整段都保持该帧，缩放也一样。空列表保持 1。
 	// 把第一帧清成 0 会藏住区域，并让后面的锚点链从错误尺寸开始。
+	if (reset) {
+		_block.pose_scale_index = 0;
+		_block.pose_scale_x = base_x;
+		_block.pose_scale_y = base_y;
+		_block.pose_scale_sx = scale_count > 0 ? scales[0].x : 1;
+		_block.pose_scale_sy = scale_count > 0 ? scales[0].y : 1;
+		_block.pose_static = scale_count == 0 && array_length(_block.rotate) == 0 && array_length(_block.move) == 0;
+		if (!is_array(_block[$ "pose_result"])) _block.pose_result = array_create(5);
+	}
 	if (scale_count > 0) {
-		sx = scales[0].x;
-		sy = scales[0].y;
-		for (var si = 0; si < scale_count; si++) {
-			if (si + 1 >= scale_count) break;
+		cx = _block.pose_scale_x;
+		cy = _block.pose_scale_y;
+		sx = _block.pose_scale_sx;
+		sy = _block.pose_scale_sy;
+		// 已完成的锚点链只计算一次。回退和宽高比变化时重放，运算顺序保持原样。
+		for (var si = _block.pose_scale_index; si + 1 < scale_count; si++) {
 			var scale_event = scales[si];
 			var scale_next = scales[si + 1];
 			var scale_done = _now >= scale_next.t;
@@ -1291,8 +1431,12 @@ function official_block_pose(_block, _now, _aspect) {
 			cy = scale_anchor[1] + (cy - scale_anchor[1]) * official_block_safe_div(vy, scale_event.y);
 			sx = vx;
 			sy = vy;
-			// 还没到下一段就停；旋转和位移同样处理
-			if (_now < scale_next.t) break;
+			if (!scale_done) break;
+			_block.pose_scale_index = si + 1;
+			_block.pose_scale_x = cx;
+			_block.pose_scale_y = cy;
+			_block.pose_scale_sx = sx;
+			_block.pose_scale_sy = sy;
 		}
 	}
 	var angle = 0;
@@ -1320,8 +1464,15 @@ function official_block_pose(_block, _now, _aspect) {
 	if (move_count > 0) {
 		var move_x = moves[0].x;
 		var move_y = moves[0].y;
-		for (var mi = 0; mi < move_count; mi++) {
-			if (mi + 1 >= move_count) break;
+		if (move_count > 1) {
+			var lo_index = 0;
+			var hi_index = move_count;
+			while (lo_index < hi_index) {
+				var mid = (lo_index + hi_index) div 2;
+				if (moves[mid].t <= _now) lo_index = mid + 1;
+				else hi_index = mid;
+			}
+			var mi = clamp(lo_index - 1, 0, move_count - 2);
 			var move_event = moves[mi];
 			var move_next = moves[mi + 1];
 			var move_done = _now >= move_next.t;
@@ -1329,13 +1480,20 @@ function official_block_pose(_block, _now, _aspect) {
 			var move_py = move_done ? 1 : official_block_ease(move_event.ey, official_block_ratio(_now, move_event.t, move_next.t));
 			move_x = move_event.x + (move_next.x - move_event.x) * move_px;
 			move_y = move_event.y + (move_next.y - move_event.y) * move_py;
-			if (_now < move_next.t) break;
 		}
 		var moved = official_block_world(move_x, move_y, _aspect);
 		cx += moved[0] - base_x;
 		cy += moved[1] - base_y;
 	}
-	return [cx, cy, abs((hi[0] - lo[0]) * sx), abs((hi[1] - lo[1]) * sy), angle * pi / 180];
+	var result = _block.pose_result;
+	result[0] = cx;
+	result[1] = cy;
+	result[2] = abs((hi[0] - lo[0]) * sx);
+	result[3] = abs((hi[1] - lo[1]) * sy);
+	result[4] = angle * pi / 180;
+	_block.pose_now = _now;
+	_block.pose_aspect = _aspect;
+	return result;
 }
 
 ///@desc 重置紧凑列表的扫描游标。出现顺序已在打包时排好
@@ -1347,6 +1505,7 @@ function official_block_index(_state) {
 	_state.scan_sorted = false;
 	_state.scan_active_n = 0;
 	_state.scan_cursor = 0;
+	_state.scan_bucket = 0;
 	_state.scan_now = -infinity;
 	if (!is_array(_state.scan_active)) _state.scan_active = [];
 }
@@ -1362,7 +1521,7 @@ function official_block_hide(_state) {
 		blocks[hide_i].on = false;
 		hide_i += 1;
 	}
-	var complex = _state.pack_complex;
+	var complex = _state.complex_live;
 	var ci = 0;
 	var complex_n = array_length(complex);
 	while (ci < complex_n) {
@@ -1402,19 +1561,31 @@ function official_block_activate(_state, _block, _now, _aspect, _half) {
 	var pose = official_block_pose(_block, _now, _aspect);
 	if (!is_finite(pose[0]) || !is_finite(pose[1]) || pose[2] < 0.0001 || pose[3] < 0.0001) return;
 	var corners = _block.corners;
-	var finite = true;
-	for (var corner = 0; corner < 4; corner++) {
-		var local = official_block_rotate_vec(_half[corner][0] * pose[2], _half[corner][1] * pose[3], pose[4]);
-		var room_point = official_block_world_to_room(pose[0] + local[0], pose[1] + local[1], _aspect);
-		// 任一角不是有限值则整块不算
-		if (!is_finite(room_point[0]) || !is_finite(room_point[1])) {
-			finite = false;
-			break;
+	// 缓存相等要精确；默认浮点比较容差不能吞掉缓慢位移或细微缩放。
+	var geometry_same = sign(_block.cx - pose[0]) == 0 && sign(_block.cy - pose[1]) == 0
+		&& sign(_block.sx - pose[2]) == 0 && sign(_block.sy - pose[3]) == 0 && sign(_block.ang - pose[4]) == 0
+		&& _block[$ "corner_width"] == chart_view_width
+		&& _block[$ "corner_height"] == chart_view_height
+		&& _block[$ "corner_left"] == chart_view_left;
+	if (!geometry_same) {
+		var cosine = cos(pose[4]);
+		var sine = sin(pose[4]);
+		for (var corner = 0; corner < 4; corner++) {
+			var lx = _half[corner][0] * pose[2];
+			var ly = _half[corner][1] * pose[3];
+			var room_point = official_block_world_to_room(
+				pose[0] + (cosine * lx - sine * ly),
+				pose[1] + (sine * lx + cosine * ly), _aspect);
+			if (!is_finite(room_point[0]) || !is_finite(room_point[1])) return;
+			corners[corner * 2] = room_point[0];
+			corners[corner * 2 + 1] = room_point[1];
 		}
-		corners[corner * 2] = room_point[0];
-		corners[corner * 2 + 1] = room_point[1];
+		_block.corner_width = chart_view_width;
+		_block.corner_height = chart_view_height;
+		_block.corner_left = chart_view_left;
+		_block.cosine = cosine;
+		_block.sine = sine;
 	}
-	if (!finite) return;
 	_block.on = true;
 	_block.phase = phase;
 	_block.fade = fade;
@@ -1462,6 +1633,7 @@ function official_block_gather_packed(_state, _now, _aspect, _half) {
 	var stride = OFFICIAL_BLOCK_PACK;
 	if (_now < _state.scan_now) {
 		_state.scan_cursor = 0;
+		_state.scan_bucket = 0;
 		_state.scan_active_n = 0;
 	}
 	_state.scan_now = _now;
@@ -1472,21 +1644,28 @@ function official_block_gather_packed(_state, _now, _aspect, _half) {
 	}
 	var live = _state.scan_active_n;
 	var cursor = _state.scan_cursor;
-	// 游标只向前。一帧最多收一批，避免时间跳变时把窗口卡死
+	var bucket = _state.scan_bucket;
+	var ends = _state.pack_bucket_ends;
+	var max_ends = _state.pack_bucket_max_end;
 	if (buffer_exists(buf) && is_array(order)) {
-		var admit = 0;
-		while (cursor < count && admit < 16000) {
+		while (cursor < count) {
+			while (bucket < array_length(ends) && cursor >= ends[bucket]) bucket++;
+			// 时间跳转时整桶略过已经结束的记录，不消耗可见集合的接纳额度。
+			if (bucket < array_length(ends) && max_ends[bucket] <= _now) {
+				cursor = ends[bucket];
+				bucket++;
+				continue;
+			}
 			var packed_index = order[cursor];
-			var appear = buffer_peek(buf, packed_index * stride + 16, buffer_f32);
-			if (appear > _now) break;
-			if (live >= array_length(active)) array_push(active, packed_index);
-			else active[live] = packed_index;
-			live++;
+			var base = packed_index * stride;
+			if (buffer_peek(buf, base + 16, buffer_f32) > _now) break;
 			cursor++;
-			admit++;
+			if (buffer_peek(buf, base + 28, buffer_f32) <= _now) continue;
+			active[live++] = packed_index;
 		}
 	}
 	_state.scan_cursor = cursor;
+	_state.scan_bucket = bucket;
 	var write = 0;
 	var pool_i = 0;
 	if (buffer_exists(buf)) {
@@ -1494,17 +1673,20 @@ function official_block_gather_packed(_state, _now, _aspect, _half) {
 			var idx = active[si];
 			var base = idx * stride;
 			if (buffer_peek(buf, base + 28, buffer_f32) <= _now) continue;
-			active[write] = idx;
-			write++;
-			var block = official_block_pool_at(_state, pool_i);
-			pool_i++;
-			official_block_unpack(block, buf, base);
+			active[write++] = idx;
+			var block = official_block_pool_at(_state, pool_i++);
+			if (block[$ "record_base"] != base) {
+				official_block_unpack(block, buf, base);
+				block.record_base = base;
+				block.pose_aspect = undefined;
+			}
 			official_block_activate(_state, block, _now, _aspect, _half);
 		}
 	}
 	_state.scan_active_n = write;
 	_state.block_n = pool_i;
-	var complex = _state.pack_complex;
+	official_block_complex_gather(_state, _now);
+	var complex = _state.complex_live;
 	for (var ci = 0; ci < array_length(complex); ci++) {
 		official_block_activate(_state, complex[ci], _now, _aspect, _half);
 	}
@@ -1537,9 +1719,10 @@ function official_block_contains(_block, _x, _y, _adjusted) {
 	var sy = _block.sy;
 	// 宽或高接近 0 时不算命中
 	if (abs(sx) < 0.0001 || abs(sy) < 0.0001) return false;
-	var local = official_block_rotate_vec(_x - _block.cx, _y - _block.cy, -_block.ang);
-	var lx = local[0] / sx;
-	var ly = local[1] / sy;
+	var dx = _x - _block.cx;
+	var dy = _y - _block.cy;
+	var lx = (_block.cosine * dx + _block.sine * dy) / sx;
+	var ly = (-_block.sine * dx + _block.cosine * dy) / sy;
 	var hx = 0.5;
 	var hy = 0.5;
 	if (_adjusted) {
@@ -1576,7 +1759,7 @@ function official_block_hits(_state, _x, _y) {
 			else inside_edge = true;
 		}
 	}
-	var complex = _state.pack_complex;
+	var complex = _state.complex_live;
 	for (var ci = 0; ci < array_length(complex); ci++) {
 		var extra = complex[ci];
 		if (!extra.on || extra.phase != 0) continue;
@@ -1923,40 +2106,54 @@ function official_block_gpu_warm(_state) {
 	official_block_refresh_ok(_state);
 }
 
-///@desc 按分辨率和精细模式重建全套渲染目标
+///@desc 按分辨率和精细模式准备本帧需要的渲染目标
 ///@param {Struct} _state 噪声区状态
 ///@param {Real} _w 屏幕宽
 ///@param {Real} _h 屏幕高
 ///@returns {Bool} 全部创建成功时为真
 function official_block_rt_ensure(_state, _w, _h) {
 	var fine = official_block_fine();
-	// 尺寸和精细开关都没变则复用
-	if (_state.surf_w == _w && _state.surf_h == _h && bool(_state.fine) == fine && surface_exists(_state.rt[0])) return true;
-	official_block_free_rt(_state);
-	// 默认遮罩是八个屏幕像素一个纹素，外框因此较粗。精细模式用两个屏幕像素。
-	// 效果缓冲保持同一尺寸；下面的辉光步仍用原来的四像素环。
+	if (_state.surf_w != _w || _state.surf_h != _h || bool(_state.fine) != fine) {
+		official_block_free_rt(_state);
+	}
 	var grid = fine ? 2 : 8;
 	var bw = max(1, _w div grid);
 	var bh = max(1, _h div grid);
 	var ew = fine ? bw : max(1, bw * 2);
 	var eh = fine ? bh : max(1, bh * 2);
-	var sw = max(1, _w div 6);
-	var sh = max(1, _h div 6);
 	_state.fine = fine;
 	_state.bw = bw;
 	_state.bh = bh;
 	_state.ew = ew;
 	_state.eh = eh;
-	_state.sw = sw;
-	_state.sh = sh;
-	// 场景拷贝是全分辨率。1:1 的 draw_surface 对齐谱面级拷贝。
-	// 激活着色器仍按六个屏幕像素取点，精细模式则是两个。
+	_state.sw = max(1, _w div 6);
+	_state.sh = max(1, _h div 6);
+	var compose = _state.on_active && _state.ok_compose;
+	var glow = compose && _state.ok_glow;
+	var pack = (_state.on_active || _state.on_ready || _state.hover_live)
+		&& _state.ok_pack_m && _state.ok_pack_e;
+	// 槽位与 BLOCK_RT_* 一一对应。保留分辨率，仅准备本帧依赖的目标。
+	var needed = [
+		_state.norm_active, _state.sub_active, _state.norm_ready, _state.sub_ready,
+		_state.norm_disabled, _state.sub_disabled,
+		_state.sub_active && _state.ok_subtract, _state.sub_ready && _state.ok_subtract_soft,
+		compose, _state.on_ready && _state.sub_ready && _state.ok_compose_plain,
+		_state.sub_disabled && _state.ok_subtract_soft,
+		glow, glow, _state.hover_live && _state.ok_hover, pack, pack,
+		_state.on_active || _state.hover_live,
+		_state.on_disabled && _state.sub_disabled && _state.ok_compose_plain
+	];
 	var widths = [bw, bw, bw, bw, bw, bw, bw, bw, bw, bw, bw, ew, ew, bw, bw, ew, _w, bw];
 	var heights = [bh, bh, bh, bh, bh, bh, bh, bh, bh, bh, bh, eh, eh, bh, bh, eh, _h, bh];
 	for (var i = 0; i < BLOCK_RT_COUNT; i++) {
+		if (!needed[i] || surface_exists(_state.rt[i])) continue;
 		_state.rt[i] = surface_create(widths[i], heights[i]);
-		// 任一表面创建失败则整套不算就绪
-		if (!surface_exists(_state.rt[i])) return false;
+		if (!surface_exists(_state.rt[i])) {
+			// 半套表面不能复用；下帧重建时连遮罩内容一起失效。
+			official_block_free_rt(_state);
+			return false;
+		}
+		_state.mask_valid = false;
 	}
 	_state.surf_w = _w;
 	_state.surf_h = _h;
@@ -2072,6 +2269,7 @@ function official_block_mask_store(_block) {
 function official_block_masks_match(_state) {
 	if (!variable_struct_exists(_state, "mask_valid") || !_state.mask_valid) return false;
 	if (_state.mask_n != _state.block_n || _state.mask_bw != _state.bw || _state.mask_bh != _state.bh) return false;
+	if (_state.mask_complex_version != _state.complex_version) return false;
 	if (_state.mask_norm_active != _state.norm_active || _state.mask_sub_active != _state.sub_active) return false;
 	if (_state.mask_norm_ready != _state.norm_ready || _state.mask_sub_ready != _state.sub_ready) return false;
 	if (_state.mask_norm_disabled != _state.norm_disabled || _state.mask_sub_disabled != _state.sub_disabled) return false;
@@ -2080,7 +2278,7 @@ function official_block_masks_match(_state) {
 	for (var i = 0; i < count; i++) {
 		if (!official_block_mask_same(blocks[i])) return false;
 	}
-	var complex = _state.pack_complex;
+	var complex = _state.complex_live;
 	var complex_n = array_length(complex);
 	if (_state.mask_complex_n != complex_n) return false;
 	for (var ci = 0; ci < complex_n; ci++) {
@@ -2094,6 +2292,7 @@ function official_block_masks_match(_state) {
 ///@returns {Undefined} 无
 function official_block_masks_commit(_state) {
 	_state.mask_valid = true;
+	_state.mask_complex_version = _state.complex_version;
 	_state.mask_n = _state.block_n;
 	_state.mask_bw = _state.bw;
 	_state.mask_bh = _state.bh;
@@ -2106,7 +2305,7 @@ function official_block_masks_commit(_state) {
 	var blocks = _state.blocks;
 	var count = official_block_iter_count(_state);
 	for (var i = 0; i < count; i++) official_block_mask_store(blocks[i]);
-	var complex = _state.pack_complex;
+	var complex = _state.complex_live;
 	_state.mask_complex_n = array_length(complex);
 	for (var ci = 0; ci < _state.mask_complex_n; ci++) official_block_mask_store(complex[ci]);
 }
@@ -2133,7 +2332,7 @@ function official_block_paint_group(_state, _index, _phase, _subtract, _sx, _sy)
 		if (!block.on || block.phase != _phase || block.subtract != _subtract) continue;
 		official_block_draw_quad(block.corners, _sx, _sy, _subtract, block.fade);
 	}
-	var complex = _state.pack_complex;
+	var complex = _state.complex_live;
 	for (var ci = 0; ci < array_length(complex); ci++) {
 		var extra = complex[ci];
 		if (!extra.on || extra.phase != _phase || extra.subtract != _subtract) continue;
@@ -2337,29 +2536,54 @@ function official_block_copy_scene(_state, _chart) {
 	surface_reset_target();
 }
 
+///@desc 判断材质常量是否需要重传；重建目标时缓存也会清空
+///@param {Struct} _state 噪声区状态
+///@param {Real} _shader 着色器
+///@param {Real} _w 目标宽
+///@param {Real} _h 目标高
+///@returns {Bool} 常量已改变时为真
+function official_block_uniforms_changed(_state, _shader, _w, _h) {
+	if (!is_struct(_state[$ "uniform_cache"])) _state.uniform_cache = {};
+	var key = string(_shader);
+	var previous = _state.uniform_cache[$ key];
+	if (is_struct(previous)
+		&& previous.w == _w && previous.h == _h
+		&& previous.bw == _state.bw && previous.bh == _state.bh
+		&& previous.ew == _state.ew && previous.eh == _state.eh
+		&& previous.fine == _state.fine
+		&& sign(previous.r - _state.tint_r) == 0 && sign(previous.g - _state.tint_g) == 0
+		&& sign(previous.b - _state.tint_b) == 0) return false;
+	_state.uniform_cache[$ key] = {
+		w:_w, h:_h, bw:_state.bw, bh:_state.bh, ew:_state.ew, eh:_state.eh,
+		fine:_state.fine, r:_state.tint_r, g:_state.tint_g, b:_state.tint_b
+	};
+	return true;
+}
+
 ///@desc 按当前染色写未启用材质的填充与火花参数
 ///@param {Real} _shader 着色器
 ///@param {Struct} _state 噪声区状态
 ///@param {Real} _now 当前谱面时间
 ///@returns {Undefined} 无
 function official_block_disabled_uniforms(_shader, _state, _now) {
-	var cr = _state.tint_r;
-	var cg = _state.tint_g;
-	var cb = _state.tint_b;
-	var fill = official_block_shift_color(0.4970000088214874, 0.13766898214817047, 0.13766898214817047, cr, cg, cb);
-	var spark = official_block_shift_color(0.31132078170776367, 0.07783019542694092, 0.07783019542694092, cr, cg, cb);
 	official_block_u4(_shader, "_BlockTime", _now / 20, _now, _now * 2, _now * 3);
-	official_block_u4(_shader, "_FillColor", fill[0], fill[1], fill[2], 1);
-	official_block_u1(_shader, "_FillOpacity", 0.4000000059604645);
-	official_block_u3(_shader, "_SparkTint", spark[0], spark[1], spark[2]);
-	official_block_u1(_shader, "_SparkMapOpacity", 3.5);
-	official_block_u1(_shader, "_SparkDisplaceIntensity", 2.2899999618530273);
-	official_block_u1(_shader, "_DisplaceSpeed", 0.30000001192092896);
-	official_block_u4(_shader, "_DisplaceDirection", 1, 1, 0, 0);
-	official_block_u4(_shader, "_DisplaceMap_ST", 0.5, 0.20000000298023224, 0, 0);
-	official_block_u4(_shader, "_SparkMap_ST", 3, 1.2000000476837158, 0, 0);
+	if (official_block_uniforms_changed(_state, _shader, 0, 0)) {
+		var cr = _state.tint_r;
+		var cg = _state.tint_g;
+		var cb = _state.tint_b;
+		var fill = official_block_shift_color(0.4970000088214874, 0.13766898214817047, 0.13766898214817047, cr, cg, cb);
+		var spark = official_block_shift_color(0.31132078170776367, 0.07783019542694092, 0.07783019542694092, cr, cg, cb);
+		official_block_u4(_shader, "_FillColor", fill[0], fill[1], fill[2], 1);
+		official_block_u1(_shader, "_FillOpacity", 0.4000000059604645);
+		official_block_u3(_shader, "_SparkTint", spark[0], spark[1], spark[2]);
+		official_block_u1(_shader, "_SparkMapOpacity", 3.5);
+		official_block_u1(_shader, "_SparkDisplaceIntensity", 2.2899999618530273);
+		official_block_u1(_shader, "_DisplaceSpeed", 0.30000001192092896);
+		official_block_u4(_shader, "_DisplaceDirection", 1, 1, 0, 0);
+		official_block_u4(_shader, "_DisplaceMap_ST", 0.5, 0.20000000298023224, 0, 0);
+		official_block_u4(_shader, "_SparkMap_ST", 3, 1.2000000476837158, 0, 0);
+	}
 }
-
 ///@desc 按当前染色和触摸点写激活或预备材质参数
 ///@param {Real} _shader 着色器
 ///@param {Struct} _state 噪声区状态
@@ -2368,60 +2592,62 @@ function official_block_disabled_uniforms(_shader, _state, _now) {
 ///@param {Real} _h 屏幕高
 ///@returns {Undefined} 无
 function official_block_active_uniforms(_shader, _state, _now, _w, _h) {
-	var cr = _state.tint_r;
-	var cg = _state.tint_g;
-	var cb = _state.tint_b;
-	var edge = official_block_shift_color(1, 0.3301885724067688, 0.3301885724067688, cr, cg, cb);
-	var fill = official_block_shift_color(0.713207483291626, 0.23549295961856842, 0.23549295961856842, cr, cg, cb);
-	var glow = official_block_shift_color(1, 0.17924517393112183, 0.17924517393112183, cr, cg, cb);
-	var spark = official_block_shift_color(1, 0.28490567207336426, 0.28490567207336426, cr, cg, cb);
 	official_block_u4(_shader, "_BlockTime", _now / 20, _now, _now * 2, _now * 3);
-	official_block_u4(_shader, "_ScreenParams", _w, _h, 1 + 1 / _w, 1 + 1 / _h);
-	official_block_u4(_shader, "_EffectRT_TexelSize", 1 / _state.ew, 1 / _state.eh, _state.ew, _state.eh);
-	official_block_u4(_shader, "_EdgeColor", edge[0], edge[1], edge[2], 1);
-	official_block_u1(_shader, "_EdgeOpacity", 0.800000011920929);
-	official_block_u4(_shader, "_FillColor", fill[0], fill[1], fill[2], 1);
-	official_block_u1(_shader, "_FillStrength", 0.6669999957084656);
-	official_block_u1(_shader, "_FillOpacity", 0.6669999957084656);
-	official_block_u4(_shader, "_GlowColor", glow[0], glow[1], glow[2], 1);
-	official_block_u1(_shader, "_GlowIntensity", 0.800000011920929);
-	official_block_u3(_shader, "_SparkTint", spark[0], spark[1], spark[2]);
-	official_block_u1(_shader, "_SparkMapOpacity", 5.690000057220459);
-	official_block_u1(_shader, "_SparkHueShiftAmount", 0.20000000298023224);
-	official_block_u1(_shader, "_SparkDisplaceIntensity", 2.390000104904175);
-	official_block_u1(_shader, "_DisplaceBlendIntensity", 0.41100001335144043);
-	official_block_u1(_shader, "_DisplaceSpeed", 1.5);
-	official_block_u1(_shader, "_DisplaceStrength", 0.15000000596046448);
-	official_block_u4(_shader, "_DisplaceDirection", 1, 1, 0, 0);
-	official_block_u1(_shader, "_TouchPosShine", 1);
-	official_block_u1(_shader, "_TouchPosRadius", 0.5);
-	official_block_u1(_shader, "_TouchPosSDFSmoothness", 0.4699999988079071);
-	official_block_u1(_shader, "_TouchPosSDFFalloff", 0.4099999964237213);
-	official_block_u1(_shader, "_BackgroundPixelScale", official_block_fine() ? 2 : 6);
-	official_block_u1(_shader, "_ShineSpeed", 37.900001525878906);
-	official_block_u1(_shader, "_ShineBrightness", 0.11999999731779099);
-	official_block_u4(_shader, "_ShineColor", 1, 1, 1, 1);
-	official_block_u1(_shader, "_TouchDisplaceSpeed", 2.9000000953674316);
-	official_block_u1(_shader, "_TouchDisplaceStrength", 0.07999999821186066);
-	official_block_u4(_shader, "_TouchDisplaceDirection", 1, 1, 0, 0);
-	official_block_u4(_shader, "_NoiseTint", cr, cg, cb, 1);
-	official_block_u1(_shader, "_NoiseEvoSpeed", 0.029999999329447746);
-	official_block_u1(_shader, "_NoiseDirChangeSpeed", 60);
-	official_block_u1(_shader, "_NoiseDisplaceStrength", 1);
-	official_block_u1(_shader, "_NoiseRadius", 0.47999998927116394);
-	official_block_u1(_shader, "_NoiseSmoothness", 1);
-	official_block_u1(_shader, "_SDFCellSize", 0.10999999940395355);
-	official_block_u1(_shader, "_SDFFalloff", 0.3400000035762787);
-	official_block_u1(_shader, "_SDFSmoothness", 0.6299999952316284);
-	official_block_u1(_shader, "_SDFMoveSpeed", 9.300000190734863);
-	official_block_u4(_shader, "_TouchGlowColor", cr, cg, cb, 1);
-	official_block_u1(_shader, "_TouchBackgroundPixelScale", 8);
-	official_block_u4(_shader, "_DisplaceMap_ST", 0.800000011920929, 0.30000001192092896, 0, 0);
-	official_block_u4(_shader, "_SparkMap_ST", 3, 1.2000000476837158, 0, 0);
-	official_block_u4(_shader, "_TouchDisplaceMap_ST", 0.550000011920929, 0.30000001192092896, 0, 0);
-	official_block_u4(_shader, "_NoiseMap_ST", 1.5, 1.4600000381469727, 0, 0);
-	official_block_u2(_shader, "_HoverSize", _state.bw, _state.bh);
-	official_block_u1(_shader, "_RemoveDistortion", 0);
+	if (official_block_uniforms_changed(_state, _shader, _w, _h)) {
+		var cr = _state.tint_r;
+		var cg = _state.tint_g;
+		var cb = _state.tint_b;
+		var edge = official_block_shift_color(1, 0.3301885724067688, 0.3301885724067688, cr, cg, cb);
+		var fill = official_block_shift_color(0.713207483291626, 0.23549295961856842, 0.23549295961856842, cr, cg, cb);
+		var glow = official_block_shift_color(1, 0.17924517393112183, 0.17924517393112183, cr, cg, cb);
+		var spark = official_block_shift_color(1, 0.28490567207336426, 0.28490567207336426, cr, cg, cb);
+		official_block_u4(_shader, "_ScreenParams", _w, _h, 1 + 1 / _w, 1 + 1 / _h);
+		official_block_u4(_shader, "_EffectRT_TexelSize", 1 / _state.ew, 1 / _state.eh, _state.ew, _state.eh);
+		official_block_u4(_shader, "_EdgeColor", edge[0], edge[1], edge[2], 1);
+		official_block_u1(_shader, "_EdgeOpacity", 0.800000011920929);
+		official_block_u4(_shader, "_FillColor", fill[0], fill[1], fill[2], 1);
+		official_block_u1(_shader, "_FillStrength", 0.6669999957084656);
+		official_block_u1(_shader, "_FillOpacity", 0.6669999957084656);
+		official_block_u4(_shader, "_GlowColor", glow[0], glow[1], glow[2], 1);
+		official_block_u1(_shader, "_GlowIntensity", 0.800000011920929);
+		official_block_u3(_shader, "_SparkTint", spark[0], spark[1], spark[2]);
+		official_block_u1(_shader, "_SparkMapOpacity", 5.690000057220459);
+		official_block_u1(_shader, "_SparkHueShiftAmount", 0.20000000298023224);
+		official_block_u1(_shader, "_SparkDisplaceIntensity", 2.390000104904175);
+		official_block_u1(_shader, "_DisplaceBlendIntensity", 0.41100001335144043);
+		official_block_u1(_shader, "_DisplaceSpeed", 1.5);
+		official_block_u1(_shader, "_DisplaceStrength", 0.15000000596046448);
+		official_block_u4(_shader, "_DisplaceDirection", 1, 1, 0, 0);
+		official_block_u1(_shader, "_TouchPosShine", 1);
+		official_block_u1(_shader, "_TouchPosRadius", 0.5);
+		official_block_u1(_shader, "_TouchPosSDFSmoothness", 0.4699999988079071);
+		official_block_u1(_shader, "_TouchPosSDFFalloff", 0.4099999964237213);
+		official_block_u1(_shader, "_BackgroundPixelScale", official_block_fine() ? 2 : 6);
+		official_block_u1(_shader, "_ShineSpeed", 37.900001525878906);
+		official_block_u1(_shader, "_ShineBrightness", 0.11999999731779099);
+		official_block_u4(_shader, "_ShineColor", 1, 1, 1, 1);
+		official_block_u1(_shader, "_TouchDisplaceSpeed", 2.9000000953674316);
+		official_block_u1(_shader, "_TouchDisplaceStrength", 0.07999999821186066);
+		official_block_u4(_shader, "_TouchDisplaceDirection", 1, 1, 0, 0);
+		official_block_u4(_shader, "_NoiseTint", cr, cg, cb, 1);
+		official_block_u1(_shader, "_NoiseEvoSpeed", 0.029999999329447746);
+		official_block_u1(_shader, "_NoiseDirChangeSpeed", 60);
+		official_block_u1(_shader, "_NoiseDisplaceStrength", 1);
+		official_block_u1(_shader, "_NoiseRadius", 0.47999998927116394);
+		official_block_u1(_shader, "_NoiseSmoothness", 1);
+		official_block_u1(_shader, "_SDFCellSize", 0.10999999940395355);
+		official_block_u1(_shader, "_SDFFalloff", 0.3400000035762787);
+		official_block_u1(_shader, "_SDFSmoothness", 0.6299999952316284);
+		official_block_u1(_shader, "_SDFMoveSpeed", 9.300000190734863);
+		official_block_u4(_shader, "_TouchGlowColor", cr, cg, cb, 1);
+		official_block_u1(_shader, "_TouchBackgroundPixelScale", 8);
+		official_block_u4(_shader, "_DisplaceMap_ST", 0.800000011920929, 0.30000001192092896, 0, 0);
+		official_block_u4(_shader, "_SparkMap_ST", 3, 1.2000000476837158, 0, 0);
+		official_block_u4(_shader, "_TouchDisplaceMap_ST", 0.550000011920929, 0.30000001192092896, 0, 0);
+		official_block_u4(_shader, "_NoiseMap_ST", 1.5, 1.4600000381469727, 0, 0);
+		official_block_u2(_shader, "_HoverSize", _state.bw, _state.bh);
+		official_block_u1(_shader, "_RemoveDistortion", 0);
+	}
 	static touch_names = ["_TouchPos0", "_TouchPos1", "_TouchPos2", "_TouchPos3", "_TouchPos4", "_TouchPos5", "_TouchPos6", "_TouchPos7", "_TouchPos8", "_TouchPos9"];
 	var worlds = _state.touch_world;
 	var touch_count = min(10, array_length(worlds));
@@ -2486,28 +2712,28 @@ function official_block_warp_present(_state, _w, _h, _now) {
 	// 缺任何一张纹理就不画
 	if (scene_tex == -1 || mask_tex == -1 || noise_tex == -1 || spark_tex == -1) return;
 	shader_set(shd_block_warp);
-	var screen_handle = shader_get_uniform(shd_block_warp, "u_screen");
-	var scene_handle = shader_get_uniform(shd_block_warp, "u_scene");
-	var noise_uv_handle = shader_get_uniform(shd_block_warp, "u_noise_uv");
-	var spark_uv_handle = shader_get_uniform(shd_block_warp, "u_spark_uv");
-	var spark_px_handle = shader_get_uniform(shd_block_warp, "u_spark_px");
-	var fill_handle = shader_get_uniform(shd_block_warp, "u_fill");
+	var screen_handle = official_block_slot(shd_block_warp, "u_screen", false);
+	var scene_handle = official_block_slot(shd_block_warp, "u_scene", false);
+	var noise_uv_handle = official_block_slot(shd_block_warp, "u_noise_uv", false);
+	var spark_uv_handle = official_block_slot(shd_block_warp, "u_spark_uv", false);
+	var spark_px_handle = official_block_slot(shd_block_warp, "u_spark_px", false);
+	var fill_handle = official_block_slot(shd_block_warp, "u_fill", false);
 	var scene_uvs = texture_get_uvs(scene_tex);
 	var noise_uvs = texture_get_uvs(noise_tex);
 	var spark_uvs = texture_get_uvs(spark_tex);
 	// w 是 texture_17 的一种排布保持不动的谱面秒数。
 	if (screen_handle >= 0) shader_set_uniform_f(screen_handle, _w, _h, _now, 0.18);
-	var fine_handle = shader_get_uniform(shd_block_warp, "u_fine");
+	var fine_handle = official_block_slot(shd_block_warp, "u_fine", false);
 	if (fine_handle >= 0) shader_set_uniform_f(fine_handle, official_block_fine() ? 1 : 0);
 	if (scene_handle >= 0) shader_set_uniform_f(scene_handle, scene_uvs[0], scene_uvs[1], scene_uvs[2], scene_uvs[3]);
 	if (noise_uv_handle >= 0) shader_set_uniform_f(noise_uv_handle, noise_uvs[0], noise_uvs[1], noise_uvs[2], noise_uvs[3]);
 	if (spark_uv_handle >= 0) shader_set_uniform_f(spark_uv_handle, spark_uvs[0], spark_uvs[1], spark_uvs[2], spark_uvs[3]);
 	if (spark_px_handle >= 0) shader_set_uniform_f(spark_px_handle, spark_w, spark_h);
 	if (fill_handle >= 0) shader_set_uniform_f(fill_handle, 0.713207483291626, 0.23549295961856842, 0.23549295961856842);
-	var mask_stage = shader_get_sampler_index(shd_block_warp, "u_mask");
-	var noise_stage = shader_get_sampler_index(shd_block_warp, "u_noise");
-	var edge_stage = shader_get_sampler_index(shd_block_warp, "u_edge");
-	var spark_stage = shader_get_sampler_index(shd_block_warp, "u_spark");
+	var mask_stage = official_block_slot(shd_block_warp, "u_mask", true);
+	var noise_stage = official_block_slot(shd_block_warp, "u_noise", true);
+	var edge_stage = official_block_slot(shd_block_warp, "u_edge", true);
+	var spark_stage = official_block_slot(shd_block_warp, "u_spark", true);
 	var edge_tex = official_block_surf_tex(_state, BLOCK_RT_PACK_E);
 	if (mask_stage > 0) {
 		texture_set_stage(mask_stage, mask_tex);

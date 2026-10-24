@@ -22,11 +22,13 @@ if (!variable_instance_exists(id, "endFloorPosition")) then endFloorPosition = f
 if (!variable_instance_exists(id, "holdFloorLength")) then holdFloorLength = endFloorPosition - floorPosition;
 if (!variable_instance_exists(id, "size")) then size = 1;
 if (!variable_instance_exists(id, "note_speed")) then note_speed = 1;
+if (!variable_instance_exists(id, "note_layer_bias")) then note_layer_bias = 0;
 if (!variable_instance_exists(id, "visibleTime")) then visibleTime = 999999;
 if (!variable_instance_exists(id, "isFake")) then isFake = false;
 if (!variable_instance_exists(id, "note_tint")) then note_tint = c_white;
 if (!variable_instance_exists(id, "has_hit_tint")) then has_hit_tint = false;
 if (!variable_instance_exists(id, "hit_tint")) then hit_tint = c_white;
+if (!variable_instance_exists(id, "hit_effect_z")) then hit_effect_z = 7;
 if (!variable_instance_exists(id, "line_id")) then line_id = 0;
 if (!variable_instance_exists(id, "compactHold")) then compactHold = false;
 if (!variable_instance_exists(id, "custom_sound")) then custom_sound = -1;
@@ -111,6 +113,7 @@ _is_out_line = true;
 _position_floor_delta = 0;
 _note_position_speed = 0;
 _control_position_speed = 0;
+_note_skew_degrees = 0;
 rpe_skip_pass_fade = (abs(real(alpha) - 1) > 0.001);
 if (!rpe_skip_pass_fade && instance_exists(_line_ref)) {
 	rpe_skip_pass_fade = !rpe_alpha_control_is_identity(_line_ref.alphaControl);
@@ -149,42 +152,53 @@ if (variable_global_exists("game_1") && is_struct(game_1)
 			};
 		};
 	};
+	// 倾斜可能把中心在视口外的音符拉回画面，不能只按中心查询休眠音符。
+	if (!_is_hold && is_struct(_line_ref._control_skew)) {
+		var skew_values = _line_ref._control_skew.values;
+		for (var si = 0; si < array_length(skew_values); si++) {
+			if (real(skew_values[si]) == 0) then continue;
+			_spatial_record.spatialSafe = false;
+			break;
+		};
+	};
 	game_1._note_activation_records[$ string(id)] = _spatial_record;
 	// 可见且速度非 0 才进入空间分组。
 	if (visibleTime > 0 && note_speed != 0) {
 		if (_is_hold) {
-			var _hold_group_key = string(line_id) + ":" + string(isAbove);
-			var _hold_group;
-			if (!struct_exists(game_1._note_spatial_hold_group_map, _hold_group_key)) {
-				_hold_group = { line:_line_ref, above:isAbove, notes:[], count:0 };
+			var _hold_group_key = string(line_id) + ":" + string(isAbove)
+				+ ":" + string(note_speed) + ":" + string(yorigin);
+			var _hold_first = game_1._note_spatial_hold_group_map[$ _hold_group_key];
+			var _hold_group = rpe_note_group_find(_hold_first, note_speed, yorigin);
+			if (!is_struct(_hold_group)) {
+				_hold_group = {
+					line:_line_ref, above:isAbove, speed:note_speed, yOrigin:yorigin,
+					spatialSafe:_spatial_record.spatialSafe, notes:[], count:0, nextWithKey:_hold_first
+				};
 				game_1._note_spatial_hold_group_map[$ _hold_group_key] = _hold_group;
 				array_add(game_1._note_spatial_hold_groups, _hold_group);
-			} else {
-				_hold_group = game_1._note_spatial_hold_group_map[$ _hold_group_key];
 			};
 			array_add(_hold_group.notes, _spatial_record);
 		} else {
 			_spatial_record.spatialFloor += yOffset / (540 * note_speed);
 			_spatial_record.endSpatialFloor += yOffset / (540 * note_speed);
 			var _group_key = string(line_id) + ":" + string(isAbove) + ":" + string(note_speed);
-			var _spatial_group;
-			if (!struct_exists(game_1._note_spatial_group_map, _group_key)) {
+			var _spatial_first = game_1._note_spatial_group_map[$ _group_key];
+			var _spatial_group = rpe_note_group_find(_spatial_first, note_speed);
+			if (!is_struct(_spatial_group)) {
 				_spatial_group = { line:_line_ref, speed:note_speed, above:isAbove,
-					spatialSafe:_spatial_record.spatialSafe, notes:[] };
+					spatialSafe:_spatial_record.spatialSafe, notes:[], nextWithKey:_spatial_first };
 				game_1._note_spatial_group_map[$ _group_key] = _spatial_group;
 				array_add(game_1._note_spatial_groups, _spatial_group);
-			} else {
-				_spatial_group = game_1._note_spatial_group_map[$ _group_key];
 			};
 			array_add(_spatial_group.notes, _spatial_record);
 		};
 	};
 };
 
-rpe_controls = [_line_ref._control_alpha, _line_ref._control_pos, _line_ref._control_size, _line_ref._control_y];
-rpe_control_cursors = [0, 0, 0, 0];
+rpe_controls = [_line_ref._control_alpha, _line_ref._control_pos, _line_ref._control_size, _line_ref._control_y, _line_ref._control_skew];
+rpe_control_cursors = [0, 0, 0, 0, 0];
 ///@desc 按音符位置速度采样一条 RPE 控制曲线
-///@param {Real} control_index 控制下标：0 透明，1 位置，2 大小，3 Y
+///@param {Real} control_index 控制下标：0 透明，1 位置，2 大小，3 Y，4 倾斜
 ///@param {Real} note_pos_speed 采样用的位置速度
 ///@param {Real} default_value 越过末点时返回的默认值
 ///@returns {Real} 插值后的控制值
@@ -288,3 +302,4 @@ lateHitTime = 0.25;
 judgeBeat = start_beat;
 judgeTime = start_sec;
 judgeRealTime = 0;
+chart_kb_register_note();

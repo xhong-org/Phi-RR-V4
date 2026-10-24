@@ -8,6 +8,7 @@ video_last_chart_time = -infinity;
 video_backend_ready = false;
 video_os_paused = false;
 effect_controller = -1;
+effect_layer_passes = [];
 requests_chart_layers = false;
 
 var extra_path = "";
@@ -200,6 +201,8 @@ function(a, b) { return sign(a.startTime - b.startTime); });
 			line: line_id,
 			position_x_factor: (has_x ? real(raw[$ "positionXFactor"]) : 1),
 			position_y_factor: (has_y ? real(raw[$ "positionYFactor"]) : 1),
+			rotation_factor: real(raw[$ "rotationFactor"] ?? 1),
+			tint_factor: real(raw[$ "tintFactor"] ?? 1),
 			scale_x_mode: floor(real(raw[$ "scaleXMode"] ?? 0)),
 			scale_y_mode: floor(real(raw[$ "scaleYMode"] ?? 0))
 		};
@@ -275,6 +278,8 @@ function(a, b) { return sign(a.startTime - b.startTime); });
 		};
 	};
 	var parsed_effects = rpe_effect_parse(extra, extra_bpm_points);
+	effect_layer_passes = parsed_effects.local;
+	if (array_length(effect_layer_passes) > 0) then requests_chart_layers = true;
 	print($"[RPE Effect] Parsed shaders: local={array_length(parsed_effects.local)}, global={array_length(parsed_effects.global)}");
 	// 有本地或全局着色器才创建控制器。
 	if (array_length(parsed_effects.local) > 0 || array_length(parsed_effects.global) > 0) {
@@ -352,6 +357,54 @@ video_draw_index = function(_index) {
 	else video_draw_fullscreen(_index);
 };
 
+///@desc 在独立表面解码，再按局部裁切、旋转和有符号缩放绘制视频
+///@param {Struct} video 视频记录
+///@param {Real} width 原始宽度
+///@param {Real} height 原始高度
+///@param {Real} sx 水平缩放
+///@param {Real} sy 垂直缩放
+///@param {Real} ax 中心 X
+///@param {Real} ay 中心 Y
+///@param {Real} angle 旋转角度
+///@param {Real} tint 染色
+///@param {Real} alpha 透明度
+///@param {Real} dim 压暗
+///@param {Real} clip_w 局部裁切宽度
+///@param {Real} clip_h 局部裁切高度
+///@returns {Undefined} 无
+draw_transformed_video = function(video, width, height, sx, sy, ax, ay, angle, tint, alpha, dim, clip_w, clip_h) {
+	if (sx == 0 || sy == 0 || alpha <= 0 || clip_w <= 0 || clip_h <= 0) then return;
+	if (surface_exists(video.clip_surface)
+		&& (surface_get_width(video.clip_surface) != width || surface_get_height(video.clip_surface) != height)) {
+		surface_free(video.clip_surface);
+		video.clip_surface = -1;
+	};
+	if (!surface_exists(video.clip_surface)) then video.clip_surface = surface_create(width, height);
+	if (!surface_exists(video.clip_surface)) then return;
+	pls_draw_flush();
+	gpu_push_state();
+	surface_set_target(video.clip_surface);
+	draw_clear_alpha(c_black, 0);
+	gpu_set_scissor(0, 0, width, height);
+	// 原生视频读取实际 D3D 目标。提交一笔透明绘制，确保新表面已经绑定。
+	chart_gpu_blend_commit();
+	var drawn = ffvideos_ext_draw(video.handle, 0, 0, 1, 1, 1, dim);
+	surface_reset_target();
+	gpu_pop_state();
+	if (drawn <= 0) then return;
+	var source_w = min(width, clip_w / abs(sx));
+	var source_h = min(height, clip_h / abs(sy));
+	var local_x = -source_w * sx * 0.5;
+	var local_y = -source_h * sy * 0.5;
+	var c = dcos(angle);
+	var s = dsin(angle);
+	chart_mask_scissor_set();
+	draw_surface_general(video.clip_surface, (width - source_w) * 0.5, (height - source_h) * 0.5,
+		source_w, source_h, ax + c * local_x + s * local_y, ay - s * local_x + c * local_y,
+		sx, sy, angle, tint, tint, tint, tint, alpha);
+	pls_draw_flush();
+};
+
 ///@desc 把视频画在它吸附的判定线上
 ///@param {Real} _index 视频下标
 ///@returns {Undefined} 无
@@ -394,8 +447,8 @@ draw_attached_video = function(_index) {
 	var draw_sx = (video.scale == "fit" ? sx : (video.scale == "inside" ? min(sx, sy) : max(sx, sy)));
 	var draw_sy = (video.scale == "fit" ? sy : draw_sx);
 	// scaleXMode 1 才缩放。模式 2 和 3 是裁切，不能把画面缩小。
-	if (video.attach.scale_x_mode == 1) then draw_sx *= max(0, real(line_instance.__scale_x));
-	if (video.attach.scale_y_mode == 1) then draw_sy *= max(0, real(line_instance.__scale_y));
+	if (video.attach.scale_x_mode == 1) then draw_sx *= real(line_instance.__scale_x);
+	if (video.attach.scale_y_mode == 1) then draw_sy *= real(line_instance.__scale_y);
 	var draw_width = video_width * draw_sx;
 	var draw_height = video_height * draw_sy;
 	var center_x = chart_view_left + chart_view_width * 0.5;
@@ -404,13 +457,32 @@ draw_attached_video = function(_index) {
 	var anchor_y = center_y + (line_instance.y - center_y) * video.attach.position_y_factor;
 	var draw_x = anchor_x - draw_width * 0.5;
 	var draw_y = anchor_y - draw_height * 0.5;
+	// PhiZone 每帧先更新判定线附着，再由 Video.update 写入视频 alpha。
+	// 因而最终透明度来自视频动画，不能用线 alpha 或 alphaFactor=0 隐藏它。
 	var alpha = clamp(real(video.alpha.value), 0, 1);
 	var dim = clamp(real(video.dim.value), 0, 1);
-	var clip_w = draw_width;
-	var clip_h = draw_height;
+	var angle = line_instance.image_angle * video.attach.rotation_factor;
+	var tint = c_white;
+	if (video.attach.tint_factor != 0) {
+		// 上游对 0xRRGGBB 整数插值；GML 颜色采用 0xBBGGRR，先转换再插值。
+		var line_colour = line_instance.__color;
+		var packed = colour_get_red(line_colour) * 65536 + colour_get_green(line_colour) * 256 + colour_get_blue(line_colour);
+		packed = floor(packed * video.attach.tint_factor + (1 - video.attach.tint_factor) * 16777215);
+		tint = make_colour_rgb((packed >> 16) & 255, (packed >> 8) & 255, packed & 255);
+	};
+	var clip_w = abs(draw_width);
+	var clip_h = abs(draw_height);
 	if (video.attach.scale_x_mode == 2) then clip_w = chart_line_pixel_width(line_instance);
-	else if (video.attach.scale_x_mode == 3) then clip_w = draw_width * max(0, abs(real(line_instance.__scale_x)));
-	if (video.attach.scale_y_mode == 2) then clip_h = draw_height * max(0, abs(real(line_instance.__scale_y)));
+	else if (video.attach.scale_x_mode == 3) then clip_w *= abs(real(line_instance.__scale_x));
+	if (video.attach.scale_y_mode == 2) then clip_h *= abs(real(line_instance.__scale_y));
+	if (alpha <= 0 || draw_sx == 0 || draw_sy == 0 || clip_w <= 0 || clip_h <= 0) then return;
+	if (angle != 0 || tint != c_white || draw_sx < 0 || draw_sy < 0) {
+		draw_transformed_video(video, video_width, video_height, draw_sx, draw_sy,
+			anchor_x, anchor_y, angle, tint, alpha, dim, clip_w, clip_h);
+		rpe_effect_grade_backdrop();
+		chart_gpu_blend_commit();
+		return;
+	};
 	var mask_x = anchor_x - clip_w * 0.5;
 	var mask_y = anchor_y - clip_h * 0.5;
 	// 裁切框明显小于画面才需要剪刀。

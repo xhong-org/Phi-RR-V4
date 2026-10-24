@@ -1,7 +1,8 @@
 ///@desc 创建：旧版打击粒子系统，图层模式时放在 PhiZone z 7
 
 // 图层模式用谱面 z 7，否则用打击特效深度。
-depth = (variable_global_exists("chart_layer_mode") && global.chart_layer_mode) ? chart_layer_depth(7) : DEPTH.HEF;
+if (!variable_instance_exists(id, "hit_effect_layer_z")) then hit_effect_layer_z = 7;
+depth = (variable_global_exists("chart_layer_mode") && global.chart_layer_mode) ? chart_layer_depth(hit_effect_layer_z) : DEPTH.HEF;
 note_scale = 1;
 image_blend = #ffeca0;
 // Part System 粒子系统

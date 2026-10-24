@@ -6,6 +6,12 @@
 
 // 深度等 zOrder 和 line_id 确定后再写。
 _father_chain = [];
+pose_epoch = -1;
+pose_scale_x = 0;
+pose_scale_y = 0;
+pose_value = [0, 0, 0];
+pose_parent_value = [0, 0, 0];
+pose_visiting = false;
 sprite_index = line;
 image_blend = c_white;
 image_alpha = 1;
@@ -124,6 +130,7 @@ if (has_gif_events && is_string(image) && string_length(image)) {
 		if (array_length(gif_frame_sprites) <= 0 && sprite_exists(gif_last_sprite)) then array_add(gif_frame_sprites, gif_last_sprite);
 		var gif_frame_delays = [];
 		var gif_total_time = 0;
+		var gif_frame_ends = [];
 		for (var gif_load_i = 0; gif_load_i < array_length(gif_frame_sprites); gif_load_i++) {
 			var gif_frame_sprite = gif_frame_sprites[gif_load_i];
 			if (sprite_exists(gif_frame_sprite)) {
@@ -133,10 +140,12 @@ if (has_gif_events && is_string(image) && string_length(image)) {
 			if (gif_load_i < array_length(gif_frame_delays_raw)) then gif_delay_seconds = max(0.01, real(gif_frame_delays_raw[gif_load_i]) * 0.01);
 			array_add(gif_frame_delays, gif_delay_seconds);
 			gif_total_time += gif_delay_seconds;
+			array_push(gif_frame_ends, gif_total_time);
 		};
 		game_1.Gif[$ image] = {
 			frames: gif_frame_sprites,
 			delays: gif_frame_delays,
+			ends: gif_frame_ends,
 			total: gif_total_time
 		};
 	};
@@ -611,7 +620,8 @@ for (var li = 0; li < array_length(events); li++) {
         array_add(events_recall, rmap);
 };
 
-rpe_speed_events = rpe_build_speed_events(events);
+if (!variable_instance_exists(id, "integrate_speed_easings")) then integrate_speed_easings = undefined;
+rpe_speed_events = rpe_build_speed_events(events, integrate_speed_easings);
 speed_event_index = 0;
 
 if (!is_struct(extEvents)) then extEvents = {};
@@ -731,6 +741,25 @@ line_texture_use_judge_color = is_default_line
 	&& !has_paint_events
 	&& !is_attach_ui;
 
+// 固定通道不再逐帧经过事件求值器；仍按原层顺序相加，保留浮点加法次序。
+rpe_event_routes = [];
+// 常量分类要区分极小变化；不能把引擎比较容差当成可省略的动画幅度。
+var route_epsilon = math_get_epsilon();
+math_set_epsilon(0);
+try {
+	for (var route_i = 0; route_i < array_length(events); route_i++) {
+		var route_layer = events[route_i];
+		var fixed_x = rpe_event_constant(route_layer.moveXEvents);
+		var fixed_y = rpe_event_constant(route_layer.moveYEvents);
+		var fixed_a = rpe_event_constant(route_layer.alphaEvents);
+		var fixed_r = rpe_event_constant(route_layer.rotateEvents);
+		if (fixed_x == 0 && fixed_y == 0 && fixed_a == 0 && fixed_r == 0) continue;
+		array_push(rpe_event_routes, [route_i, fixed_x, fixed_y, fixed_a, fixed_r]);
+	}
+} finally {
+	math_set_epsilon(route_epsilon);
+}
+
 // PCR 的 calcFloorPosition，用和运行时同一张合并表。
 ///@desc 按秒查询速度 floor
 ///@param {Real} sec 谱面秒
@@ -804,6 +833,7 @@ _control_alpha = rpe_prepare_control(alphaControl, "alpha");
 _control_pos = rpe_prepare_control(posControl, "pos");
 _control_size = rpe_prepare_control(sizeControl, "size");
 _control_y = rpe_prepare_control(yControl, "y");
+_control_skew = rpe_prepare_control(variable_instance_exists(id, "skewControl") ? skewControl : [], "skew");
 
 // 运行时状态。
 line_time = 0;
@@ -835,3 +865,10 @@ if (is_attach_ui) {
         // 绑定界面的线精灵保持隐藏；真实透明度在步进里算完再写到界面。
         image_alpha = 0;
 };
+
+// 排版缓存不包含缩放，窗口变化仍使用实时变换。
+_text_layout_source = undefined;
+_text_layout_font = undefined;
+_text_layout_em = 1;
+_text_layout_rows = [];
+_text_layout_width = 0;

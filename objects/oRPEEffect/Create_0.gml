@@ -401,7 +401,8 @@ effect_sample_upload = function(_src) {
 	if (_upload_width < 1 || _upload_height < 1) then return false;
 	fx_sample = effect_surface_fit(fx_sample, _upload_width, _upload_height);
 	if (!surface_exists(fx_sample)) then return false;
-	return effect_gpu_copy(_src, fx_sample);
+	var copied = effect_gpu_copy(_src, fx_sample);
+	return copied;
 };
 
 ///@desc 把源表面拷进上层或下层合成表面
@@ -660,8 +661,8 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 					external_uniform_total += 2;
 					external_uniform_success += bool(rpe_ext_set_uniform_component(external_handle, external_name, 0, external_value[0]));
 					external_uniform_success += bool(rpe_ext_set_uniform_component(external_handle, external_name, 1, external_value[1]));
-				} else if (external_animation.kind == 4) {
-					for (var external_component = 0; external_component < 4; external_component++) {
+				} else if (external_animation.kind >= 3) {
+					for (var external_component = 0; external_component < external_animation.kind; external_component++) {
 						external_uniform_total++;
 						external_uniform_success += bool(rpe_ext_set_uniform_component(external_handle, external_name,
 							external_component, external_value[external_component]));
@@ -782,6 +783,7 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 				effect_left_caller_bound = surface_exists(effect_caller_target);
 			};
 			source_surface = _external_result;
+			_presented_direct = (source_surface == effect_caller_target);
 			if (target_surface == source_surface) {
 				target_surface = (source_surface == fx_ping) ? fx_pong : fx_ping;
 			};
@@ -801,13 +803,18 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 		// 深度区间的捕获这时已经解绑。shader_reset 之后再拷它会得到黑图，故障效果就会用空层替换音符。直接采样这份捕获。
 		var _sample_capture = surface_exists(input_override) && source_surface == input_override
 			&& surface_get_target() != source_surface;
-		if (!_sample_capture && source_surface != fx_sample) {
+		var _native_output = _direct_external && (source_surface == fx_ping || source_surface == fx_pong);
+		// 全屏混合链也可能从调用者的原生输出继续。先解绑再采样，不能复制空表面。
+		var _sample_parent = _direct_external && source_surface == effect_caller_target;
+		if (_sample_parent) then release_caller_for_offscreen();
+		if (!_sample_capture && !_native_output && !_sample_parent && source_surface != fx_sample) {
 			if (!effect_sample_upload(source_surface)) then continue;
 			source_surface = fx_sample;
 		};
 		// 嵌套的最后一通道在 GPU 上混合。先画到清空的离屏表面，再预乘叠回父表面。直接画到父表面上会拖影。
 		var _draw_on_parent = (pass_i == array_length(active) - 1);
-		var _compose_parent = _draw_on_parent && surface_exists(input_override) && surface_exists(effect_caller_target);
+		var _compose_parent = _draw_on_parent && surface_exists(effect_caller_target)
+			&& (surface_exists(input_override) || _sample_parent);
 		pls_draw_flush();
 		if (_compose_parent) {
 			gpu_set_blendmode_ext(bm_one, bm_zero);
@@ -836,6 +843,7 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 			var handle = handles[$ variable_name];
 			if (animation.kind == 1) then shader_set_uniform_f(handle, value);
 			else if (animation.kind == 2) then shader_set_uniform_f(handle, value[0], value[1]);
+			else if (animation.kind == 3) then shader_set_uniform_f(handle, value[0], value[1], value[2]);
 			else if (animation.kind == 4) then shader_set_uniform_f(handle, value[0], value[1], value[2], value[3]);
 		};
 		draw_surface_part(source_surface, effect_left, 0, effect_width, effect_height, effect_left, 0);
@@ -845,7 +853,7 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 			// 先解绑再 shader_reset，着色后的音符才会留在这张表面上。调用者已经解开，这一次 reset 会回到它。
 			surface_reset_target();
 			shader_reset();
-			var _copied_full = _full_frame && surface_exists(effect_caller_target)
+			var _copied_full = !_direct_external && _full_frame && surface_exists(effect_caller_target)
 				&& effect_gpu_copy_part(target_surface, effect_caller_target, effect_left, 0, effect_width, effect_height);
 			if (surface_exists(effect_caller_target)) {
 				surface_set_target(effect_caller_target);
@@ -857,7 +865,7 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 			} else {
 			// 直接画着色后的表面。拷到 fx_over 会再次读回黑色，把捕获的音符丢掉。
 			var _present_surface = target_surface;
-			if (!_sample_capture) {
+			if (!_direct_external && !_sample_capture) {
 				if (!effect_upload_into(target_surface, 0)) then _present_surface = -1;
 				else _present_surface = fx_over;
 			};
@@ -888,6 +896,7 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 			effect_left_caller_bound = effect_caller_pushed;
 			source_surface = target_surface;
 			target_surface = (source_surface == fx_ping) ? fx_pong : fx_ping;
+			_presented_direct = false;
 		};
 		_shaded = true;
 		var _builtin_draw_key = $"builtin@{pass.shaderName}@{pass.startTime}";
@@ -915,13 +924,9 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 		};
 		_pending_white = 0;
 	};
-	if (_shaded && !_presented_direct && _full_frame && _direct_external
-		&& (source_surface == fx_ping || source_surface == fx_pong)
-		&& surface_exists(effect_caller_target)
-		&& effect_gpu_copy_part(source_surface, effect_caller_target, effect_left, 0, effect_width, effect_height)) {
-		_presented_direct = true;
-	};
-	if (_shaded && !_presented_direct && (source_surface == fx_ping || source_surface == fx_pong)) {
+	// 原生直接写出的颜色表面已经可以采样。surface_copy_part 在这条路径会取得空副本，
+	// 再把空副本贴回就会丢掉整个音符层。保持解绑，直接提交原输出纹理。
+	if (_shaded && !_presented_direct && !_direct_external && (source_surface == fx_ping || source_surface == fx_pong)) {
 		if (!effect_sample_upload(source_surface)) {
 			unwind_detached_caller();
 			gpu_pop_state();
@@ -963,69 +968,94 @@ effect_boundaries_create = function() {
 	// 已经建过，或判定线还没准备好，就不再创建。
 	if (effect_boundaries_initialized || !variable_global_exists("game_1")
 		|| !is_struct(game_1) || !is_array(game_1.line_list)) then return;
+	if (rpe_lines_creating()) then return;
+	if (global.chart_layer_mode && (!variable_global_exists("chart_layer_layout") || !is_struct(global.chart_layer_layout))) then return;
+	if (global.chart_layer_mode) {
+		var layer_depths = global.chart_layer_layout.depth;
+		depth = layer_depths[array_length(layer_depths) - 1] - 4 * array_length(effects_local) - 16;
+	}
 	effect_boundaries_initialized = true;
-	var ranged = {};
-	var unranged = [];
-	for (var effect_i = 0; effect_i < array_length(effects_local); effect_i++) {
-		var range_effect = effects_local[@ effect_i];
-		var range_min = real(range_effect[$ "targetMin"] ?? -infinity);
-		var range_max = real(range_effect[$ "targetMax"] ?? infinity);
-		// 没有有限深度区间的效果留在全局列表。
-		if (!is_finite(range_min) || !is_finite(range_max) || range_max <= range_min) {
-			array_add(unranged, range_effect);
-			continue;
-		};
-		var range_key = $"{range_min}:{range_max}";
-		if (!struct_exists(ranged, range_key)) {
-			ranged[$ range_key] = { min:range_min, max:range_max, effects:[] };
-		};
-		var range_record = ranged[$ range_key];
-		array_add(range_record.effects, range_effect);
-	};
-	effects_local = unranged;
-	var range_names = struct_get_names(ranged);
-	for (var range_i = 0; range_i < array_length(range_names); range_i++) {
-		var range_name = range_names[@ range_i];
-		var range = ranged[$ range_name];
-		var first_depth = -infinity;
-		var last_depth = infinity;
-		var use_layer_span = variable_global_exists("chart_layer_mode") && global.chart_layer_mode;
-		if (use_layer_span) {
-			// 开始端留一点，让外层最小值画在内层后面。结束端必须差一整级深度，否则会在音符画上之前就合成判定线。
-			var span_bias = clamp((range.max - range.min) * 0.01, 0, 0.2);
-			first_depth = chart_layer_depth(range.min) + 0.2 + span_bias;
-			last_depth = chart_layer_depth(range.max) + 1 + range.min;
-		} else {
-			for (var line_i = 0; line_i < array_length(game_1.line_list); line_i++) {
-				var line_instance = game_1.line_list[@ line_i];
-				if (!instance_exists(line_instance)) then continue;
-				var line_z = real(line_instance.zOrder);
-				if (variable_instance_exists(line_instance, "zIndex")
-					&& is_real(line_instance.zIndex)) then line_z = real(line_instance.zIndex);
-				if (line_z < range.min || line_z >= range.max) then continue;
-				first_depth = max(first_depth, line_instance.depth);
-				last_depth = min(last_depth, line_instance.depth);
+	var boundary_epsilon = math_get_epsilon();
+	math_set_epsilon(0);
+	try {
+		var ranged = {};
+		var unranged = [];
+		for (var effect_i = 0; effect_i < array_length(effects_local); effect_i++) {
+			var range_effect = effects_local[@ effect_i];
+			var range_min = real(range_effect[$ "targetMin"] ?? -infinity);
+			var range_max = real(range_effect[$ "targetMax"] ?? infinity);
+			// 没有有限深度区间的效果留在全局列表。
+			if (!is_finite(range_min) || !is_finite(range_max) || sign(range_max - range_min) <= 0) {
+				array_add(unranged, range_effect);
+				continue;
 			};
-			// 这个区间里没有判定线就不建哨兵。
-			if (!is_finite(first_depth) || !is_finite(last_depth)) then continue;
-			var span_bias = (range.max - range.min) * 0.000000001;
-			first_depth += 0.25 + span_bias;
-			last_depth -= 0.25 + span_bias;
+			var range_key = $"{range_min}:{range_max}";
+			if (!struct_exists(ranged, range_key)) {
+				ranged[$ range_key] = { min:range_min, max:range_max, effects:[] };
+			};
+			var range_record = ranged[$ range_key];
+			array_add(range_record.effects, range_effect);
 		};
-		var boundary_state = { surface:-1, active:false, blend_pushed:false, capture_pushed:false };
-		instance_create_depth(0, 0, first_depth, oRPEEffect, {
-			effect_boundary_role:"start",
-			effect_boundary_depth:first_depth,
-			effect_boundary_state:boundary_state,
-			effect_boundary_controller:id,
-			effect_boundary_effects:range.effects
-		});
-		instance_create_depth(0, 0, last_depth, oRPEEffect, {
-			effect_boundary_role:"end",
-			effect_boundary_depth:last_depth,
-			effect_boundary_state:boundary_state,
-			effect_boundary_controller:id,
-			effect_boundary_effects:range.effects
-		});
-	};
+		effects_local = unranged;
+		var range_names = struct_get_names(ranged);
+		var range_records = [];
+		for (var range_i = 0; range_i < array_length(range_names); range_i++) array_push(range_records, ranged[$ range_names[range_i]]);
+		for (var range_i = 0; range_i < array_length(range_names); range_i++) {
+			var range_name = range_names[@ range_i];
+			var range = ranged[$ range_name];
+			var first_depth = -infinity;
+			var last_depth = infinity;
+			var use_layer_span = variable_global_exists("chart_layer_mode") && global.chart_layer_mode;
+			if (use_layer_span) {
+				// 同一切点先关闭旧区间，再开启新区间，最后绘制该 Z 的对象。
+				// 同起点先开外层，同终点先关内层；偏移仅依赖区间数，不依赖 Z 的绝对值。
+				var starts_before = 0;
+				var ends_before = 0;
+				var range_count = array_length(range_records);
+				for (var peer_i = 0; peer_i < range_count; peer_i++) {
+					var peer = range_records[peer_i];
+					if (sign(peer.min - range.min) == 0 && sign(peer.max - range.max) > 0) starts_before++;
+					if (sign(peer.max - range.max) == 0 && sign(peer.min - range.min) > 0) ends_before++;
+				}
+				first_depth = chart_layer_depth(range.min) + range_count + 1 - starts_before;
+				last_depth = chart_layer_depth(range.max) + range_count * 3 + 1 - ends_before;
+			} else {
+				for (var line_i = 0; line_i < array_length(game_1.line_list); line_i++) {
+					var line_instance = game_1.line_list[@ line_i];
+					if (!instance_exists(line_instance)) then continue;
+					var line_z = real(line_instance.zOrder);
+					if (variable_instance_exists(line_instance, "zIndex")
+						&& is_real(line_instance.zIndex)) then line_z = real(line_instance.zIndex);
+					if (line_z < range.min || line_z >= range.max) then continue;
+					first_depth = max(first_depth, line_instance.depth);
+					last_depth = min(last_depth, line_instance.depth);
+				};
+				// 这个区间里没有判定线就不建哨兵。
+				if (!is_finite(first_depth) || !is_finite(last_depth)) then continue;
+				var span_bias = (range.max - range.min) * 0.000000001;
+				first_depth += 0.25 + span_bias;
+				last_depth -= 0.25 + span_bias;
+			};
+			var boundary_state = {
+				surface:-1, active:false, blend_pushed:false, capture_pushed:false,
+				minZ:range.min, maxZ:range.max, startDepth:first_depth, endDepth:last_depth
+			};
+			instance_create_depth(0, 0, first_depth, oRPEEffect, {
+				effect_boundary_role:"start",
+				effect_boundary_depth:first_depth,
+				effect_boundary_state:boundary_state,
+				effect_boundary_controller:id,
+				effect_boundary_effects:range.effects
+			});
+			instance_create_depth(0, 0, last_depth, oRPEEffect, {
+				effect_boundary_role:"end",
+				effect_boundary_depth:last_depth,
+				effect_boundary_state:boundary_state,
+				effect_boundary_controller:id,
+				effect_boundary_effects:range.effects
+			});
+		};
+	} finally {
+		math_set_epsilon(boundary_epsilon);
+	}
 };

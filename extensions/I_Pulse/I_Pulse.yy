@@ -12,11 +12,14 @@
   "author":"PhigrosLoader",
   "classname":"",
   "copyToTargets":64,
-  "description":"Non-blocking Windows move and resize hook.",
+  "description":"Non-blocking Windows move/resize and buffered A-Z keyboard input.",
   "exportToGame":true,
   "extensionVersion":"1.0.0",
   "files":[
-    {"$GMExtensionFile":"v1","%Name":"I_Pulse.dll","constants":[],"copyToTargets":64,"filename":"I_Pulse.dll","final":"rpe_window_drag_disable","functions":[
+    {"$GMExtensionFile":"v1","%Name":"I_Pulse.dll","constants":[],"copyToTargets":64,"filename":"I_Pulse.dll","final":"rpe_pulse_shutdown","functions":[
+        {"$GMExtensionFunction":"","%Name":"__rpe_keyboard_poll","argCount":2,"args":[1,2,],"documentation":"Buffered A-Z input; argument buffer contains the window and output addresses.","externalName":"__EXT_NATIVE__rpe_keyboard_poll","help":"","hidden":true,"kind":4,"name":"__rpe_keyboard_poll","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2,},
+        {"$GMExtensionFunction":"","%Name":"__rpe_keyboard_reset","argCount":0,"args":[],"documentation":"Release the keyboard hook and clear pending input.","externalName":"__EXT_NATIVE__rpe_keyboard_reset","help":"","hidden":true,"kind":4,"name":"__rpe_keyboard_reset","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2,},
+        {"$GMExtensionFunction":"","%Name":"rpe_pulse_shutdown","argCount":0,"args":[],"documentation":"Release keyboard and window hooks.","externalName":"__EXT_NATIVE__rpe_pulse_shutdown","help":"","hidden":false,"kind":4,"name":"rpe_pulse_shutdown","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2,},
         {"$GMExtensionFunction":"","%Name":"__rpe_window_drag_enable","argCount":2,"args":[1,2,],"documentation":"@param {Pointer} _arg_buffer\r\n@param {Real} _arg_buffer_length\r\n@returns {Real}","externalName":"__EXT_NATIVE__rpe_window_drag_enable","help":"","hidden":true,"kind":4,"name":"__rpe_window_drag_enable","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2,},
         {"$GMExtensionFunction":"","%Name":"rpe_window_drag_disable","argCount":0,"args":[],"documentation":"@returns {Real}","externalName":"__EXT_NATIVE__rpe_window_drag_disable","help":"","hidden":false,"kind":4,"name":"rpe_window_drag_disable","resourceType":"GMExtensionFunction","resourceVersion":"2.0","returnType":2,},
       ],"init":"","kind":1,"name":"I_Pulse.dll","origname":"","ProxyFiles":[],"resourceType":"GMExtensionFile","resourceVersion":"2.0","uncompress":false,"usesRunnerInterface":false,},

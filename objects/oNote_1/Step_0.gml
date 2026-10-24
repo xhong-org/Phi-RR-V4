@@ -13,7 +13,7 @@ _line_time = (variable_instance_exists(_line_ref, "line_time") ? _line_ref.line_
 // 判定窗口用秒，多 BPM 谱面才不会用错单位。
 var late_ms = _is_hold ? 161 : ((type == 2 || type == 4) ? 160 : 201);
 lateHitTime = late_ms * 0.001;
-judgeTime = start_sec + hitTime2 * 0.001;
+if (chart_autoplay_active()) judgeTime = start_sec + hitTime2 * 0.001;
 
 // 窗口缩放变了才刷新尺寸。
 if (_last_global_scales != global_scales) {
@@ -56,8 +56,7 @@ if (isFake) {
 	};
 };
 
-// 更新位置。
-event_user(_step_user_count);
+// 世界姿态在 Step End 才完整；绘制前统一更新外观，击中坐标由判定分支按需刷新。
 
 // 真音符走和官谱相同的自动判定。
 if (!isFake) then event_user(_judge_user_count);

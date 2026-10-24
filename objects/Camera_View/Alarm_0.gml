@@ -9,6 +9,12 @@ if (!variable_instance_exists(id, "start_height") || !is_real(start_height) || s
         start_height = max(1, room_height);
 };
 
+// 先更新比例，再通知对象，避免回调沿用切换前的缩放。
+if (start_width > 0 && start_height > 0) {
+        global_scales = min(room_width / start_width, room_height / start_height);
+};
+chart_view_refresh(room_width, room_height);
+
 // 通知音符和判定线按新尺寸重算。
 if (instance_exists(oNote)) {
         with (oNote) {
@@ -22,9 +28,4 @@ if (instance_exists(oLine)) {
         with (oLine) {
                 event_user(2);
         };
-};
-
-// 尺寸回调里也以这里算出的缩放为准。
-if (start_width > 0 && start_height > 0) {
-        global_scales = min(room_width / start_width, room_height / start_height);
 };

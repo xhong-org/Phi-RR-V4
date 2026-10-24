@@ -28,3 +28,4 @@ hl = self._hl;
 // Hold、Drag/Flick、Tap 的迟到窗口毫秒不同。
 var late_ms = _is_hold ? 161 : ((self.type == 2 || self.type == 4) ? 160 : 201);
 lateHitTime = (late_ms * 0.001 * _beat_per_second);
+chart_kb_register_note();

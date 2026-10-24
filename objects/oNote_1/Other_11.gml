@@ -20,6 +20,8 @@ if (variable_instance_exists(_line, "__incline_sin")) {
 posx *= rpe_sample_control(1, _control_position_speed, 1);
 posy *= rpe_sample_control(3, _control_position_speed, 1);
 var control_size = rpe_sample_control(2, _control_position_speed, 1);
+// PhiZone 的 skewControl 是绕音符中心的水平剪切，单位为角度。
+_note_skew_degrees = -xOffset * rpe_sample_control(4, _control_position_speed, 0);
 image_xscale = (global_scales / 6) * size * control_size;
 var _settings = game.settings;
 var uniform_scale = bool(_settings.noteUniformScale ?? false);
@@ -59,7 +61,7 @@ var dx = x - sWH;
 var dy = y - sHH;
 var radius = sWH * 1.2365 + sHH;
 var radius_sq = radius * radius;
-outside = ((dx * dx + dy * dy) >= radius_sq);
+outside = (_note_skew_degrees == 0 && (dx * dx + dy * dy) >= radius_sq);
 
 // 已判定或 Bad 仍要画淡出；飞出屏幕则不画。
 if (isJudge || isBad) {

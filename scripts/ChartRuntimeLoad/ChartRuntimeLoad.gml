@@ -19,7 +19,18 @@ function chart_lines_hide_created(_inst) {
 ///@returns {Undefined} 无
 function chart_note_activate(_inst) {
 	instance_activate_object(_inst);
-	if (instance_exists(_inst)) then _inst.visible = true;
+	if (!instance_exists(_inst)) then return;
+	if (!chart_autoplay_active()) {
+		with (_inst) {
+			if (variable_instance_exists(id, "kb_record") && is_struct(kb_record)
+				&& kb_record.owner == game[$ "keyboard_judge"] && kb_record.closed && hit_status != TYPE.BAD) {
+				instance_deactivate_object(self);
+				return;
+			}
+			chart_kb_register_note();
+		}
+	}
+	if (instance_exists(_inst)) _inst.visible = true;
 }
 
 ///@desc 冻结指定对象，渲染模式除外
@@ -34,6 +45,8 @@ function chart_lines_freeze_object(_object) {
 ///@desc 清掉分帧建线、待解冻和已冻结标记
 ///@returns {Undefined} 无
 function chart_load_flags_reset() {
+	chart_kb_reset();
+	global.chart_layer_layout = undefined;
 	_chart_lines_building = false;
 	_chart_lines_thaw_pending = false;
 	_chart_lines_frozen = false;

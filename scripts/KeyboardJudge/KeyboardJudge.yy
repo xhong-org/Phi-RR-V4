@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"KeyboardJudge",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"KeyboardJudge",
+  "parent":{
+    "name":"Format",
+    "path":"folders/Objects/Main/Loader/Format.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

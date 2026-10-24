@@ -2,32 +2,8 @@
 var now_time = _now_beat,
 	now_hit_time = judgeTime;
 
-// 手动时只判超时 Miss，并在按住期间刷新特效。
-if (!chart_autoplay_active()) {
-	if (now_time > self.time + lateHitTime && !isMiss && notJudge) {
-		hit_status = (judgeCalc(self.time, now_time, self.bpm, _hx0, _hy0, self.type, false, true));
-		notJudge = false;
-		isMiss = true;
-		isHold = true;
-	};
-	if (now_time >= self.time) {
-		if (!isHold) {
-			isHold = true;
-			event_user(2);
-		} else if (!notJudge && !isMiss && (hit_status == TYPE.GOOD || hit_status == TYPE.PREFECT) && chart_kb_hold_alive()) {
-			if (_now_seconds - _bak_time >= (60 / self.bpm) / 2) {
-				_eff_c(_hx0, _hy0, hit_status == TYPE.PREFECT ? #ffeca0 : make_colour_rgb(162, 238, 255));
-				_bak_time = _now_seconds;
-			};
-		};
-		// Hold 结束时结算并停用。
-		if (now_time >= self.time + self.holdTime && !notJudge) {
-			hit_status = (judgeCalc(self.time, now_hit_time, self.bpm, _hx0, _hy0, self.type, false, !isMiss));
-			instance_deactivate_object(self);
-		};
-	};
-	exit;
-};
+// 手动判定统一在渲染器 Step End 处理，先接收本帧输入再决定超时。
+if (!chart_autoplay_active()) then exit;
 
 // 自动播放在击中时刻判定 Hold 头。
 if(now_time >= now_hit_time && !isMiss && notJudge && hit_status == TYPE.NONE){

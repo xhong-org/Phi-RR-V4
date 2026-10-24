@@ -1308,6 +1308,7 @@ function skin_tex_group_name(_st) {
 ///@desc 统计当前帧音符与默认音符纹理组状态
 ///@returns {Undefined} 无
 function skin_tex_diag_frame() {
+	if (!variable_global_exists("skin_tex_diag") || !global.skin_tex_diag) then return;
 	if (!variable_global_exists("skin_tex_diag_f")) then global.skin_tex_diag_f = 0;
 	global.skin_tex_diag_f += 1;
 	//if (global.skin_tex_diag_f == 1) {

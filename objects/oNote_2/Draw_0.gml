@@ -1,5 +1,14 @@
 ///@desc 绘制 PEC 音符或 Hold 几何
 if (!canDraw) then exit;
+if (isBad) {
+	var bad_sprite = skin_active() ? skin_note_sprite("tap", 0) : -1;
+	var bad_scale = sprite_exists(bad_sprite) ? skin_note_scale_k(bad_sprite) : 1;
+	if (!sprite_exists(bad_sprite)) bad_sprite = sprite_index;
+	var age = game.__time[1] - game_2.chart.offsetSeconds - judgeRealTime;
+	draw_sprite_ext(bad_sprite, 0, _bad_x, _bad_y, image_xscale * bad_scale, image_yscale * bad_scale,
+		_bad_angle, c_red, max(0, 1 - age) * 0.5);
+	exit;
+}
 
 // 有皮肤时换皮肤精灵，否则用默认 Hold 绘制。
 if (skin_active()) {

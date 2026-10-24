@@ -39,6 +39,8 @@ local_settings.json
 /RPEExternalShaderPackage3/
 /RPEExternalShader.yymps
 /tools/
+__pycache__/
+/test charts/
 
 # Native build intermediates
 **/CMakeFiles/

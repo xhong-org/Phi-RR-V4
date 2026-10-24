@@ -12,6 +12,10 @@
 #include <unordered_map>
 #include <vector>
 
+// Both Windows backends sample a copy of the current target. PS slot 0 can
+// still contain a font, note atlas or video plane after GameMaker flushes.
+ID3D11ShaderResourceView* rpeSnapshotRenderTarget();
+
 namespace {
 
 constexpr unsigned kGlBgra = 0x80E1;
@@ -626,8 +630,7 @@ std::int32_t rpe_gles_draw(ID3D11Device* device, ID3D11DeviceContext* context, s
         setError("Direct GLSL ES draw failed: backend or handle is invalid.");
         return 0;
     }
-    ID3D11ShaderResourceView* sourceView = nullptr;
-    context->PSGetShaderResources(0, 1, &sourceView);
+    ID3D11ShaderResourceView* sourceView = rpeSnapshotRenderTarget();
     ID3D11RenderTargetView* targetView = nullptr;
     context->OMGetRenderTargets(1, &targetView, nullptr);
     if (!sourceView || !targetView) {

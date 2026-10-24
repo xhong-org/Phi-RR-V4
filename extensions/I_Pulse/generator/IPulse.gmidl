@@ -1,6 +1,9 @@
 [gml_api]
 module IPulse;
 
+// Buffered keyboard packet exports and the combined shutdown entry point are
+// implemented in src/native/IPulse_native.cpp and registered in ../I_Pulse.yy.
+
 [global]
 function rpe_window_drag_enable(window : pointer) : bool;
 [global, finish_fn]
