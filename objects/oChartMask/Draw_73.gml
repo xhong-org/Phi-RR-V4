@@ -20,7 +20,8 @@ if (target_active && surface_exists(surface_id) && instance_exists(oRPEEffect)
 	if (_global_fx != noone && is_array(_global_fx.effects_global) && array_length(_global_fx.effects_global) > 0) {
 		var _global_allow = true;
 		if (instance_exists(oPlayTransition)) {
-			_global_allow = (instance_find(oPlayTransition, 0).state == PLAY_TRANSITION_STATE.PLAYING);
+			var _fx_state = instance_find(oPlayTransition, 0).state;
+			_global_allow = (_fx_state == PLAY_TRANSITION_STATE.PLAYING || _fx_state == PLAY_TRANSITION_STATE.OUTRO);
 		};
 		var _global_stack = _global_fx.effect_capture_stack;
 		// 转场允许且没有嵌套效果栈时，才在这里做全局着色器。
@@ -97,15 +98,45 @@ var _copy_left = floor(chart_view_left);
 var _copy_right = ceil(chart_view_right);
 var _copy_width = max(1, _copy_right - _copy_left);
 var _copy_height = max(1, chart_view_height);
+var _outro_scale = 1;
+var _outro_composite = false;
+if (instance_exists(oPlayTransition)) {
+	var _outro = instance_find(oPlayTransition, 0);
+	_outro_composite = _outro.state == PLAY_TRANSITION_STATE.OUTRO;
+	if (_outro.state >= PLAY_TRANSITION_STATE.OUTRO) then _outro_scale = _outro.end_xscale;
+};
 // 没开遮罩且拷贝宽度几乎等于表面时，改为整张贴回。
 if (!chart_mask_enabled() && _copy_width >= surface_get_width(surface_id) - 1) {
 	_copy_left = 0;
 	_copy_width = max(1, surface_get_width(surface_id));
 	_copy_height = max(1, surface_get_height(surface_id));
 };
-draw_surface_part(surface_id, _copy_left, 0, _copy_width, _copy_height, _copy_left, 0);
+// 退场源里只有黑底和前景，以预乘透明度叠回未压缩的曲绘。
+if (_outro_composite) then gpu_set_blendmode_ext(bm_one, bm_inv_src_alpha);
+if (_outro_scale > 0) {
+	if (_outro_scale < 1) {
+		var _copy_x = _copy_left + _copy_width * (1 - _outro_scale) * 0.5;
+		draw_surface_part_ext(surface_id, _copy_left, 0, _copy_width, _copy_height,
+			_copy_x, 0, _outro_scale, 1, c_white, 1);
+	} else {
+		draw_surface_part(surface_id, _copy_left, 0, _copy_width, _copy_height, _copy_left, 0);
+	};
+};
 gpu_set_blendmode(bm_normal);
 pls_draw_flush();
 gpu_pop_state();
 // pop 会把 scaleOnNotes 推进去的线宽剪刀还原。版本号和帧率在 Draw GUI 再画，这里先放开。
 chart_mask_scissor_clear();
+// HUD 留在压缩画面之外，继续使用原来的收缩和淡出。
+if (instance_exists(oPlayTransition)) {
+	var _hud_transition = instance_find(oPlayTransition, 0);
+	if (_hud_transition.state == PLAY_TRANSITION_STATE.OUTRO
+		&& instance_exists(_hud_transition.owner)) {
+		with (_hud_transition.owner) {
+			if (chart_hud_ready()) {
+				draw_set_font(game.font);
+				event_user(_draw_user_count);
+			};
+		};
+	};
+};

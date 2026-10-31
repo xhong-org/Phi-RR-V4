@@ -15,7 +15,7 @@ if (variable_global_exists("loading_animation_load_start")
         && !global.loading_animation_load_start && phase == 2) exit;
 // 结束或失败后只等按键返回。
 if (done || failed) {
-        if (keyboard_check_pressed(vk_escape) || keyboard_check_pressed(vk_enter) || mouse_check_button_pressed(mb_left)) {
+        if (keyboard_check_pressed(vk_escape) || keyboard_check_pressed(vk_enter) || settings_gui_pointer().pressed) {
                 if (failed) {
                         chart_loading_animation_abort();
                         pls_return_to_entry();

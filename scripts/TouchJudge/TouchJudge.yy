@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"TouchJudge",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"TouchJudge",
+  "parent":{
+    "name":"Format",
+    "path":"folders/Objects/Main/Loader/Format.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

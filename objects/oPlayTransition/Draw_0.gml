@@ -1,9 +1,7 @@
-// 两条扫线都画在谱面遮罩里，两侧黑边另画。
+// 只在开场绘制扫线，退场直接压缩谱面的原有内容。
 shader_reset();
 // 游玩中或扫线进度为 0 时不画。
-if (line_progress <= 0 || state == PLAY_TRANSITION_STATE.PLAYING
-	|| state == PLAY_TRANSITION_STATE.EXIT_DELAY
-	|| state == PLAY_TRANSITION_STATE.SETTLEMENT) then exit;
+if (line_progress <= 0 || state >= PLAY_TRANSITION_STATE.PLAYING) then exit;
 
 var _old_colour = draw_get_colour();
 var _old_alpha = draw_get_alpha();

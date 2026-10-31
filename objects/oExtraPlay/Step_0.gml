@@ -1,4 +1,6 @@
 ///@desc 步进：把每段 FFVideos 对齐到 RPE 谱面时钟
+if (video_playback_finished) then exit;
+if (chart_play_ending()) then exit;
 // 关掉谱面视频就全部关闭并退出。
 if (chart_setting_on("disableChartVideo")) {
 	video_close_all();
@@ -32,11 +34,12 @@ video_sync = function(_index) {
 	// 已经播完的不再打开。
 	if (video.completed) then return;
 	var inside = video_chart_time >= video.startTime && video_chart_time < video.endTime;
-	// 不在播放区间就关掉句柄。
+	// 离开播放区间就释放句柄和表面；结束后不再重开。
 	if (!inside) {
-		if (video.handle >= 0) {
-			ffvideos_ext_close(video.handle);
-			video.handle = -1;
+		video_release(video);
+		if (video_chart_time >= video.endTime) {
+			video.completed = true;
+			print($"[FFVideos] Finished: index={_index}, time={video_chart_time}");
 		};
 		return;
 	};
@@ -74,10 +77,15 @@ video_sync = function(_index) {
 			print($"[FFVideos] Playback failed: {ffvideos_ext_get_error(video.handle)}");
 			video.error_logged = true;
 		};
+		video_release(video);
 		return;
 	};
 	// 已关闭就不再控制。
-	if (status == FFVideosStatus.Closed) then return;
+	if (status == FFVideosStatus.Closed) {
+		video.error_logged = true;
+		video_release(video);
+		return;
+	};
 	// 系统暂停时暂停播放。
 	if (os_is_paused()) {
 		if (status == FFVideosStatus.Playing) then ffvideos_ext_pause(video.handle);
@@ -86,6 +94,18 @@ video_sync = function(_index) {
 	// 还在准备就等下一帧。
 	if (status == FFVideosStatus.Preparing) then return;
 	var target_ms = max(0, (video_chart_time - video.startTime) * 1000);
+	var duration_ms = ffvideos_ext_get_duration(video.handle);
+	if (duration_ms > 0) {
+		video.duration_ms = duration_ms;
+		video.endTime = video.startTime + duration_ms / 1000;
+	};
+	// 普通播放、暂停定位和离线渲染都在到达片尾时释放。
+	if (video.duration_ms > 0 && target_ms >= video.duration_ms) {
+		video_release(video);
+		video.completed = true;
+		print($"[FFVideos] Finished: index={_index}, time={video_chart_time}");
+		return;
+	};
 	// 离线渲染按目标毫秒取精确帧，不进入播放状态。
 	if (variable_global_exists("render_mode") && global.render_mode) {
 		if (!ffvideos_ext_prepare_frame(video.handle, target_ms, 10000)) {
@@ -110,19 +130,6 @@ video_sync = function(_index) {
 	// 播放中偏差超过 250 毫秒才拉回，避免每帧 seek。
 	if (status == FFVideosStatus.Playing && abs(target_ms - ffvideos_ext_get_position(video.handle)) > 250) {
 		ffvideos_ext_seek(video.handle, target_ms);
-	};
-	var duration_ms = ffvideos_ext_get_duration(video.handle);
-	// 读到真实时长后改写结束时间。
-	if (duration_ms > 0) {
-		video.duration_ms = duration_ms;
-		video.endTime = video.startTime + duration_ms / 1000;
-	};
-	// 播到文件结尾就关闭并标记完成。
-	if (video.duration_ms > 0 && target_ms >= video.duration_ms) {
-		ffvideos_ext_close(video.handle);
-		video.handle = -1;
-		video.completed = true;
-		print($"[FFVideos] Finished: index={_index}, time={video_chart_time}");
 	};
 };
 

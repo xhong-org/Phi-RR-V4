@@ -18,7 +18,7 @@ public class IAndroidOpen extends IAndroidOpenInternal {
     public static final int STATUS_CANCELLED = 3;
     public static final int STATUS_ERROR = 4;
 
-    private static final int REQUEST_OPEN = 0x49414F50;
+    private static final int REQUEST_OPEN = 0x4F50;
 
     private final Object lock = new Object();
     private int status = STATUS_IDLE;
@@ -140,7 +140,11 @@ public class IAndroidOpen extends IAndroidOpenInternal {
             }
             return;
         }
+        // Large PEZ files may include videos; copying on the UI thread can ANR.
+        new Thread(() -> copyDocument(activity, uri), "PhiRR-Import").start();
+    }
 
+    private void copyDocument(Activity activity, Uri uri) {
         try {
             String displayName = queryDisplayName(activity, uri);
             if (displayName == null || displayName.length() == 0) displayName = "chart.zip";

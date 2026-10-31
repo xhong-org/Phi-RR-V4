@@ -1,4 +1,6 @@
 ///@desc 用户事件 7：中止播放
+if (!media_use_gx() && is_real(track) && track > 0) then fmod_system_select(track);
+chart_music_noise_release();
 // GX 停掉 js 或实例；FMOD 停频道。
 if (media_use_gx()) {
 	if (gx_audio_kind == "js" && gx_js_handle > 0) {

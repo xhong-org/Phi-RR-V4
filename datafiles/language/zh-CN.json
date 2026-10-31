@@ -86,12 +86,20 @@
       "urlFailed": "URL 下载失败。",
       "downloadMissing": "下载完成但文件不存在。"
     },
+    "settlement": {
+      "score": "本次得分",
+      "maxCombo": "最大连击",
+      "accuracy": "准确率"
+    },
     "settings": {
       "title": "设置",
       "close": "关闭",
       "save": "保存",
       "discardClose": "不保存并关闭",
       "normal": "常规设置",
+      "groupSound": "声音",
+      "saveClose": "保存并返回",
+      "discardShort": "不保存返回",
       "groupDisplay": "画面",
       "groupDebug": "调试",
       "groupChart": "谱面",
@@ -101,6 +109,9 @@
       "reset": "重置设置",
       "reloadLanguage": "重新加载语言包",
       "hintNormal": "对应 Phigros().settings",
+      "hintTouch": "上下滑动查看其余设置，保存后生效。",
+      "unsupportedPlatform": "此平台不支持",
+      "unsupportedMSAA": "Android Runtime 不支持 MSAA",
       "hintDeveloper": "开发者选项含有已废弃/已弃用的设置",
       "language": "语言",
       "skin": "皮肤",
@@ -122,6 +133,9 @@
       "errorTitle": "皮肤"
     },
     "fields": {
+      "noteSize": "音符大小",
+      "hitsoundVolume": "打击音效音量",
+      "musicVolume": "音乐音量",
       "enableBlur": "是否启用背景模糊",
       "enableFPS": "是否显示FPS",
       "enableQuikyStart": "是否启用快速启动",
@@ -154,7 +168,7 @@
       "directGlslEs": "直接编译 GLSL ES（Beta）",
       "disableChartVideo": "禁用谱面视频",
       "enableNoiseArea": "是否启用噪区",
-      "enableNoiseAreaFine": "是否开启噪区精细",
+      "enableNoiseAreaFine": "是否开启噪区高分辨率",
       "reduceNoiseAreaWave": "减少噪区起伏幅度",
       "TEST1": "判定偏移抖动测试"
     },

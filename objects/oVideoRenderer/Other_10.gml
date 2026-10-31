@@ -50,6 +50,7 @@ if (!encoder_started) {
     // 第一帧有效画面才配置编码器。
     video_renderer_configure(frame_width, frame_height, global.render_fps, global.render_crf);
     video_renderer_set_ffmpeg(global.render_ffmpeg);
+    video_renderer_set_music_volume(game.settings.musicVolume);
     // 延迟、预设或编码器非法就退出。
     if (!video_renderer_set_audio_delay(global.render_intro_seconds)) {
         print($"[Renderer] Invalid audio delay: {video_renderer_get_error()}");

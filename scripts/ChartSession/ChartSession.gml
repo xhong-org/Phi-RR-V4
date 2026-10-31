@@ -126,20 +126,34 @@ function chart_playback_prepare_exit() {
 
 ///@desc 释放本局 FMOD 打击音并清空 HitSounds
 ///@returns {Undefined} 无
-function chart_playback_release_hitsounds() {
+function chart_playback_release_hitsounds(_system = -1) {
         // 没有游戏结构或打击音表时直接返回
         if (!variable_global_exists("game_1") || !is_struct(game_1)) then return;
         if (!struct_exists(game_1, "HitSounds") || !is_struct(game_1.HitSounds)) then return;
-        if (extension_exists("FMOD") && instance_exists(oMedia)) {
-                var media = instance_find(oMedia, 0);
-                if (media.track > 0) then fmod_system_select(media.track);
-        };
-        var hit_names = struct_get_names(game_1.HitSounds);
-        for (var i = 0; i < array_length(hit_names); i++) {
-                var sound = game_1.HitSounds[$ hit_names[i]];
-                if (sound > 0 && extension_exists("FMOD")) then fmod_sound_release(sound);
-        };
+        var owner = game_1[$ "HitSoundsSystem"] ?? -1;
+        if (_system > 0 && owner != _system) then return;
+        var live = (_system > 0 && owner == _system) || skin_fmod_system_live(owner);
+        var sounds = game_1.HitSounds;
         game_1.HitSounds = {};
+        game_1.HitSoundsSystem = -1;
+        if (!live) then return;
+        fmod_system_select(owner);
+        var hit_names = struct_get_names(sounds);
+        for (var i = 0; i < array_length(hit_names); i++) {
+                var sound = sounds[$ hit_names[i]];
+                if (sound > 0) then fmod_sound_release(sound);
+        };
+}
+
+///@desc 所有媒体销毁入口都先释放依附于该系统的声音，避免原生悬空指针
+function chart_audio_release_for_system(_system) {
+        if (!is_real(_system) || _system <= 0 || media_use_gx()) then return;
+        fmod_system_select(_system);
+        skin_fmod_release_for_system(_system);
+        chart_playback_release_hitsounds(_system);
+        with (oSettlement) {
+                if (ending_fmod && ending_system == _system) then settlement_stop_audio(_system);
+        };
 }
 
 ///@desc 回菜单前停音频、丢掉特效与视频，并清掉解压文件
@@ -163,8 +177,10 @@ function chart_playback_teardown_for_menu() {
                 rpe_ext_shutdown();
         };
 
-        chart_playback_release_hitsounds();
         m_stop();
+        // 动态皮肤声音必须在 m_clean 关闭其 FMOD 系统之前释放。
+        skin_gameplay_unload();
+        chart_playback_release_hitsounds();
         m_clean(true);
         mus_system_clean();
         chart_session_cleanup(true);
@@ -265,6 +281,9 @@ function chart_draw_recorded_version() {
 ///@returns {Undefined} 无
 function chart_hud_draw_overlay() {
 	if (!chart_hud_ready()) then return;
+	// 全屏黑底和结算页已经接管画面，不再把游玩的水印叠到它们上面。
+	if (instance_exists(oSettlement)) then return;
+	if (instance_exists(oPlayTransition) && instance_find(oPlayTransition, 0).mask_released) then return;
 	if (!variable_global_exists("game") || !is_struct(game) || !asset_font_valid(game.font)) then return;
 	if (variable_global_exists("render_mode") && global.render_mode) then return;
 	var _scale = variable_global_exists("global_scales") ? global_scales : 1;
@@ -336,18 +355,21 @@ function render_wants_settlement() {
 }
 
 ///@desc 谱面结束后、结算界面出现前要等的秒数
-///@returns {Real} 退场段数各 1 秒，再加 1 秒等待
+///@returns {Real} 1 秒横向收拢，再加 1 秒整帧压暗
 function render_settlement_lead_seconds() {
-        // 录像结束过场每段固定 1 秒。开了谱面遮罩要走三段，否则只退界面那一段。
-        // 段走完后再等 1 秒才创建结算。结尾音的时间是谱面秒，片头延迟由编码器另加，这里不要再加片头。
-        var phase_count = chart_mask_enabled() ? 3 : 1;
-        return phase_count + 1;
+        return 2;
 }
 
-///@desc 结算收尾时长：退场和等待，加上缓动约 3 秒、停留 3 秒
+///@desc 结算入场动画时长，界面和录像共用
+///@returns {Real} 秒数
+function settlement_animation_seconds() {
+        return 2.6;
+}
+
+///@desc 结算收尾时长：退场和等待，加上入场动画、停留 3 秒
 ///@returns {Real} 从谱面结束到结算停留结束的秒数
 function render_settlement_tail_seconds() {
-        return render_settlement_lead_seconds() + 6;
+        return render_settlement_lead_seconds() + settlement_animation_seconds() + 3;
 }
 
 ///@desc 按难度前缀选择结算结尾音序号
@@ -733,7 +755,7 @@ function chart_session_track_dir() {
         // 原生文件、GX、普通存档三条路径
         if (chart_use_native_files()) {
                 var external = chart_native_external_dir();
-                if (!string_length(external) && os_type == os_android) then external = "/storage/emulated/0/Android/data/com.xthx.pls/files/";
+                if (!string_length(external) && os_type == os_android) then external = android_files_internal_dir();
                 var track = chart_path_norm(external + "track/");
                 chart_native_mkdir(track);
                 return track;
@@ -1427,11 +1449,11 @@ function chart_session_apply_folder(_game) {
         if (!is_struct(_game)) then return false;
         if (!chart_session_has_track()) then return false;
         var session = global.chart_session;
-        _game.folder_chart.name = session.name;
-        _game.folder_chart.level = session.level;
-        _game.folder_chart.chart = session.chart_file;
-        _game.folder_chart.music = session.music_file;
-        _game.folder_chart.bg = session.image_file;
+        // Configs 可清掉旧的快捷启动信息；会话绑定独立结构，避免继续写入已删除的引用。
+        _game.folder_chart = {
+                name:session.name, level:session.level, chart:session.chart_file,
+                music:session.music_file, bg:session.image_file
+        };
         return true;
 }
 

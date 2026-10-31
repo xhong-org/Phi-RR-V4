@@ -25,7 +25,7 @@
 #macro func function
 #macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal { "windows": 40545, "android": 40534, "gxgames": 40532 } // 各平台版本号(独立)
+#macro VerReal { "windows": 40548, "android": 40549, "gxgames": 40532 } // 各平台版本号(独立)
 #macro VerStr "v.4.1.1r"
 
 ///@desc 按当前操作系统从 VerReal 取出对应版本号
@@ -1456,6 +1456,9 @@ function Phigros() constructor { // 仅仅结构
 	// 设置
 	/// 作者的话: 古董
 	static settings = {
+		"hitsoundVolume" : 1,					// 打击音效音量，范围 0 到 1
+		"musicVolume" : 1,					// 音乐音量，范围 0 到 1
+		"noteSize" : 1,						// 音符视觉大小，范围 0.5 到 4
 		"enableBlur" : true,					// 是否启用背景模糊(default:true)
 		"enableFPS" : true,						// 是否显示FPS(default:true)
 		"enableQuikyStart" : true,				// 是否启用快速启动(已弃用)(default:true)
@@ -1488,7 +1491,7 @@ function Phigros() constructor { // 仅仅结构
 		"directGlslEs" : false,					// Windows 直接编译谱面 GLSL ES(default:false)
 		"disableChartVideo" : false,			// 禁用谱面视频(default:false)
 		"enableNoiseArea" : true,				// 是否启用噪区(default:true)
-		"enableNoiseAreaFine" : false,			// 是否开启噪区精细(default:false)
+		"enableNoiseAreaFine" : false,			// 是否开启噪区高分辨率(default:false)
 		"reduceNoiseAreaWave" : false,			// 减少噪区起伏幅度(default:false)
 		"TEST1" : false							// 判定偏移抖动测试(default false)
 	};
@@ -1834,12 +1837,13 @@ function Phigros() constructor { // 仅仅结构
 	///@desc 读取或创建 configs.ini，并把设置写回内存
 	///@returns {Undefined} 无
 	static Configs = (func(){
-		var f = $"{working_directory}resource/configs.ini";
+		var f = settings_ini_path();
+		var config_exists = isExists(f);
 		//if(isExists(f)){
 		ini_open(f);
 		print($"str: {game.settings.comboString}");
 		// 没有配置文件时写入默认资源和设置
-		if(!isExists(f)){
+		if(!config_exists){
 			print("[F-Configs] No Found 'configs.ini' file" , game.settings.enableDebug);
 			
 			// 资源路径
@@ -1862,7 +1866,6 @@ function Phigros() constructor { // 仅仅结构
 			for(var l = 0 ; l < array_length(_name) ; l ++){
 				ini_write_string("Chart" , _name[l] , self.folder_chart[$ _name[l]]);
 			};
-			delete(self.folder_chart);
 			//ini_write_string("Settings" , "enableFPS" , "false");
 			//ini_write_string("Settings" , "enableBlur" , "false");
 		};
@@ -1900,6 +1903,9 @@ function Phigros() constructor { // 仅仅结构
 		self.settings[$ "notePreloadSeconds"] = (clamp(self.settings[$ "notePreloadSeconds"] , 0 , 60));
 		self.settings[$ "rpeWorkerMinLines"] = clamp(floor(self.settings[$ "rpeWorkerMinLines"]), 1, 1024);
 		self.settings[$ "rpeWorkerProfileFrames"] = clamp(floor(self.settings[$ "rpeWorkerProfileFrames"]), 60, 36000);
+		self.settings.noteSize = settings_clamp_number(self.settings.noteSize, 0.5, 4);
+		self.settings.hitsoundVolume = settings_clamp_number(self.settings.hitsoundVolume, 0, 1);
+		self.settings.musicVolume = settings_clamp_number(self.settings.musicVolume, 0, 1);
 		ini_write_string("Settings", "language", lang_current_id());
 		ini_close();
 		print($"str2: {game.settings.comboString}");
@@ -5521,7 +5527,7 @@ function phi_official_quantize_scalar(ranges) {
 			if (connected && phi_official_same_slope(prev.endTime - prev.startTime, prev.rawEnd - prev.rawStart, span_b - span_a, v1 - v0)) {
 				prev.endTime = span_b;
 				prev.rawEnd = v1;
-				prev.end = phi_official_f32_finite(v1);
+				prev[$ "end"] = phi_official_f32_finite(v1);
 				continue;
 			}
 		}
@@ -8332,6 +8338,7 @@ function render_schedule_note_hitsound(_note, _event_time, _custom_path = "", _i
 function render_schedule_hitsound(_default_sound, _event_time, _custom_path = "", _is_fake = false) {
 	if (!(variable_global_exists("render_mode") && global.render_mode)) then return false;
 	if (bool(_is_fake)) then return false;
+	if (chart_hitsound_volume() <= 0) then return true;
 	var _path = render_hitsound_path(_default_sound, _custom_path);
 	if (!string_length(_path)) then return false;
 	// 预计算事件要对齐音符真正被判定并画出的第一帧
@@ -8344,7 +8351,7 @@ function render_schedule_hitsound(_default_sound, _event_time, _custom_path = ""
 	array_add(global.render_hitsounds, {
 		path: _path,
 		time: _scheduled_time,
-		volume: 0.5
+		volume: 0.5 * chart_hitsound_volume()
 	});
 	return true;
 };
@@ -8355,39 +8362,55 @@ function render_schedule_hitsound(_default_sound, _event_time, _custom_path = ""
 ///@returns {Bool} 假音符为假，其余视播放结果
 function render_play_hitsound(_default_sound, _custom_path = "") {
 	if (variable_instance_exists(id, "isFake") && bool(variable_instance_get(id, "isFake"))) then return false;
+	if (chart_hitsound_volume() <= 0) then return true;
 	if (variable_global_exists("render_mode") && global.render_mode) {
 		if (variable_instance_exists(id, "render_hitsound_scheduled")
 			&& bool(variable_instance_get(id, "render_hitsound_scheduled"))) then return true;
 		var _path = render_hitsound_path(_default_sound, _custom_path);
 		if (string_length(_path)) {
 			var _event_time = max(0, global.render_frame) / max(1, global.render_fps);
-			return bool(video_renderer_add_hitsound(_path, _event_time, 0.5));
+			return bool(video_renderer_add_hitsound(_path, _event_time, 0.5 * chart_hitsound_volume()));
 		};
 		return false;
 	};
-	if (audio_exists(_default_sound)) then audio_play_sound(_default_sound, 0, false);
-	return true;
+	if (!audio_exists(_default_sound)) then return false;
+	var voice = audio_play_sound(_default_sound, 0, false, chart_hitsound_volume());
+	return !is_undefined(voice) && voice != -1;
 };
+
+///@desc 尝试在当前媒体系统播放自定义打击音，创建或启动声道失败时返回假
+function chart_try_fmod_hitsound(_sound) {
+	if (!is_real(_sound) || _sound <= 0
+		|| media_use_gx() || !instance_exists(oMedia)) then return false;
+	var media = instance_find(oMedia, 0);
+	if (!skin_fmod_system_live(media.track)) then return false;
+	fmod_system_select(media.track);
+	var voice = fmod_system_play_sound(_sound, true);
+	if (!is_real(voice) || voice <= 0 || fmod_last_result() != FMOD_RESULT.OK) then return false;
+	fmod_channel_control_set_volume(voice, chart_hitsound_volume());
+	if (fmod_last_result() == FMOD_RESULT.OK) {
+		fmod_channel_control_set_paused(voice, false);
+		if (fmod_last_result() == FMOD_RESULT.OK) then return true;
+	};
+	fmod_channel_control_stop(voice);
+	return false;
+}
 
 ///@desc 播放 RPE 打击音，录像和 GX 走文件，否则可用 FMOD
 ///@param {Id.Sound} _default_sound 默认音效
 ///@param {Real} _custom_fmod_sound FMOD 声音，默认 -1
 ///@param {String} _custom_path 自定义路径，默认为空
-///@returns {Any} 录像或 GX 返回布尔，FMOD 成功时无返回值
+///@returns {Bool} 是否已播放或记录
 function rpe_play_hitsound(_default_sound, _custom_fmod_sound = -1, _custom_path = "") {
+	if (variable_instance_exists(id, "isFake") && bool(isFake)) then return false;
+	if (chart_hitsound_volume() <= 0) then return true;
 	if (variable_global_exists("render_mode") && global.render_mode) {
 		return render_play_hitsound(_default_sound, _custom_path);
 	};
 	if (media_use_gx()) {
 		return render_play_hitsound(_default_sound, _custom_path);
 	};
-	if (_custom_fmod_sound > 0 && instance_exists(oMedia)) {
-		var _media = instance_find(oMedia, 0);
-		if (_media.track > 0) then fmod_system_select(_media.track);
-		var _channel = fmod_system_play_sound(_custom_fmod_sound, false);
-		if (_channel > 0) then fmod_channel_control_set_volume(_channel, 1);
-		return;
-	};
+	if (chart_try_fmod_hitsound(_custom_fmod_sound)) then return true;
 	return render_play_hitsound(_default_sound);
 };
 

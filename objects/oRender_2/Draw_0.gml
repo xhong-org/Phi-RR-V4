@@ -1,6 +1,7 @@
 ///@desc 绘制 PEC 界面，并处理染色模式
 // HUD 还没准备好就不画。
 if (!chart_hud_ready()) then exit;
+if (instance_exists(oPlayTransition) && instance_find(oPlayTransition, 0).state == PLAY_TRANSITION_STATE.OUTRO) then exit;
 draw_set_font(game.font);
 event_user(_draw_user_count);
 draw_set_valign(fa_center);

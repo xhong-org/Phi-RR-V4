@@ -1623,6 +1623,7 @@
         exportGx("i_gx_audio_append", global.i_gx_audio_append);
         exportGx("i_gx_audio_end", global.i_gx_audio_end);
         exportGx("i_gx_audio_play", global.i_gx_audio_play);
+        exportGx("i_gx_audio_set_volume", global.i_gx_audio_set_volume);
         exportGx("i_gx_audio_pause", global.i_gx_audio_pause);
         exportGx("i_gx_audio_resume", global.i_gx_audio_resume);
         exportGx("i_gx_audio_stop", global.i_gx_audio_stop);
@@ -1689,6 +1690,12 @@
         }
         var src = blobUrlFromBytes(out, rec.mime);
         audios[id] = makeAudioEl(src, src);
+        return 1;
+    });
+    exportGx("i_gx_audio_set_volume", function (handle, volume) {
+        var el = audios[toNum(handle) | 0];
+        if (!el) return 0;
+        el.volume = Math.max(0, Math.min(1, toNum(volume)));
         return 1;
     });
     exportGx("i_gx_audio_play", function (handle) {

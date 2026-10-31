@@ -2,8 +2,6 @@
 // 加载动画或暂停时不推进，除非强制初始化。
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active
 	&& !chart_force_event_init) then exit;
-if (game.paused && !chart_force_event_init) then exit;
-line_sec = game.__time[1] - game_2.chart.offsetSeconds;
 var current_scale = (variable_global_exists("global_scales") ? global_scales : 1);
 // 缩放或视口变了才重算精灵缩放。
 if (current_scale != _last_scale || room_height != _last_room_height
@@ -20,6 +18,13 @@ if (current_scale != _last_scale || room_height != _last_room_height
 	_last_room_height = room_height;
 	_last_view_width = chart_view_width;
 };
+if (game.paused && !chart_force_event_init) {
+	// 暂停事件值，只校正窗口变化后的坐标。
+	x = chart_view_left + chart_view_width * _move_x;
+	y = chart_view_height * _move_y;
+	exit;
+};
+line_sec = game.__time[1] - game_2.chart.offsetSeconds;
 image_blend = chart_line_judge_blend();
 // 时间回退时游标和当前值全部归零重放。
 if (line_sec < _last_line_sec) {

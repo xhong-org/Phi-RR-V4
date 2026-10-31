@@ -14,6 +14,8 @@ if (start_width > 0 && start_height > 0) {
         global_scales = min(room_width / start_width, room_height / start_height);
 };
 chart_view_refresh(room_width, room_height);
+// 退场已经冻结事件；Step 和 Draw Begin 会用保留值校正线与音符的几何。
+if (chart_play_ending()) then exit;
 
 // 通知音符和判定线按新尺寸重算。
 if (instance_exists(oNote)) {

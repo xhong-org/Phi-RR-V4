@@ -326,6 +326,7 @@ function pls_draw_flush() {
 }
 
 function pls_window_width() {
+	if (os_type == os_android) then return max(1, window_get_width());
         // 桌面全屏时 window_get_width 可能仍返回退出全屏后恢复的窗口宽度。
         var w = (!pls_is_gxgames() && window_get_fullscreen()) ? display_get_width() : window_get_width();
         if (!is_real(w) || w <= 1) then w = display_get_width();
@@ -334,6 +335,7 @@ function pls_window_width() {
 }
 
 function pls_window_height() {
+	if (os_type == os_android) then return max(1, window_get_height());
         var h = (!pls_is_gxgames() && window_get_fullscreen()) ? display_get_height() : window_get_height();
         if (!is_real(h) || h <= 1) then h = display_get_height();
         if (!is_real(h) || h <= 1) then h = max(1, room_height);

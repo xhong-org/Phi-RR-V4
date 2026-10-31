@@ -86,12 +86,20 @@
       "urlFailed": "URL download failed.",
       "downloadMissing": "Download finished but the file is missing."
     },
+    "settlement": {
+      "score": "SCORE",
+      "maxCombo": "MAX COMBO",
+      "accuracy": "ACCURACY"
+    },
     "settings": {
       "title": "Settings",
       "close": "Close",
       "save": "Save",
       "discardClose": "Don't save and close",
       "normal": "General",
+      "groupSound": "Sound",
+      "saveClose": "Save and return",
+      "discardShort": "Discard",
       "groupDisplay": "Display",
       "groupDebug": "Debug",
       "groupChart": "Chart",
@@ -101,6 +109,9 @@
       "reset": "Reset settings",
       "reloadLanguage": "Reload language packs",
       "hintNormal": "Maps to Phigros().settings",
+      "hintTouch": "Swipe the list to see more settings. Save to apply.",
+      "unsupportedPlatform": "Unavailable on this platform",
+      "unsupportedMSAA": "Android Runtime does not support MSAA",
       "hintDeveloper": "Developer options are settings whose comments contain deprecated markers",
       "language": "Language",
       "skin": "Skin",
@@ -122,6 +133,9 @@
       "errorTitle": "Skin"
     },
     "fields": {
+      "noteSize": "Note size",
+      "hitsoundVolume": "Hitsound volume",
+      "musicVolume": "Music volume",
       "enableBlur": "Enable background blur",
       "enableFPS": "Show FPS",
       "enableQuikyStart": "Enable quick start",
@@ -154,7 +168,7 @@
       "directGlslEs": "Compile GLSL ES directly (Beta)",
       "disableChartVideo": "Disable chart videos",
       "enableNoiseArea": "Enable noise areas",
-      "enableNoiseAreaFine": "Enable fine noise areas",
+      "enableNoiseAreaFine": "Enable high-resolution noise areas",
       "reduceNoiseAreaWave": "Reduce noise-area wave",
       "TEST1": "Judge offset jitter test"
     },

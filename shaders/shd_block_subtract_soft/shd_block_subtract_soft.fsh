@@ -2,7 +2,7 @@ precision highp float;
 precision highp int;
 uniform 	mediump float _ClampThresholdLow;
 uniform 	mediump float _ClampThresholdHigh;
-uniform mediump sampler2D _MainTex;
+uniform mediump sampler2D u_main;
 varying highp vec2 vs_TEXCOORD0;
 vec2 SV_Target0;
 mediump vec2 u_xlat16_0;
@@ -12,7 +12,7 @@ mediump float u_xlat16_3;
 mediump float u_xlat16_5;
 void main()
 {
-    u_xlat16_0.xy = texture2D(_MainTex, vs_TEXCOORD0.xy).xy;
+    u_xlat16_0.xy = texture2D(u_main, vs_TEXCOORD0.xy).xy;
     u_xlatb0.xz = greaterThanEqual(u_xlat16_0.xxxx, vec4(_ClampThresholdLow, _ClampThresholdLow, _ClampThresholdHigh, _ClampThresholdLow)).xz;
     u_xlat16_1.x = (u_xlatb0.x) ? float(1.0) : float(0.0);
     u_xlat16_1.y = (u_xlatb0.z) ? float(-1.0) : float(-0.0);
@@ -27,5 +27,6 @@ void main()
     SV_Target0.x = u_xlat16_1.x;
     SV_Target0.y = u_xlat16_3 * 10.0;
     gl_FragColor = vec4(SV_Target0,0.,1.);
+    gl_FragColor *= texture2D(gm_BaseTexture, vs_TEXCOORD0).a;
     return;
 }

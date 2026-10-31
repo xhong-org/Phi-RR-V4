@@ -1,5 +1,6 @@
 ///@desc 清理：房间或游戏结束时释放音频资源
 if(!resources_released){
+	chart_music_noise_release();
 	// GX 走自己的释放，不再动 FMOD。
 	if (media_use_gx()) {
 		gx_media_release(id);
@@ -10,6 +11,7 @@ if(!resources_released){
 		fmod_channel_control_stop(channel);
 		channel = -1;
 	};
+	chart_audio_release_for_system(track);
 	if(soundIndex){
 		fmod_sound_release(soundIndex);
 		soundIndex = undefined;

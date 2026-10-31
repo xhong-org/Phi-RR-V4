@@ -1,0 +1,175 @@
+<html>
+<head>
+<title>Welcome to the FMOD Engine | New in FMOD Engine 2.04</title>
+<link rel="stylesheet" href="style/docs.css">
+<link rel="stylesheet" href="style/code_highlight.css">
+<script type="text/javascript" src="scripts/language-selector.js"></script></head>
+<body>
+<div class="docs-body">
+<div class="manual-toc">
+<p>FMOD Engine User Manual 2.04</p>
+<ul>
+<li class="manual-current-chapter manual-inactive-chapter"><a href="welcome.html">Welcome to the FMOD Engine</a><ul class="subchapters"><li class="manual-current-chapter manual-active-chapter"><a href="welcome-whats-new-204.html">New in FMOD Engine 2.04</a></li><li><a href="welcome-whats-new-203.html">New in FMOD Engine 2.03</a></li><li><a href="welcome-whats-new-202.html">New in FMOD Engine 2.02</a></li><li><a href="welcome-whats-new-201.html">New in FMOD Engine 2.01</a></li><li><a href="welcome-whats-new-200.html">New in FMOD Engine 2.00</a></li><li><a href="welcome-whats-new-110.html">New in FMOD Engine 1.10</a></li><li><a href="welcome-revision-history.html">Detailed Revision History</a></li></ul></li>
+<li><a href="core-api-concepts.html">Core API Key Concepts</a></li>
+<li><a href="running-the-core-api.html">Core API Getting Started</a></li>
+<li><a href="loading-and-playing-sounds-in-the-core-api.html">Core API Loading and Playing Sounds</a></li>
+<li><a href="spatializing-sounds-in-the-core-api.html">Core API Spatializing Sounds</a></li>
+<li><a href="mixing-and-routing-in-the-core-api.html">Core API Mixing and Routing</a></li>
+<li><a href="using-dsp-effects-in-the-core-api.html">Core API Using DSP Effects</a></li>
+<li><a href="effects-reference.html">Core API Effect Reference</a></li>
+<li><a href="managing-resources-in-the-core-api.html">Core API Managing Resources</a></li>
+<li><a href="advanced-core-api-topics.html">Core API Advanced Topics</a></li>
+<li><a href="core-api.html">Core API Reference</a></li>
+<li><a href="studio-api-getting-started.html">Studio API Getting Started</a></li>
+<li><a href="studio-guide.html">Studio API Guide</a></li>
+<li><a href="studio-api-3d-events.html">Studio API 3D Events</a></li>
+<li><a href="studio-api-threads.html">Studio API Threads</a></li>
+<li><a href="studio-api.html">Studio API Reference</a></li>
+<li><a href="platforms.html">Platform Details</a></li>
+<li><a href="dsp-plugin-api-guide.html">Custom DSP API Guide</a></li>
+<li><a href="plugin-api.html">Plug-in API Reference</a></li>
+<li><a href="fsbank-api.html">FSBank API Reference</a></li>
+<li><a href="troubleshooting.html">Troubleshooting</a></li>
+<li><a href="glossary.html">Glossary</a></li>
+</ul>
+</div>
+<div class="manual-content api">
+<h1>1. Welcome to the FMOD Engine | New in FMOD Engine 2.04</h1>
+<div class="toc">
+<ul>
+<li><a href="#whats-new-in-204">What's New in 2.04?</a><ul>
+<li><a href="#audio-table-instruments">Audio Table Instruments</a></li>
+<li><a href="#dsp-api-improvements">DSP API Improvements</a></li>
+<li><a href="#html5-improvements">HTML5 Improvements</a></li>
+<li><a href="#minimum-maximum-distance-overrides">Minimum / Maximum Distance Overrides</a></li>
+<li><a href="#multiband-dynamics-legacy-mode">Multiband Dynamics Legacy Mode</a></li>
+<li><a href="#per-sound-resampler-configuration">Per Sound Resampler Configuration</a></li>
+<li><a href="#studio-api-asset-markers">Studio API Asset Markers</a></li>
+<li><a href="#platform-notes">Platform Notes</a></li>
+<li><a href="#api-differences">API Differences</a><ul>
+<li><a href="#studio-api">Studio API</a></li>
+<li><a href="#core-api">Core API</a></li>
+<li><a href="#dsp-plugin-api">DSP Plugin API</a></li>
+<li><a href="#dsp-effects">DSP Effects</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#whats-new-since-203-initial-release">What's New Since 2.03 Initial Release?</a><ul>
+<li><a href="#platforms">Platforms</a></li>
+<li><a href="#api-differences_1">API Differences</a><ul>
+<li><a href="#core-api_1">Core API</a></li>
+<li><a href="#dsp-plugin-api_1">DSP Plugin API</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<h2 id="whats-new-in-204"><a href="#whats-new-in-204">What's New in 2.04?</a></h2>
+<p>This section describes the major features introduced in the 2.04 release. See the <a href="welcome-revision-history.html">Detailed Revision History</a> for information regarding each patch release.</p>
+<h3 id="audio-table-instruments"><a href="#audio-table-instruments">Audio Table Instruments</a></h3>
+<p>Playing sounds from <a href="https://fmod.com/docs/2.04/studio/dialogue-and-localization.html#audio-tables">audio tables</a> has been simplified with the introduction of the <a href="https://fmod.com/docs/2.04/studio/instrument-reference.html#audio-table-instrument">audio table instrument</a>. Playing a sound from an audio table previously required the use of a <a href="https://fmod.com/docs/2.04/studio/instrument-reference.html#programmer-instrument">programmer instrument</a> in conjunction with <a class="apilink" href="studio-api-eventinstance.html#fmod_studio_event_callback_create_programmer_sound">FMOD_STUDIO_EVENT_CALLBACK_CREATE_PROGRAMMER_SOUND</a> and <a class="apilink" href="studio-api-eventinstance.html#fmod_studio_event_callback_destroy_programmer_sound">FMOD_STUDIO_EVENT_CALLBACK_DESTROY_PROGRAMMER_SOUND</a> callbacks. While this workflow is still available, you can now enqueue <a href="https://fmod.com/docs/2.04/studio/dialogue-and-localization.html#keys">keys</a> for any <a class="apilink" href="studio-api-eventinstance.html">Studio::EventInstance</a> containing an audio table instrument using <a class="apilink" href="studio-api-eventinstance.html#studio_eventinstance_addaudiotablekey">Studio::EventInstance::addAudioTableKey</a>. When an audio table instrument is triggered it pops a key from the queue and plays the corresponding key from the audio table. Once the list is exhausted the instrument no longer triggers.</p>
+<h3 id="dsp-api-improvements"><a href="#dsp-api-improvements">DSP API Improvements</a></h3>
+<p>The DSP API has been simplified to remove the <code>read</code>, and <code>shouldiprocess</code> callbacks, so all plugins must now use <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_process_callback">FMOD_DSP_PROCESS_CALLBACK</a> to be compatible with FMOD 2.04. <code>FMOD_DSP_PROCESS_CALLBACK</code> has been modified to remove the two <code>FMOD_DSP_PROCESS_OPERATION</code> modes, and is now solely responsible for processing sample data. DSP idle behavior is now controlled by the new <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_setsilence_func">FMOD_DSP_SETSILENCE_FUNC</a> and <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_setbypass_func">FMOD_DSP_SETBYPASS_FUNC</a> DSP state functions that can be called when the plugin should stop processing. The new <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_description_defaultcooldown">FMOD_DSP_DESCRIPTION::defaultcooldown</a> field can also be used to configure the number of samples to wait after receiving no signal before the DSP should automatically go idle.</p>
+<p>Full details of the required migration steps can be found in the <a href="dsp-plugin-api-guide.html#migrating-from-203-to-204">Migrating from 2.03 to 2.04</a> section of the <a href="dsp-plugin-api-guide.html">DSP Plugin API Guide</a>.</p>
+<h3 id="html5-improvements"><a href="#html5-improvements">HTML5 Improvements</a></h3>
+<p>The HTML5 platform has been upgraded with a modernized JavaScript API, along with support for TypeScript/IntelliSense, Node.js, and NPM package install support. File and bank loading has also been improved with a new "fetch" API and updated file callback support. FMOD for HTML5 has deprecated asm.js support and is now WebAssembly only.</p>
+<h3 id="minimum-maximum-distance-overrides"><a href="#minimum-maximum-distance-overrides">Minimum / Maximum Distance Overrides</a></h3>
+<p>A new <code>includeOverrides</code> flag has been added to <a class="apilink" href="studio-api-eventdescription.html#studio_eventdescription_getminmaxdistance">Studio::EventDescription::getMinMaxDistance</a>. When set to <code>true</code>, the function evaluates the event's <a class="apilink" href="studio-api-eventinstance.html#fmod_studio_event_property_minimum_distance">FMOD_STUDIO_EVENT_PROPERTY_MINIMUM_DISTANCE</a> and <a class="apilink" href="studio-api-eventinstance.html#fmod_studio_event_property_maximum_distance">FMOD_STUDIO_EVENT_PROPERTY_MAXIMUM_DISTANCE</a> properties, as well as the overriding min and max distance of all spatializer DSPs (<a class="apilink" href="core-api-common-dsp-effects.html#fmod_dsp_type_pan">FMOD_DSP_TYPE_PAN</a> and <a class="apilink" href="core-api-common-dsp-effects.html#fmod_dsp_type_objectpan">FMOD_DSP_TYPE_OBJECTPAN</a>) on the event's <span class="dead-link" href="glossary.html#master-track">master track</span class="dead-link">, and returns the minimum of all min distances and maximum of all max distances from the respective <code>min</code> and <code>max</code> out parameters.</p>
+<p>This means you can now accurately query the min and max distance of a <a class="apilink" href="studio-api-eventdescription.html">Studio::EventDescription</a> without needing to first play an <a class="apilink" href="studio-api-eventinstance.html">Studio::EventInstance</a> of that event, allowing for improved distance-based performance optimizations.</p>
+<h3 id="multiband-dynamics-legacy-mode"><a href="#multiband-dynamics-legacy-mode">Multiband Dynamics Legacy Mode</a></h3>
+<p>In 2.03 the <a href="effects-reference.html#multiband-dynamics">multiband dynamics effect</a> used a ratio calculation that produced inaccurate dynamic response results. This caused an audibly reduced amount of attenuation or gain to be applied during playback. This has been corrected in 2.04, and any new multiband dynamics effect instances now use the corrected ratio calculation. To preserve existing behavior, any existing multiband dynamics effect instances are switched over to using the legacy ratio calculation during FMOD Studio project migration.</p>
+<p>If you prefer the old ratio calculation, or if you migrate your project and are manually creating <a class="apilink" href="core-api-common-dsp-effects.html#fmod_dsp_multiband_dynamics">FMOD_DSP_MULTIBAND_DYNAMICS</a> instances using the API, you can set the <a class="apilink" href="core-api-common-dsp-effects.html#fmod_dsp_multiband_dynamics_legacy_mode">FMOD_DSP_MULTIBAND_DYNAMICS_LEGACY_MODE</a> int parameter to <a class="apilink" href="core-api-common-dsp-effects.html#fmod_dsp_multiband_dynamics_legacy_mode_20300">FMOD_DSP_MULTIBAND_DYNAMICS_LEGACY_MODE_20300</a> to use the previous calculation.</p>
+<h3 id="per-sound-resampler-configuration"><a href="#per-sound-resampler-configuration">Per Sound Resampler Configuration</a></h3>
+<p>The resampler method (<a class="apilink" href="core-api-system.html#fmod_dsp_resampler">FMOD_DSP_RESAMPLER</a>) can now be configured per-sound using <a class="apilink" href="core-api-system.html#fmod_createsoundexinfo_resamplermethod">FMOD_CREATESOUNDEXINFO::resamplermethod</a>. This allows anti-aliasing to be applied to individual sounds rather than system-wide with <a class="apilink" href="core-api-system.html#fmod_advancedsettings_resamplermethod">FMOD_ADVANCEDSETTINGS::resamplerMethod</a>.</p>
+<h3 id="studio-api-asset-markers"><a href="#studio-api-asset-markers">Studio API Asset Markers</a></h3>
+<p><a class="apilink" href="studio-api-eventinstance.html">Studio::EventInstance</a>s and <a class="apilink" href="studio-api-eventdescription.html">Studio::EventDescription</a>s can now have an <a class="apilink" href="studio-api-eventinstance.html#fmod_studio_event_callback_asset_marker">FMOD_STUDIO_EVENT_CALLBACK_ASSET_MARKER</a> callback registered which is triggered whenever an instrument's playhead passes over an <a class="apilink" href="core-api-common.html#fmod_syncpoint">FMOD_SYNCPOINT</a> embedded in any of its assets. This works for <a href="https://fmod.com/docs/2.04/studio//glossary.html#asset-markers">asset markers</a> created in FMOD Studio, as well as syncpoints embedded in assets played back via a <a href="https://fmod.com/docs/2.04/studio/instrument-reference.html#programmer-instrument">programmer instrument</a>.</p>
+<h3 id="platform-notes"><a href="#platform-notes">Platform Notes</a></h3>
+<ul>
+<li>Removed support for UWP</li>
+<li>Added NPM and Node.js support to HTML5</li>
+<li>Removed asm.js support for HTML5</li>
+</ul>
+<h3 id="api-differences"><a href="#api-differences">API Differences</a></h3>
+<p>APIs that have changed with this release that haven't been called out explicitly above.</p>
+<h4 id="studio-api"><a href="#studio-api">Studio API</a></h4>
+<ul>
+<li>Modified <a class="apilink" href="studio-api-eventdescription.html#studio_eventdescription_getminmaxdistance">Studio::EventDescription::GetMinMaxDistance</a> to add <code>includeOverrides</code></li>
+<li>Added <a class="apilink" href="studio-api-eventinstance.html#fmod_studio_event_callback_asset_marker">FMOD_STUDIO_EVENT_CALLBACK_ASSET_MARKER</a></li>
+<li>Added <a class="apilink" href="studio-api-eventinstance.html#fmod_studio_asset_marker_properties">FMOD_STUDIO_ASSET_MARKER_PROPERTIES</a></li>
+<li>Added <a class="apilink" href="studio-api-common.html#studio_hashaudiotablekey">Studio::hashAudioTableKey</a></li>
+<li>Added <a class="apilink" href="studio-api-eventinstance.html#studio_eventinstance_addaudiotablekey">Studio::EventInstance::addAudioTableKey</a></li>
+<li>Added <a class="apilink" href="studio-api-eventinstance.html#studio_eventinstance_clearaudiotablekeys">Studio::EventInstance::clearAudioTableKeys</a></li>
+<li>Added <a class="apilink" href="studio-api-system.html#fmod_studio_system_callback_get_sound_info">FMOD_STUDIO_SYSTEM_CALLBACK_GET_SOUND_INFO</a></li>
+<li>Added <a class="apilink" href="studio-api-common.html#fmod_studio_parameter_automatic_audio_table_key_count">FMOD_STUDIO_PARAMETER_AUTOMATIC_AUDIO_TABLE_KEY_COUNT</a></li>
+<li>Modified <a class="apilink" href="studio-api-system.html#fmod_studio_sound_info">FMOD_STUDIO_SOUND_INFO</a> to add <code>keyhash</code></li>
+</ul>
+<h4 id="core-api"><a href="#core-api">Core API</a></h4>
+<ul>
+<li>Renamed <code>DSP::setChannelFormat</code> to <a class="apilink" href="core-api-dsp.html#dsp_setinputchannelformat">DSP::setInputChannelFormat</a></li>
+<li>Renamed <code>DSP::getChannelFormat</code> to <a class="apilink" href="core-api-dsp.html#dsp_getinputchannelformat">DSP::getInputChannelFormat</a></li>
+<li>Modified <a class="apilink" href="core-api-dsp.html#dsp_setinputchannelformat">DSP::setInputChannelFormat</a> to remove <code>channelmask</code></li>
+<li>Modified <a class="apilink" href="core-api-dsp.html#dsp_getinputchannelformat">DSP::getInputChannelFormat</a> to remove <code>channelmask</code></li>
+<li>Modified <a class="apilink" href="core-api-dsp.html#dsp_getoutputchannelformat">DSP::getOutputChannelFormat</a> to remove <code>inmask</code>, <code>outmask</code></li>
+<li>Removed <code>FMOD_DSP_ShowConfigDialog</code></li>
+<li>Modified <a class="apilink" href="core-api-dsp.html#dsp_getinfo">DSP::getInfo</a> to remove <code>configwidth</code>, <code>configheight</code>, and to add <code>mode</code></li>
+<li>Removed <code>FMOD_INIT_MIX_FROM_UPDATE</code></li>
+<li>Removed <code>FMOD_SOUND_TYPE_MEDIA_FOUNDATION</code></li>
+<li>Modified <a class="apilink" href="core-api-system.html#fmod_createsoundexinfo">FMOD_CREATESOUNDEXINFO</a> to add <code>resamplermethod</code></li>
+</ul>
+<h4 id="dsp-plugin-api"><a href="#dsp-plugin-api">DSP Plugin API</a></h4>
+<ul>
+<li>Renamed <code>FMOD_DSP_BUFFER_ARRAY</code> to <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_buffer">FMOD_DSP_BUFFER</a></li>
+<li>Modified <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_buffer">FMOD_DSP_BUFFER</a> to remove <code>numbuffers</code>, <code>bufferchannelmask</code>, and return a single pointer for <code>buffer</code></li>
+<li>Added <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_cooldown_infinite">FMOD_DSP_COOLDOWN_INFINITE</a></li>
+<li>Added <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_mode">FMOD_DSP_MODE</a> with <code>FILTER</code> and <code>GENERATOR</code> values</li>
+<li>Removed <code>FMOD_DSP_PROCESS_OPERATION</code></li>
+<li>Removed <code>FMOD_DSP_READ_CALLBACK</code></li>
+<li>Removed <code>FMOD_DSP_SHOULDIPROCESS_CALLBACK</code></li>
+<li>Added <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_getidletime_func">FMOD_DSP_GETIDLETIME_FUNC</a></li>
+<li>Added <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_setcooldown_func">FMOD_DSP_SETCOOLDOWN_FUNC</a></li>
+<li>Added <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_setbypass_func">FMOD_DSP_SETBYPASS_FUNC</a></li>
+<li>Added <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_setsilence_func">FMOD_DSP_SETSILENCE_FUNC</a></li>
+<li>Added <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_setoutputformat_func">FMOD_DSP_SETOUTPUTFORMAT_FUNC</a></li>
+<li>Modified <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_description">FMOD_DSP_DESCRIPTION</a> to remove <code>numinputbuffers</code>, <code>numoutputbuffers</code>, <code>read</code>, <code>shouldishouldiprocess</code>, and to add <code>mode</code>, <code>defauldefaultcooldown</code>, <code>inchannels</code>, <code>outchannels</code></li>
+<li>Modified <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_state_functions">FMOD_DSP_STATE_FUNCTIONS</a> to remove <code>getidletime</code>, <code>setcooldown</code>, <code>setbypass</code>, <code>setsilence</code>, <code>setoutputformat</code></li>
+<li>Deprecated <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_state_channelmask">FMOD_DSP_STATE::channelmask</a></li>
+<li>Deprecated <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_state_source_speakermode">FMOD_DSP_STATE::source_speakermode</a></li>
+<li><a class="apilink" href="plugin-api-dsp.html#fmod_plugin_sdk_version">FMOD_PLUGIN_SDK_VERSION</a> has changed from 110 to 204</li>
+</ul>
+<h4 id="dsp-effects"><a href="#dsp-effects">DSP Effects</a></h4>
+<ul>
+<li>Added <a class="apilink" href="core-api-common-dsp-effects.html#fmod_dsp_multiband_dynamics_legacy_mode">FMOD_DSP_MULTIBAND_DYNAMICS_LEGACY_MODE</a></li>
+<li>Added <a class="apilink" href="core-api-common-dsp-effects.html#fmod_dsp_multiband_dynamics_legacy_mode_type">FMOD_DSP_MULTIBAND_DYNAMICS_LEGACY_MODE_TYPE</a> with <code>FMOD_DSP_MULTIBAND_DYNAMICS_LEGACY_MODE_LATEST</code> and <code>FMOD_DSP_MULTIBAND_DYNAMICS_LEGACY_MODE_20300</code> values</li>
+<li>Added <code>FMOD_HAPTICS_INTENSITY</code></li>
+<li>Added <code>FMOD_HAPTICS_PLAY_COUNT</code></li>
+</ul>
+<h2 id="whats-new-since-203-initial-release"><a href="#whats-new-since-203-initial-release">What's New Since 2.03 Initial Release?</a></h2>
+<p>This section describes any major changes that occurred in 2.03.xx leading up to the release of 2.04.</p>
+<h3 id="platforms"><a href="#platforms">Platforms</a></h3>
+<ul>
+<li>Added support for Nintendo Switch 2</li>
+<li>Added FMOD Haptics plugin for PS4, PS5, Switch 1/2, Xbox One, Xbox X|S, and Meta Quest</li>
+<li>Added support for pthread/SharedArrayBuffer in HTML5</li>
+<li>Added support for WeChat Mini Game in TuanjJie Engine</li>
+<li>Added support for Android Native Activities</li>
+</ul>
+<h3 id="api-differences_1"><a href="#api-differences_1">API Differences</a></h3>
+<p>APIs that have changed with this release that haven't been called out explicitly above.</p>
+<h4 id="core-api_1"><a href="#core-api_1">Core API</a></h4>
+<ul>
+<li>Added <a class="apilink" href="core-api-system.html#system_createdspconnection">System::createDSPConnection</a></li>
+<li>Added <a class="apilink" href="core-api-dsp.html#dsp_addinputpreallocated">DSP::addInputPreallocated</a></li>
+</ul>
+<h4 id="dsp-plugin-api_1"><a href="#dsp-plugin-api_1">DSP Plugin API</a></h4>
+<ul>
+<li>Added <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_parameter_data_type_finite_length">FMOD_DSP_PARAMETER_DATA_TYPE_FINITE_LENGTH</a></li>
+<li>Added <a class="apilink" href="plugin-api-dsp.html#fmod_dsp_parameter_finite_length">FMOD_DSP_PARAMETER_FINITE_LENGTH</a></li>
+</ul></div>
+
+<p class="manual-footer">FMOD Engine User Manual 2.04.00 (2026-09-29). &copy; 2026 Firelight Technologies Pty Ltd.</p>
+</div>
+</body>
+</html>
+

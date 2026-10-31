@@ -7,13 +7,7 @@ if (variable_instance_exists(id, "video_layers") && is_array(video_layers)) {
 	video_layers = [];
 };
 if (variable_instance_exists(id, "videos") && is_array(videos)) {
-	// 释放裁剪表面并关闭解码器。
-	for (var _video_i = 0; _video_i < array_length(videos); _video_i++) {
-		if (surface_exists(videos[_video_i].clip_surface)) then surface_free(videos[_video_i].clip_surface);
-		videos[_video_i].clip_surface = -1;
-		if (videos[_video_i].handle >= 0) then ffvideos_ext_close(videos[_video_i].handle);
-		videos[_video_i].handle = -1;
-	};
+	video_close_all();
 };
 // 后端只在初始化成功时关闭。
 if (video_backend_ready) {

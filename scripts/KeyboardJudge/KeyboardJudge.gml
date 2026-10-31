@@ -289,6 +289,7 @@ function chart_kb_judge_step() {
 	else {
 		state.held = 0;
 		state.pressed = 0;
+		state.sample_sec = game.__time[1];
 	}
 	if (!chart_player_keyboard_judge_active()) {
 		state.was_active = false;
@@ -302,6 +303,28 @@ function chart_kb_judge_step() {
 		state.initialized = true;
 	}
 	if (!state.was_active) state.pressed = 0;
+	if (os_type == os_android) {
+		var input = android_touch_state();
+		if (!input.focused || !input.available) {
+			state.was_active = false;
+			return;
+		}
+		// 暂停/过场中的点击不可命中恢复后的音符，仍保留已按住的触点。
+		if (!state.was_active) {
+			input.taps = []; input.flicks = [];
+			for (var index = 0; index < array_length(input.fingers); index++) {
+				input.fingers[index].gesture.consumed = true;
+				input.fingers[index].flicking = false;
+			}
+			// 暂停前按住的 Hold 可在恢复帧交接，但不能因暂停时长直接断连。
+			for (var index = 0; index < array_length(state.active); index++) {
+				state.active[index].touch_contact_at = (input.sample_us - game.__time[3] - game.__time[0]) / 1000000;
+			}
+		}
+		state.was_active = true;
+		chart_touch_judge_at(state, input, (input.sample_us - game.__time[3] - game.__time[0]) / 1000000);
+		return;
+	}
 	state.was_active = true;
 	// 使用输入采样时刻，避免恰好跨过判定点的 Drag/Flick 再多等一帧。
 	chart_kb_judge_at(state, state.sample_sec);

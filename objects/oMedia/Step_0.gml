@@ -1,4 +1,5 @@
 ///@desc 步进：刷新播放位置和时长
+chart_music_noise_step();
 if (media_use_gx()) {
 	// js 音频用毫秒位置；读到时长后通知谱面。
 	if (gx_audio_kind == "js" && gx_js_handle > 0) {

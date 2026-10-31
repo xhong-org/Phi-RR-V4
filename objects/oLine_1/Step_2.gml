@@ -1,6 +1,8 @@
 ///@desc 步进结束：所有线求值后再做父级变换和屏幕映射
 // RPE 在父级旋转之前，用视口宽/1350 和视口高/900 缩放子级偏移。
 // 步进结束时，每条线这一帧的 __raw_* 都已经写完。
+// 退场不重复写绑定界面；窗口变化由渲染器的 Draw Begin 统一校正。
+if (chart_play_ending()) then exit;
 
 // 加载动画或暂停时不做屏幕映射，除非强制初始化或转场还在更新。
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active

@@ -23,11 +23,9 @@ play_delay = 500000;
 exit_delay = 1000000;
 progress = 0;
 line_progress = 0;
-mask_end_phase = 0;
 mask_released = false;
+end_xscale = 1;
 end_cover_alpha = 0;
-end_cover_span = 0;
-end_phase_origin_s = 0;
 render_started_frame = 0;
 render_outro_started_frame = 0;
 render_exit_delay_started_frame = 0;
@@ -110,91 +108,50 @@ function play_transition_apply(_value, _outro = false) {
 	owner.play_transition_score_y = -max(1, 110 * global_scales) * _hidden;
 	owner.play_transition_ui_alpha = _outro ? (1 - _p) : 1;
 	owner.play_transition_bar_alpha = _outro ? 1 : _p;
-	var _outro_bg_end = 0.5;
-	// 录像且不录结算时，结束背景直接收到 0。
-	if (variable_global_exists("render_mode") && global.render_mode && !render_wants_settlement()) {
-		_outro_bg_end = 0;
-	};
-	owner.play_transition_bg_alpha = _outro ? lerp(1, _outro_bg_end, _p) : _p;
+	// 退场保持源画面的压暗，由遮罩合成统一压缩整个有效画面。
+	owner.play_transition_bg_alpha = _outro ? 1 : _p;
 	line_progress = _outro ? (1 - _p) : _p;
 }
 
-///@desc 推进结束阶段，并在遮罩释放后切换黑边
+///@desc 横向收拢有效区域，完成后放开遮罩并准备全屏压暗
 ///@param {Real} _elapsed 本阶段已经过的时间
 ///@param {Real} _duration 本阶段时长
-///@returns {Real} 0 继续，1 进入下一小段，2 结束阶段完成
+///@returns {Real} 0 继续，2 结束阶段完成
 function play_transition_step_end_phase(_elapsed, _duration) {
 	var _dur = max(0.000001, _duration);
 	progress = clamp(_elapsed / _dur, 0, 1);
 	var _eased = Easings.InOutExpo(progress);
-	// 没有谱面遮罩时只做界面退场。
-	if (!chart_mask_enabled()) {
-		mask_released = false;
-		end_cover_alpha = 0;
-		end_cover_span = 0;
-		play_transition_apply(_eased, true);
-		owner.chart_exit_alpha = 1 - _eased;
-		// 这一小段还没走完就继续等。
-		if (progress < 1) then return 0;
-		play_transition_apply(1, true);
-		owner.chart_exit_alpha = 0;
-		line_progress = 0;
-		return 2;
-	};
-	// 第一段退界面并释放遮罩。
-	if (mask_end_phase <= 0) {
-		mask_released = false;
-		end_cover_alpha = 0;
-		end_cover_span = 0;
-		play_transition_apply(_eased, true);
-		owner.play_transition_bg_alpha = 1;
-		owner.chart_exit_alpha = 1 - _eased;
-		if (progress < 1) then return 0;
-		line_progress = 0;
-		mask_end_phase = 1;
-		mask_released = true;
-		depth = -12200;
-		end_cover_alpha = 0.6;
-		end_cover_span = 0;
-		owner.play_transition_bg_alpha = 0;
-		return 1;
-	};
-	// 第二段把遮罩黑边淡出。
-	if (mask_end_phase == 1) {
-		mask_released = true;
-		line_progress = 0;
-		play_transition_apply(1, true);
-		owner.play_transition_bg_alpha = 0;
-		owner.chart_exit_alpha = 0;
-		end_cover_span = 1;
-		end_cover_alpha = lerp(0.6, 0, _eased);
-		if (progress < 1) then return 0;
-		mask_end_phase = 2;
-		end_cover_alpha = 0;
-		end_cover_span = 1;
-		return 1;
-	};
-	mask_released = true;
-	line_progress = 0;
-	play_transition_apply(1, true);
-	owner.play_transition_bg_alpha = 0;
-	owner.chart_exit_alpha = 0;
-	end_cover_span = 1;
-	end_cover_alpha = lerp(0, 0.3, _eased);
+	play_transition_apply(_eased, true);
+	owner.chart_exit_alpha = 1 - _eased;
+	end_xscale = 1 - _eased;
 	if (progress < 1) then return 0;
-	end_cover_alpha = 0.3;
+	play_transition_deactivate_gameplay();
+	// 压缩完成后只保留原始背景，下一阶段再把整帧压暗到 0.3。
+	mask_released = true;
+	depth = -12200;
+	line_progress = 0;
+	owner.chart_exit_alpha = 0;
+	owner.play_transition_bg_alpha = 0;
+	end_xscale = 0;
+	end_cover_alpha = 0;
 	return 2;
+}
+
+///@desc 横向压缩结束后缓动整帧黑底，完成后交给结算页
+///@returns {Bool} 全屏压暗是否完成
+function play_transition_step_exit_delay(_elapsed, _duration) {
+	var _p = clamp(_elapsed / max(0.000001, _duration), 0, 1);
+	end_cover_alpha = 0.3 * Easings.InOutExpo(_p);
+	return _p >= 1;
 }
 
 ///@desc 清掉结束遮罩并重新播放开场
 ///@returns {Undefined} 无
 function play_transition_restart_intro() {
 	// 结算重试会留下结束遮罩，这里必须清掉。开场压暗只在遮罩还被握住时发生。
-	mask_end_phase = 0;
 	mask_released = false;
+	end_xscale = 1;
 	end_cover_alpha = 0;
-	end_cover_span = 0;
-	end_phase_origin_s = 0;
 	depth = DEPTH.HEF + 2;
 	progress = 0;
 	line_progress = 0;
@@ -211,7 +168,8 @@ function play_transition_begin_exit() {
 	if (state >= PLAY_TRANSITION_STATE.OUTRO) then return;
 	game.paused = true;
 	m_pause();
-	play_transition_deactivate_gameplay();
+	// 谱面停止推进，保留音符、判定线和视频末帧参与横向压缩。
+	with (oExtraPlay) video_pause_for_outro();
 	state = PLAY_TRANSITION_STATE.OUTRO;
 	state_started_at = get_timer();
 }

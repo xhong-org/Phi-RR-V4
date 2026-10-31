@@ -1,4 +1,5 @@
 ///@desc 跟踪 RPE 谱面秒数，并在需要时重试外部后端
+if (chart_play_ending()) then exit;
 // 区间哨兵不推进控制器时间。
 if (variable_instance_exists(id, "effect_boundary_role")) then exit;
 if (pls_is_gxgames() && !external_hlsl_ready && !chart_setting_on("disableChartShader")) {

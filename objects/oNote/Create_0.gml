@@ -17,6 +17,10 @@ if (!is_array(game.line_list) || self.line_id < 0 || self.line_id >= array_lengt
 };
 _line_ref = (game.line_list[self.line_id]);
 _last_global_scales = -1;
+_last_note_size = -1;
+_last_view_width = -1;
+_last_view_height = -1;
+_last_view_left = -1;
 _now_seconds = 0;
 _now_beat = 0;
 

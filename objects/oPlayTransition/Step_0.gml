@@ -59,22 +59,17 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 	if (state == PLAY_TRANSITION_STATE.PLAYING
 		&& variable_global_exists("render_chart_frames")
 		&& global.render_frame >= global.render_chart_frames) {
-		game.paused = true;
-		play_transition_deactivate_gameplay();
 		owner.chart_exit_started = true;
 		owner.chart_exit_alpha = 1;
+		play_transition_begin_exit();
 		render_outro_started_frame = global.render_frame;
-		state = PLAY_TRANSITION_STATE.OUTRO;
 	};
 	if (state == PLAY_TRANSITION_STATE.OUTRO) {
 		var _render_outro_elapsed = max(0,
 			(global.render_frame - render_outro_started_frame) / max(1, global.render_fps));
-		var _render_phase_elapsed = _render_outro_elapsed - end_phase_origin_s;
-		var _render_end_signal = play_transition_step_end_phase(_render_phase_elapsed, 1.0);
-		// 1 切到下一小段，2 进入退出等待。
-		if (_render_end_signal == 1) {
-			end_phase_origin_s = _render_outro_elapsed;
-		} else if (_render_end_signal == 2) {
+		var _render_end_signal = play_transition_step_end_phase(_render_outro_elapsed, 1.0);
+		if (_render_end_signal == 2) {
+			with (oExtraPlay) video_finish_playback();
 			render_exit_delay_started_frame = global.render_frame;
 			state = PLAY_TRANSITION_STATE.EXIT_DELAY;
 		};
@@ -82,11 +77,12 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 	};
 	if (state == PLAY_TRANSITION_STATE.EXIT_DELAY) {
 		game.paused = true;
-		// 需要结算时等一秒再创建结算界面。
+		var _wait_s = max(0, (global.render_frame - render_exit_delay_started_frame)
+			/ max(1, global.render_fps));
+		var _cover_done = play_transition_step_exit_delay(_wait_s, 1.0);
+		// 整帧压暗完成后再创建结算界面。
 		if (render_wants_settlement()) {
-			var _wait_s = max(0, (global.render_frame - render_exit_delay_started_frame)
-				/ max(1, global.render_fps));
-			if (_wait_s >= 1.0) {
+			if (_cover_done) {
 				if (!instance_exists(oSettlement)) {
 					instance_create_depth(0, 0, -12500, oSettlement, { owner: owner });
 				};
@@ -219,10 +215,8 @@ switch (state) {
 
 	case PLAY_TRANSITION_STATE.OUTRO:
 		var _end_signal = play_transition_step_end_phase(_elapsed, animation_duration);
-		// 结束小段切换或进入退出等待。
-		if (_end_signal == 1) {
-			state_started_at = _now;
-		} else if (_end_signal == 2) {
+		if (_end_signal == 2) {
+			with (oExtraPlay) video_finish_playback();
 			state = PLAY_TRANSITION_STATE.EXIT_DELAY;
 			state_started_at = _now;
 		};
@@ -231,7 +225,7 @@ switch (state) {
 	case PLAY_TRANSITION_STATE.EXIT_DELAY:
 		game.paused = true;
 		// 环境测试直接结束，否则进入结算。
-		if (_elapsed >= exit_delay) {
+		if (play_transition_step_exit_delay(_elapsed, exit_delay)) {
 			if (variable_global_exists("pls_environment_run") && global.pls_environment_run) {
 				play_transition_finish_exit();
 			} else {

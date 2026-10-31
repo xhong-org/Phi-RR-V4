@@ -3,7 +3,21 @@
 ///@desc 返回设置 ini 的路径
 ///@returns {String} configs.ini 路径
 function settings_ini_path() {
+	if (os_type == os_android) then return game_save_id + "configs.ini";
 	return $"{working_directory}resource/configs.ini";
+}
+
+///@desc 设置仍保存全部键，只隐藏当前平台不能执行的桌面选项
+function settings_platform_visible(key) {
+	if (os_type != os_android) then return true;
+	return key != "preventWindowMoveFreeze" && key != "enableRPEMulticore"
+		&& key != "rpeWorkerMinLines" && key != "rpeWorkerProfileFrames"
+		&& key != "directGlslEs";
+}
+
+///@desc 当前 Android Runtime 的 SetMultiSample 为空实现，不改写已保存的桌面档位
+function settings_platform_enabled(key) {
+	return os_type != os_android || key != "aa_level";
 }
 
 ///@desc 判断字段注释是否标成已废弃或已弃用
@@ -35,6 +49,9 @@ function settings_catalog() {
 	// 静态目录只建一次
 	if (!is_undefined(cat)) then return cat;
 	cat = [
+		{ key:"hitsoundVolume", comment:"打击音效音量(default:1)" },
+		{ key:"musicVolume", comment:"音乐音量(default:1)" },
+		{ key:"noteSize", comment:"音符大小(default:1)" },
 		{ key:"enableBlur", comment:"是否启用背景模糊(default:true)" },
 		{ key:"enableFPS", comment:"是否显示FPS(default:true)" },
 		{ key:"enableQuikyStart", comment:"是否启用快速启动(已弃用)(default:true)" },
@@ -67,7 +84,7 @@ function settings_catalog() {
 		{ key:"directGlslEs", comment:"Windows 直接编译 GLSL ES，不经 HLSL 翻译(default:false)" },
 		{ key:"disableChartVideo", comment:"禁用谱面视频(default:false)" },
 		{ key:"enableNoiseArea", comment:"是否启用噪区(default:true)" },
-		{ key:"enableNoiseAreaFine", comment:"是否开启噪区精细(default:false)" },
+		{ key:"enableNoiseAreaFine", comment:"是否开启噪区高分辨率(default:false)" },
 		{ key:"reduceNoiseAreaWave", comment:"减少噪区起伏幅度(default:false)" },
 		{ key:"TEST1", comment:"judge offset jitter test (default false)" }
 	];
@@ -179,6 +196,9 @@ function settings_format_ini(_key, _value) {
 ///@returns {Undefined} 无
 function settings_clamp_store(_store) {
 	if (!is_struct(_store)) then return;
+	if (struct_exists(_store, "noteSize")) then _store.noteSize = settings_clamp_number(_store.noteSize, 0.5, 4);
+	if (struct_exists(_store, "hitsoundVolume")) then _store.hitsoundVolume = settings_clamp_number(_store.hitsoundVolume, 0, 1);
+	if (struct_exists(_store, "musicVolume")) then _store.musicVolume = settings_clamp_number(_store.musicVolume, 0, 1);
 	// 只钳制存在的键，帧数和抗锯齿取整
 	if (struct_exists(_store, "refreshFPSCount")) then _store.refreshFPSCount = clamp(real(_store.refreshFPSCount), 1, 300);
 	if (struct_exists(_store, "notePreloadSeconds")) then _store.notePreloadSeconds = clamp(real(_store.notePreloadSeconds), 0, 60);
@@ -186,6 +206,12 @@ function settings_clamp_store(_store) {
 	if (struct_exists(_store, "rpeWorkerProfileFrames")) then _store.rpeWorkerProfileFrames = clamp(floor(real(_store.rpeWorkerProfileFrames)), 60, 36000);
 	if (struct_exists(_store, "aa_level")) then _store.aa_level = clamp(floor(real(_store.aa_level)), 0, 8);
 	if (struct_exists(_store, "judgeOffset")) then _store.judgeOffset = clamp(real(_store.judgeOffset), -5000, 5000);
+}
+
+///@desc 非有限数回到默认 1，避免错误配置把音符或声道变成 NaN
+function settings_clamp_number(_value, _low, _high) {
+	var value = real(_value);
+	return is_finite(value) ? clamp(value, _low, _high) : 1;
 }
 
 ///@desc 判断该键是否应忽略；随包的 configs.ini 只有少量键，不算用户存档
@@ -240,6 +266,8 @@ function settings_save_store(_store) {
 	// 语言不在设置结构里，单独写入
 	ini_write_string("Settings", "language", lang_current_id());
 	ini_close();
+	// 菜单和下一局不能继续持有修改前的副本。
+	global.pls_settings = settings_clone(_store);
 }
 
 ///@desc 返回对局设置，否则返回已加载的全局设置
@@ -262,6 +290,13 @@ function settings_store() {
 ///@returns {Undefined} 无
 function settings_apply_live(_key) {
 	var s = settings_store();
+	if (_key == "musicVolume" || is_undefined(_key)) then chart_music_apply_volume();
+	if ((_key == "noteSize" || _key == "noteUniformScale" || is_undefined(_key))
+		&& variable_global_exists("game") && is_struct(game)) {
+		// 被暂停或停用的实例恢复时仍会采样当前设置；当前可见音符立即刷新。
+		with (oNote) { if (inition) then event_user(7); };
+		with (oNote_1) { if (inition) then event_user(7); };
+	};
 	// 只在改这两项或未指定键时刷新显示
 	if (_key == "aa_level" || _key == "enableVsync" || is_undefined(_key)) {
 		display_custom(real(s.aa_level ?? 8), bool(s.enableVsync ?? true));
@@ -361,9 +396,10 @@ function settings_list(_deprecated) {
 ///@returns {Array} 分组定义
 function settings_group_defs() {
 	static groups = [
-		{ id:"display", keys:["enableBlur", "enableSurface", "enableLineJudge", "showBG", "enableHitEffect", "enableNoteHightLight", "enableChartGUI", "aa_level", "useOldFX", "enableVsync"] },
+		{ id:"sound", keys:["hitsoundVolume", "musicVolume"] },
+		{ id:"display", keys:["noteSize", "enableBlur", "enableSurface", "enableLineJudge", "showBG", "enableHitEffect", "enableNoteHightLight", "enableChartGUI", "enableNoiseArea", "enableNoiseAreaFine", "reduceNoiseAreaWave", "aa_level", "useOldFX", "enableVsync"] },
 		{ id:"debug", keys:["enableFPS", "refreshFPSCount", "enableDebug", "preventWindowMoveFreeze", "enableRPEMulticore", "rpeWorkerMinLines", "rpeWorkerProfileFrames", "TEST1"] },
-		{ id:"chart", keys:["comboString", "userName", "enableAutoPlay", "enableComboScore", "judgeOffset", "enableAccJudgment", "notePreloadSeconds", "noteUniformScale", "disableChartShader", "directGlslEs", "disableChartVideo", "enableNoiseArea", "enableNoiseAreaFine", "reduceNoiseAreaWave"] },
+		{ id:"chart", keys:["comboString", "userName", "enableAutoPlay", "enableComboScore", "judgeOffset", "enableAccJudgment", "notePreloadSeconds", "noteUniformScale", "disableChartShader", "directGlslEs", "disableChartVideo"] },
 		{ id:"deprecated", keys:["enableQuikyStart", "enableCanvasZoom", "enableDisplayLineID"] }
 	];
 	return groups;
@@ -375,6 +411,7 @@ function settings_group_defs() {
 function settings_group_title(_id) {
 	// 未知分组 id 原样返回
 	switch (_id) {
+		case "sound": return lang("settings.groupSound", "Sound");
 		case "display": return lang("settings.groupDisplay", "Display");
 		case "debug": return lang("settings.groupDebug", "Debug");
 		case "chart": return lang("settings.groupChart", "Chart");
@@ -438,18 +475,21 @@ function settings_grouped_keys() {
 ///@desc 取得或初始化各分组的展开状态
 ///@returns {Struct} 分组开关
 function settings_gui_group_state() {
-	// 首次使用时四个分组都收起
+	// 首次使用时各分组都收起
 	if (!variable_instance_exists(id, "group_open") || !is_struct(group_open)) {
-		group_open = { display:false, debug:false, chart:false, deprecated:false };
+		group_open = { sound:false, display:false, debug:false, chart:false, deprecated:false };
 	};
 	return group_open;
 }
 
-///@desc 把四个分组的展开状态拼成签名
+///@desc 把分组的展开状态拼成签名
 ///@returns {String} 用于判断折叠是否变化
 function settings_gui_fold_sig() {
 	var state = settings_gui_group_state();
-	return string(bool(state[$ "display"])) + string(bool(state[$ "debug"])) + string(bool(state[$ "chart"])) + string(bool(state[$ "deprecated"]));
+	var groups = settings_group_defs();
+	var sig = "";
+	for (var g = 0; g < array_length(groups); g++) sig += string(bool(state[$ groups[g].id]));
+	return sig;
 }
 
 ///@desc 按展开状态生成当前可见的分组和字段行
@@ -468,6 +508,7 @@ function settings_gui_visible_rows() {
 		var keys = grouped[$ group_id];
 		if (!is_array(keys)) then continue;
 		for (var k = 0; k < array_length(keys); k++) {
+			if (!settings_platform_visible(keys[k])) then continue;
 			var item = index[$ keys[k]];
 			if (!is_struct(item)) then item = { key:keys[k], comment:keys[k] };
 			array_add(rows, { type:"field", item:item });
@@ -758,9 +799,15 @@ function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill
 		draw_set_halign(fa_left);
 		draw_set_valign(fa_middle);
 		draw_set_colour(c_white);
-		draw_text_transformed(list_x + 10 * _s, row_y + row_h * 0.32, string(item.name ?? ""), _body, _body, 0);
+		var name_scale = _body;
+		var author_scale = _small;
+		if (os_type == os_android) {
+			name_scale = min(name_scale, settings_fit_text_scale(string(item.name ?? ""), skin_list_w - 20 * _s, row_h * 0.38));
+			author_scale = min(author_scale, settings_fit_text_scale(string(item.author ?? ""), skin_list_w - 20 * _s, row_h * 0.28));
+		};
+		draw_text_transformed(list_x + 10 * _s, row_y + row_h * 0.32, string(item.name ?? ""), name_scale, name_scale, 0);
 		draw_set_colour(make_colour_rgb(150, 160, 180));
-		draw_text_transformed(list_x + 10 * _s, row_y + row_h * 0.74, string(item.author ?? ""), _small, _small, 0);
+		draw_text_transformed(list_x + 10 * _s, row_y + row_h * 0.74, string(item.author ?? ""), author_scale, author_scale, 0);
 	};
 	draw_set_halign(fa_center);
 	draw_set_valign(fa_middle);
@@ -794,7 +841,9 @@ function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill
 	var used_surf = surface_exists(surf);
 	// 表面可用时画到表面，否则直接画到界面
 	if (used_surf) {
+		if (os_type == os_android) then gpu_push_state();
 		surface_set_target(surf);
+		if (os_type == os_android) then gpu_set_scissor(0, 0, clip_w, clip_h);
 		draw_clear_alpha(make_colour_rgb(18, 24, 38), 1);
 	} else {
 		draw_set_colour(make_colour_rgb(18, 24, 38));
@@ -994,6 +1043,7 @@ function settings_gui_draw_skins(_s, _body, _small, _fill_idle, _fill_hot, _fill
 	// 画完把表面贴回预览区
 	if (used_surf) {
 		surface_reset_target();
+		if (os_type == os_android) then gpu_pop_state();
 		draw_surface(surf, skin_preview_x + inset, list_y + inset);
 	};
 	draw_set_colour(make_colour_rgb(70, 80, 96));
@@ -1091,6 +1141,11 @@ function settings_menu_button_layout() {
 	btn_settings.label = lang("common.settings");
 	btn_settings.w = 140 * s;
 	btn_settings.h = 44 * s;
+	if (os_type == os_android) {
+		// 横屏手机保留完整的触控面积，与主菜单按钮使用相同缩放。
+		btn_settings.w = 200 * s;
+		btn_settings.h = 104 * s;
+	};
 	btn_settings.x = rw - btn_settings.w - pad;
 	btn_settings.y = pad;
 }
@@ -1155,6 +1210,9 @@ function settings_aa_cycle(_current, _dir) {
 ///@returns {Real} 步长
 function settings_number_step(_key) {
 	switch (_key) {
+		case "noteSize": return 0.1;
+		case "hitsoundVolume":
+		case "musicVolume": return 0.05;
 		// 大步长的项单独指定，其余每次 1
 		case "rpeWorkerProfileFrames": return 60;
 		case "refreshFPSCount": return 5;
@@ -1199,6 +1257,7 @@ function settings_gui_begin_edit(_key) {
 ///@desc 按房间尺寸计算设置面板、页签、列表和皮肤区布局
 ///@returns {Undefined} 无
 function settings_gui_layout() {
+	if (os_type == os_android) { settings_android_layout(); return; };
 	var s = variable_global_exists("global_scales") ? global_scales : 1.0;
 	// 全局缩放无效时按 1 处理
 	if (!is_real(s) || s <= 0) then s = 1.0;
@@ -1274,6 +1333,7 @@ function settings_gui_action_label() {
 ///@desc 按文字测量右上角动作按钮并排在丢弃按钮左侧
 ///@returns {Undefined} 无
 function settings_gui_action_layout() {
+	if (os_type == os_android) { settings_android_action_layout(); return; };
 	var s = layout_s;
 	if (!is_real(s) || s <= 0) then s = 1.0;
 	var kind = settings_gui_action_kind();
@@ -1340,7 +1400,9 @@ function settings_gui_init() {
 	ignore_release = (os_type == os_android);
 	hover_discard = false;
 	hover_action = false;
-	group_open = { display:false, debug:false, chart:false, deprecated:false };
+	group_open = { sound:false, display:false, debug:false, chart:false, deprecated:false };
+	slider_hit = undefined;
+	slider_dragging = false;
 	draft = settings_clone(settings_store());
 	draft_saved = settings_clone(draft);
 	show_action = false;
@@ -1386,6 +1448,7 @@ function settings_gui_init() {
 ///@desc 在布局或折叠变化时重建各页签的点击区域
 ///@returns {Undefined} 无
 function settings_gui_refresh_hits() {
+	if (os_type == os_android && tab != 2) { settings_android_refresh_hits(); return; };
 	var rows = (tab == 0) ? settings_gui_rows() : [];
 	var lang_rows = lang_packs();
 	var skin_rows = skin_menu_items();
@@ -1448,7 +1511,12 @@ function settings_gui_refresh_hits() {
 			var ctrl_x = list_x + list_w - ctrl_w - 8 * layout_s;
 			var ctrl_y = row_y + (row_h - ctrl_h) * 0.5;
 			var kind = settings_kind(item.key);
-			var hit = { row_type:"field", key:item.key, kind:kind, row:i, y:row_y, minus:undefined, plus:undefined, toggle:undefined, field:undefined };
+			var hit = { row_type:"field", key:item.key, kind:kind, enabled:settings_platform_enabled(item.key), row:i, y:row_y, minus:undefined, plus:undefined, toggle:undefined, field:undefined };
+			if (!hit.enabled) {
+				hit.field = { x:ctrl_x, y:ctrl_y, w:ctrl_w, h:ctrl_h };
+				array_add(row_hits, hit);
+				continue;
+			};
 			// 布尔是整条开关，数字拆成减号、输入和加号
 			if (kind == "bool") {
 				hit.toggle = { x:ctrl_x, y:ctrl_y, w:ctrl_w, h:ctrl_h };
@@ -1465,46 +1533,12 @@ function settings_gui_refresh_hits() {
 	};
 }
 
-///@desc 读取指针坐标和按键边沿，Android 上合并多指
+///@desc 读取指针坐标和按键边沿，Android 使用原始触点
 ///@returns {Struct} x、y、pressed、released、held
 function settings_gui_pointer() {
-	var px = mouse_x;
-	var py = mouse_y;
-	var pressed = mouse_check_button_pressed(mb_left);
-	var released = mouse_check_button_released(mb_left);
-	var held = mouse_check_button(mb_left);
-	// 非 Android 直接用鼠标
-	if (os_type != os_android) {
-		return { x: px, y: py, pressed: pressed, released: released, held: held };
-	};
-	// mouse_x 停在打开面板的那根手指上。之后的点击是另一个触摸序号，保存和丢弃因此收不到。
-	pressed = false;
-	released = false;
-	held = false;
-	var found = false;
-	for (var device = 0; device < 4; device++) {
-		var edge = device_mouse_check_button_pressed(device, mb_left);
-		var up = device_mouse_check_button_released(device, mb_left);
-		var down = device_mouse_check_button(device, mb_left);
-		if (!edge && !up && !down) then continue;
-		// 优先采用刚按下的那根手指
-		if (!found || edge) {
-			px = device_mouse_x(device);
-			py = device_mouse_y(device);
-			found = true;
-		};
-		if (edge) then pressed = true;
-		if (up) then released = true;
-		if (down) then held = true;
-	};
-	if (!found) {
-		px = mouse_x;
-		py = mouse_y;
-		pressed = mouse_check_button_pressed(mb_left);
-		released = mouse_check_button_released(mb_left);
-		held = mouse_check_button(mb_left);
-	};
-	return { x: px, y: py, pressed: pressed, released: released, held: held };
+	if (os_type == os_android) then return android_touch_pointer();
+	return { x:mouse_x, y:mouse_y, pressed:mouse_check_button_pressed(mb_left),
+		released:mouse_check_button_released(mb_left), held:mouse_check_button(mb_left) };
 }
 
 ///@desc 处理设置界面的布局、导入、拖动和点击
@@ -1512,12 +1546,13 @@ function settings_gui_pointer() {
 function settings_gui_step() {
 	var scale_now = variable_global_exists("global_scales") ? global_scales : 1.0;
 	// 房间或缩放变了就重算布局
-	if (layout_w != room_width || layout_h != room_height || layout_s != scale_now) {
+	var layout_scale = (os_type == os_android) ? layout_global_s : layout_s;
+	if (layout_w != room_width || layout_h != room_height || layout_scale != scale_now) {
 		settings_gui_layout();
 	};
 	var pointer = settings_gui_pointer();
 	if (!armed) {
-		// Android 松手后 mb_left 可能仍为按住。一直等这次松开，面板就永远不会武装，两个关闭按钮都不会执行。
+		// Android 由 ignore_release 排除打开面板的那次手势。
 		if (os_type == os_android || !pointer.held) then armed = true;
 	};
 	// 文件选择器打开时不处理点击
@@ -1554,7 +1589,8 @@ function settings_gui_step() {
 	if (tab == 1) then list_count = array_length(lang_rows);
 	else if (tab == 2) then list_count = array_length(skin_rows);
 	var skin_visible = max(1, floor(skin_list_h / row_h));
-	var max_scroll = max(0, list_count - ((tab == 2) ? skin_visible : visible_rows));
+	var page_rows = (tab == 2) ? skin_visible : ((os_type == os_android) ? list_h / row_h : visible_rows);
+	var max_scroll = max(0, list_count - page_rows);
 	scroll = clamp(scroll, 0, max_scroll);
 
 	if (is_string(editing_key) && string_length(editing_key)) {
@@ -1582,6 +1618,10 @@ function settings_gui_step() {
 	hover_skin_add = (tab == 2) && settings_gui_hit(skin_add, mx, my);
 	hover_skin_delete = (tab == 2) && (skin_selected_id() != SKIN_DEFAULT_ID) && settings_gui_hit(skin_delete, mx, my);
 	hover_clear = show_clear && point_in_rectangle(mx, my, clear_x, clear_y, clear_x + clear_w, clear_y + clear_h);
+	if (os_type == os_android) {
+		settings_gui_refresh_hits();
+		if (!ignore_release && settings_android_slider_step(pointer)) then exit;
+	};
 
 	if (mouse_wheel_up()) then scroll = max(0, scroll - 1);
 	if (mouse_wheel_down()) then scroll = min(max_scroll, scroll + 1);
@@ -1606,21 +1646,22 @@ function settings_gui_step() {
 		// 拖动超过阈值才滚动，避免把点击当成拖动
 		if (abs(dy) > max(8, 10 * layout_s)) then drag_moved = true;
 		if (drag_moved) {
-			scroll = clamp(drag_start_scroll + dy / row_h, 0, max_scroll);
+			var shift = dy / row_h;
+			if (os_type != os_android || tab == 2) then shift = round(shift);
+			scroll = clamp(drag_start_scroll + shift, 0, max_scroll);
 		};
 	};
 	if (!pointer.held) then dragging = false;
 
 	settings_gui_refresh_hits();
 
-	// Android 在松开时才给出点击位置。按下那一帧仍是上一根手指的坐标，顶栏按钮会对不准。
 	// 打开面板的那次松手不算点了保存或丢弃。
 	if (ignore_release) {
 		if (pointer.released || !pointer.held) then ignore_release = false;
 		if (pointer.released) then exit;
 	};
 	var activate = pointer.pressed;
-	// Android 用松开作为点击
+	// Android 松开后激活，列表滑动结束时不会误选一行。
 	if (os_type == os_android) then activate = pointer.released;
 	if (!armed || !activate) then exit;
 	// 这次是拖动列表，不触发按钮
@@ -1720,17 +1761,20 @@ function settings_gui_step() {
 
 	for (var h = 0; h < array_length(row_hits); h++) {
 		var rh = row_hits[h];
+		if (os_type == os_android && !settings_gui_hit(rh.box, mx, my)) then continue;
 		if (rh.row_type == "group") {
 			if (settings_gui_hit(rh.box, mx, my)) {
 				var state = settings_gui_group_state();
 				state[$ rh.group_id] = !bool(state[$ rh.group_id]);
 				var shown = array_length(settings_gui_rows());
-				scroll = clamp(scroll, 0, max(0, shown - visible_rows));
+				var page = (os_type == os_android) ? list_h / row_h : visible_rows;
+				scroll = clamp(scroll, 0, max(0, shown - page));
 				hits_fold = "";
 				exit;
 			};
 			continue;
 		};
+		if (!rh.enabled) then continue;
 		var key = rh.key;
 		var cur = settings_gui_draft()[$ key];
 		if (is_struct(rh.toggle) && settings_gui_hit(rh.toggle, mx, my)) {
@@ -1762,6 +1806,7 @@ function settings_gui_step() {
 ///@desc 绘制设置面板、页签、列表和底部提示
 ///@returns {Undefined} 无
 function settings_gui_draw() {
+	if (os_type == os_android) { settings_android_draw(); return; };
 	var old_font = draw_get_font();
 	var old_halign = draw_get_halign();
 	var old_valign = draw_get_valign();
@@ -1920,6 +1965,19 @@ function settings_gui_draw() {
 	for (var h = 0; h < array_length(row_hits); h++) {
 		var rh = row_hits[h];
 		if (rh.row_type == "group") then continue;
+		if (!rh.enabled) {
+			var disabled = rh.field;
+			draw_set_colour(fill_idle);
+			draw_rectangle(disabled.x, disabled.y, disabled.x + disabled.w, disabled.y + disabled.h, false);
+			draw_set_colour(c_gray);
+			var disabled_label = lang("settings.unsupportedPlatform", "Unavailable on this platform");
+			if (os_type == os_android && rh.key == "aa_level") {
+				disabled_label = lang("settings.unsupportedMSAA", "Android Runtime does not support MSAA");
+			};
+			var disabled_scale = settings_fit_text_scale(disabled_label, disabled.w * 0.88, disabled.h * 0.64);
+			draw_text_transformed(disabled.x + disabled.w * 0.5, disabled.y + disabled.h * 0.5, disabled_label, disabled_scale, disabled_scale, 0);
+			continue;
+		};
 		var cur = store[$ rh.key];
 		// 按控件种类画开关、加减或文本框
 		if (rh.kind == "bool" && is_struct(rh.toggle)) {
@@ -1970,7 +2028,22 @@ function settings_gui_draw() {
 	};
 	};
 
+	// 列表超出面板时显示滚动位置，避免把屏幕外的选项误认为缺失。
+	var row_count = (tab == 0) ? array_length(settings_gui_rows()) : array_length(lang_packs());
+	if (tab != 2 && row_count > visible_rows) {
+		var track_h = visible_rows * row_h;
+		var thumb_h = max(20 * s, track_h * visible_rows / row_count);
+		var thumb_y = list_y + (track_h - thumb_h) * scroll / (row_count - visible_rows);
+		var track_x = list_x + list_w - 5 * s;
+		draw_set_colour(make_colour_rgb(40, 48, 64));
+		draw_rectangle(track_x, list_y, track_x + 3 * s, list_y + track_h, false);
+		draw_set_colour(make_colour_rgb(150, 160, 180));
+		draw_rectangle(track_x, thumb_y, track_x + 3 * s, thumb_y + thumb_h, false);
+	};
+
 	if (show_clear) {
+		draw_set_halign(fa_center);
+		draw_set_valign(fa_middle);
 		draw_set_colour(hover_clear ? make_colour_rgb(140, 60, 60) : make_colour_rgb(96, 48, 48));
 		draw_rectangle(clear_x, clear_y, clear_x + clear_w, clear_y + clear_h, false);
 		draw_set_colour(c_white);
@@ -1983,6 +2056,7 @@ function settings_gui_draw() {
 	draw_set_halign(fa_right);
 	draw_set_colour(c_gray);
 	var hint = lang("settings.hintNormal");
+	if (os_type == os_android) then hint = lang("settings.hintTouch", "Swipe the list to see more settings. Save to apply.");
 	// 底部提示随页签切换
 	if (tab == 1) then hint = lang_current_label();
 	else if (tab == 2) then hint = lang("settings.hintSkin", "Add a resource pack, then select it. It applies when you enter a chart.");

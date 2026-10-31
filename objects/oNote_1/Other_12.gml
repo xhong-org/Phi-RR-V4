@@ -51,10 +51,11 @@ posx *= rpe_sample_control(1, _control_position_speed, 1);
 var control_y = rpe_sample_control(3, _control_position_speed, 1);
 posy *= control_y;
 var control_size = rpe_sample_control(2, _control_position_speed, 1);
-image_xscale = (global_scales / 6) * size * control_size;
 var _settings = game.settings;
+var note_scale = (global_scales / 6) * _settings.noteSize;
+image_xscale = note_scale * size * control_size;
 var uniform_factor = bool(_settings.noteUniformScale ?? false) ? size * control_size : 1;
-image_yscale = (global_scales / 6) * uniform_factor;
+image_yscale = note_scale * uniform_factor;
 
 var reversed = (isAbove ? -1 : 1);
 var line_x = _line.x;
@@ -83,18 +84,22 @@ var base_length = notes_h * visual_speed * control_y * uniform_factor;
 
 var _skin_hold = skin_active() ? skin_hold_parts(hl) : undefined;
 var _use_compact = compactHold || (is_struct(_skin_hold) && bool(_skin_hold.compact));
+var _hold_skin_scale = 1;
 if (is_struct(_skin_hold)) {
 	if (sprite_exists(_skin_hold.body)) then _hold_body_height = max(1, sprite_get_height(_skin_hold.body));
 	if (sprite_exists(_skin_hold.tail)) then _hold_tail_height = max(1, sprite_get_height(_skin_hold.tail));
 	if (sprite_exists(_skin_hold.head)) then _hold_head_attach = max(1, sprite_get_yoffset(_skin_hold.head));
+	_hold_skin_scale = skin_note_scale_k(_skin_hold.head);
 };
 var head_offset = 0;
 if (_is_out && (!_use_compact)) {
-	head_offset = _hold_head_attach * image_yscale;
+	head_offset = _hold_head_attach * image_yscale * _hold_skin_scale;
 };
 
 var hold_units = (time_before ? length_floor : endFloorPosition - line_floor);
 var signed_hold_px = base_length * hold_units;
+// 用户放大头部时也不能把短 Hold 的尾端推过实际终点。
+head_offset = min(head_offset, max(0, signed_hold_px));
 var hold_px = max(0, signed_hold_px - head_offset);
 if (!variable_instance_exists(id, "_hold_body_height") || _hold_body_height <= 0) {
 	_hold_body_height = max(1, sprite_get_height(note_hold_body));
@@ -104,7 +109,7 @@ if (!variable_instance_exists(id, "_hold_tail_height") || _hold_tail_height <= 0
 };
 yscale = hold_px / max(1, _hold_body_height);
 
-var tail_trim = (_use_compact ? image_yscale * (_hold_tail_height * 0.5) : 0);
+var tail_trim = (_use_compact ? image_yscale * _hold_skin_scale * (_hold_tail_height * 0.5) : 0);
 var tail_offset = max(head_offset, head_offset + hold_px - tail_trim);
 var body_ox = _ox_v;
 var body_oy = _oy_v;

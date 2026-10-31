@@ -57,9 +57,10 @@ isJudge = false;
 hit_status = TYPE.NONE;
 
 var initial_scale = (variable_global_exists("global_scales") ? global_scales : 1.0);
-image_xscale = (initial_scale / 6) * size;
+image_xscale = (initial_scale / 6) * size * game.settings.noteSize;
 image_yscale = image_xscale;
 _last_global_scales = initial_scale;
+_last_note_size = game.settings.noteSize;
 image_alpha = alpha;
 image_blend = c_white;
 

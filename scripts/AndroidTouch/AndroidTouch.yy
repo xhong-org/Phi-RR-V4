@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"AndroidTouch",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"AndroidTouch",
+  "parent":{
+    "name":"Format",
+    "path":"folders/Objects/Main/Loader/Format.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

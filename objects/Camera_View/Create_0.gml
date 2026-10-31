@@ -15,7 +15,7 @@ if ((variable_global_exists("render_mode") && global.render_mode) || _archive_si
 	start_height = 768;
 	room_width = global.render_width;
 	room_height = global.render_height;
-} else if (pls_is_gxgames()) {
+} else if (pls_is_gxgames() || os_type == os_android) {
 	room_width = pls_window_width();
 	room_height = pls_window_height();
 };
@@ -23,6 +23,7 @@ gx_last_room_w = room_width;
 gx_last_room_h = room_height;
 gx_gui_w = -1;
 gx_gui_h = -1;
+if (os_type == os_android) android_touch_reset();
 
 // 全局界面与世界缩放。其他对象应读它，不要自己再算窗口缩放。
 globalvar global_scales;

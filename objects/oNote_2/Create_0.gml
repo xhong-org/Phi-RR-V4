@@ -1,6 +1,10 @@
 ///@desc 初始化规范化后的 PEC 音符和判定窗口
 depth = DEPTH.NOTE;
 canDraw = false;
+_last_view_width = -1;
+_last_view_height = -1;
+_last_view_left = -1;
+_last_geometry_scale = -1;
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then visible = false;
 
 judged = false;
@@ -38,7 +42,7 @@ if (!is_array(game_2.line_group) || line_id < 0 || line_id >= array_length(game_
 	exit;
 };
 line_ref = game_2.line_group[line_id];
-var base_scale = (variable_global_exists("global_scales") ? global_scales : 1) / 6;
+var base_scale = (variable_global_exists("global_scales") ? global_scales : 1) / 6 * game.settings.noteSize;
 image_xscale = base_scale * widthScale;
 uniform_scale = bool(game.settings.noteUniformScale ?? false);
 image_yscale = uniform_scale ? image_xscale : base_scale;

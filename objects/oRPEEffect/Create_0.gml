@@ -32,6 +32,7 @@ external_gles_handles = {};
 external_hlsl_uniforms = {};
 builtin_native_handles = {};
 builtin_native_uniforms = {};
+android_backend_frame = -1;
 external_draw_logged = {};
 var external_extension_found = extension_exists("I_Shaders");
 print($"[RPE Effect] External backend probe: os={os_type}, windows={os_type == os_windows}, extension={external_extension_found}");
@@ -57,17 +58,46 @@ if (os_type == os_windows && external_extension_found) {
 		} else print($"[RPE Effect] External D3D11 backend init failed: {rpe_ext_get_error()}");
 	};
 } else if (os_type == os_android && external_extension_found) {
-	var android_init_status = rpe_ext_initialize(pointer_null, pointer_null);
-	print($"[RPE Effect] External GLES status: init={android_init_status}, state={rpe_ext_state()}");
-	external_hlsl_ready = android_init_status == 3;
-	if (external_hlsl_ready) then print("[RPE Effect] External GLES backend initialized");
-	else print($"[RPE Effect] External GLES backend init failed: {rpe_ext_get_error()}");
+	// Create 不保证持有 GL 上下文；统一在首次 Draw 初始化并重绑通道。
+	print("[RPE Effect] External GLES backend waiting for Draw");
 } else if (pls_is_gxgames()) {
 	var gx_init_status = rpe_ext_initialize(pointer_null, pointer_null);
 	print($"[RPE Effect] External GX status: init={gx_init_status}, state={rpe_ext_state()}");
 	external_hlsl_ready = gx_init_status == 3;
 	if (external_hlsl_ready) then print("[RPE Effect] External GX WebGL backend initialized");
 	else print($"[RPE Effect] External GX backend waiting; Step will retry ping ({rpe_ext_get_error()})");
+};
+
+///@desc Android 的 GL 上下文只在 Draw 中有效；恢复后重编译本局句柄
+effect_prepare_android = function() {
+	if (os_type != os_android || chart_setting_on("disableChartShader")) then return;
+	var input_frame = android_touch_state().sample_us;
+	if (android_backend_frame == input_frame) then return;
+	android_backend_frame = input_frame;
+	if (external_hlsl_ready && rpe_ext_state() == 202608363) then return;
+	external_hlsl_ready = false;
+	pls_draw_flush();
+	if (rpe_ext_initialize(pointer_null, pointer_null) != 3) then return;
+	external_hlsl_ready = true;
+	external_hlsl_handles = {};
+	external_gles_handles = {};
+	external_hlsl_uniforms = {};
+	builtin_native_handles = {};
+	builtin_native_uniforms = {};
+	var lists = [effects_local, effects_global];
+	for (var li = 0; li < array_length(lists); li++) {
+		var passes = lists[li];
+		for (var pass_index = 0; pass_index < array_length(passes); pass_index++) {
+			var pass = passes[pass_index];
+			if (!bool(pass[$ "externalGlsl"] ?? false) && !bool(pass[$ "externalHlsl"] ?? false)) then continue;
+			pass.externalHandle = -1;
+			pass.externalHlslHandle = -1;
+			pass.externalGlesHandle = -1;
+		}
+	}
+	effect_compile_externals();
+	effect_compile_builtins();
+	print("[RPE Effect] Android GLES context ready; shader handles rebuilt");
 };
 
 ///@desc 从着色器源码里解析用户 uniform 的分量数
@@ -198,8 +228,8 @@ effect_compile_externals = function() {
 				print($"[RPE Effect] External shader empty: {external_full_path}");
 				continue;
 			};
-			// 这张谱的光束把 uv.y = 0 当顶部。写出的偏移先到屏幕底部，两条 Hold 会向上消失。
-			if (string_pos("scene_beam_transition", external_relative) > 0
+			// Android 原生输出经 GM 表面合成后方向已正确，不再套用桌面端的光束方向修正。
+			if (os_type != os_android && string_pos("scene_beam_transition", external_relative) > 0
 				&& string_pos("float y=uv.y;", external_source) > 0) {
 				external_source = string_replace(external_source, "float y=uv.y;", "float y=1.0-uv.y;");
 				print("[RPE Effect] scene_beam sweeps from the top downward");
@@ -262,73 +292,76 @@ effect_compile_externals = function() {
 };
 effect_compile_externals();
 
-effect_uniforms = {};
-var uniform_names = ["time", "screenSize", "sampleCount", "power", "size", "rate", "speed", "blockCount", "colorRate", "factor", "seed", "centerX", "centerY", "progress", "width", "distortion", "expand", "color", "extend", "radius"];
-var effect_names = ["chromatic", "circleBlur", "fisheye", "glitch", "grayscale", "noise", "pixel", "radialBlur", "shockwave", "vignette", "customTint"];
-if (!chart_setting_on("disableChartShader")) {
-for (var effect_name_i = 0; effect_name_i < array_length(effect_names); effect_name_i++) {
-	var effect_name = effect_names[effect_name_i];
-	var shader_asset = rpe_effect_shader_asset(effect_name);
-	var handles = {};
-	if (shader_asset != -1 && shader_is_compiled(shader_asset)) {
-		for (var uniform_i = 0; uniform_i < array_length(uniform_names); uniform_i++) {
-			var uniform_name = uniform_names[uniform_i];
-			var uniform_handle = shader_get_uniform(shader_asset, uniform_name);
-			if (uniform_handle != -1) then handles[$ uniform_name] = uniform_handle;
-		};
-	} else if (shader_asset != -1) {
-		print($"[RPE Effect] Built-in shader failed to compile: {effect_name}");
-	};
-	effect_uniforms[$ effect_name] = handles;
-	if (os_type == os_android && external_hlsl_ready) {
-		var builtin_source = rpe_effect_builtin_glsl(effect_name);
-		if (string_length(builtin_source)) {
-			var builtin_uniforms = external_uniforms_parse(builtin_source);
-			builtin_source = rpe_ext_translate(builtin_source, effect_name);
-			if (!string_length(builtin_source)) {
-				print($"[RPE Effect] Built-in GLSL ES prepare failed ({effect_name}): {rpe_ext_get_error()}");
-			} else {
-				var builtin_handle = rpe_ext_compile(builtin_source, "builtin:" + effect_name);
-				if (builtin_handle <= 0) {
-					print($"[RPE Effect] Built-in GLSL ES compile failed ({effect_name}): {rpe_ext_get_error()}");
-				} else {
-					builtin_native_handles[$ effect_name] = builtin_handle;
-					builtin_native_uniforms[$ effect_name] = builtin_uniforms;
-					print($"[RPE Effect] Built-in GLSL ES compiled: {effect_name}, handle={builtin_handle}");
+effect_compile_builtins = function() {
+	effect_uniforms = {};
+	var uniform_names = ["time", "screenSize", "sampleCount", "power", "size", "rate", "speed", "blockCount", "colorRate", "factor", "seed", "centerX", "centerY", "progress", "width", "distortion", "expand", "color", "extend", "radius"];
+	var effect_names = ["chromatic", "circleBlur", "fisheye", "glitch", "grayscale", "noise", "pixel", "radialBlur", "shockwave", "vignette", "customTint"];
+	if (!chart_setting_on("disableChartShader")) {
+		for (var effect_name_i = 0; effect_name_i < array_length(effect_names); effect_name_i++) {
+			var effect_name = effect_names[effect_name_i];
+			var shader_asset = rpe_effect_shader_asset(effect_name);
+			var handles = {};
+			if (shader_asset != -1 && shader_is_compiled(shader_asset)) {
+				for (var uniform_i = 0; uniform_i < array_length(uniform_names); uniform_i++) {
+					var uniform_name = uniform_names[uniform_i];
+					var uniform_handle = shader_get_uniform(shader_asset, uniform_name);
+					if (uniform_handle != -1) then handles[$ uniform_name] = uniform_handle;
+				};
+			} else if (shader_asset != -1) {
+				print($"[RPE Effect] Built-in shader failed to compile: {effect_name}");
+			};
+			effect_uniforms[$ effect_name] = handles;
+			if (os_type == os_android && external_hlsl_ready) {
+				var builtin_source = rpe_effect_builtin_glsl(effect_name);
+				if (string_length(builtin_source)) {
+					var builtin_uniforms = external_uniforms_parse(builtin_source);
+					builtin_source = rpe_ext_translate(builtin_source, effect_name);
+					if (!string_length(builtin_source)) {
+						print($"[RPE Effect] Built-in GLSL ES prepare failed ({effect_name}): {rpe_ext_get_error()}");
+					} else {
+						var builtin_handle = rpe_ext_compile(builtin_source, "builtin:" + effect_name);
+						if (builtin_handle <= 0) {
+							print($"[RPE Effect] Built-in GLSL ES compile failed ({effect_name}): {rpe_ext_get_error()}");
+						} else {
+							builtin_native_handles[$ effect_name] = builtin_handle;
+							builtin_native_uniforms[$ effect_name] = builtin_uniforms;
+							print($"[RPE Effect] Built-in GLSL ES compiled: {effect_name}, handle={builtin_handle}");
+						};
+					};
 				};
 			};
 		};
 	};
-};
-};
-// chromatic_random_rate 用这张谱的着色器画。外部替换通道会采样空拷贝，把音符和打击丢掉。
-if (shader_is_compiled(shd_rpe_chromatic_rate)) {
-	var chromatic_rate_handles = {};
-	var chromatic_rate_names = ["time", "sampleCount", "power", "rate", "speed"];
-	for (var chromatic_rate_i = 0; chromatic_rate_i < array_length(chromatic_rate_names); chromatic_rate_i++) {
-		var chromatic_rate_name = chromatic_rate_names[chromatic_rate_i];
-		var chromatic_rate_handle = shader_get_uniform(shd_rpe_chromatic_rate, chromatic_rate_name);
-		if (chromatic_rate_handle != -1) then chromatic_rate_handles[$ chromatic_rate_name] = chromatic_rate_handle;
+	// chromatic_random_rate 用这张谱的着色器画。外部替换通道会采样空拷贝，把音符和打击丢掉。
+	if (shader_is_compiled(shd_rpe_chromatic_rate)) {
+		var chromatic_rate_handles = {};
+		var chromatic_rate_names = ["time", "sampleCount", "power", "rate", "speed"];
+		for (var chromatic_rate_i = 0; chromatic_rate_i < array_length(chromatic_rate_names); chromatic_rate_i++) {
+			var chromatic_rate_name = chromatic_rate_names[chromatic_rate_i];
+			var chromatic_rate_handle = shader_get_uniform(shd_rpe_chromatic_rate, chromatic_rate_name);
+			if (chromatic_rate_handle != -1) then chromatic_rate_handles[$ chromatic_rate_name] = chromatic_rate_handle;
+		};
+		effect_uniforms[$ "@glsl:chromatic_random_rate.glsl"] = chromatic_rate_handles;
+		print($"[RPE Effect] chromatic_random_rate uses chart shader, uniforms={array_length(struct_get_names(chromatic_rate_handles))}");
+	} else {
+		print("[RPE Effect] chromatic_random_rate chart shader failed to compile");
 	};
-	effect_uniforms[$ "@glsl:chromatic_random_rate.glsl"] = chromatic_rate_handles;
-	print($"[RPE Effect] chromatic_random_rate uses chart shader, uniforms={array_length(struct_get_names(chromatic_rate_handles))}");
-} else {
-	print("[RPE Effect] chromatic_random_rate chart shader failed to compile");
-};
-// 早期色差段里 gate 是全屏的。外部替换会在谱面已经被拷走之后去采样后缓冲。
-if (shader_is_compiled(shd_rpe_gate)) {
-	var gate_handles = {};
-	var gate_names = ["time", "params"];
-	for (var gate_i = 0; gate_i < array_length(gate_names); gate_i++) {
-		var gate_name = gate_names[gate_i];
-		var gate_handle = shader_get_uniform(shd_rpe_gate, gate_name);
-		if (gate_handle != -1) then gate_handles[$ gate_name] = gate_handle;
+	// 早期色差段里 gate 是全屏的。外部替换会在谱面已经被拷走之后去采样后缓冲。
+	if (shader_is_compiled(shd_rpe_gate)) {
+		var gate_handles = {};
+		var gate_names = ["time", "params"];
+		for (var gate_i = 0; gate_i < array_length(gate_names); gate_i++) {
+			var gate_name = gate_names[gate_i];
+			var gate_handle = shader_get_uniform(shd_rpe_gate, gate_name);
+			if (gate_handle != -1) then gate_handles[$ gate_name] = gate_handle;
+		};
+		effect_uniforms[$ "@glsl:gate.glsl"] = gate_handles;
+		print($"[RPE Effect] gate uses chart shader, uniforms={array_length(struct_get_names(gate_handles))}");
+	} else {
+		print("[RPE Effect] gate chart shader failed to compile");
 	};
-	effect_uniforms[$ "@glsl:gate.glsl"] = gate_handles;
-	print($"[RPE Effect] gate uses chart shader, uniforms={array_length(struct_get_names(gate_handles))}");
-} else {
-	print("[RPE Effect] gate chart shader failed to compile");
 };
+effect_compile_builtins();
 
 ///@desc 保证乒乓表面和应用程序表面一样大
 ///@returns {Bool} 两张表面都可用时为真
@@ -428,6 +461,7 @@ effect_upload_into = function(_src, _slot) {
 ///@param {Bool} caller_was_bound 调用时目标是否已经绑定
 ///@returns {Undefined} 无
 effect_render = function(effect_list, input_override = -1, composite_target = -1, caller_was_bound = true) {
+	if (os_type == os_android) effect_prepare_android();
 	// caller_was_bound 必须显式传入。遮罩弹出后 surface_get_target 仍可能报它，按那个编号 reset 会丢帧。
 	effect_left_caller_bound = false;
 	effect_caller_pushed = false;
@@ -697,9 +731,15 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 				pls_draw_flush();
 				external_begin_status = rpe_ext_begin(external_handle);
 				surface_reset_target();
-				surface_set_target(target_surface);
-				draw_clear_alpha(c_black, 0);
-				pls_draw_flush();
+				// 恢复期间可能暂时没有源帧；捕获成功后才能清空输出。
+				if (external_begin_status > 0) {
+					surface_set_target(target_surface);
+					draw_clear_alpha(c_black, 0);
+					pls_draw_flush();
+				} else {
+					// 后续失败分支会统一弹出这一层并恢复调用者。
+					surface_set_target(source_surface);
+				};
 				var external_target_width = max(surface_get_width(target_surface), 1);
 				var external_target_height = max(surface_get_height(target_surface), 1);
 				external_uvs = [
@@ -781,6 +821,15 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 			} else {
 				effect_caller_pushed = false;
 				effect_left_caller_bound = surface_exists(effect_caller_target);
+			};
+			// 保留上一通道的有效输入，避免 GPU 绘制失败时合成空表面。
+			if (external_draw_status <= 0) {
+				var _draw_failure_key = external_draw_key + "@draw-failed";
+				if (!struct_exists(external_draw_logged, _draw_failure_key)) {
+					external_draw_logged[$ _draw_failure_key] = true;
+					print($"[RPE Effect] External draw failed: shader={pass.shaderName}, error={rpe_ext_get_error()}");
+				};
+				continue;
 			};
 			source_surface = _external_result;
 			_presented_direct = (source_surface == effect_caller_target);

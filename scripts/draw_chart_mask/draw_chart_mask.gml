@@ -188,8 +188,10 @@ function chart_gpu_blend_commit() {
 	var _colour = draw_get_colour();
 	var _alpha = draw_get_alpha();
 	gpu_set_blendmode_ext(bm_zero, bm_one);
-	// 捕获层保留目标透明度，普通绘制则恢复标准混合
-	if (_inside_capture) {
+	// 退场源也需要保留一次 alpha，半透明音符不能把黑底透明度平方。
+	var _outro_drawing = instance_exists(oPlayTransition)
+		&& instance_find(oPlayTransition, 0).state == PLAY_TRANSITION_STATE.OUTRO;
+	if (_inside_capture || _outro_drawing) {
 		gpu_set_blendmode_ext_sepalpha(bm_src_alpha, bm_inv_src_alpha, bm_one, bm_inv_src_alpha);
 	} else {
 		gpu_set_blendmode(bm_normal);
@@ -229,7 +231,7 @@ function chart_viewport_dim_draw() {
 	chart_gpu_blend_commit();
 }
 
-///@desc 在谱面两侧绘制离场遮盖
+///@desc 退场压缩结束后盖满整帧，不受谱面视口裁剪
 ///@returns {Undefined} 无
 function chart_mask_side_dim_draw() {
 	shader_reset();
@@ -238,15 +240,8 @@ function chart_mask_side_dim_draw() {
 	if (!variable_instance_exists(_transition, "end_cover_alpha")) then return;
 	var _alpha = _transition.end_cover_alpha;
 	if (_alpha <= 0) then return;
-	if (!variable_global_exists("chart_view_left") || !is_real(chart_view_left)) then return;
-	if (!variable_global_exists("chart_view_right") || !is_real(chart_view_right)) then return;
-	var _span = clamp(real(_transition.end_cover_span ?? 0), 0, 1);
 	var _frame_w = chart_frame_width();
 	var _frame_h = chart_frame_height();
-	// 黑边在 16:9 视口之外。遮盖要按整帧计算，否则两侧盖不住。
-	var _left = lerp(chart_view_left, 0, _span);
-	var _right = lerp(chart_view_right, _frame_w, _span);
-	if (_right - _left <= 1) then return;
 	pls_draw_flush();
 	gpu_set_scissor(0, 0, _frame_w, _frame_h);
 	var _old_colour = draw_get_colour();
@@ -254,7 +249,7 @@ function chart_mask_side_dim_draw() {
 	gpu_set_blendmode(bm_normal);
 	draw_set_colour(c_black);
 	draw_set_alpha(_alpha);
-	draw_rectangle(_left, 0, _right, _frame_h, false);
+	draw_rectangle(0, 0, _frame_w, _frame_h, false);
 	pls_draw_flush();
 	draw_set_alpha(_old_alpha);
 	draw_set_colour(_old_colour);

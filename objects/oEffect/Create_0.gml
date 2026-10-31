@@ -3,7 +3,7 @@
 // 图层模式用谱面 z 7，否则用打击特效深度。
 if (!variable_instance_exists(id, "hit_effect_layer_z")) then hit_effect_layer_z = 7;
 depth = (variable_global_exists("chart_layer_mode") && global.chart_layer_mode) ? chart_layer_depth(hit_effect_layer_z) : DEPTH.HEF;
-note_scale = 1;
+note_scale = game.settings.noteSize;
 image_blend = #ffeca0;
 // Part System 粒子系统
 p1 = part_system_create_layer("Instances",false);//part_system_create();

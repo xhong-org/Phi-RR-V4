@@ -562,6 +562,7 @@ function paused_ui_reset_rpe() {
         };
         with (oExtraPlay) {
                 video_close_all();
+                video_playback_finished = false;
                 for (var _video_i = 0; _video_i < array_length(videos); _video_i++) {
                         videos[_video_i].completed = false;
                         videos[_video_i].error_logged = false;

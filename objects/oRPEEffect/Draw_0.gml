@@ -1,6 +1,13 @@
 ///@desc 在界面之前应用谱面局部效果或区间捕获
 // 关闭谱面着色器时整段跳过。
 if (chart_setting_on("disableChartShader")) then exit;
+if (os_type == os_android) {
+	if (variable_instance_exists(id, "effect_boundary_role")) {
+		if (instance_exists(effect_boundary_controller)) {
+			with (effect_boundary_controller) effect_prepare_android();
+		}
+	} else effect_prepare_android();
+}
 chart_mask_scissor_set();
 if (variable_instance_exists(id, "effect_boundary_role")) {
 	var _boundary_state = effect_boundary_state;
@@ -134,7 +141,8 @@ if (variable_instance_exists(id, "effect_boundary_role")) {
 var _transition_allows_shaders = true;
 if (instance_exists(oPlayTransition)) {
 	var _transition = instance_find(oPlayTransition, 0);
-	_transition_allows_shaders = (_transition.state == PLAY_TRANSITION_STATE.PLAYING);
+	_transition_allows_shaders = (_transition.state == PLAY_TRANSITION_STATE.PLAYING
+		|| _transition.state == PLAY_TRANSITION_STATE.OUTRO);
 };
 if (_transition_allows_shaders
 	&& (!is_array(effect_capture_stack) || array_length(effect_capture_stack) <= 0)) {

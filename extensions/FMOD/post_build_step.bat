@@ -162,6 +162,24 @@ exit /b 0
 
 :: ----------------------------------------------------------------------------------------------------
 :setupAndroid
+    :: The repository includes the runtime libraries. A developer SDK is only
+    :: needed when dependencies for an enabled ABI are actually missing.
+    set "FMOD_BUNDLED=1"
+    if not exist "%~dp0AndroidSource\libs\fmod.jar" set "FMOD_BUNDLED=0"
+    if "%YYPLATFORM_option_android_arch_arm64%"=="True" (
+        if not exist "%~dp0AndroidSource\libs\arm64-v8a\libfmodL.so" set "FMOD_BUNDLED=0"
+        if not exist "%~dp0AndroidSource\libs\arm64-v8a\libfmodstudioL.so" set "FMOD_BUNDLED=0"
+    )
+    if "%YYPLATFORM_option_android_arch_armv7%"=="True" (
+        if not exist "%~dp0AndroidSource\libs\armeabi-v7a\libfmodL.so" set "FMOD_BUNDLED=0"
+        if not exist "%~dp0AndroidSource\libs\armeabi-v7a\libfmodstudioL.so" set "FMOD_BUNDLED=0"
+    )
+    if "%YYPLATFORM_option_android_arch_x86_64%"=="True" (
+        if not exist "%~dp0AndroidSource\libs\x86_64\libfmodL.so" set "FMOD_BUNDLED=0"
+        if not exist "%~dp0AndroidSource\libs\x86_64\libfmodstudioL.so" set "FMOD_BUNDLED=0"
+    )
+    if "%FMOD_BUNDLED%"=="1" exit /b 0
+
     :: Resolve the SDK path (must exist)
     call %Utils% pathResolveExisting "%YYprojectDir%" "%ANDROID_SDK_PATH%" SDK_PATH
 

@@ -45,6 +45,7 @@ function official_block_state_create() {
 			blocked_ids: [],
 			touch_world: [],
 			hover_live: false,
+			input_sample_us: -1,
 			need_gpu: false,
 			on_active: false,
 			on_ready: false,
@@ -62,6 +63,7 @@ function official_block_state_create() {
 			ok_glow: false,
 			ok_disabled: false,
 			ok_active: false,
+			ok_material: false,
 			ok_ready: false,
 			ok_pack_m: false,
 			ok_pack_e: false,
@@ -208,6 +210,7 @@ function official_blocks_reset() {
 	state.blocked_ids = [];
 	state.touch_world = [];
 	state.hover_live = false;
+	state.input_sample_us = -1;
 	state.need_gpu = false;
 	state.ready = false;
 	state.empty = true;
@@ -1091,10 +1094,10 @@ function official_block_enabled() {
 	return bool(game.settings[$ "enableNoiseArea"] ?? true);
 }
 
-///@desc 读取设置里是否使用精细噪声区
+///@desc 读取设置里是否使用全分辨率噪声区，沿用旧配置键
 ///@returns {Bool} 未写设置时为假
 function official_block_fine() {
-	// 没有设置时默认不用精细模式
+	// 没有设置时默认使用低分辨率区域目标
 	if (!variable_global_exists("game") || !is_struct(game) || !is_struct(game.settings)) return false;
 	return bool(game.settings[$ "enableNoiseAreaFine"] ?? false);
 }
@@ -1287,6 +1290,7 @@ function official_blocks_ensure() {
 		official_block_compile(shd_block_pack_mask);
 		official_block_compile(shd_block_pack_effect);
 		official_block_compile(shd_block_hover);
+		official_block_compile(shd_block_warp);
 		official_block_refresh_ok(state);
 		state.preloaded = true;
 	}
@@ -1317,6 +1321,7 @@ function official_block_refresh_ok(_state) {
 	_state.ok_glow = shader_is_compiled(shd_block_glow);
 	_state.ok_disabled = shader_is_compiled(shd_block_disabled);
 	_state.ok_active = shader_is_compiled(shd_block_active);
+	_state.ok_material = shader_is_compiled(shd_block_warp);
 	_state.ok_ready = shader_is_compiled(shd_block_active_ready);
 	_state.ok_pack_m = shader_is_compiled(shd_block_pack_mask);
 	_state.ok_pack_e = shader_is_compiled(shd_block_pack_effect);
@@ -1821,11 +1826,30 @@ function official_block_hover_tick(_hover, _dt) {
 ///@returns {Undefined} 无
 function official_block_input(_state, _aspect, _dt) {
 	var touches = [];
-	for (var device = 0; device < 4; device++) {
-		// 只采集按下的设备
-		if (!device_mouse_check_button(device, mb_left)) continue;
-		var world = official_block_pixel_to_world(device_mouse_x(device), device_mouse_y(device), _aspect);
-		array_add(touches, { id: device, x: world[0], y: world[1] });
+	if (os_type == os_android) {
+		var input = android_touch_state();
+		var fingers = input.fingers;
+		for (var fi = 0; fi < array_length(fingers); fi++) {
+			var finger = fingers[fi];
+			var world = official_block_pixel_to_world(finger.x, finger.y, _aspect);
+			array_add(touches, { id:finger.token, x:world[0], y:world[1], blocked:finger.blocked });
+		}
+		// 低帧率下短触点可能已抬起，仍给一次 blockTouch 反馈，再正常淡出。
+		var released = [];
+		for (var si = array_length(input.samples) - 1; si >= 0; si--) {
+			var sample = input.samples[si];
+			var finger = sample.finger;
+			if (finger.active || !finger.blocked || official_block_has_id(released, finger.token)) continue;
+			array_add(released, finger.token);
+			var world = official_block_pixel_to_world(sample.x, sample.y, _aspect);
+			array_add(touches, { id:finger.token, x:world[0], y:world[1], blocked:true, released:true });
+		}
+	} else {
+		for (var device = 0; device < 4; device++) {
+			if (!device_mouse_check_button(device, mb_left)) continue;
+			var world = official_block_pixel_to_world(device_mouse_x(device), device_mouse_y(device), _aspect);
+			array_add(touches, { id:device, x:world[0], y:world[1] });
+		}
 	}
 	var still = [];
 	var worlds = [];
@@ -1834,7 +1858,8 @@ function official_block_input(_state, _aspect, _dt) {
 	var hovers = _state.hovers;
 	for (var t = 0; t < touch_count; t++) {
 		var touch = touches[t];
-		var blocked = official_block_has_id(_state.blocked_ids, touch.id) || official_block_hits(_state, touch.x, touch.y);
+		var blocked = bool(touch[$ "blocked"] ?? false)
+			|| official_block_has_id(_state.blocked_ids, touch.id) || official_block_hits(_state, touch.x, touch.y);
 		// 只保留仍被挡住的触点
 		if (!blocked) continue;
 		array_add(still, touch.id);
@@ -1860,6 +1885,8 @@ function official_block_input(_state, _aspect, _dt) {
 			if (hover.id != touch.id) {
 				hover.id = touch.id;
 				official_block_hover_go(hover, 11.5, true);
+				// 同帧抬起的触点也先显示一帧，避免刚从零开始就进入淡出。
+				if (bool(touch[$ "released"] ?? false)) hover.elapsed = max(0.01, _dt);
 			}
 			hover.x = touch.x;
 			hover.y = touch.y;
@@ -1893,6 +1920,50 @@ function official_block_input(_state, _aspect, _dt) {
 		}
 	}
 	_state.hover_live = live;
+}
+
+///@desc 一帧只收集一次几何与 blockTouch；手动 Android 在判定前调用，Draw 复用结果
+function official_blocks_update(_state, _now, _aspect, _filter_touch = false) {
+	var outside = _now < _state.first_appear || _now >= _state.last_disappear;
+	if (outside && !_state.hover_live && array_length(_state.blocked_ids) == 0) {
+		if (_state.need_gpu) official_block_hide(_state);
+		return;
+	}
+	if (outside) official_block_hide(_state);
+	else official_block_gather(_state, _now, _aspect);
+	if (_filter_touch) {
+		var samples = android_touch_state().samples;
+		for (var si = 0; si < array_length(samples); si++) {
+			var sample = samples[si];
+			var finger = sample.finger;
+			if (finger.blocked) continue;
+			if (official_block_has_id(_state.blocked_ids, finger.token)) {
+				finger.blocked = true;
+			} else if (_state.on_active) {
+				var world = official_block_pixel_to_world(sample.x, sample.y, _aspect);
+				finger.blocked = official_block_hits(_state, world[0], world[1]);
+			}
+		}
+	}
+	var frame_dt = delta_time / 1000000;
+	if (variable_global_exists("render_mode") && global.render_mode
+		&& variable_global_exists("render_fps") && is_real(global.render_fps) && global.render_fps > 0) {
+		frame_dt = 1 / global.render_fps;
+	}
+	if (!is_real(frame_dt) || frame_dt < 0) frame_dt = 0;
+	official_block_input(_state, _aspect, min(0.05, frame_dt));
+}
+
+///@desc 触碰激活噪区后锁住该次接触，抬起后新触点使用新 token，其他手指不受影响
+function official_blocks_touch_step(_input) {
+	var state = official_blocks_ensure();
+	if (state.skipped || !state.ready || state.empty || !state.preloaded) {
+		for (var si = 0; si < array_length(_input.samples); si++) _input.samples[si].finger.blocked = false;
+		return;
+	}
+	if (!official_block_view_ready()) return;
+	state.input_sample_us = _input.sample_us;
+	official_blocks_update(state, game.__time[1], official_block_aspect(), true);
 }
 
 ///@desc 取着色器 uniform 或采样器槽位，并缓存
@@ -2058,7 +2129,7 @@ function official_block_pixels(_state) {
 ///@param {Real} _texture 纹理
 ///@returns {Undefined} 无
 function official_block_warm_bind(_shader, _texture) {
-	static names = ["_MainTex", "_DisplaceMap", "_NormalBlockRT", "_SubtractBlockRT", "_DisabledNormalBlockRT", "_DisabledSubtractBlockRT", "_ComposeRT", "_SparkMap", "_EffectRT", "_SceneColor", "_NoiseMap", "_MaskRT", "Active", "Ready", "Normal", "Subtract", "Glow", "Hover"];
+	static names = ["u_main", "u_displace", "u_normal", "u_subtract", "u_off_normal", "u_off_subtract", "u_compose", "u_spark", "u_effect", "u_scene_color", "u_grain", "u_mask", "u_active", "u_ready", "u_glow", "u_hover", "u_noise", "u_edge"];
 	var count = array_length(names);
 	// 名字对不上的采样器由 tex 自己跳过
 	for (var i = 0; i < count; i++) official_block_tex(_shader, names[i], _texture, true, true);
@@ -2090,6 +2161,12 @@ function official_block_gpu_warm(_state) {
 		else if (shader == shd_block_disabled) official_block_disabled_uniforms(shader, _state, 0);
 		else if (shader == shd_block_compose) official_block_compose_uniforms(shader, 0);
 		else if (shader == shd_block_glow) official_block_u4(shader, "_DilateTexelSize", 0.5, 0.5, 2, 2);
+		else if (shader == shd_block_warp) {
+			official_block_u4(shader, "u_screen", 2, 2, 0, 2);
+			official_block_u4(shader, "u_scene", 0, 0, 1, 1);
+			official_block_u2(shader, "u_effect_size", 2, 2);
+			official_block_u2(shader, "u_spark_px", 1, 1);
+		}
 		else if (shader == shd_block_subtract || shader == shd_block_subtract_soft) {
 			official_block_u1(shader, "_ClampThresholdLow", 0.09);
 			official_block_u1(shader, "_ClampThresholdHigh", 0.12);
@@ -2106,7 +2183,7 @@ function official_block_gpu_warm(_state) {
 	official_block_refresh_ok(_state);
 }
 
-///@desc 按分辨率和精细模式准备本帧需要的渲染目标
+///@desc 准备区域目标：低分辨率为八分之一，高分辨率与谱面等尺寸
 ///@param {Struct} _state 噪声区状态
 ///@param {Real} _w 屏幕宽
 ///@param {Real} _h 屏幕高
@@ -2116,7 +2193,7 @@ function official_block_rt_ensure(_state, _w, _h) {
 	if (_state.surf_w != _w || _state.surf_h != _h || bool(_state.fine) != fine) {
 		official_block_free_rt(_state);
 	}
-	var grid = fine ? 2 : 8;
+	var grid = fine ? 1 : 8;
 	var bw = max(1, _w div grid);
 	var bh = max(1, _h div grid);
 	var ew = fine ? bw : max(1, bw * 2);
@@ -2166,6 +2243,8 @@ function official_block_rt_ensure(_state, _w, _h) {
 ///@returns {Undefined} 无
 function official_block_fullscreen_begin(_dest, _shader) {
 	surface_set_target(_dest);
+	// 裁剪使用当前目标的像素尺寸，不能沿用全分辨率谱面的裁剪。
+	gpu_set_scissor(0, 0, surface_get_width(_dest), surface_get_height(_dest));
 	draw_clear_alpha(c_black, 0);
 	gpu_set_blendmode_ext(bm_one, bm_zero);
 	shader_set(_shader);
@@ -2174,7 +2253,7 @@ function official_block_fullscreen_begin(_dest, _shader) {
 	gpu_set_texfilter(false);
 }
 
-///@desc 用白面铺满目标并结束着色器
+///@desc 用白面铺满目标并结束着色器；材质采样器必须与绘制纹理分开
 ///@param {Struct} _state 噪声区状态
 ///@param {Real} _dest 目标表面
 ///@returns {Undefined} 无
@@ -2182,6 +2261,19 @@ function official_block_fullscreen_end(_state, _dest) {
 	draw_surface_stretched(_state.white_surf, 0, 0, surface_get_width(_dest), surface_get_height(_dest));
 	shader_reset();
 	surface_reset_target();
+}
+
+///@desc 显式绑定绘制纹理并提交 0..1 的全屏 UV；不依赖精灵或表面的类型检查
+function official_block_texture_quad(_texture, _w, _h) {
+	texture_set_stage(0, _texture);
+	draw_primitive_begin_texture(pr_trianglelist, _texture);
+	draw_vertex_texture(0, 0, 0, 0);
+	draw_vertex_texture(_w, 0, 1, 0);
+	draw_vertex_texture(_w, _h, 1, 1);
+	draw_vertex_texture(0, 0, 0, 0);
+	draw_vertex_texture(_w, _h, 1, 1);
+	draw_vertex_texture(0, _h, 0, 1);
+	draw_primitive_end();
 }
 
 ///@desc 用两个三角形画出四个角构成的四边形
@@ -2322,6 +2414,7 @@ function official_block_paint_group(_state, _index, _phase, _subtract, _sx, _sy)
 	var dest = _state.rt[_index];
 	if (!surface_exists(dest)) return;
 	surface_set_target(dest);
+	gpu_set_scissor(0, 0, _state.bw, _state.bh);
 	draw_clear_alpha(c_black, 0);
 	gpu_set_blendmode_ext(bm_src_alpha, bm_one);
 	shader_reset();
@@ -2353,7 +2446,7 @@ function official_block_subtract_pass(_state, _shader, _dest_index, _source_inde
 	official_block_fullscreen_begin(dest, _shader);
 	official_block_u1(_shader, "_ClampThresholdLow", 0.09);
 	official_block_u1(_shader, "_ClampThresholdHigh", 0.12);
-	official_block_tex(_shader, "_MainTex", official_block_surf_tex(_state, _source_index), false, false);
+	official_block_tex(_shader, "u_main", official_block_surf_tex(_state, _source_index), false, false);
 	official_block_fullscreen_end(_state, dest);
 }
 
@@ -2380,10 +2473,10 @@ function official_block_compose_active(_state, _now) {
 	official_block_fullscreen_begin(dest, shader);
 	official_block_compose_uniforms(shader, _now);
 	var displace_tex = official_block_image(_state, _state.noise_spr);
-	official_block_tex(shader, "_DisplaceMap", displace_tex, true, false);
+	official_block_tex(shader, "u_displace", displace_tex, true, false);
 	official_block_map_rect(shader, "_DisplaceMap_Rect", displace_tex);
-	official_block_tex(shader, "_NormalBlockRT", official_block_surf_tex(_state, _state.norm_active ? BLOCK_RT_ACTIVE_N : -1), false, false);
-	official_block_tex(shader, "_SubtractBlockRT", official_block_surf_tex(_state, _state.sub_active ? BLOCK_RT_ACTIVE_HP : -1), false, false);
+	official_block_tex(shader, "u_normal", official_block_surf_tex(_state, _state.norm_active ? BLOCK_RT_ACTIVE_N : -1), false, false);
+	official_block_tex(shader, "u_subtract", official_block_surf_tex(_state, _state.sub_active ? BLOCK_RT_ACTIVE_HP : -1), false, false);
 	official_block_fullscreen_end(_state, dest);
 }
 
@@ -2397,8 +2490,8 @@ function official_block_compose_plain(_state, _dest_index, _normal_index, _subtr
 	var shader = shd_block_compose_plain;
 	var dest = _state.rt[_dest_index];
 	official_block_fullscreen_begin(dest, shader);
-	official_block_tex(shader, "_DisabledNormalBlockRT", official_block_surf_tex(_state, _normal_index), false, false);
-	official_block_tex(shader, "_DisabledSubtractBlockRT", official_block_surf_tex(_state, _subtract_index), false, false);
+	official_block_tex(shader, "u_off_normal", official_block_surf_tex(_state, _normal_index), false, false);
+	official_block_tex(shader, "u_off_subtract", official_block_surf_tex(_state, _subtract_index), false, false);
 	official_block_fullscreen_end(_state, dest);
 }
 
@@ -2413,10 +2506,10 @@ function official_block_glow(_state) {
 	var eh = _state.eh;
 	var step_x = 1 / ew;
 	var step_y = 1 / eh;
-	// 精细模式的步进按全屏四像素，而不是效果缓冲纹素
+	// 高分辨率保留一像素细边；低分辨率仍按效果目标的纹素膨胀。
 	if (_state.fine) {
-		step_x = 4 / max(1, _state.surf_w);
-		step_y = 4 / max(1, _state.surf_h);
+		step_x = 1 / max(1, _state.surf_w);
+		step_y = 1 / max(1, _state.surf_h);
 	}
 	// 奇偶两张目标来回写
 	for (var pass = 0; pass < 5; pass++) {
@@ -2426,8 +2519,8 @@ function official_block_glow(_state) {
 		official_block_u4(shader, "_DilateTexelSize", step_x, step_y, ew, eh);
 		official_block_u1(shader, "_PassWeight", weights[pass]);
 		official_block_u1(shader, "_GlowFirstPass", pass == 0 ? 1 : 0);
-		official_block_tex(shader, "_MainTex", official_block_surf_tex(_state, source), false, false);
-		official_block_tex(shader, "_ComposeRT", official_block_surf_tex(_state, BLOCK_RT_ACTIVE_C), false, false);
+		official_block_tex(shader, "u_main", official_block_surf_tex(_state, source), false, false);
+		official_block_tex(shader, "u_compose", official_block_surf_tex(_state, BLOCK_RT_ACTIVE_C), false, false);
 		official_block_fullscreen_end(_state, dest);
 		source = dest_index;
 	}
@@ -2440,13 +2533,15 @@ function official_block_paint_hover(_state) {
 	var dest = _state.rt[BLOCK_RT_HOVER];
 	if (!surface_exists(dest) || !sprite_exists(_state.touch_spr)) return;
 	surface_set_target(dest);
+	gpu_set_scissor(0, 0, _state.bw, _state.bh);
 	draw_clear_alpha(c_black, 0);
 	gpu_set_blendmode_ext(bm_one, bm_inv_src_alpha);
 	shader_set(shd_block_hover);
 	draw_set_colour(c_white);
 	draw_set_alpha(1);
 	var texture = sprite_get_texture(_state.touch_spr, 0);
-	var uvs = texture_get_uvs(texture);
+	gpu_set_texfilter(true);
+	gpu_set_texrepeat(false);
 	var sx = _state.bw / _state.surf_w;
 	var sy = _state.bh / _state.surf_h;
 	var aspect = official_block_aspect();
@@ -2469,10 +2564,12 @@ function official_block_paint_hover(_state) {
 			var point = index[v];
 			var uu = local_x[point] / 0.44 + 0.5;
 			var vv = local_y[point] / 0.44 + 0.5;
-			draw_vertex_texture(pos[point * 2], pos[point * 2 + 1], uvs[0] + uu * (uvs[2] - uvs[0]), uvs[1] + vv * (uvs[3] - uvs[1]));
+			// 此接口会映射精灵图集，传局部 UV，避免再次映射后采样到贴图边缘。
+			draw_vertex_texture(pos[point * 2], pos[point * 2 + 1], uu, vv);
 		}
 		draw_primitive_end();
 	}
+	pls_draw_flush();
 	shader_reset();
 	surface_reset_target();
 }
@@ -2490,17 +2587,17 @@ function official_block_pack(_state) {
 	var mask = shd_block_pack_mask;
 	var mask_dest = _state.rt[BLOCK_RT_PACK_M];
 	official_block_fullscreen_begin(mask_dest, mask);
-	official_block_tex(mask, "Active", official_block_surf_tex(_state, active_tex), false, false);
-	official_block_tex(mask, "Ready", official_block_surf_tex(_state, ready_tex), false, false);
-	official_block_tex(mask, "Normal", official_block_surf_tex(_state, _state.norm_ready ? BLOCK_RT_READY_N : -1), false, false);
-	official_block_tex(mask, "Subtract", official_block_surf_tex(_state, _state.sub_ready ? BLOCK_RT_READY_HP : -1), false, false);
+	official_block_tex(mask, "u_active", official_block_surf_tex(_state, active_tex), false, false);
+	official_block_tex(mask, "u_ready", official_block_surf_tex(_state, ready_tex), false, false);
+	official_block_tex(mask, "u_normal", official_block_surf_tex(_state, _state.norm_ready ? BLOCK_RT_READY_N : -1), false, false);
+	official_block_tex(mask, "u_subtract", official_block_surf_tex(_state, _state.sub_ready ? BLOCK_RT_READY_HP : -1), false, false);
 	official_block_fullscreen_end(_state, mask_dest);
 
 	var pack_shader = shd_block_pack_effect;
 	var effect_dest = _state.rt[BLOCK_RT_PACK_E];
 	official_block_fullscreen_begin(effect_dest, pack_shader);
-	official_block_tex(pack_shader, "Glow", official_block_surf_tex(_state, glow_tex), false, false);
-	official_block_tex(pack_shader, "Hover", official_block_surf_tex(_state, _state.hover_live ? BLOCK_RT_HOVER : -1), false, false);
+	official_block_tex(pack_shader, "u_glow", official_block_surf_tex(_state, glow_tex), false, false);
+	official_block_tex(pack_shader, "u_hover", official_block_surf_tex(_state, _state.hover_live ? BLOCK_RT_HOVER : -1), false, false);
 	official_block_fullscreen_end(_state, effect_dest);
 }
 
@@ -2686,91 +2783,50 @@ function official_block_scissor(_cover, _margin, _w, _h) {
 	return true;
 }
 
-///@desc 用像素对齐的扭曲着色器盖住噪声区内部
+///@desc 一次合成场景位移、颜色混合、细噪点和边缘
 ///@param {Struct} _state 噪声区状态
 ///@param {Real} _w 屏幕宽
 ///@param {Real} _h 屏幕高
 ///@param {Real} _now 当前谱面时间
-///@returns {Undefined} 无
+///@returns {Bool} 材质已呈现时为真，否则使用旧材质回退
 function official_block_warp_present(_state, _w, _h, _now) {
-	// 着色器或场景表面缺失则不画
-	if (!shader_is_compiled(shd_block_warp)) return;
-	if (!surface_exists(_state.rt[BLOCK_RT_SCENE])) return;
+	if (!_state.ok_material || !surface_exists(_state.rt[BLOCK_RT_SCENE])) return false;
+	var shader = shd_block_warp;
 	var scene_tex = surface_get_texture(_state.rt[BLOCK_RT_SCENE]);
-	var mask_tex = official_block_surf_tex(_state, BLOCK_RT_PACK_M);
 	var noise_tex = official_block_image(_state, _state.noise_spr);
-	var spark_tex = -1;
-	var spark_w = 1;
-	var spark_h = 1;
-	if (sprite_exists(_state.spark_spr)) {
-		spark_tex = sprite_get_texture(_state.spark_spr, 0);
-		spark_w = max(1, sprite_get_width(_state.spark_spr));
-		spark_h = max(1, sprite_get_height(_state.spark_spr));
-	} else if (surface_exists(_state.blank_surf)) {
-		spark_tex = surface_get_texture(_state.blank_surf);
-	}
-	// 缺任何一张纹理就不画
-	if (scene_tex == -1 || mask_tex == -1 || noise_tex == -1 || spark_tex == -1) return;
-	shader_set(shd_block_warp);
-	var screen_handle = official_block_slot(shd_block_warp, "u_screen", false);
-	var scene_handle = official_block_slot(shd_block_warp, "u_scene", false);
-	var noise_uv_handle = official_block_slot(shd_block_warp, "u_noise_uv", false);
-	var spark_uv_handle = official_block_slot(shd_block_warp, "u_spark_uv", false);
-	var spark_px_handle = official_block_slot(shd_block_warp, "u_spark_px", false);
-	var fill_handle = official_block_slot(shd_block_warp, "u_fill", false);
-	var scene_uvs = texture_get_uvs(scene_tex);
-	var noise_uvs = texture_get_uvs(noise_tex);
-	var spark_uvs = texture_get_uvs(spark_tex);
-	// w 是 texture_17 的一种排布保持不动的谱面秒数。
-	if (screen_handle >= 0) shader_set_uniform_f(screen_handle, _w, _h, _now, 0.18);
-	var fine_handle = official_block_slot(shd_block_warp, "u_fine", false);
-	if (fine_handle >= 0) shader_set_uniform_f(fine_handle, official_block_fine() ? 1 : 0);
-	if (scene_handle >= 0) shader_set_uniform_f(scene_handle, scene_uvs[0], scene_uvs[1], scene_uvs[2], scene_uvs[3]);
-	if (noise_uv_handle >= 0) shader_set_uniform_f(noise_uv_handle, noise_uvs[0], noise_uvs[1], noise_uvs[2], noise_uvs[3]);
-	if (spark_uv_handle >= 0) shader_set_uniform_f(spark_uv_handle, spark_uvs[0], spark_uvs[1], spark_uvs[2], spark_uvs[3]);
-	if (spark_px_handle >= 0) shader_set_uniform_f(spark_px_handle, spark_w, spark_h);
-	if (fill_handle >= 0) shader_set_uniform_f(fill_handle, 0.713207483291626, 0.23549295961856842, 0.23549295961856842);
-	var mask_stage = official_block_slot(shd_block_warp, "u_mask", true);
-	var noise_stage = official_block_slot(shd_block_warp, "u_noise", true);
-	var edge_stage = official_block_slot(shd_block_warp, "u_edge", true);
-	var spark_stage = official_block_slot(shd_block_warp, "u_spark", true);
-	var edge_tex = official_block_surf_tex(_state, BLOCK_RT_PACK_E);
-	if (mask_stage > 0) {
-		texture_set_stage(mask_stage, mask_tex);
-		gpu_set_texfilter_ext(mask_stage, false);
-		gpu_set_texrepeat_ext(mask_stage, false);
-	}
-	if (edge_stage > 0 && edge_tex != -1) {
-		texture_set_stage(edge_stage, edge_tex);
-		gpu_set_texfilter_ext(edge_stage, true);
-		gpu_set_texrepeat_ext(edge_stage, false);
-	}
-	if (noise_stage > 0) {
-		texture_set_stage(noise_stage, noise_tex);
-		gpu_set_texfilter_ext(noise_stage, true);
-		gpu_set_texrepeat_ext(noise_stage, true);
-	}
-	if (spark_stage > 0) {
-		texture_set_stage(spark_stage, spark_tex);
-		gpu_set_texfilter_ext(spark_stage, false);
-		gpu_set_texrepeat_ext(spark_stage, false);
-	}
-	// 0 号槽是谱面拷贝。放在其它采样器之后设置，避免上一通道的白四边形还绑在上面。
-	texture_set_stage(0, scene_tex);
-	gpu_set_texfilter(false);
-	gpu_set_texrepeat(false);
+	var spark_tex = official_block_image(_state, _state.spark_spr);
+	shader_set(shader);
+	// 区域目标的分辨率独立于场景像素和细噪点，两个档位都包含完整材质。
+	official_block_u4(shader, "u_screen", _w, _h, _now, 2);
+	var scene_uv = texture_get_uvs(scene_tex);
+	official_block_u4(shader, "u_scene", scene_uv[0], scene_uv[1], scene_uv[2], scene_uv[3]);
+	official_block_map_rect(shader, "u_noise_uv", noise_tex);
+	official_block_map_rect(shader, "u_spark_uv", spark_tex);
+	official_block_u2(shader, "u_spark_px", max(1, sprite_get_width(_state.spark_spr)), max(1, sprite_get_height(_state.spark_spr)));
+	official_block_u2(shader, "u_effect_size", _state.ew, _state.eh);
+	var cr = _state.tint_r;
+	var cg = _state.tint_g;
+	var cb = _state.tint_b;
+	var fill = official_block_shift_color(0.71320748, 0.23549296, 0.23549296, cr, cg, cb);
+	var edge = official_block_shift_color(1, 0.33018857, 0.33018857, cr, cg, cb);
+	var glow = official_block_shift_color(1, 0.17924517, 0.17924517, cr, cg, cb);
+	var spark = official_block_shift_color(1, 0.28490567, 0.28490567, cr, cg, cb);
+	official_block_u3(shader, "u_fill", fill[0], fill[1], fill[2]);
+	official_block_u3(shader, "u_edge_color", edge[0], edge[1], edge[2]);
+	official_block_u3(shader, "u_glow_color", glow[0], glow[1], glow[2]);
+	official_block_u3(shader, "u_spark_color", spark[0], spark[1], spark[2]);
+	official_block_tex(shader, "u_mask", official_block_surf_tex(_state, BLOCK_RT_PACK_M), false, false);
+	official_block_tex(shader, "u_edge", official_block_surf_tex(_state, BLOCK_RT_PACK_E), false, false);
+	official_block_tex(shader, "u_noise", noise_tex, true, false);
+	official_block_tex(shader, "u_spark", spark_tex, false, false);
+	gpu_set_texfilter_ext(0, false);
+	gpu_set_texrepeat_ext(0, false);
 	gpu_set_blendmode_ext(bm_one, bm_inv_src_alpha);
 	draw_set_colour(c_white);
 	draw_set_alpha(1);
-	draw_primitive_begin_texture(pr_trianglelist, scene_tex);
-	draw_vertex_texture(0, 0, 0, 0);
-	draw_vertex_texture(_w, 0, 1, 0);
-	draw_vertex_texture(_w, _h, 1, 1);
-	draw_vertex_texture(0, 0, 0, 0);
-	draw_vertex_texture(_w, _h, 1, 1);
-	draw_vertex_texture(0, _h, 0, 1);
-	draw_primitive_end();
+	official_block_texture_quad(scene_tex, _w, _h);
 	shader_reset();
+	return true;
 }
 
 ///@desc 铺一张表面或默认白面，然后复位着色器
@@ -2782,9 +2838,29 @@ function official_block_warp_present(_state, _w, _h, _now) {
 function official_block_present_quad(_state, _w, _h, _surface = undefined) {
 	var source = _state.white_surf;
 	// 传入有效表面就用它，否则用 1x1 白面
-	if (is_real(_surface) && surface_exists(_surface)) then source = _surface;
+	if (!is_undefined(_surface) && surface_exists(_surface)) then source = _surface;
 	draw_surface_stretched(source, 0, 0, _w, _h);
 	shader_reset();
+}
+
+///@desc 激活回退材质与预备材质的纹理绑定
+function official_block_active_bind(_state, _shader, _now, _w, _h, _hover_only = false) {
+	shader_set(_shader);
+	official_block_active_uniforms(_shader, _state, _now, _w, _h);
+	official_block_u1(_shader, "_HoverOnly", _hover_only ? 1 : 0);
+	official_block_tex(_shader, "u_mask", official_block_surf_tex(_state, BLOCK_RT_PACK_M), false, false);
+	official_block_tex(_shader, "u_effect", official_block_surf_tex(_state, BLOCK_RT_PACK_E), false, false);
+	var displace = official_block_image(_state, _state.noise_spr);
+	var spark = official_block_image(_state, _state.spark_spr);
+	var grain = official_block_image(_state, _state.grain_spr);
+	official_block_tex(_shader, "u_displace", displace, true, false);
+	official_block_map_rect(_shader, "_DisplaceMap_Rect", displace);
+	official_block_tex(_shader, "u_spark", spark, true, false);
+	official_block_map_rect(_shader, "_SparkMap_Rect", spark);
+	official_block_tex(_shader, "u_grain", grain, true, false);
+	official_block_map_rect(_shader, "_NoiseMap_Rect", grain);
+	var scene = (_shader == shd_block_active) ? BLOCK_RT_SCENE : -1;
+	official_block_tex(_shader, "u_scene_color", official_block_surf_tex(_state, scene), false, false);
 }
 
 ///@desc 把未启用材质和激活或预备材质画回谱面表面
@@ -2794,9 +2870,9 @@ function official_block_present_quad(_state, _w, _h, _surface = undefined) {
 ///@param {Real} _h 屏幕高
 ///@returns {Undefined} 无
 function official_block_present(_state, _now, _w, _h) {
+	gpu_set_scissor(0, 0, _w, _h);
 	var displace_tex = official_block_image(_state, _state.noise_spr);
 	var spark_tex = official_block_image(_state, _state.spark_spr);
-	var grain_tex = official_block_image(_state, _state.grain_spr);
 	gpu_set_alphatestenable(false);
 	draw_set_colour(c_white);
 	draw_set_alpha(1);
@@ -2810,10 +2886,10 @@ function official_block_present(_state, _now, _w, _h) {
 			gpu_set_blendmode_ext(bm_one, bm_one);
 			shader_set(shader);
 			official_block_disabled_uniforms(shader, _state, _now);
-			official_block_tex(shader, "_ComposeRT", official_block_surf_tex(_state, compose), false, false);
-			official_block_tex(shader, "_DisplaceMap", displace_tex, true, false);
+			official_block_tex(shader, "u_compose", official_block_surf_tex(_state, compose), false, false);
+			official_block_tex(shader, "u_displace", displace_tex, true, false);
 			official_block_map_rect(shader, "_DisplaceMap_Rect", displace_tex);
-			official_block_tex(shader, "_SparkMap", spark_tex, true, false);
+			official_block_tex(shader, "u_spark", spark_tex, true, false);
 			official_block_map_rect(shader, "_SparkMap_Rect", spark_tex);
 			official_block_present_quad(_state, _w, _h);
 		}
@@ -2821,29 +2897,24 @@ function official_block_present(_state, _now, _w, _h) {
 	}
 	// 有激活或悬停时用激活着色器，否则用预备着色器
 	var active_shader = (_state.on_active || _state.hover_live) ? shd_block_active : shd_block_active_ready;
-	var active_ok = (active_shader == shd_block_active) ? _state.ok_active : _state.ok_ready;
+	var active_ok = (active_shader == shd_block_active) ? (_state.ok_material || _state.ok_active) : _state.ok_ready;
 	if ((_state.on_active || _state.on_ready || _state.hover_live) && active_ok) {
 		var margin = 0.11 * max(_w, _h) + 8;
 		if (official_block_scissor(_state.cover_active, margin, _w, _h)) {
-			gpu_set_blendmode_ext(bm_one, bm_inv_src_alpha);
-			shader_set(active_shader);
-			official_block_active_uniforms(active_shader, _state, _now, _w, _h);
-			official_block_tex(active_shader, "_MaskRT", official_block_surf_tex(_state, BLOCK_RT_PACK_M), false, false);
-			official_block_tex(active_shader, "_EffectRT", official_block_surf_tex(_state, BLOCK_RT_PACK_E), false, false);
-			official_block_tex(active_shader, "_DisplaceMap", displace_tex, true, false);
-			official_block_map_rect(active_shader, "_DisplaceMap_Rect", displace_tex);
-			official_block_tex(active_shader, "_SparkMap", spark_tex, true, false);
-			official_block_map_rect(active_shader, "_SparkMap_Rect", spark_tex);
-			official_block_tex(active_shader, "_NoiseMap", grain_tex, true, false);
-			official_block_map_rect(active_shader, "_NoiseMap_Rect", grain_tex);
-			// 四边形本身保持 1x1 白面，UV 才仍是遮罩所用的 0 到 1 屏幕坐标。
-			// 若把谱面拷贝当成这个四边形，gm_BaseTexture 会是白的，因为 texture_set_stage 先执行。
-			// _SceneColor 是更后面的采样器。
-			var scene_index = (active_shader == shd_block_active) ? BLOCK_RT_SCENE : -1;
-			official_block_tex(active_shader, "_SceneColor", official_block_surf_tex(_state, scene_index), false, false);
-			official_block_present_quad(_state, _w, _h);
-			// 材质通道会让区域内仍看见清晰谱面。这里改成像素对齐并带位移的拷贝。
-			if (active_shader == shd_block_active) official_block_warp_present(_state, _w, _h, _now);
+			// 正常通道只呈现一次。旧材质保留为着色器不支持时的回退。
+			var composed = active_shader == shd_block_active
+				&& official_block_warp_present(_state, _w, _h, _now);
+			if (!composed) {
+				gpu_set_blendmode_ext(bm_one, bm_inv_src_alpha);
+				official_block_active_bind(_state, active_shader, _now, _w, _h);
+				official_block_present_quad(_state, _w, _h);
+			}
+			// blockTouch 沿用既有噪声、高光和淡出，仅在场景材质之后叠加反馈。
+			if (_state.hover_live && _state.ok_active) {
+				gpu_set_blendmode_ext(bm_one, bm_one);
+				official_block_active_bind(_state, shd_block_active, _now, _w, _h, true);
+				official_block_present_quad(_state, _w, _h);
+			}
 			gpu_set_scissor(0, 0, _w, _h);
 		}
 	}
@@ -2917,23 +2988,10 @@ function official_blocks_draw() {
 	var aspect = official_block_aspect();
 	if (!loading && official_block_view_ready() && variable_global_exists("game") && is_struct(game) && is_array(game[$ "__time"]) && array_length(game.__time) >= 2 && is_real(game.__time[1])) {
 		now = game.__time[1];
-		// 加载中、视口未好或完全在显示区间外则不收集
-		var outside = now < state.first_appear || now >= state.last_disappear;
-		if (!(outside && !state.hover_live && array_length(state.blocked_ids) == 0)) {
-			if (outside) official_block_hide(state);
-			else official_block_gather(state, now, aspect);
-			var frame_dt = delta_time / 1000000;
-			// 录像按固定帧长走，不跟这一帧的真实耗时。
-			if (variable_global_exists("render_mode") && global.render_mode
-				&& variable_global_exists("render_fps") && is_real(global.render_fps) && global.render_fps > 0) {
-				frame_dt = 1 / global.render_fps;
-			}
-			if (!is_real(frame_dt) || frame_dt < 0) frame_dt = 0;
-			// 帧间隔限制在 0.05 秒内，避免悬停跳变
-			if (frame_dt > 0.05) frame_dt = 0.05;
-			official_block_input(state, aspect, frame_dt);
-			wants = state.need_gpu || state.hover_live;
-		}
+		var input_ready = os_type == os_android && !chart_autoplay_active()
+			&& state.input_sample_us == android_touch_state().sample_us;
+		if (!input_ready) official_blocks_update(state, now, aspect);
+		wants = state.need_gpu || state.hover_live;
 	}
 	// 这一帧不需要画且已经预热过则返回
 	if (!wants && state.gpu_warm) return;

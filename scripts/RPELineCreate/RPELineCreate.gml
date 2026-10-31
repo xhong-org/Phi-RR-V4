@@ -288,8 +288,13 @@ function rpe_lines_create_note(i, n) {
 				if (!struct_exists(game_1.HitSounds, hitsound_rel)) {
 					var _media = instance_find(oMedia, 0);
 					if (_media.track > 0) then fmod_system_select(_media.track);
-					var loaded_hitsound = fmod_system_create_sound(hitsound_path, FMOD_MODE.DEFAULT);
-					if (loaded_hitsound > 0) then game_1.HitSounds[$ hitsound_rel] = loaded_hitsound;
+					// 与皮肤打击音一致，不继承文件中的循环设置。
+					var loaded_hitsound = fmod_system_create_sound(hitsound_path, FMOD_MODE.LOOP_OFF);
+					if (loaded_hitsound > 0) {
+						fmod_sound_set_loop_count(loaded_hitsound, 0);
+						game_1.HitSounds[$ hitsound_rel] = loaded_hitsound;
+						game_1.HitSoundsSystem = _media.track;
+					};
 				};
 				if (struct_exists(game_1.HitSounds, hitsound_rel)) then custom_fmod_sound = game_1.HitSounds[$ hitsound_rel];
 			};
@@ -451,11 +456,6 @@ function rpe_lines_finish() {
 	rpe._note_activation_enabled = (_note_preload > 0);
 	rpe._note_activation_index = (rpe._note_activation_enabled ? 0 : array_length(rpe._notes));
 	rpe._note_activation_last_time = -infinity;
-	// 创建和空间记录都完成后才冻结每个音符。
-	for (var _di = 0; _di < array_length(rpe._notes); _di++) {
-		instance_deactivate_object(rpe._notes[_di].id);
-	};
-
 	for (var _fi = 0; _fi < array_length(rpe.line_list); _fi++) {
 		var _fl = rpe.line_list[_fi];
 		if (!instance_exists(_fl)) then continue;
@@ -588,6 +588,12 @@ function rpe_lines_finish() {
 		};
 	};
 
+	// 深度布局完成后再冻结音符。休眠实例会被上面的 instance_exists 跳过，
+	// 保留布局前的深度，自定义贴图就可能盖住本应画在上方的音符。
+	for (var _di = 0; _di < array_length(rpe._notes); _di++) {
+		instance_deactivate_object(rpe._notes[_di].id);
+	};
+
 	for (var _initial_line_i = 0; _initial_line_i < array_length(rpe.line_list); _initial_line_i++) {
 		var _initial_line = rpe.line_list[_initial_line_i];
 		if (instance_exists(_initial_line)) {
@@ -708,7 +714,14 @@ function rpe_lines_thaw_force_init() {
 ///@param {Bool} _layout_changed 视口是否改变
 ///@returns {Undefined} 无
 function rpe_notes_refresh_geometry(_layout_changed) {
-	if (game.paused && !_layout_changed) return;
+	// 暂停时设置也可能变化。不能只用视口大小决定是否重算皮肤和 Hold 几何。
+	var note_size = game.settings.noteSize;
+	var uniform = bool(game.settings.noteUniformScale ?? false);
+	var size_changed = (game_1[$ "_geometry_note_size"] ?? -1) != note_size
+		|| (game_1[$ "_geometry_uniform"] ?? !uniform) != uniform;
+	game_1._geometry_note_size = note_size;
+	game_1._geometry_uniform = uniform;
+	if (game.paused && !_layout_changed && !size_changed) return;
 	with (oNote_1) {
 		if (inition && instance_exists(_line_ref)) event_user(_step_user_count);
 	}

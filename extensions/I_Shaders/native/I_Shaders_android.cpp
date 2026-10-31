@@ -1,4 +1,5 @@
 #include "native/IShadersInternal_native.h"
+#include "../../I_NativeCommon/GlesState.h"
 
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
@@ -24,6 +25,9 @@
 #ifndef GL_DRAW_FRAMEBUFFER
 #define GL_DRAW_FRAMEBUFFER 0x8CA9
 #endif
+#ifndef GL_READ_FRAMEBUFFER_BINDING
+#define GL_READ_FRAMEBUFFER_BINDING 0x8CAA
+#endif
 
 namespace {
 
@@ -46,6 +50,8 @@ std::recursive_mutex g_mutex;
 std::string g_error;
 std::string g_translatedSource;
 bool g_ready = false;
+bool g_separateFramebuffers = false;
+EGLContext g_context = EGL_NO_CONTEXT;
 GLuint g_quadVbo = 0;
 GLuint g_vao = 0;
 GLuint g_inputTexture = 0;
@@ -174,8 +180,9 @@ void parseUniforms(const std::string& source, ShaderRecord& record) {
         else if (type == "vec3") uniform.components = 3;
         else if (type == "vec4") uniform.components = 4;
         else continue;
+        // The source and translated underscore alias share one value. Uploading
+        // two independent records can overwrite chart parameters with zero.
         record.uniforms[name] = uniform;
-        record.uniforms["_" + name] = uniform;
     }
 }
 
@@ -650,6 +657,18 @@ std::string hlslToGlslEs(std::string source, const std::string& sourceName) {
     return source;
 }
 
+std::string remapFragCoordComponents(std::string fragment) {
+    // GLSL .st / .rg and .xy address the same components. Keep all three
+    // spellings in the same top-left pixel space before texture sampling.
+    static const std::regex xy(R"(\bgl_FragCoord\s*\.\s*(?:xy|st|rg)\b)");
+    static const std::regex x(R"(\bgl_FragCoord\s*\.\s*[xsr]\b)");
+    static const std::regex y(R"(\bgl_FragCoord\s*\.\s*[ytg]\b)");
+    fragment = std::regex_replace(fragment, xy, "rpe_pixel");
+    fragment = std::regex_replace(fragment, x, "rpe_pixel.x");
+    fragment = std::regex_replace(fragment, y, "rpe_pixel.y");
+    return fragment;
+}
+
 std::string remapFragCoord(std::string fragment) {
     if (fragment.find("gl_FragCoord") == std::string::npos) return fragment;
     if (fragment.find("screenSize") == std::string::npos) return fragment;
@@ -676,9 +695,7 @@ std::string remapFragCoord(std::string fragment) {
         }
     }
 
-    fragment = replaceAll(fragment, "gl_FragCoord.xy", "rpe_pixel");
-    fragment = replaceAll(fragment, "gl_FragCoord.x", "rpe_pixel.x");
-    fragment = replaceAll(fragment, "gl_FragCoord.y", "rpe_pixel.y");
+    fragment = remapFragCoordComponents(fragment);
     fragment = replaceAll(fragment,
         "vec2 dropPos = generateDropPosition(i, i * 10.0);",
         "float rpe_i = float(i);\n"
@@ -725,9 +742,7 @@ std::string remapWindowCoordToGameMaker(std::string fragment) {
     if (fragment.find("gl_FragCoord") == std::string::npos) return fragment;
     if (fragment.find("screenSize") == std::string::npos
         && fragment.find("iResolution") == std::string::npos) return fragment;
-    fragment = replaceAll(fragment, "gl_FragCoord.xy", "rpe_pixel");
-    fragment = replaceAll(fragment, "gl_FragCoord.x", "rpe_pixel.x");
-    fragment = replaceAll(fragment, "gl_FragCoord.y", "rpe_pixel.y");
+    fragment = remapFragCoordComponents(fragment);
     const char* pixelInit =
         "vec2 rpe_pixel = vec2(gl_FragCoord.x, screenSize.y - gl_FragCoord.y);\n";
     const auto mainPos = fragment.find("void main");
@@ -803,6 +818,17 @@ int nextPowerOfTwo(int value) {
 }
 
 bool captureInputFromCurrentFramebuffer(GLint width, GLint height) {
+    pls::GlesTextureState textureState;
+    struct ReadFramebufferState {
+        GLint previous = 0;
+        bool separate = g_separateFramebuffers;
+        ReadFramebufferState() {
+            if (separate) glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &previous);
+        }
+        ~ReadFramebufferState() {
+            if (separate) glBindFramebuffer(GL_READ_FRAMEBUFFER, previous);
+        }
+    } readFramebufferState;
     GLint sourceFbo = 0;
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &sourceFbo);
     GLint viewport[4] = {0, 0, width, height};
@@ -820,18 +846,18 @@ bool captureInputFromCurrentFramebuffer(GLint width, GLint height) {
         return false;
     }
 
-    glDisable(GL_SCISSOR_TEST);
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glPixelStorei(GL_PACK_ALIGNMENT, 1);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glFinish();
+    // Texture copies obey command order; no GPU-wide finish or pixel-store changes.
 
-    // NPOT + GL_LINEAR returns black on many GLES2/3 drivers. Copy into the
-    // lower-left of a POT texture and scale UVs when sampling.
+    // Preserve the existing POT capture layout and sample only its valid area.
     const GLint potW = nextPowerOfTwo(copyW);
     const GLint potH = nextPowerOfTwo(copyH);
-    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(sourceFbo));
+    if (g_separateFramebuffers) glBindFramebuffer(GL_READ_FRAMEBUFFER, sourceFbo);
     glActiveTexture(GL_TEXTURE0);
+    if (g_inputTexture != 0 && !glIsTexture(g_inputTexture)) {
+        g_inputTexture = 0;
+        g_potWidth = 0;
+        g_potHeight = 0;
+    }
     if (g_inputTexture == 0) glGenTextures(1, &g_inputTexture);
     glBindTexture(GL_TEXTURE_2D, g_inputTexture);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -897,7 +923,15 @@ std::int32_t rpe_hlsl_initialize(void* devicePointer, void* contextPointer) {
     std::lock_guard lock(g_mutex);
     (void)devicePointer;
     (void)contextPointer;
+    if (eglGetCurrentContext() == EGL_NO_CONTEXT) {
+        setError("Shader initialization needs a current GLES context (Draw).");
+        return -1;
+    }
     rpe_hlsl_shutdown();
+    g_context = eglGetCurrentContext();
+    const auto* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+    g_separateFramebuffers = version && std::strncmp(version, "OpenGL ES 3", 11) == 0;
+    pls::GlesDrawState drawState(0);
     const float vertices[] = {
         -1.0f,  1.0f, 0.0f, 0.0f,
          1.0f,  1.0f, 1.0f, 0.0f,
@@ -923,12 +957,13 @@ std::int32_t rpe_hlsl_initialize(void* devicePointer, void* contextPointer) {
 
 std::int32_t rpe_hlsl_state() {
     std::lock_guard lock(g_mutex);
-    return 202608360 + (g_ready ? 3 : 0);
+    return 202608360 + (g_ready && g_context == eglGetCurrentContext()
+        && glIsBuffer(g_quadVbo) ? 3 : 0);
 }
 
 std::int32_t rpe_hlsl_compile(std::string_view source, std::string_view sourceName) {
     std::lock_guard lock(g_mutex);
-    if (!g_ready || source.empty()) {
+    if (!g_ready || g_context != eglGetCurrentContext() || source.empty()) {
         setError("RPE GLSL ES backend is not initialized.");
         return -1;
     }
@@ -998,7 +1033,9 @@ bool rpe_hlsl_set_uniform_component(std::int32_t handle, std::string_view name,
     auto& uniforms = shaderIt->second->uniforms;
     const std::string uniformName(name);
     auto uniformIt = uniforms.find(uniformName);
-    if (uniformIt == uniforms.end()) uniformIt = uniforms.find("_" + uniformName);
+    if (uniformIt == uniforms.end() && uniformName[0] == '_') {
+        uniformIt = uniforms.find(uniformName.substr(1));
+    }
     if (uniformIt == uniforms.end()) return false;
     uniformIt->second.values[component] = value;
     return true;
@@ -1008,7 +1045,7 @@ bool rpe_hlsl_begin(std::int32_t handle) {
     std::lock_guard lock(g_mutex);
     const auto shaderIt = g_shaders.find(handle);
     g_inputCaptured = false;
-    if (!g_ready || shaderIt == g_shaders.end()) {
+    if (!g_ready || g_context != eglGetCurrentContext() || shaderIt == g_shaders.end()) {
         setError("Android shader begin failed: backend or handle is invalid.");
         return false;
     }
@@ -1024,35 +1061,15 @@ bool rpe_hlsl_begin(std::int32_t handle) {
 std::int32_t rpe_hlsl_draw(std::int32_t handle, float uvLeft, float uvTop, float uvRight, float uvBottom) {
     std::lock_guard lock(g_mutex);
     const auto shaderIt = g_shaders.find(handle);
-    if (!g_ready || !g_quadVbo || shaderIt == g_shaders.end() || !g_inputCaptured || g_inputTexture == 0) {
+    if (!g_ready || g_context != eglGetCurrentContext() || !g_quadVbo || shaderIt == g_shaders.end() || !g_inputCaptured || g_inputTexture == 0) {
         if (g_error.empty()) setError("Android shader draw skipped: captured source texture is missing.");
         return 0;
     }
     ShaderRecord& record = *shaderIt->second;
 
-    GLint previousProgram = 0;
-    GLint previousArrayBuffer = 0;
-    GLint previousTexture = 0;
-    GLint previousActive = 0;
-    GLint previousVao = 0;
-    GLint previousViewport[4] = {0, 0, 0, 0};
-    GLint previousScissor[4] = {0, 0, 0, 0};
-    GLint previousSrc = 0;
-    GLint previousDst = 0;
+    pls::GlesDrawState drawState(g_vao);
+    while (glGetError() != GL_NO_ERROR) {}
     GLint drawFbo = 0;
-    const GLboolean previousBlend = glIsEnabled(GL_BLEND);
-    const GLboolean previousDepth = glIsEnabled(GL_DEPTH_TEST);
-    const GLboolean previousCull = glIsEnabled(GL_CULL_FACE);
-    const GLboolean previousScissorEnabled = glIsEnabled(GL_SCISSOR_TEST);
-    glGetIntegerv(GL_CURRENT_PROGRAM, &previousProgram);
-    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &previousArrayBuffer);
-    glGetIntegerv(GL_TEXTURE_BINDING_2D, &previousTexture);
-    glGetIntegerv(GL_ACTIVE_TEXTURE, &previousActive);
-    glGetIntegerv(0x85B5, &previousVao);
-    glGetIntegerv(GL_VIEWPORT, previousViewport);
-    glGetIntegerv(GL_SCISSOR_BOX, previousScissor);
-    glGetIntegerv(GL_BLEND_SRC_RGB, &previousSrc);
-    glGetIntegerv(GL_BLEND_DST_RGB, &previousDst);
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &drawFbo);
 
     const float width = static_cast<float>(std::max(g_lastTargetWidth, 1));
@@ -1085,7 +1102,6 @@ std::int32_t rpe_hlsl_draw(std::int32_t handle, float uvLeft, float uvTop, float
         screenSizeIt->second.values[1] = height;
     }
 
-    if (const auto bindVao = bindVertexArrayFn()) bindVao(g_vao);
     glViewport(viewX, viewY, viewW, viewH);
     glEnable(GL_SCISSOR_TEST);
     glScissor(viewX, viewY, viewW, viewH);
@@ -1111,25 +1127,14 @@ std::int32_t rpe_hlsl_draw(std::int32_t handle, float uvLeft, float uvTop, float
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride,
         reinterpret_cast<const void*>(2 * sizeof(float)));
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    const GLenum drawError = glGetError();
     glDisableVertexAttribArray(0);
     glDisableVertexAttribArray(1);
+    if (drawError != GL_NO_ERROR) {
+        setError("Android shader draw failed: GLES error " + std::to_string(drawError));
+        return 0;
+    }
 
-    glBindBuffer(GL_ARRAY_BUFFER, previousArrayBuffer);
-    if (const auto bindVao = bindVertexArrayFn()) bindVao(static_cast<GLuint>(previousVao));
-    glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(previousTexture));
-    glActiveTexture(static_cast<GLenum>(previousActive));
-    glUseProgram(previousProgram);
-    glViewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
-    if (previousScissorEnabled) glEnable(GL_SCISSOR_TEST);
-    else glDisable(GL_SCISSOR_TEST);
-    glScissor(previousScissor[0], previousScissor[1], previousScissor[2], previousScissor[3]);
-    if (previousBlend) glEnable(GL_BLEND);
-    else glDisable(GL_BLEND);
-    if (previousDepth) glEnable(GL_DEPTH_TEST);
-    else glDisable(GL_DEPTH_TEST);
-    if (previousCull) glEnable(GL_CULL_FACE);
-    else glDisable(GL_CULL_FACE);
-    glBlendFunc(previousSrc, previousDst);
     setError(std::string("ok ") + g_lastCaptureMethod
         + " fbo=" + std::to_string(g_lastCaptureFbo)
         + " drawFbo=" + std::to_string(drawFbo)
@@ -1163,34 +1168,40 @@ bool rpe_hlsl_release(std::int32_t handle) {
     std::lock_guard lock(g_mutex);
     const auto shaderIt = g_shaders.find(handle);
     if (shaderIt == g_shaders.end()) return false;
-    destroyRecord(*shaderIt->second);
+    if (g_context == eglGetCurrentContext()) destroyRecord(*shaderIt->second);
     g_shaders.erase(shaderIt);
     return true;
 }
 
 void rpe_hlsl_shutdown() {
-    for (auto& [handle, record] : g_shaders) {
-        (void)handle;
-        if (record) destroyRecord(*record);
+    std::lock_guard lock(g_mutex);
+    // Object names belong to their original context. Deleting stale names in a
+    // replacement context can delete GameMaker's newly created GPU resources.
+    const bool sameContext = g_context != EGL_NO_CONTEXT && g_context == eglGetCurrentContext();
+    if (sameContext) {
+        for (auto& [handle, record] : g_shaders) {
+            (void)handle;
+            if (record) destroyRecord(*record);
+        }
     }
     g_shaders.clear();
     if (g_quadVbo) {
-        glDeleteBuffers(1, &g_quadVbo);
+        if (sameContext) glDeleteBuffers(1, &g_quadVbo);
         g_quadVbo = 0;
     }
-    if (g_vao) {
+    if (g_vao && sameContext) {
         const auto deleteVao = reinterpret_cast<DeleteVertexArraysFn>(eglGetProcAddress("glDeleteVertexArrays"));
         const auto deleteVaoOes = reinterpret_cast<DeleteVertexArraysFn>(eglGetProcAddress("glDeleteVertexArraysOES"));
         if (deleteVao) deleteVao(1, &g_vao);
         else if (deleteVaoOes) deleteVaoOes(1, &g_vao);
-        g_vao = 0;
     }
+    g_vao = 0;
     if (g_blitFbo) {
-        glDeleteFramebuffers(1, &g_blitFbo);
+        if (sameContext) glDeleteFramebuffers(1, &g_blitFbo);
         g_blitFbo = 0;
     }
     if (g_inputTexture) {
-        glDeleteTextures(1, &g_inputTexture);
+        if (sameContext) glDeleteTextures(1, &g_inputTexture);
         g_inputTexture = 0;
     }
     g_potWidth = 0;
@@ -1199,6 +1210,8 @@ void rpe_hlsl_shutdown() {
     g_texScaleY = 1.0f;
     g_inputCaptured = false;
     g_ready = false;
+    g_separateFramebuffers = false;
+    g_context = EGL_NO_CONTEXT;
     g_translatedSource.clear();
 }
 

@@ -17,6 +17,8 @@ chart_mask_scissor_set();
 gpu_set_blendmode(bm_normal);
 draw_set_colour(c_white);
 draw_set_alpha(1);
+var _outro_drawing = instance_exists(oPlayTransition)
+	&& instance_find(oPlayTransition, 0).state == PLAY_TRANSITION_STATE.OUTRO;
 draw_clear_alpha(c_black, 0);
 // 新建表面的第一帧可能丢掉清屏之后画的东西。先把插图画上，避免同帧合成是一块空黑。
-if (surface_born) then chart_draw_background(false);
+if (surface_born && !_outro_drawing) then chart_draw_background(false);

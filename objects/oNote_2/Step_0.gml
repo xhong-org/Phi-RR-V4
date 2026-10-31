@@ -1,15 +1,24 @@
 ///@desc 更新 PEC 音符位置，并处理自动播放或超时判定
 if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then exit;
-// 暂停或判定线丢失时不更新。
-if (game.paused || !instance_exists(line_ref)) then exit;
+if (!instance_exists(line_ref)) then exit;
+var current_scale = (variable_global_exists("global_scales") ? global_scales : 1) / 6 * game.settings.noteSize;
+var geometry_changed = _last_view_width != chart_view_width
+	|| _last_view_height != chart_view_height || _last_view_left != chart_view_left
+	|| _last_geometry_scale != current_scale;
+_last_view_width = chart_view_width;
+_last_view_height = chart_view_height;
+_last_view_left = chart_view_left;
+_last_geometry_scale = current_scale;
+// 暂停时只允许窗口校正，下面几何分支之后直接退出，不进入任何判定。
+if (game.paused && !geometry_changed) then exit;
 var chart_sec = game.__time[1] - game_2.chart.offsetSeconds;
 if (isBad) {
+	if (game.paused) then exit;
 	canDraw = true;
 	if (chart_sec - judgeRealTime >= 1) instance_deactivate_object(self);
 	exit;
 }
 var line_floor = line_ref.floor_position;
-var current_scale = (variable_global_exists("global_scales") ? global_scales : 1) / 6;
 image_xscale = current_scale * widthScale;
 image_yscale = uniform_scale ? image_xscale : current_scale;
 var scene_height = chart_view_height * 0.6;
@@ -38,15 +47,18 @@ if (type != 2) {
 if (type == 2) {
 	var before = before_hold;
 	var _skin_hold = skin_active() ? skin_hold_parts(hl) : undefined;
+	var head_scale = 1;
 	if (is_struct(_skin_hold)) {
 		if (sprite_exists(_skin_hold.body)) then hold_body_height = max(1, sprite_get_height(_skin_hold.body));
 		if (sprite_exists(_skin_hold.head)) then hold_head_attach = max(1, sprite_get_yoffset(_skin_hold.head));
+		head_scale = skin_note_scale_k(_skin_hold.head);
 	};
 	var head_offset = 0;
 	if (before && !(is_struct(_skin_hold) && bool(_skin_hold.compact))) {
-		head_offset = max(0, hold_head_attach * image_yscale);
+		head_offset = max(0, hold_head_attach * image_yscale * head_scale);
 	};
 	var units = before ? speedHoldFloorLength : speedFloorEnd - note_speed * line_floor;
+	head_offset = min(head_offset, max(0, units * scene_height));
 	var hold_length = max(0, units * scene_height - head_offset);
 	var body_scale = hold_length / hold_body_height;
 	if (before) {
@@ -59,6 +71,7 @@ if (type == 2) {
 	};
 	yscale = body_scale;
 	canDraw = line_notes_visible && (hold_length > 0 || before) && (before ? !behind_line : true);
+	if (game.paused) then exit;
 	if (!isFake && !chart_autoplay_active()) then exit;
 	// 自动播放到判定秒开始 Hold，超时则记 Miss。
 	if (chart_autoplay_active()) {
@@ -115,6 +128,7 @@ y = note_y;
 
 
 canDraw = line_notes_visible && !judged && (chart_sec < startSec ? !behind_line : image_alpha > 0);
+if (game.paused) then exit;
 if (!isFake && !chart_autoplay_active()) then exit;
 // 非 Hold：到触发秒判定，超时则记 Miss。
 if (chart_autoplay_active()) {

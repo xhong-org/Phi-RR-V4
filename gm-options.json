@@ -7,6 +7,16 @@
     },
     "operagx": {
       "emscriptenSdk": "D:\\emsdk-6.0.8"
+    },
+    "android": {
+      "packageType": "apk",
+      "sdkPath": "D:/Android-Studio-SDK",
+      "ndkPath": "D:/Android-Studio-SDK/ndk/30.0.16248370",
+      "jdkPath": "D:/LibericaJDK-18-Full",
+      "keystoreFile": "D:/Desktop/工具/PhigrosLoader-sample.keystore",
+      "keystoreAlias": "prr",
+      "keystorePassword": "114514",
+      "keystoreAliasPassword": "114514"
     }
   }
 }

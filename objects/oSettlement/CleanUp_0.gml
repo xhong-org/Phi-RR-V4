@@ -1,4 +1,8 @@
 ///@desc 释放结算精灵和结算音乐
+if (variable_instance_exists(id, "background_owned") && background_owned
+	&& asset_sprite_valid(background_sprite)) then sprite_delete(background_sprite);
+background_sprite = -1;
+background_owned = false;
 if (variable_instance_exists(id, "settlement_stop_audio") && is_method(settlement_stop_audio)) {
 	settlement_stop_audio();
 };
@@ -14,3 +18,4 @@ if (variable_instance_exists(id, "rank_sprite") && asset_sprite_valid(rank_sprit
 rank_sprite = -1;
 if (variable_instance_exists(id, "head_sprite") && asset_sprite_valid(head_sprite)) then sprite_delete(head_sprite);
 head_sprite = -1;
+pls_ui_font_release_instance();

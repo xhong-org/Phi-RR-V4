@@ -20,9 +20,12 @@ var worker_half_width = worker_window_width * 0.5;
 var worker_half_height = worker_window_height * 0.5;
 var line_layout_changed = !variable_instance_exists(id, "_rpe_layout_width")
 	|| !variable_instance_exists(id, "_rpe_layout_height")
-	|| _rpe_layout_width != worker_window_width || _rpe_layout_height != worker_window_height;
+	|| !variable_instance_exists(id, "_rpe_layout_left")
+	|| _rpe_layout_width != worker_window_width || _rpe_layout_height != worker_window_height
+	|| _rpe_layout_left != worker_view_left;
 _rpe_layout_width = worker_window_width;
 _rpe_layout_height = worker_window_height;
+_rpe_layout_left = worker_view_left;
 // Step End 已经用同一批局部事件求出世界姿态时，不再打包、等待原生工作器和回写。
 var poses_ready = !line_layout_changed;
 for (var ready_i = 0; ready_i < line_count && poses_ready; ready_i++) {

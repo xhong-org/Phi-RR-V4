@@ -47,15 +47,16 @@ if (settings_gui_blocking()) {
         exit;
 };
 
-var mx = mouse_x;
-var my = mouse_y;
+var pointer = android_touch_pointer();
+var mx = pointer.x;
+var my = pointer.y;
 hover_open = (mx >= btn_open.x && mx <= btn_open.x + btn_open.w && my >= btn_open.y && my <= btn_open.y + btn_open.h);
 hover_sample = (mx >= btn_sample.x && mx <= btn_sample.x + btn_sample.w && my >= btn_sample.y && my <= btn_sample.y + btn_sample.h);
 hover_settings = settings_menu_button_hit(mx, my);
 
 if (picking) then exit;
-// 没按下左键就只更新悬停。
-if (!mouse_check_button_pressed(mb_left)) then exit;
+// 没有新的触点按下就只更新悬停。
+if (!pointer.pressed) then exit;
 
 // 设置、打开谱面或载入示例，三者互斥。
 if (hover_settings) {
@@ -65,7 +66,7 @@ if (hover_settings) {
         if (!extension_exists("I_AndroidOpen")) {
                 last_error = lang("android.pickerUnavailable");
         } else {
-                pick_started = i_android_open_pick("application/zip");
+                pick_started = i_android_open_pick("*/*");
                 if (!pick_started) then last_error = i_android_open_error();
         };
         // 选择器真正启动后才进入等待状态。

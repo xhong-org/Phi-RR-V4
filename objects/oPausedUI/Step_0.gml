@@ -6,6 +6,16 @@ if (!instance_exists(owner)) {
 paused_ui_refresh_layout();
 // 结算或过场中不允许操作。
 if (!paused_ui_can_control()) then exit;
+// 后台恢复先由谱面时钟处理，未获得焦点时不响应继续/重试。
+if (os_type == os_android) {
+        var input = android_touch_state();
+        if (input.suspended_at >= 0 && retry_waiting) {
+                retry_waiting = false;
+                retry_mode = 0;
+                action_queued = false;
+        };
+        if (!input.focused) then exit;
+};
 
 gui_width = max(1, room_width);
 gui_height = max(1, room_height);
@@ -52,9 +62,10 @@ if (retry_waiting) {
 if (game.paused && !was_paused) then opened_at = get_timer();
 was_paused = game.paused;
 
-var mouse_gui_x = mouse_x;
-var mouse_gui_y = mouse_y;
-var button_pressed = mouse_check_button_pressed(mb_left);
+var pointer = settings_gui_pointer();
+var mouse_gui_x = pointer.x;
+var mouse_gui_y = pointer.y;
+var button_pressed = pointer.pressed;
 
 // 游玩中双击暂停按钮或按 Esc 暂停。
 if (!game.paused) {

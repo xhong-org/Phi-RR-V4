@@ -1,25 +1,18 @@
 ///@desc 推进结算动画，并处理重试和继续
-// 已经离开或游戏状态丢了就停止。
 if (consumed) then exit;
 if (!variable_global_exists("game") || !is_struct(game)) {
 	instance_destroy();
 	exit;
 };
 
-settlement_refresh_layout();
 var now = settlement_elapsed_us();
-var s = variable_global_exists("global_scales") ? global_scales : 1;
-if (!is_real(s) || s <= 0) then s = 1;
-
 // 离开淡出结束后再真正重试或继续。
 if (leaving) {
-	var leave_raw = clamp((now - leave_started_at) / max(1, leave_fade_dur), 0, 1);
-	fade_alpha = leave_raw;
+	fade_alpha = Easings.InOutCubic(settlement_phase(now, leave_started_at, leave_fade_dur));
 	settlement_set_ending_volume(1 - fade_alpha);
-	if (leave_raw >= 1) {
+	if (fade_alpha >= 1) {
 		if (leave_wait_at < 0) then leave_wait_at = now;
 		if (now - leave_wait_at >= leave_wait_dur) {
-			// 等淡出和额外等待都结束。
 			if (leave_retry) then settlement_do_retry();
 			else settlement_do_continue();
 		};
@@ -27,106 +20,40 @@ if (leaving) {
 	exit;
 };
 
-var elapsed = max(0, now);
-var slide_raw = clamp(elapsed / max(1, slide_dur), 0, 1);
-slide_eased = Easings.OutExpo(slide_raw);
-var slide_off = (1 - slide_eased) * slide_dist;
-illus_cx = illus_rest_cx + slide_off;
-score_x = score_rest_x + slide_off;
-combo_x = lerp(score_rest_x + slide_dist + box_d, score_rest_x, slide_eased);
-judge_x = lerp(score_rest_x + slide_dist + 2 * box_d, score_rest_x, slide_eased);
+// 使用固定时间轴，低帧率和录像跳帧不会累积各小段的等待误差。
+page_eased = Easings.OutCubic(settlement_phase(now, 0, 450000));
+art_eased = Easings.OutExpo(settlement_phase(now, 100000, 1000000));
+score_eased = Easings.OutCubic(settlement_phase(now, 400000, 1100000));
+score_show = round(score_value * score_eased);
+record_eased = Easings.OutCubic(settlement_phase(now, 1200000, 450000));
+stats_eased = Easings.OutQuart(settlement_phase(now, 950000, 650000));
+for (var i = 0; i < 4; i++) {
+	judge_eased[@ i] = Easings.OutCubic(settlement_phase(now, 1250000 + i * 100000, 500000));
+};
+footer_eased = Easings.OutCubic(settlement_phase(now, 1550000, 650000));
+var rank_raw = settlement_phase(now, 1750000, 850000);
+rank_alpha = Easings.OutCubic(settlement_phase(now, 1750000, 250000));
+rank_scale = lerp(1.18, 1, Easings.OutBack(rank_raw));
+rank_flash = sin(rank_raw * pi) * (1 - rank_raw);
+easing_complete = now >= animation_dur;
+settlement_refresh_layout();
 
-var user_raw = clamp(elapsed / max(1, user_dur), 0, 1);
-user_alpha = Easings.InOutCubic(user_raw);
-var btn_raw = clamp(elapsed / max(1, btn_dur), 0, 1);
-var btn_eased = Easings.InOutCubic(btn_raw);
-retry_x = lerp(-240 * s, retry_rest_x, btn_eased);
-cont_x = lerp(240 * s, cont_rest_x, btn_eased);
-
-// 滑入过了减速点才开始滚分。
-if (score_tween_at < 0 && slide_raw >= score_decel_t) then score_tween_at = now;
-if (score_tween_at >= 0) {
-	var score_raw = clamp((now - score_tween_at) / max(1, text_dur), 0, 1);
-	box_alpha[@ 0] = Easings.OutCubic(score_raw);
-	var score_k = box_alpha[0];
-	score_show = score_value * score_k;
-} else {
-	box_alpha[@ 0] = 0;
-	score_show = 0;
+if (variable_global_exists("render_mode") && global.render_mode) {
+	if (now >= animation_dur + hold_dur) then global.render_settlement_finished = true;
+	exit;
 };
 
-// 分数块满透明度后再淡入后面两块。
-if (box_alpha[0] >= 1) {
-	if (box1_at < 0) then box1_at = now;
-	box_alpha[@ 1] = Easings.OutCubic(clamp((now - box1_at) / max(1, text_dur), 0, 1));
-} else {
-	box_alpha[@ 1] = 0;
+var pointer = settings_gui_pointer();
+// 不把游玩结束前按住的手指带入结算按钮。
+if (!input_armed && now >= 800000 && !pointer.held) {
+	input_armed = true;
 };
-if (box_alpha[1] >= 1) {
-	if (box2_at < 0) then box2_at = now;
-	box_alpha[@ 2] = Easings.OutCubic(clamp((now - box2_at) / max(1, text_dur), 0, 1));
-} else {
-	box_alpha[@ 2] = 0;
-};
+retry_hover = input_armed && settlement_button_contains(retry_hit, pointer.x, pointer.y, button_cut);
+cont_hover = input_armed && settlement_button_contains(cont_hit, pointer.x, pointer.y, -button_cut);
+if (!input_armed || footer_eased < 0.95) then exit;
 
-var other_done = (slide_raw >= 1 && user_raw >= 1 && btn_raw >= 1 && box_alpha[2] >= 1);
-if (other_done && !rank_started) {
-	rank_started = true;
-	rank_fade_at = now;
-};
-// 评级先淡入，再从两倍缩回一倍。
-if (rank_started) {
-	if (rank_scale_at < 0) {
-		var fade_raw = clamp((now - rank_fade_at) / max(1, rank_fade_dur), 0, 1);
-		rank_alpha = Easings.Linear(fade_raw);
-		rank_scale = 2;
-		if (fade_raw >= 1) then rank_scale_at = now;
-	} else {
-		rank_alpha = 1;
-		var scale_raw = clamp((now - rank_scale_at) / max(1, rank_scale_dur), 0, 1);
-		rank_scale = lerp(2, 1, Easings.InOutQuint(scale_raw));
-		if (scale_raw >= 1) then easing_complete = true;
-	};
-} else {
-	rank_alpha = 0;
-	rank_scale = 2;
-};
-
-if (easing_complete) {
-	if (hold_at < 0) then hold_at = now;
-	if (variable_global_exists("render_mode") && global.render_mode
-		&& now - hold_at >= hold_dur) {
-		global.render_settlement_finished = true;
-	};
-};
-
-rank_cx = score_x + score_w - 168 * s;
-rank_cy = score_bottom - score_h * 0.42;
-
-var bar_h = 72 * s;
-var retry_w = 210 * s;
-retry_hit = [retry_x, retry_y, retry_x + retry_w, retry_y + bar_h];
-var cont_w = 210 * s;
-cont_hit = [room_width + cont_x - cont_w, room_height - bar_h, room_width + cont_x, room_height];
-
-// 录像不接收结算输入。
-if (variable_global_exists("render_mode") && global.render_mode) then exit;
-
-// R 重试，回车或 Esc 继续，点击命中对应按钮。
-if (keyboard_check_pressed(ord("R"))) {
+if (pointer.pressed && retry_hover) {
 	settlement_begin_leave(true);
-	exit;
-};
-if (keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_escape)) {
+} else if (pointer.pressed && cont_hover) {
 	settlement_begin_leave(false);
-	exit;
-};
-if (mouse_check_button_pressed(mb_left)) {
-	var mx = mouse_x;
-	var my = mouse_y;
-	if (point_in_rectangle(mx, my, retry_hit[0], retry_hit[1], retry_hit[2], retry_hit[3])) {
-		settlement_begin_leave(true);
-	} else if (point_in_rectangle(mx, my, cont_hit[0], cont_hit[1], cont_hit[2], cont_hit[3])) {
-		settlement_begin_leave(false);
-	};
 };

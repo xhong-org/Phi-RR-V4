@@ -1,3 +1,4 @@
+#include "../../I_NativeCommon/GlesState.h"
 #include "native/FFVideosInternal_native.h"
 
 #include <EGL/egl.h>
@@ -46,6 +47,13 @@ constexpr GLenum GL_TEXTURE_EXTERNAL_OES_ENUM = 0x8D65;
 constexpr GLenum GL_TEXTURE_BINDING_EXTERNAL_OES_ENUM = 0x8D67;
 
 JavaVM* g_javaVm = nullptr;
+std::atomic<std::uint64_t> g_contextGeneration{0};
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_gamemaker_ExtensionCore_ExtBridge_FFVideosLifecycle_invalidateContext(JNIEnv*, jclass) {
+    // Called after Runner stops GL. Defer all Surface / decoder work to Draw.
+    g_contextGeneration.fetch_add(1, std::memory_order_release);
+}
 
 extern "C" void FFVideos_StoreJavaVM(JavaVM* vm) {
     if (vm) g_javaVm = vm;
@@ -118,6 +126,7 @@ GLuint g_program = 0;
 GLuint g_vbo = 0;
 GLuint g_vao = 0;
 EGLContext g_pipelineContext = EGL_NO_CONTEXT;
+std::uint64_t g_pipelineGeneration = 0;
 GLint g_uTexture = -1;
 GLint g_uMatrix = -1;
 GLint g_uAlpha = -1;
@@ -234,11 +243,15 @@ bool linkVideoProgram(const char* vertexSource, const char* fragmentSource, std:
 bool ensureDrawPipeline() {
     const EGLContext current = eglGetCurrentContext();
     if (current == EGL_NO_CONTEXT) return false;
-    if (g_program && g_vbo && current == g_pipelineContext) return true;
+    const auto generation = g_contextGeneration.load(std::memory_order_acquire);
+    if (g_program && g_vbo && current == g_pipelineContext
+        && generation == g_pipelineGeneration) return true;
+    pls::GlesDrawState drawState(0);
     g_program = 0;
     g_vbo = 0;
     g_vao = 0;
     g_pipelineContext = current;
+    g_pipelineGeneration = generation;
 
     static constexpr char kVertex100[] = R"GLSL(
 #version 100
@@ -339,7 +352,8 @@ void main() {
 }
 
 void destroyDrawPipeline() {
-    if (eglGetCurrentContext() != EGL_NO_CONTEXT) {
+    if (g_pipelineContext != EGL_NO_CONTEXT && eglGetCurrentContext() == g_pipelineContext
+        && g_pipelineGeneration == g_contextGeneration.load(std::memory_order_acquire)) {
         if (g_vao) {
             using DeleteVertexArraysFn = void (*)(GLsizei, const GLuint*);
             const auto deleteVao = reinterpret_cast<DeleteVertexArraysFn>(eglGetProcAddress("glDeleteVertexArrays"));
@@ -532,6 +546,7 @@ struct VideoPlayer {
         return oesTexture != 0 && surfaceTexture != nullptr && window != nullptr
             && !surfaceInvalid
             && glContext != EGL_NO_CONTEXT
+            && contextGeneration == g_contextGeneration.load(std::memory_order_acquire)
             && glContext == eglGetCurrentContext();
     }
 
@@ -566,6 +581,7 @@ struct VideoPlayer {
             surfaceTexture = nullptr;
         }
         const bool sameContext = glContext != EGL_NO_CONTEXT
+            && contextGeneration == g_contextGeneration.load(std::memory_order_acquire)
             && eglGetCurrentContext() == glContext;
         if (oesTexture && sameContext) glDeleteTextures(1, &oesTexture);
         oesTexture = 0;
@@ -578,6 +594,7 @@ struct VideoPlayer {
             setGlobalError("Video surface needs a current GLES context (Draw).");
             return false;
         }
+        pls::GlesTextureState textureState(true);
         JniSession jni;
         if (!jni.env) {
             setGlobalError(javaVm()
@@ -622,6 +639,7 @@ struct VideoPlayer {
             window = createdWindow;
         }
         glContext = eglGetCurrentContext();
+        contextGeneration = g_contextGeneration.load(std::memory_order_acquire);
         surfaceInvalid = false;
         if (codec) codecNeedsSurface.store(true, std::memory_order_release);
         cv.notify_all();
@@ -1178,6 +1196,7 @@ private:
     std::string mimeType;
     size_t videoTrack = static_cast<size_t>(-1);
     EGLContext glContext = EGL_NO_CONTEXT;
+    std::uint64_t contextGeneration = 0;
     std::atomic<bool> codecNeedsSurface{false};
     bool surfaceInvalid = false;
     int64_t discardUntilUs = 0;
@@ -1322,6 +1341,7 @@ std::int32_t ffvideos_draw(std::int32_t handle, float left, float top, float rig
     // has not compiled yet, otherwise playback dies before the first frame.
     if (!player->ensureSurface()) return -1;
     if (!ensureDrawPipeline()) return -1;
+    pls::GlesDrawState drawState(g_vao, true);
 
     float matrix[16]{
         1, 0, 0, 0,
@@ -1332,30 +1352,8 @@ std::int32_t ffvideos_draw(std::int32_t handle, float left, float top, float rig
     player->updateImage(matrix);
     if (!(right > left && bottom > top) || !player->hasFrame.load(std::memory_order_acquire)) return 0;
 
-    GLint previousProgram = 0;
-    GLint previousArrayBuffer = 0;
-    GLint previousTexture2D = 0;
-    GLint previousExternal = 0;
-    GLint previousActive = 0;
-    GLint previousVao = 0;
-    GLint previousViewport[4] = {0, 0, 0, 0};
-    GLint previousScissor[4] = {0, 0, 0, 0};
-    GLint previousSrc = 0;
-    GLint previousDst = 0;
-    const GLboolean previousBlend = glIsEnabled(GL_BLEND);
-    const GLboolean previousDepth = glIsEnabled(GL_DEPTH_TEST);
-    const GLboolean previousCull = glIsEnabled(GL_CULL_FACE);
-    const GLboolean previousScissorEnabled = glIsEnabled(GL_SCISSOR_TEST);
-    glGetIntegerv(GL_CURRENT_PROGRAM, &previousProgram);
-    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &previousArrayBuffer);
-    glGetIntegerv(GL_TEXTURE_BINDING_2D, &previousTexture2D);
-    glGetIntegerv(GL_TEXTURE_BINDING_EXTERNAL_OES_ENUM, &previousExternal);
-    glGetIntegerv(GL_ACTIVE_TEXTURE, &previousActive);
-    glGetIntegerv(0x85B5, &previousVao);
+    GLint previousViewport[4]{};
     glGetIntegerv(GL_VIEWPORT, previousViewport);
-    glGetIntegerv(GL_SCISSOR_BOX, previousScissor);
-    glGetIntegerv(GL_BLEND_SRC_RGB, &previousSrc);
-    glGetIntegerv(GL_BLEND_DST_RGB, &previousDst);
 
     const float width = static_cast<float>(std::max(previousViewport[2], 1));
     const float height = static_cast<float>(std::max(previousViewport[3], 1));
@@ -1369,7 +1367,6 @@ std::int32_t ffvideos_draw(std::int32_t handle, float left, float top, float rig
         static_cast<GLsizei>((clippedRight - clippedLeft) * width),
         static_cast<GLsizei>((clippedBottom - clippedTop) * height));
 
-    if (const auto bindVao = bindVertexArrayFn()) bindVao(g_vao);
     glDisable(GL_CULL_FACE);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glActiveTexture(GL_TEXTURE0);
@@ -1393,23 +1390,6 @@ std::int32_t ffvideos_draw(std::int32_t handle, float left, float top, float rig
     glDisableVertexAttribArray(static_cast<GLuint>(g_aPosition));
     glDisableVertexAttribArray(static_cast<GLuint>(g_aTexCoord));
 
-    glBindBuffer(GL_ARRAY_BUFFER, previousArrayBuffer);
-    if (const auto bindVao = bindVertexArrayFn()) bindVao(static_cast<GLuint>(previousVao));
-    glBindTexture(GL_TEXTURE_EXTERNAL_OES_ENUM, static_cast<GLuint>(previousExternal));
-    glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(previousTexture2D));
-    glActiveTexture(static_cast<GLenum>(previousActive));
-    glUseProgram(previousProgram);
-    glViewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
-    if (previousScissorEnabled) glEnable(GL_SCISSOR_TEST);
-    else glDisable(GL_SCISSOR_TEST);
-    glScissor(previousScissor[0], previousScissor[1], previousScissor[2], previousScissor[3]);
-    if (previousBlend) glEnable(GL_BLEND);
-    else glDisable(GL_BLEND);
-    if (previousDepth) glEnable(GL_DEPTH_TEST);
-    else glDisable(GL_DEPTH_TEST);
-    if (previousCull) glEnable(GL_CULL_FACE);
-    else glDisable(GL_CULL_FACE);
-    glBlendFunc(previousSrc, previousDst);
     return 7;
 }
 

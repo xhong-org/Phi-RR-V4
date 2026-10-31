@@ -16,7 +16,7 @@ var title_scale = 1.1 * s;
 var subtitle_scale = 0.55 * s;
 var body_scale = 0.45 * s;
 var small_scale = 0.32 * s;
-var btn_text_scale = 0.55 * s;
+var btn_text_scale = 1.15 * s;
 
 draw_set_halign(fa_center);
 draw_set_valign(fa_middle);

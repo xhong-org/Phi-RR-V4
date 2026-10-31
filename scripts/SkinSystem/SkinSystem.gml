@@ -8,6 +8,7 @@
 ///@returns {String} skins 目录路径
 function skin_root_dir() {
 	var dir = working_directory + "skins/";
+	if (os_type == os_android) dir = android_files_internal_dir() + "skins/";
 	dir = string_replace_all(dir, "\\", "/");
 	// 目录不存在时尝试创建
 	if (!directory_exists(dir)) {
@@ -467,6 +468,8 @@ function skin_destroy_sprite(_spr) {
 function skin_destroy_sound(_snd, _buf = -1) {
 	// 内置打击音直接返回
 	if (is_undefined(_snd) || _snd == snd_note_tap || _snd == snd_note_drag || _snd == snd_note_flick) then return;
+	// 缓冲仍被声道读取时不能释放其内存。停止这个资源的全部播放实例。
+	if (audio_exists(_snd)) then audio_stop_sound(_snd);
 	// 有缓冲则释放缓冲音，否则销毁流
 	if (buffer_exists(_buf)) {
 		if (audio_exists(_snd)) {
@@ -484,10 +487,41 @@ function skin_destroy_sound(_snd, _buf = -1) {
 ///@param {Real} _snd FMOD 声音句柄
 ///@returns {Undefined} 无
 function skin_destroy_fmod(_snd) {
-	// 句柄无效或没有 FMOD 扩展则返回
+	// 仅由已确认所属系统仍存活的清理入口调用。
 	if (!is_real(_snd) || _snd <= 0) then return;
-	if (!extension_exists("FMOD")) then return;
 	try { fmod_sound_release(_snd); } catch (e) { delete(e); };
+}
+
+///@desc 判断皮肤音效所属的媒体系统是否仍可使用
+function skin_fmod_system_live(_system) {
+	if (!is_real(_system) || _system <= 0 || media_use_gx()) then return false;
+	if (!instance_exists(oMedia)) then return false;
+	var media = instance_find(oMedia, 0);
+	return media.track == _system && !media.resources_released;
+}
+
+///@desc 在所属系统关闭前释放声音；重复清理或旧系统已关闭时只清空句柄
+function skin_pack_fmod_release(_pack, _system = -1) {
+	if (!is_struct(_pack)) then return;
+	var owner = _pack[$ "fmod_system"] ?? -1;
+	if (_system > 0 && owner != _system) then return;
+	var live = (_system > 0 && owner == _system) || skin_fmod_system_live(owner);
+	_pack.fmod_system = -1;
+	_pack.fmod_attempted_system = -1;
+	_pack.fmod_ready = false;
+	if (live) then fmod_system_select(owner);
+	var names = ["fmod_click", "fmod_drag", "fmod_flick"];
+	for (var i = 0; i < array_length(names); i++) {
+		var sound = _pack[$ names[i]] ?? -1;
+		_pack[$ names[i]] = -1;
+		if (live) then skin_destroy_fmod(sound);
+	};
+}
+
+///@desc 媒体销毁与重建共用的皮肤音效清理入口
+function skin_fmod_release_for_system(_system) {
+	skin_pack_fmod_release(skin_runtime(), _system);
+	skin_pack_fmod_release(skin_preview_runtime(), _system);
 }
 
 ///@desc 卸载皮肤包的精灵、打击音和 FMOD 资源
@@ -506,17 +540,19 @@ function skin_pack_unload(_pack) {
 		"hold", "hold_mh", "hit_fx", "hold_head", "hold_body", "hold_tail",
 		"hold_head_mh", "hold_body_mh", "hold_tail_mh"];
 	for (var i = 0; i < array_length(names); i++) {
-		if (struct_exists(_pack, names[i])) then skin_destroy_sprite(_pack[$ names[i]]);
+		if (struct_exists(_pack, names[i])) {
+			skin_destroy_sprite(_pack[$ names[i]]);
+			_pack[$ names[i]] = -1;
+		};
 	};
 	var sounds = ["click", "drag", "flick"];
 	for (var s = 0; s < array_length(sounds); s++) {
 		var stem = sounds[s];
-		skin_destroy_sound(_pack[$ "sfx_" + stem], _pack[$ "sfx_buf_" + stem] ?? -1);
+		skin_destroy_sound(_pack[$ "sfx_" + stem] ?? -1, _pack[$ "sfx_buf_" + stem] ?? -1);
+		_pack[$ "sfx_" + stem] = -1;
+		_pack[$ "sfx_buf_" + stem] = -1;
 	};
-	var fmods = ["fmod_click", "fmod_drag", "fmod_flick"];
-	for (var f = 0; f < array_length(fmods); f++) {
-		if (struct_exists(_pack, fmods[f])) then skin_destroy_fmod(_pack[$ fmods[f]]);
-	};
+	skin_pack_fmod_release(_pack);
 }
 
 ///@desc 设置拷贝表面时的混合与颜色写入
@@ -963,6 +999,57 @@ function skin_sound_prepared_path(_path, _force_cache = false) {
 	return file_exists(dest) ? dest : src;
 }
 
+///@desc 把交错 PCM 转成 GameMaker 支持的缓冲格式，不接管源缓冲
+function skin_pcm_make_sound(_src, _offset, _length, _code, _bits, _channels, _rate) {
+	var failed = { snd: -1, buf: -1 };
+	if (!buffer_exists(_src) || (_channels != 1 && _channels != 2)
+		|| !is_finite(_rate) || _rate <= 0) then return failed;
+	var sample_bytes = _bits / 8;
+	var integer_pcm = _code == 1 && (_bits == 8 || _bits == 16 || _bits == 24 || _bits == 32);
+	var float_pcm = _code == 3 && _bits == 32;
+	if ((!integer_pcm && !float_pcm) || _offset < 0 || _length <= 0
+		|| _offset + _length > buffer_get_size(_src)
+		|| _length mod (sample_bytes * _channels) != 0) then return failed;
+	// audio_create_buffer_sound 只接受 unsigned PCM8 或 signed PCM16。
+	var gm_fmt = (_bits == 8) ? buffer_u8 : buffer_s16;
+	var out_bytes = (_bits == 8) ? 1 : 2;
+	var samples = _length div sample_bytes;
+	var pcm_size = samples * out_bytes;
+	var pcm = buffer_create(pcm_size, buffer_fixed, out_bytes);
+	if (_bits <= 16) {
+		buffer_copy(_src, _offset, _length, pcm, 0);
+	} else {
+		// PCM32 是有符号整数，不能把它的位模式直接当 float32。
+		for (var i = 0; i < samples; i++) {
+			var at = _offset + i * sample_bytes;
+			var value = 0;
+			if (float_pcm) {
+				value = buffer_peek(_src, at, buffer_f32);
+			} else if (_bits == 32) {
+				value = real(buffer_peek(_src, at, buffer_s32)) / 2147483648;
+			} else {
+				value = buffer_peek(_src, at, buffer_u8) + buffer_peek(_src, at + 1, buffer_u8) * 256
+					+ buffer_peek(_src, at + 2, buffer_u8) * 65536;
+				if (value >= 8388608) then value -= 16777216;
+				value /= 8388608;
+			};
+			var pcm16 = is_finite(value) ? clamp(round(value * 32768), -32768, 32767) : 0;
+			buffer_poke(pcm, i * out_bytes, buffer_s16, pcm16);
+		};
+	};
+	buffer_set_used_size(pcm, pcm_size);
+	var snd = -1;
+	try {
+		snd = audio_create_buffer_sound(pcm, gm_fmt, _rate, 0, pcm_size,
+			_channels == 2 ? audio_stereo : audio_mono);
+	} catch (make_error) { delete(make_error); };
+	if (is_undefined(snd) || !audio_exists(snd)) {
+		buffer_delete(pcm);
+		return failed;
+	};
+	return { snd: snd, buf: pcm };
+}
+
 ///@desc 从 WAV 的 PCM 数据创建缓冲音效
 ///@param {String} _path WAV 路径
 ///@returns {Struct} snd 与 buf，失败时均为 -1
@@ -972,7 +1059,7 @@ function skin_wav_make_sound(_path) {
 	if (!buffer_exists(src)) then return { snd: -1, buf: -1 };
 	var size = buffer_get_size(src);
 	// 不是 WAVE 则失败
-	if (size < 44 || skin_buf_tag(src, 8, 4) != "WAVE") {
+	if (size < 44 || skin_buf_tag(src, 0, 4) != "RIFF" || skin_buf_tag(src, 8, 4) != "WAVE") {
 		buffer_delete(src);
 		return { snd: -1, buf: -1 };
 	};
@@ -981,61 +1068,77 @@ function skin_wav_make_sound(_path) {
 	var channels = 0;
 	var rate = 0;
 	var bits = 0;
+	var block_align = 0;
 	var data_off = -1;
 	var data_size = 0;
 	while (pos + 8 <= size) {
 		var ckid = skin_buf_tag(src, pos, 4);
 		buffer_seek(src, buffer_seek_start, pos + 4);
 		var cksize = buffer_read(src, buffer_u32);
-		if (cksize < 0) then break;
 		var payload = pos + 8;
+		if (cksize > size - payload) {
+			buffer_delete(src);
+			return { snd: -1, buf: -1 };
+		};
 		// 遍历块，记下 fmt 和 data
-		if (ckid == "fmt " && payload + 16 <= size) {
+		if (ckid == "fmt " && cksize >= 16) {
 			buffer_seek(src, buffer_seek_start, payload);
 			fmt_code = buffer_read(src, buffer_u16);
 			channels = buffer_read(src, buffer_u16);
 			rate = buffer_read(src, buffer_u32);
 			buffer_read(src, buffer_u32);
-			buffer_read(src, buffer_u16);
+			block_align = buffer_read(src, buffer_u16);
 			bits = buffer_read(src, buffer_u16);
 		} else if (ckid == "data") {
 			data_off = payload;
-			data_size = min(cksize, size - payload);
-			break;
+			data_size = cksize;
 		};
+		if (fmt_code > 0 && data_off >= 0) then break;
 		pos = payload + cksize;
 		// RIFF 块按偶数字节对齐
 		if ((cksize mod 2) == 1) then pos++;
 	};
-	if (data_off < 0 || data_size < 1 || channels < 1 || rate < 1) {
+	if (data_off < 0 || data_size < 1 || block_align != channels * bits / 8) {
 		buffer_delete(src);
 		return { snd: -1, buf: -1 };
 	};
-	var gm_fmt = -1;
-	if (fmt_code == 1 && bits == 8) then gm_fmt = buffer_u8;
-	else if (fmt_code == 1 && bits == 16) then gm_fmt = buffer_s16;
-	else if ((fmt_code == 3 || fmt_code == 1) && bits == 32) then gm_fmt = buffer_f32;
-	// 只接受 8/16/32 位 PCM
-	if (gm_fmt < 0) {
-		skin_log($"wav unsupported format={fmt_code} bits={bits} path={_path}");
-		buffer_delete(src);
-		return { snd: -1, buf: -1 };
-	};
-	var align = (gm_fmt == buffer_u8) ? 1 : ((gm_fmt == buffer_s16) ? 2 : 4);
-	var pcm = buffer_create(max(align, data_size), buffer_fixed, align);
-	buffer_copy(src, data_off, data_size, pcm, 0);
+	var result = skin_pcm_make_sound(src, data_off, data_size, fmt_code, bits, channels, rate);
 	buffer_delete(src);
-	var ch = (channels >= 2) ? audio_stereo : audio_mono;
-	var snd = -1;
-	try { snd = audio_create_buffer_sound(pcm, gm_fmt, rate, 0, data_size, ch); } catch (make_e) {
-		delete(make_e);
-		snd = -1;
-	};
-	if (is_undefined(snd) || !audio_exists(snd)) {
-		buffer_delete(pcm);
-		return { snd: -1, buf: -1 };
-	};
-	return { snd: snd, buf: pcm };
+	return result;
+}
+
+///@desc Android 压缩打击音只解码一次，播放使用可重叠的 GameMaker PCM 缓冲
+function skin_fmod_decode_sound(_path) {
+	var failed = { snd: -1, buf: -1 };
+	var decoder = -1;
+	var raw = -1;
+	var result = failed;
+	try {
+		decoder = fmod_system_create_sound(_path, FMOD_MODE.OPENONLY | FMOD_MODE.LOOP_OFF);
+		if (is_real(decoder) && decoder > 0) {
+			var fmt = fmod_sound_get_format(decoder);
+			var defaults = fmod_sound_get_defaults(decoder);
+			var bytes = fmod_sound_get_length(decoder, FMOD_TIMEUNIT.PCMBYTES);
+			// 限制的是单个打击音解码后的内存，避免把整首音乐当皮肤音效加载。
+			var supported = fmt.format >= FMOD_SOUND_FORMAT.PCM8 && fmt.format <= FMOD_SOUND_FORMAT.PCMFLOAT;
+			if (supported && (fmt.channels == 1 || fmt.channels == 2)
+				&& bytes > 0 && bytes <= 64 * 1024 * 1024 && defaults.frequency > 0) {
+				raw = buffer_create(bytes, buffer_fixed, 1);
+				var read = fmod_sound_read_data(decoder, raw, bytes, 0);
+				// 原生 readData 直接写地址，不会更新 GameMaker 的已用字节数。
+				if (read > 0) then buffer_set_used_size(raw, min(read, bytes));
+				var frame_bytes = fmt.channels * (fmt.bits / 8);
+				if (read > 0 && frame_bytes > 0) {
+					read -= read mod frame_bytes;
+					result = skin_pcm_make_sound(raw, 0, read,
+						fmt.format == FMOD_SOUND_FORMAT.PCMFLOAT ? 3 : 1, fmt.bits, fmt.channels, defaults.frequency);
+				};
+			};
+		};
+	} catch (decode_error) { delete(decode_error); };
+	if (buffer_exists(raw)) then buffer_delete(raw);
+	skin_destroy_fmod(decoder);
+	return result;
 }
 
 ///@desc 尝试把音效载成缓冲音或音频流
@@ -1078,35 +1181,55 @@ function skin_try_sound(_path, _stem) {
 ///@returns {Bool} 是否已准备好
 function skin_pack_fmod_ensure(_pack) {
 	if (!is_struct(_pack)) then return false;
-	// 已就绪、无扩展、渲染模式或媒体未就绪则返回
-	if (variable_struct_exists(_pack, "fmod_ready") && _pack.fmod_ready) then return true;
-	if (!extension_exists("FMOD")) then return false;
 	if (variable_global_exists("render_mode") && global.render_mode) then return false;
 	if (media_use_gx()) then return false;
 	if (!instance_exists(oMedia)) then return false;
 	var media = instance_find(oMedia, 0);
-	if (!instance_exists(media) || !is_real(media.track) || media.track <= 0) then return false;
+	if (!skin_fmod_system_live(media.track)) then return false;
+	// 失败也只在这个系统上尝试一次，避免每帧加载；换系统后重新准备。
+	if ((_pack[$ "fmod_attempted_system"] ?? -1) == media.track) then return _pack.fmod_ready;
+	skin_pack_fmod_release(_pack);
 	fmod_system_select(media.track);
-	_pack.fmod_ready = true;
+	_pack.fmod_system = media.track;
+	_pack.fmod_attempted_system = media.track;
+	var ready = true;
 	var stems = ["click", "drag", "flick"];
 	for (var i = 0; i < array_length(stems); i++) {
 		var stem = stems[i];
 		var path = string(_pack[$ "sfx_path_" + stem] ?? "");
 		if (!string_length(path)) then continue;
 		path = skin_sound_prepared_path(chart_file_readable_path(path));
+		var gm_sound = _pack[$ "sfx_" + stem] ?? -1;
+		var gm_buffer = _pack[$ "sfx_buf_" + stem] ?? -1;
+		if (os_type == os_android) {
+			// PCM 可同时触发多个声道，且不依赖媒体 FMOD 的暂停和销毁。
+			if (audio_exists(gm_sound) && buffer_exists(gm_buffer)) then continue;
+			var decoded = skin_fmod_decode_sound(path);
+			if (audio_exists(decoded.snd)) {
+				skin_destroy_sound(gm_sound, gm_buffer);
+				_pack[$ "sfx_" + stem] = decoded.snd;
+				_pack[$ "sfx_buf_" + stem] = decoded.buf;
+				skin_log($"sfx {stem} decoded PCM path={path}");
+				continue;
+			};
+		};
 		var loaded = -1;
-		try { loaded = fmod_system_create_sound(path, FMOD_MODE.DEFAULT); } catch (e) {
+		// DEFAULT 会采纳音频内嵌的循环点，打击音必须显式禁用循环。
+		try { loaded = fmod_system_create_sound(path, FMOD_MODE.LOOP_OFF); } catch (e) {
 			delete(e);
 			loaded = -1;
 		};
 		if (is_real(loaded) && loaded > 0) {
+			fmod_sound_set_loop_count(loaded, 0);
 			_pack[$ "fmod_" + stem] = loaded;
 			skin_log($"sfx {stem} fmod ok path={path}");
 		} else {
+			if (!audio_exists(gm_sound)) then ready = false;
 			skin_log($"sfx {stem} fmod failed path={path}");
 		};
 	};
-	return true;
+	_pack.fmod_ready = ready;
+	return ready;
 }
 
 ///@desc 加载皮肤目录里的精灵和打击音路径
@@ -1177,6 +1300,8 @@ function skin_pack_load(_root, _info) {
 	pack.fmod_drag = -1;
 	pack.fmod_flick = -1;
 	pack.fmod_ready = false;
+	pack.fmod_system = -1;
+	pack.fmod_attempted_system = -1;
 	pack.hit_cols = max(1, floor(real(_info.hitFx[0])));
 	pack.hit_rows = max(1, floor(real(_info.hitFx[1])));
 	pack.hit_frames = pack.hit_cols * pack.hit_rows;
@@ -1848,7 +1973,7 @@ function skin_pick_file() {
 		};
 		if (instance_exists(oSettings)) {
 			oSettings.skin_picking = true;
-			if (!i_android_open_pick("application/zip")) {
+			if (!i_android_open_pick("*/*")) {
 				oSettings.skin_picking = false;
 				skin_error(lang("android.pickerFailed", "Failed to open the system picker."));
 			} else {
@@ -1990,6 +2115,8 @@ function skin_note_kind_from_instance() {
 ///@param {Any} _fallback 默认音效
 ///@returns {Bool} 是否已交给播放
 function skin_play_hitsound(_kind, _fallback) {
+	if (variable_instance_exists(id, "isFake") && bool(isFake)) then return false;
+	if (chart_hitsound_volume() <= 0) then return true;
 	var pack = skin_runtime();
 	var path = "";
 	var fmod_snd = -1;
@@ -2018,15 +2145,18 @@ function skin_play_hitsound(_kind, _fallback) {
 	if (variable_global_exists("render_mode") && global.render_mode) {
 		return render_play_hitsound(_fallback, path);
 	};
-	// 有 FMOD 句柄优先用它
-	if (is_real(fmod_snd) && fmod_snd > 0) {
-		rpe_play_hitsound(_fallback, fmod_snd, path);
-		return true;
+	// Android 优先用一次解码的缓冲；FMOD 播放失败后必须继续尝试备用音效。
+	if (os_type == os_android && audio_exists(gm_snd)) {
+		if (render_play_hitsound(gm_snd, path)) then return true;
 	};
-	if (!is_undefined(gm_snd) && audio_exists(gm_snd)) {
-		return render_play_hitsound(gm_snd, path);
+	if (is_struct(pack) && skin_fmod_system_live(pack[$ "fmod_system"] ?? -1)
+		&& chart_try_fmod_hitsound(fmod_snd)) then return true;
+	if (os_type != os_android && audio_exists(gm_snd)) {
+		if (render_play_hitsound(gm_snd, path)) then return true;
 	};
-	return render_play_hitsound(_fallback, path);
+	if (_fallback != gm_snd && render_play_hitsound(_fallback, path)) then return true;
+	var built_in = (_kind == "drag") ? snd_note_drag : ((_kind == "flick") ? snd_note_flick : snd_note_tap);
+	return render_play_hitsound(built_in);
 }
 
 ///@desc 为当前音符实例播放打击音
@@ -2193,7 +2323,7 @@ function skin_preview_play_hitsound(_kind_i = 0) {
 		else if (kind_i == 1 && audio_exists(pack.sfx_drag)) then snd = pack.sfx_drag;
 		else if (kind_i == 2 && audio_exists(pack.sfx_flick)) then snd = pack.sfx_flick;
 	};
-	if (audio_exists(snd)) then audio_play_sound(snd, 0, false);
+	if (audio_exists(snd)) then audio_play_sound(snd, 0, false, chart_hitsound_volume(true));
 }
 
 ///@desc 重置预览里的打击循环计时和粒子参数

@@ -214,8 +214,9 @@ function lang_save_id(_id) {
 function lang_find_pack(_id) {
 	lang_ensure();
 	var packs = global.pls_lang.packs;
+	var wanted = string_lower(string_trim(string(_id ?? "")));
 	for (var i = 0; i < array_length(packs); i++) {
-		if (packs[i].id == _id) then return packs[i];
+		if (string_lower(packs[i].id) == wanted) then return packs[i];
 	};
 	return undefined;
 }
@@ -380,12 +381,9 @@ function lang_cycle(_dir) {
 ///@desc 扫描语言目录并去重加载语言包
 ///@returns {Struct} packs、loaded、error、skipped
 function lang_scan_packs() {
-	var files = [];
+	// Android 的文件枚举可能返回小写文件名；优先保留内置包的标准 id。
+	var files = [lang_dir() + "en-US.json", lang_dir() + "zh-CN.json"];
 	lang_collect_json(lang_dir(), files);
-	var extras = [lang_dir() + "en-US.json", lang_dir() + "zh-CN.json"];
-	for (var e = 0; e < array_length(extras); e++) {
-		array_add(files, extras[e]);
-	};
 	var seen_path = {};
 	var seen_id = {};
 	var packs = [];
@@ -396,19 +394,22 @@ function lang_scan_packs() {
 		var path = files[i];
 		if (!is_string(path) || !string_length(path)) then continue;
 		// 同一路径只读一次
-		if (struct_exists(seen_path, path)) then continue;
-		seen_path[$ path] = true;
+		var path_key = string_replace_all(path, "\\", "/");
+		if (os_type == os_android || os_type == os_windows) then path_key = string_lower(path_key);
+		if (struct_exists(seen_path, path_key)) then continue;
 		var pack = lang_try_load_file(path);
 		if (!is_struct(pack)) {
 			error_n += 1;
 			continue;
 		};
+		seen_path[$ path_key] = true;
 		// 相同 id 的后到文件跳过
-		if (struct_exists(seen_id, "id:" + pack.id)) {
+		var id_key = "id:" + string_lower(pack.id);
+		if (struct_exists(seen_id, id_key)) {
 			skipped += 1;
 			continue;
 		};
-		seen_id[$ "id:" + pack.id] = true;
+		seen_id[$ id_key] = true;
 		array_add(packs, pack);
 		loaded += 1;
 	};

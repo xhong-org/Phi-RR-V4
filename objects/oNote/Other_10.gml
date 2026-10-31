@@ -56,9 +56,10 @@ _note_x = 0;
 _note_y = 0;
 isJudge = false;
 var initial_scale = (variable_global_exists("global_scales") ? global_scales : 1.0);
-image_xscale = (initial_scale / 6);
+image_xscale = (initial_scale / 6) * game.settings.noteSize;
 image_yscale = image_xscale;
 _last_global_scales = initial_scale;
+_last_note_size = game.settings.noteSize;
 
 if(self.type != 3 && BYD_COLOR_MODE) then hl = 2;
 hit_status = TYPE.NONE;

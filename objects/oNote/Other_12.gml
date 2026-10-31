@@ -50,7 +50,8 @@ if (is_struct(_skin_hold)) {
 };
 var head_offset = 0;
 if (show_head && !_compact) {
-	head_offset = max(0, sprite_get_yoffset(_head_spr)) * image_yscale;
+	var head_scale = is_struct(_skin_hold) ? skin_note_scale_k(_head_spr) : 1;
+	head_offset = max(0, sprite_get_yoffset(_head_spr)) * image_yscale * head_scale;
 	if (head_offset > remain_px) then head_offset = remain_px;
 };
 var hold_length = max(0, remain_px - head_offset);

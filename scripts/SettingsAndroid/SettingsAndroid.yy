@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"SettingsAndroid",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"SettingsAndroid",
+  "parent":{
+    "name":"Tools",
+    "path":"folders/Other/Tools.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

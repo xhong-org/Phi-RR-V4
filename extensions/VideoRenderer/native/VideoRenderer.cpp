@@ -39,6 +39,7 @@ std::string g_encoder = "auto";
 std::string g_active_encoder = "x264";
 std::string g_audio_path;
 double g_audio_delay_seconds = 0.0;
+double g_music_volume = 1.0;
 ComPtr<ID3D11Device> g_device;
 ComPtr<ID3D11DeviceContext> g_context;
 ComPtr<ID3D11Texture2D> g_resolved;
@@ -458,7 +459,8 @@ bool mux_h264_bitstream(const std::wstring& raw_path) {
         + std::to_wstring(g_fps) + L" -i " + quote(raw_path)
         + L" -itsoffset " + std::to_wstring(g_audio_delay_seconds)
         + L" -i " + quote(utf8_to_wide(g_audio_path))
-        + L" -map 0:v:0 -map 1:a:0? -c:v copy -c:a aac -b:a 192k"
+        + L" -map 0:v:0 -map 1:a:0? -c:v copy -af volume=" + std::to_wstring(g_music_volume)
+        + L" -c:a aac -b:a 192k"
           L" -movflags +faststart " + quote(output);
     return run_process(std::move(command));
 }
@@ -1459,7 +1461,7 @@ bool mix_hitsounds() {
         + std::to_wstring(static_cast<int>(std::llround(g_audio_delay_seconds * 1000.0)))
         + L"|"
         + std::to_wstring(static_cast<int>(std::llround(g_audio_delay_seconds * 1000.0)))
-        + L",volume=0.82[music];[2:a:0]adelay="
+        + L",volume=" + std::to_wstring(0.82 * g_music_volume) + L"[music];[2:a:0]adelay="
         + std::to_wstring(static_cast<int>(std::llround(g_audio_delay_seconds * 1000.0)))
         + L"|"
         + std::to_wstring(static_cast<int>(std::llround(g_audio_delay_seconds * 1000.0)))
@@ -1526,6 +1528,12 @@ extern "C" __declspec(dllexport) double video_renderer_configure(double width_va
 
 extern "C" __declspec(dllexport) double video_renderer_set_ffmpeg(const char* ffmpeg_path) {
     g_ffmpeg = ffmpeg_path && *ffmpeg_path ? ffmpeg_path : "ffmpeg.exe";
+    return 1.0;
+}
+
+extern "C" __declspec(dllexport) double video_renderer_set_music_volume(double volume) {
+    if (!std::isfinite(volume)) return 0.0;
+    g_music_volume = std::clamp(volume, 0.0, 1.0);
     return 1.0;
 }
 
@@ -1663,6 +1671,7 @@ extern "C" __declspec(dllexport) double video_renderer_start(const char* output_
         + std::to_wstring(g_audio_delay_seconds) + L" -i " + quote(audio)
         + L" -map 0:v:0 -map 1:a:0?" + hardware_encoder_options()
         + (g_active_encoder == "qsv" ? L" -pix_fmt nv12" : L" -pix_fmt yuv420p")
+        + L" -af volume=" + std::to_wstring(g_music_volume)
         + L" -c:a aac -b:a 192k -movflags +faststart "
         + quote(output);
 
@@ -1788,6 +1797,7 @@ extern "C" __declspec(dllexport) double video_renderer_shutdown() {
     g_output_path.clear();
     g_audio_path.clear();
     g_audio_delay_seconds = 0.0;
+    g_music_volume = 1.0;
     g_captured_frames = 0;
     g_pipe_bgra = false;
     g_active_encoder = "x264";

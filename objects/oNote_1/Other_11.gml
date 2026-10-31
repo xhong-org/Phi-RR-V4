@@ -22,10 +22,11 @@ posy *= rpe_sample_control(3, _control_position_speed, 1);
 var control_size = rpe_sample_control(2, _control_position_speed, 1);
 // PhiZone 的 skewControl 是绕音符中心的水平剪切，单位为角度。
 _note_skew_degrees = -xOffset * rpe_sample_control(4, _control_position_speed, 0);
-image_xscale = (global_scales / 6) * size * control_size;
 var _settings = game.settings;
+var note_scale = (global_scales / 6) * _settings.noteSize;
+image_xscale = note_scale * size * control_size;
 var uniform_scale = bool(_settings.noteUniformScale ?? false);
-image_yscale = uniform_scale ? image_xscale : (global_scales / 6);
+image_yscale = uniform_scale ? image_xscale : note_scale;
 
 var reversed = (isAbove ? -1 : 1);
 var c = _line.__cos;

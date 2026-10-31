@@ -4,18 +4,24 @@ if (variable_global_exists("render_mode") && global.render_mode) then exit;
 // GX 按 js、缓冲区或资源三种来源播放。
 if (media_use_gx()) {
 	if (gx_audio_kind == "js" && gx_js_handle > 0) {
+		chart_music_apply_volume();
 		try { i_gx_audio_play(gx_js_handle); } catch (play_error) { delete(play_error); };
 		exit;
 	};
 	if (gx_audio_kind == "buffer" && gx_buffer_sound != -1 && audio_exists(gx_buffer_sound)) {
-		gx_audio_inst = audio_play_sound(gx_buffer_sound, 0, false);
+		gx_audio_inst = audio_play_sound(gx_buffer_sound, 0, false, settings_store().musicVolume);
 		exit;
 	};
-	if (gx_audio_asset != -1 && audio_exists(gx_audio_asset)) then gx_audio_inst = audio_play_sound(gx_audio_asset, 0, false);
+	if (gx_audio_asset != -1 && audio_exists(gx_audio_asset)) then gx_audio_inst = audio_play_sound(gx_audio_asset, 0, false, settings_store().musicVolume);
 	exit;
 };
 if(soundIndex){
+	chart_music_noise_release();
 	var source = (!is_undefined(playbackIndex) ? playbackIndex : soundIndex);
-	channel = (fmod_system_play_sound(source , false));
-	fmod_channel_control_set_volume(channel , 1);
+	if (track > 0) then fmod_system_select(track);
+	channel = (fmod_system_play_sound(source, true));
+	if (channel > 0) {
+		chart_music_apply_volume();
+		fmod_channel_control_set_paused(channel, false);
+	};
 };

@@ -7,6 +7,7 @@ video_chart_time = 0;
 video_last_chart_time = -infinity;
 video_backend_ready = false;
 video_os_paused = false;
+video_playback_finished = false;
 effect_controller = -1;
 effect_layer_passes = [];
 requests_chart_layers = false;
@@ -302,14 +303,41 @@ for (var video_layer_i = 0; video_layer_i < array_length(videos); video_layer_i+
 	}));
 };
 
-///@desc 关闭全部已打开的视频句柄
+///@desc 释放一段视频的解码句柄与裁剪表面，可重复调用
+///@param {Struct} video 视频记录
+///@returns {Undefined} 无
+video_release = function(video) {
+	if (video.handle >= 0) then ffvideos_ext_close(video.handle);
+	video.handle = -1;
+	if (surface_exists(video.clip_surface)) then surface_free(video.clip_surface);
+	video.clip_surface = -1;
+};
+
+///@desc 释放全部视频句柄与裁剪表面
 ///@returns {Undefined} 无
 video_close_all = function() {
 	for (var _close_i = 0; _close_i < array_length(videos); _close_i++) {
-		// 只关还开着的句柄。
-		if (videos[_close_i].handle >= 0) then ffvideos_ext_close(videos[_close_i].handle);
-		videos[_close_i].handle = -1;
+		video_release(videos[_close_i]);
 	};
+};
+
+///@desc 退场时暂停解码，保留最后一帧和吸附布局，压缩结束后统一释放
+video_pause_for_outro = function() {
+	for (var _pause_i = 0; _pause_i < array_length(videos); _pause_i++) {
+		var _handle = videos[_pause_i].handle;
+		if (_handle >= 0 && ffvideos_ext_get_status(_handle) == FFVideosStatus.Playing) {
+			ffvideos_ext_pause(_handle);
+		};
+	};
+};
+
+///@desc 退场结束后释放视频，暂停的谱面时钟不再触发重新打开
+///@returns {Undefined} 无
+video_finish_playback = function() {
+	if (video_playback_finished) then return;
+	video_playback_finished = true;
+	video_close_all();
+	if (array_length(videos) > 0) then print("[FFVideos] Playback finished; video handles and surfaces released");
 };
 
 // 这条线当前吸附的视频。没有自己 z 的片段跟线一起画；
@@ -535,8 +563,9 @@ video_draw_fullscreen = function(_index) {
 		};
 		status = ffvideos_ext_get_status(_handle);
 	};
-	// 全屏绘制只接受正在播放或暂停。
-	if (status != FFVideosStatus.Playing && status != FFVideosStatus.Paused) then return;
+	// 离线渲染和退场可保留已解码的末帧。
+	if (status != FFVideosStatus.Playing && status != FFVideosStatus.Paused
+		&& status != FFVideosStatus.Ended) then return;
 	var video_width = ffvideos_ext_get_width(_handle);
 	var video_height = ffvideos_ext_get_height(_handle);
 	// 再试一次取宽高，仍然没有就退出。

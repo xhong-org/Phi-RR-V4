@@ -125,7 +125,12 @@
         stopSrc(s);
         var src = c.createBufferSource();
         src.buffer = s.buffer;
-        src.connect(c.destination);
+        if (!s.gain) {
+            s.gain = c.createGain();
+            s.gain.connect(c.destination);
+        }
+        s.gain.gain.value = s.volume === undefined ? 1 : s.volume;
+        src.connect(s.gain);
         s.off = s.off || 0;
         try { src.start(0, s.off); } catch (e0) {
             try { src.start(0); } catch (e1) {}
@@ -147,6 +152,7 @@
             var blob = new Blob([u8], { type: mime || "audio/ogg" });
             var url = URL.createObjectURL(blob);
             var el = new Audio();
+            el.volume = s.volume === undefined ? 1 : s.volume;
             el.preload = "auto";
             el.src = url;
             el.__plsObjectUrl = url;
@@ -252,6 +258,15 @@
         lastErr = "path needs bytes";
         return 0;
     });
+    bind("i_gx_audio_set_volume", function (id, volume) {
+        var s = slots[id | 0];
+        if (!s) return 0;
+        var v = Number(volume);
+        s.volume = isFinite(v) ? Math.max(0, Math.min(1, v)) : 1;
+        if (s.el) s.el.volume = s.volume;
+        if (s.gain) s.gain.gain.value = s.volume;
+        return 1;
+    });
     bind("i_gx_audio_play", function (id) {
         var s = slots[id | 0];
         if (!s) return 0;
@@ -331,6 +346,9 @@
         var s = slots[id | 0];
         if (!s) return 0;
         stopSrc(s);
+        if (s.gain) {
+            try { s.gain.disconnect(); } catch (gainError) {}
+        }
         if (s.el) {
             try { s.el.pause(); s.el.removeAttribute("src"); s.el.load(); } catch (e0) {}
             if (s.el.__plsObjectUrl) {

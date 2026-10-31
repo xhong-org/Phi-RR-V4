@@ -1,4 +1,6 @@
 ///@desc 步进：RPE 判定线事件运行时，对齐 PCR
+// 退场只保留已有事件值；Step End 和绘制前仍可校正窗口几何。
+if (chart_play_ending()) then exit;
 if (!is_array(events)) then events = [];
 if (!is_array(events_count)) then events_count = [];
 if (!is_array(events_hold)) then events_hold = [];

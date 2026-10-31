@@ -71,7 +71,7 @@ if (has_paint_events) {
 		} else {
 			var paint_alpha = clamp(max(0, __raw_a) / 255, 0, 1);
 			// 有透明度才把上一帧到这一帧连成一条带子。
-			if (paint_alpha > 0) {
+			if (paint_alpha > 0 && !game.paused) {
 				surface_set_target(paint_surface);
 				draw_set_colour(__color);
 				draw_set_alpha(paint_alpha);

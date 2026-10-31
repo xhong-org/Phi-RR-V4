@@ -91,6 +91,7 @@ _preload_seconds = (variable_global_exists("game") && is_struct(game)
 	: 0);
 _max_visible_floor_distance = 12;
 _last_global_scales = -1;
+_last_note_size = -1;
 _now_seconds = 0;
 _now_beat = 0;
 _line_time = 0;
@@ -295,7 +296,7 @@ rpe_note_apply_visibility = function() {
 
 hitTime2 = 0;
 event_user(0);
-if (!bool(game.settings.noteUniformScale ?? false)) then image_yscale = (global_scales / 6);
+if (!bool(game.settings.noteUniformScale ?? false)) then image_yscale = (global_scales / 6) * game.settings.noteSize;
 image_blend = note_tint;
 if (audio_exists(custom_sound) && custom_sound != snd_note_tap && custom_sound != snd_note_drag && custom_sound != snd_note_flick) then sound = custom_sound;
 lateHitTime = 0.25;

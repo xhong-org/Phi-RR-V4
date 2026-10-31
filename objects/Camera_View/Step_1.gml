@@ -31,7 +31,7 @@ if (abs(_sw - size_last_w) > _jitter || abs(_sh - size_last_h) > _jitter) {
         };
 };
 // GX 上把 GUI 尺寸跟房间对齐。
-if (pls_is_gxgames()) {
+if (pls_is_gxgames() || os_type == os_android) {
         gx_last_room_w = size_last_w;
         gx_last_room_h = size_last_h;
         if (!variable_instance_exists(id, "gx_gui_w") || gx_gui_w != room_width || gx_gui_h != room_height) {
@@ -51,6 +51,11 @@ if (start_width > 0 && start_height > 0) {
 	global_scales = 1.0;
 };
 chart_view_refresh(room_width, room_height);
+// 原始 MotionEvent 的坐标属于 GL View；在同帧布局确定后统一换算。
+if (os_type == os_android) {
+        android_touch_poll();
+        display_android_update();
+};
 
 // 在任何绘制之前贴合应用表面。帧画完后再改尺寸会清掉这一帧，进房间会闪黑。
 if (application_surface_is_enabled() && surface_exists(application_surface)) {

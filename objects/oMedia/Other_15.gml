@@ -4,6 +4,7 @@ event_user(7);
 if (media_use_gx()) {
 	gx_media_release(id);
 } else {
+	chart_audio_release_for_system(track);
 	if(soundIndex){
 		fmod_sound_release(soundIndex);
 		soundIndex = undefined;

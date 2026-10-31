@@ -16,9 +16,10 @@ lateHitTime = late_ms * 0.001;
 if (chart_autoplay_active()) judgeTime = start_sec + hitTime2 * 0.001;
 
 // 窗口缩放变了才刷新尺寸。
-if (_last_global_scales != global_scales) {
+if (_last_global_scales != global_scales || _last_note_size != game.settings.noteSize) {
 	event_user(7);
 	_last_global_scales = global_scales;
+	_last_note_size = game.settings.noteSize;
 };
 
 // Bad 淡出结束后停用。

@@ -19,6 +19,7 @@ uniform 	mediump float _DisplaceSpeed;
 uniform 	mediump float _DisplaceStrength;
 uniform 	mediump vec4 _DisplaceDirection;
 uniform 	int _TouchPosCount;
+uniform float _HoverOnly;
 uniform 	vec2 _TouchPos0;
 uniform vec2 _TouchPos1;
 uniform vec2 _TouchPos2;
@@ -54,15 +55,15 @@ uniform 	float _SDFMoveSpeed;
 uniform 	mediump vec4 _TouchGlowColor;
 uniform 	mediump float _TouchBackgroundPixelScale;
 
-uniform mediump sampler2D _EffectRT;
+uniform mediump sampler2D u_effect;
 
 
 
 
-uniform mediump sampler2D _DisplaceMap;
-uniform mediump sampler2D _SparkMap;
-uniform mediump sampler2D _SceneColor;
-uniform mediump sampler2D _NoiseMap;
+uniform mediump sampler2D u_displace;
+uniform mediump sampler2D u_spark;
+uniform mediump sampler2D u_scene_color;
+uniform mediump sampler2D u_grain;
 uniform vec4 _DisplaceMap_Rect;
 uniform vec4 _SparkMap_Rect;
 uniform vec4 _NoiseMap_Rect;
@@ -135,7 +136,7 @@ float touchDistance(vec2 point, vec2 touch, float distanceSoFar) {
     float blend = max(_TouchPosSDFSmoothness - abs(distanceToTouch - distanceSoFar), 0.0) / _TouchPosSDFSmoothness;
     return min(distanceToTouch, distanceSoFar) - blend * blend * _TouchPosSDFSmoothness * 0.25;
 }
-uniform sampler2D _MaskRT;
+uniform sampler2D u_mask;
 uniform vec2 _HoverSize;
 uniform float _RemoveDistortion;
 void main()
@@ -144,20 +145,29 @@ void main()
     u_xlat0.x = -abs(u_xlat0.x) + vs_TEXCOORD6;
     u_xlatb0.x = u_xlat0.x<0.0;
     if(u_xlatb0.x){discard;}
-    mediump vec4 maskChannels = texture2D(_MaskRT, vs_TEXCOORD0.xy);
+    mediump vec4 maskChannels = texture2D(u_mask, vs_TEXCOORD0.xy);
     u_xlat16_0 = maskChannels.r;
     u_xlat16.xy = vs_TEXCOORD0.xy * _EffectRT_TexelSize.zw;
     u_xlat16.xy = floor(u_xlat16.xy);
     u_xlat16.xy = u_xlat16.xy + vec2(0.5, 0.5);
     u_xlat16.xy = u_xlat16.xy * _EffectRT_TexelSize.xy;
-    u_xlat16_16 = texture2D(_EffectRT, u_xlat16.xy).x;
-    u_xlat16_32 = texture2D(_EffectRT, vs_TEXCOORD0.xy).y;
+    u_xlat16_16 = texture2D(u_effect, u_xlat16.xy).x;
+    u_xlat16_32 = texture2D(u_effect, vs_TEXCOORD0.xy).y;
     u_xlat16_48 = maskChannels.b;
     u_xlat16_1.x = maskChannels.a;
     u_xlat16_17 = maskChannels.g;
+    // The touch overlay is composited after the scene warp. Keep the base
+    // material out of that pass so it cannot cover or tint the feedback.
+    float baseWeight = 1.0 - _HoverOnly;
+    u_xlat16_0 *= baseWeight;
+    u_xlat16_16 *= baseWeight;
+    u_xlat16_32 *= baseWeight;
+    u_xlat16_48 *= baseWeight;
+    u_xlat16_1.x *= baseWeight;
+    u_xlat16_17 *= baseWeight;
     u_xlat16_2.x = (-u_xlat16_48) + u_xlat16_1.x;
     u_xlat16_18 = u_xlat16_17 * abs(u_xlat16_2.x);
-    u_xlat48 = texture2D(_EffectRT, (floor(vs_TEXCOORD0.xy * _HoverSize) + 0.5) / _HoverSize).b;
+    u_xlat48 = texture2D(u_effect, (floor(vs_TEXCOORD0.xy * _HoverSize) + 0.5) / _HoverSize).b * _HoverOnly;
     u_xlat16_34 = u_xlat16_16 + u_xlat16_0;
     u_xlat16_50 = u_xlat16_32 + u_xlat16_34;
     u_xlat16_2.x = abs(u_xlat16_2.x) * u_xlat16_17 + u_xlat16_50;
@@ -189,8 +199,8 @@ void main()
         u_xlat33.xy = floor(u_xlat33.xy);
         u_xlat1.zw = u_xlat33.xy * u_xlat32.xx + u_xlat4.xx;
         u_xlat1 = u_xlat1 / _ScreenParams.xyxy;
-        u_xlat16_16 = texture2D(_DisplaceMap, block_repeat(_DisplaceMap_Rect, u_xlat1.xy)).x;
-        u_xlat16_1.x = texture2D(_DisplaceMap, block_repeat(_DisplaceMap_Rect, u_xlat1.zw)).x;
+        u_xlat16_16 = texture2D(u_displace, block_repeat(_DisplaceMap_Rect, u_xlat1.xy)).x;
+        u_xlat16_1.x = texture2D(u_displace, block_repeat(_DisplaceMap_Rect, u_xlat1.zw)).x;
         u_xlat16_35 = u_xlat16_16 + u_xlat16_1.x;
         u_xlat16_35 = u_xlat16_35 * 0.5;
         u_xlat16_51 = u_xlat16_16 + -0.5;
@@ -205,9 +215,9 @@ void main()
         u_xlat16.xy = u_xlat16.xy / _ScreenParams.xy;
         u_xlat16.xy = u_xlat1.xy * vec2(vec2(_DisplaceStrength, _DisplaceStrength)) + u_xlat16.xy;
         u_xlat33.xy = u_xlat1.xy * vec2(vec2(_SparkDisplaceIntensity, _SparkDisplaceIntensity)) + vs_TEXCOORD2.xy;
-        u_xlat16_33 = texture2D(_SparkMap, block_repeat(_SparkMap_Rect, u_xlat33.xy)).x;
+        u_xlat16_33 = texture2D(u_spark, block_repeat(_SparkMap_Rect, u_xlat33.xy)).x;
         u_xlat4.xyz = vec3(u_xlat16_33) * _SparkTint.xyz;
-        u_xlat6.xyz = texture2D(_SceneColor, mix(u_xlat16.xy, vs_TEXCOORD0.xy, _RemoveDistortion)).xyz;
+        u_xlat6.xyz = texture2D(u_scene_color, mix(u_xlat16.xy, vs_TEXCOORD0.xy, _RemoveDistortion)).xyz;
         u_xlatb16 = 0<_TouchPosCount;
         if(u_xlatb16){
             u_xlat16.xy = vs_TEXCOORD3.xy / vs_TEXCOORD3.ww;
@@ -334,14 +344,14 @@ void main()
         u_xlat22.xy = floor(u_xlat22.xy);
         u_xlat1.xw = u_xlat22.xy * vec2(u_xlat49) + u_xlat6.xx;
         u_xlat1 = u_xlat1 / _ScreenParams.xxyy;
-        u_xlat16_32 = texture2D(_DisplaceMap, block_repeat(_DisplaceMap_Rect, u_xlat1.yz)).x;
-        u_xlat16_1.x = texture2D(_DisplaceMap, block_repeat(_DisplaceMap_Rect, u_xlat1.xw)).x;
+        u_xlat16_32 = texture2D(u_displace, block_repeat(_DisplaceMap_Rect, u_xlat1.yz)).x;
+        u_xlat16_1.x = texture2D(u_displace, block_repeat(_DisplaceMap_Rect, u_xlat1.xw)).x;
         u_xlat16_51 = u_xlat16_32 + -0.5;
         u_xlat16_5.x = u_xlat16_1.x + -0.5;
         u_xlat32.xy = u_xlat0.wx * u_xlat16_5.xx;
         u_xlat0.xy = u_xlat0.xy * vec2(u_xlat16_51) + u_xlat32.xy;
         u_xlat0.xy = u_xlat0.xy * vec2(vec2(_TouchDisplaceStrength, _TouchDisplaceStrength)) + vs_TEXCOORD0.xy;
-        u_xlat16_0 = texture2D(_EffectRT, (floor(u_xlat0.xy * _HoverSize) + 0.5) / _HoverSize).b;
+        u_xlat16_0 = texture2D(u_effect, (floor(u_xlat0.xy * _HoverSize) + 0.5) / _HoverSize).b;
         u_xlat16.xy = vs_TEXCOORD3.xy / vs_TEXCOORD3.ww;
         u_xlat48 = _BlockTime.y * _NoiseDirChangeSpeed;
         u_xlat1.x = floor(u_xlat48);
@@ -387,7 +397,7 @@ void main()
         u_xlat1.xw = (-u_xlat17.xy) + u_xlat1.xw;
         u_xlat1.xy = vec2(u_xlat48) * u_xlat1.xw + u_xlat17.xy;
         u_xlat1.xy = u_xlat1.xy * vec2(_NoiseEvoSpeed) + vs_TEXCOORD5.xy;
-        u_xlat16_1.xy = texture2D(_NoiseMap, block_repeat(_NoiseMap_Rect, u_xlat1.xy)).xy;
+        u_xlat16_1.xy = texture2D(u_grain, block_repeat(_NoiseMap_Rect, u_xlat1.xy)).xy;
         u_xlat1.xy = u_xlat16_1.xy + vec2(-0.5, -0.5);
         u_xlat48 = _NoiseRadius + (-_NoiseSmoothness);
         u_xlat33.x = _NoiseRadius + _NoiseSmoothness;
@@ -491,5 +501,6 @@ void main()
     u_xlat16_2.xyz = u_xlat16_2.xzw * vec3(u_xlat16_18) + u_xlat16_3.xyz;
     SV_Target0.xyz = u_xlat16_8.xyz + u_xlat16_2.xyz;
     gl_FragColor = SV_Target0;
+    gl_FragColor *= texture2D(gm_BaseTexture, vs_TEXCOORD0).a;
     return;
 }
