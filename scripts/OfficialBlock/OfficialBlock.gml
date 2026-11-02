@@ -22,7 +22,10 @@
 #macro BLOCK_RT_PACK_E 15
 #macro BLOCK_RT_SCENE 16
 #macro BLOCK_RT_OFF_C 17
-#macro BLOCK_RT_COUNT 18
+#macro BLOCK_RT_RPEN_ACTIVE 18
+#macro BLOCK_RT_RPEN_READY 19
+#macro BLOCK_RT_RPEN_OFF 20
+#macro BLOCK_RT_COUNT 21
 // 静态噪域每条记录占 48 字节，含 12 个 float32。
 #macro OFFICIAL_BLOCK_PACK 48
 
@@ -33,6 +36,10 @@ function official_block_state_create() {
 	var hovers = array_create(10);
 	for (var i = 0; i < 10; i++) hovers[i] = official_block_hover_new();
 	return {
+			rpen_session: false,
+			rpen_layer: false,
+			rpen_layers: [],
+			single_inversion: false,
 			ready: false,
 			empty: true,
 			loaded_enabled: false,
@@ -183,6 +190,16 @@ function official_block_cover_add(_cover, _x, _y) {
 ///@returns {Undefined} 无
 function official_blocks_reset() {
 	var state = official_block_state();
+	// RPEN layers own RTs, but borrow the shared BlockAreaGroup textures.
+	for (var li = 0; li < array_length(state.rpen_layers); li++) {
+		var rpen_layer_state = state.rpen_layers[li];
+		official_block_free_rt(rpen_layer_state);
+		if (surface_exists(rpen_layer_state.white_surf)) surface_free(rpen_layer_state.white_surf);
+		if (surface_exists(rpen_layer_state.blank_surf)) surface_free(rpen_layer_state.blank_surf);
+		official_block_pack_free(rpen_layer_state);
+	}
+	state.rpen_layers = [];
+	state.rpen_session = false;
 	official_block_free_rt(state);
 	if (surface_exists(state.white_surf)) surface_free(state.white_surf);
 	if (surface_exists(state.blank_surf)) surface_free(state.blank_surf);
@@ -258,7 +275,7 @@ function official_block_free_rt(_state) {
 	_state.surf_w = 0;
 	_state.surf_h = 0;
 	_state.mask_valid = false;
-	_state.uniform_cache = {};
+	official_block_uniforms_changed(_state, -1, 0, 0, true);
 }
 
 ///@desc 判断谱面是否正在结束、结算或退出
@@ -1254,9 +1271,13 @@ function official_blocks_ensure() {
 		}
 		state.blocks = [];
 		state.block_n = 0;
-		state.empty = state.pack_count <= 0 && array_length(state.pack_complex) <= 0;
+		state.empty = state.pack_count <= 0 && array_length(state.pack_complex) <= 0 && array_length(state.rpen_layers) <= 0;
 		state.first_appear = state.pack_first;
 		state.last_disappear = state.pack_last;
+		for (var li = 0; li < array_length(state.rpen_layers); li++) {
+			state.first_appear = min(state.first_appear, state.rpen_layers[li].pack_first);
+			state.last_disappear = max(state.last_disappear, state.rpen_layers[li].pack_last);
+		}
 		official_block_index(state);
 		state.loaded_enabled = true;
 		var count = state.pack_count;
@@ -1291,6 +1312,7 @@ function official_blocks_ensure() {
 		official_block_compile(shd_block_pack_effect);
 		official_block_compile(shd_block_hover);
 		official_block_compile(shd_block_warp);
+		if (array_length(state.rpen_layers) > 0) official_block_compile(shd_rpen_block_resolve);
 		official_block_refresh_ok(state);
 		state.preloaded = true;
 	}
@@ -1555,6 +1577,10 @@ function official_block_hide(_state) {
 ///@param {Array} _half 四个半宽半高局部角
 ///@returns {Undefined} 无
 function official_block_activate(_state, _block, _now, _aspect, _half) {
+	if (bool(_block[$ "rpen"] ?? false)) {
+		rpen_block_activate(_state, _block, _now, _aspect, _half);
+		return;
+	}
 	// 显示区间外直接退出
 	if (_now < _block.appear || _now >= _block.disappear) return;
 	var phase = 2;
@@ -1720,6 +1746,7 @@ function official_block_gather(_state, _now, _aspect) {
 ///@param {Bool} _adjusted 是否使用收边后的半宽
 ///@returns {Bool} 在范围内时为真
 function official_block_contains(_block, _x, _y, _adjusted) {
+	if (bool(_block[$ "rpen"] ?? false)) return rpen_block_contains(_block, _x, _y, _adjusted);
 	var sx = _block.sx;
 	var sy = _block.sy;
 	// 宽或高接近 0 时不算命中
@@ -1745,6 +1772,10 @@ function official_block_contains(_block, _x, _y, _adjusted) {
 ///@param {Real} _y 世界纵坐标
 ///@returns {Bool} 本体和收边都算挡住时为真
 function official_block_hits(_state, _x, _y) {
+	if (_state.rpen_layer) return rpen_layer_hits(_state, _x, _y);
+	for (var li = 0; li < array_length(_state.rpen_layers); li++) {
+		if (rpen_layer_hits(_state.rpen_layers[li], _x, _y)) return true;
+	}
 	var inside = false;
 	var hole = false;
 	var inside_edge = false;
@@ -1924,13 +1955,20 @@ function official_block_input(_state, _aspect, _dt) {
 
 ///@desc 一帧只收集一次几何与 blockTouch；手动 Android 在判定前调用，Draw 复用结果
 function official_blocks_update(_state, _now, _aspect, _filter_touch = false) {
+	if (_state.rpen_session) _now = rpen_noise_chart_time(_now);
 	var outside = _now < _state.first_appear || _now >= _state.last_disappear;
 	if (outside && !_state.hover_live && array_length(_state.blocked_ids) == 0) {
 		if (_state.need_gpu) official_block_hide(_state);
+		for (var li = 0; li < array_length(_state.rpen_layers); li++) official_block_hide(_state.rpen_layers[li]);
 		return;
 	}
 	if (outside) official_block_hide(_state);
 	else official_block_gather(_state, _now, _aspect);
+	for (var li = 0; li < array_length(_state.rpen_layers); li++) {
+		var rpen_layer_state = _state.rpen_layers[li];
+		official_block_gather(rpen_layer_state, _now, _aspect);
+		_state.need_gpu = _state.need_gpu || rpen_layer_state.need_gpu;
+	}
 	if (_filter_touch) {
 		var samples = android_touch_state().samples;
 		for (var si = 0; si < array_length(samples); si++) {
@@ -1939,7 +1977,7 @@ function official_blocks_update(_state, _now, _aspect, _filter_touch = false) {
 			if (finger.blocked) continue;
 			if (official_block_has_id(_state.blocked_ids, finger.token)) {
 				finger.blocked = true;
-			} else if (_state.on_active) {
+			} else if (_state.on_active || array_length(_state.rpen_layers) > 0) {
 				var world = official_block_pixel_to_world(sample.x, sample.y, _aspect);
 				finger.blocked = official_block_hits(_state, world[0], world[1]);
 			}
@@ -2179,6 +2217,8 @@ function official_block_gpu_warm(_state) {
 		surface_reset_target();
 	}
 	surface_free(warm);
+	// Warm-up writes shader constants outside the regular material cache.
+	official_block_uniforms_changed(_state, -1, 0, 0, true);
 	_state.gpu_warm = true;
 	official_block_refresh_ok(_state);
 }
@@ -2218,10 +2258,14 @@ function official_block_rt_ensure(_state, _w, _h) {
 		_state.sub_disabled && _state.ok_subtract_soft,
 		glow, glow, _state.hover_live && _state.ok_hover, pack, pack,
 		_state.on_active || _state.hover_live,
-		_state.on_disabled && _state.sub_disabled && _state.ok_compose_plain
+		_state.on_disabled && _state.sub_disabled && _state.ok_compose_plain,
+		_state.rpen_layer && _state.on_active,
+		_state.rpen_layer && _state.on_ready,
+		_state.rpen_layer && _state.on_disabled
 	];
-	var widths = [bw, bw, bw, bw, bw, bw, bw, bw, bw, bw, bw, ew, ew, bw, bw, ew, _w, bw];
-	var heights = [bh, bh, bh, bh, bh, bh, bh, bh, bh, bh, bh, eh, eh, bh, bh, eh, _h, bh];
+	var widths = [bw, bw, bw, bw, bw, bw, bw, bw, bw, bw, bw, ew, ew, bw, bw, ew, _w, bw, bw, bw, bw];
+	var heights = [bh, bh, bh, bh, bh, bh, bh, bh, bh, bh, bh, eh, eh, bh, bh, eh, _h, bh, bh, bh, bh];
+	var rebuilt = false;
 	for (var i = 0; i < BLOCK_RT_COUNT; i++) {
 		if (!needed[i] || surface_exists(_state.rt[i])) continue;
 		_state.rt[i] = surface_create(widths[i], heights[i]);
@@ -2231,7 +2275,10 @@ function official_block_rt_ensure(_state, _w, _h) {
 			return false;
 		}
 		_state.mask_valid = false;
+		rebuilt = true;
 	}
+	// Context loss can recreate same-size surfaces without free_rt().
+	if (rebuilt) official_block_uniforms_changed(_state, -1, 0, 0, true);
 	_state.surf_w = _w;
 	_state.surf_h = _h;
 	return true;
@@ -2416,7 +2463,12 @@ function official_block_paint_group(_state, _index, _phase, _subtract, _sx, _sy)
 	surface_set_target(dest);
 	gpu_set_scissor(0, 0, _state.bw, _state.bh);
 	draw_clear_alpha(c_black, 0);
-	gpu_set_blendmode_ext(bm_src_alpha, bm_one);
+	// RPEN ordinary coverage is a union. Legacy inverse coverage uses XOR;
+	// single-inversion keeps the Official 0.1-per-area threshold encoding.
+	if (_state.rpen_layer && (!_subtract || !_state.single_inversion)) {
+		gpu_set_blendmode_ext(_subtract ? bm_inv_dest_colour : bm_one,
+			_subtract ? bm_inv_src_colour : bm_zero);
+	} else gpu_set_blendmode_ext(bm_src_alpha, bm_one);
 	shader_reset();
 	var blocks = _state.blocks;
 	var count = official_block_iter_count(_state);
@@ -2429,7 +2481,8 @@ function official_block_paint_group(_state, _index, _phase, _subtract, _sx, _sy)
 	for (var ci = 0; ci < array_length(complex); ci++) {
 		var extra = complex[ci];
 		if (!extra.on || extra.phase != _phase || extra.subtract != _subtract) continue;
-		official_block_draw_quad(extra.corners, _sx, _sy, _subtract, extra.fade);
+		var encoded_subtract = _subtract && !(_state.rpen_layer && !_state.single_inversion);
+		official_block_draw_quad(extra.corners, _sx, _sy, encoded_subtract, extra.fade);
 	}
 	draw_set_alpha(1);
 	surface_reset_target();
@@ -2446,6 +2499,7 @@ function official_block_subtract_pass(_state, _shader, _dest_index, _source_inde
 	official_block_fullscreen_begin(dest, _shader);
 	official_block_u1(_shader, "_ClampThresholdLow", 0.09);
 	official_block_u1(_shader, "_ClampThresholdHigh", 0.12);
+	official_block_u1(_shader, "_RPENParity", _state.rpen_layer && !_state.single_inversion ? 1 : 0);
 	official_block_tex(_shader, "u_main", official_block_surf_tex(_state, _source_index), false, false);
 	official_block_fullscreen_end(_state, dest);
 }
@@ -2477,6 +2531,10 @@ function official_block_compose_active(_state, _now) {
 	official_block_map_rect(shader, "_DisplaceMap_Rect", displace_tex);
 	official_block_tex(shader, "u_normal", official_block_surf_tex(_state, _state.norm_active ? BLOCK_RT_ACTIVE_N : -1), false, false);
 	official_block_tex(shader, "u_subtract", official_block_surf_tex(_state, _state.sub_active ? BLOCK_RT_ACTIVE_HP : -1), false, false);
+	if (_state.rpen_layer) {
+		official_block_tex(shader, "u_normal", official_block_surf_tex(_state, BLOCK_RT_RPEN_ACTIVE), false, false);
+		official_block_tex(shader, "u_subtract", official_block_surf_tex(_state, -1), false, false);
+	}
 	official_block_fullscreen_end(_state, dest);
 }
 
@@ -2591,6 +2649,12 @@ function official_block_pack(_state) {
 	official_block_tex(mask, "u_ready", official_block_surf_tex(_state, ready_tex), false, false);
 	official_block_tex(mask, "u_normal", official_block_surf_tex(_state, _state.norm_ready ? BLOCK_RT_READY_N : -1), false, false);
 	official_block_tex(mask, "u_subtract", official_block_surf_tex(_state, _state.sub_ready ? BLOCK_RT_READY_HP : -1), false, false);
+	if (_state.rpen_layer) {
+		// Ready coverage is already XOR-composed and excludes higher active state.
+		official_block_tex(mask, "u_ready", official_block_surf_tex(_state, _state.on_ready ? BLOCK_RT_RPEN_READY : -1), false, false);
+		official_block_tex(mask, "u_normal", official_block_surf_tex(_state, _state.on_ready ? BLOCK_RT_RPEN_READY : -1), false, false);
+		official_block_tex(mask, "u_subtract", official_block_surf_tex(_state, -1), false, false);
+	}
 	official_block_fullscreen_end(_state, mask_dest);
 
 	var pack_shader = shd_block_pack_effect;
@@ -2639,10 +2703,13 @@ function official_block_copy_scene(_state, _chart) {
 ///@param {Real} _w 目标宽
 ///@param {Real} _h 目标高
 ///@returns {Bool} 常量已改变时为真
-function official_block_uniforms_changed(_state, _shader, _w, _h) {
-	if (!is_struct(_state[$ "uniform_cache"])) _state.uniform_cache = {};
+function official_block_uniforms_changed(_state, _shader, _w, _h, _reset = false) {
+	// Uniforms belong to the shared shader, so compare its last uploaded values.
+	// Keeping this cache on a layer would reuse another layer's tint/viewport.
+	static cache = {};
+	if (_reset) { cache = {}; return true; }
 	var key = string(_shader);
-	var previous = _state.uniform_cache[$ key];
+	var previous = cache[$ key];
 	if (is_struct(previous)
 		&& previous.w == _w && previous.h == _h
 		&& previous.bw == _state.bw && previous.bh == _state.bh
@@ -2650,7 +2717,7 @@ function official_block_uniforms_changed(_state, _shader, _w, _h) {
 		&& previous.fine == _state.fine
 		&& sign(previous.r - _state.tint_r) == 0 && sign(previous.g - _state.tint_g) == 0
 		&& sign(previous.b - _state.tint_b) == 0) return false;
-	_state.uniform_cache[$ key] = {
+	cache[$ key] = {
 		w:_w, h:_h, bw:_state.bw, bh:_state.bh, ew:_state.ew, eh:_state.eh,
 		fine:_state.fine, r:_state.tint_r, g:_state.tint_g, b:_state.tint_b
 	};
@@ -2699,6 +2766,8 @@ function official_block_active_uniforms(_shader, _state, _now, _w, _h) {
 		var glow = official_block_shift_color(1, 0.17924517393112183, 0.17924517393112183, cr, cg, cb);
 		var spark = official_block_shift_color(1, 0.28490567207336426, 0.28490567207336426, cr, cg, cb);
 		official_block_u4(_shader, "_ScreenParams", _w, _h, 1 + 1 / _w, 1 + 1 / _h);
+		// Separate stage uniforms: the fragment needs nonzero dimensions for its SDF.
+		official_block_u4(_shader, "_VertexScreenParams", _w, _h, 1 + 1 / _w, 1 + 1 / _h);
 		official_block_u4(_shader, "_EffectRT_TexelSize", 1 / _state.ew, 1 / _state.eh, _state.ew, _state.eh);
 		official_block_u4(_shader, "_EdgeColor", edge[0], edge[1], edge[2], 1);
 		official_block_u1(_shader, "_EdgeOpacity", 0.800000011920929);
@@ -2869,7 +2938,7 @@ function official_block_active_bind(_state, _shader, _now, _w, _h, _hover_only =
 ///@param {Real} _w 屏幕宽
 ///@param {Real} _h 屏幕高
 ///@returns {Undefined} 无
-function official_block_present(_state, _now, _w, _h) {
+function official_block_present(_state, _now, _w, _h, _touch = true) {
 	gpu_set_scissor(0, 0, _w, _h);
 	var displace_tex = official_block_image(_state, _state.noise_spr);
 	var spark_tex = official_block_image(_state, _state.spark_spr);
@@ -2882,6 +2951,7 @@ function official_block_present(_state, _now, _w, _h) {
 		var compose = -1;
 		if (_state.sub_disabled && _state.ok_compose_plain) compose = BLOCK_RT_OFF_C;
 		else if (_state.norm_disabled) compose = BLOCK_RT_OFF_N;
+		if (_state.rpen_layer) compose = BLOCK_RT_RPEN_OFF;
 		if (compose >= 0) {
 			gpu_set_blendmode_ext(bm_one, bm_one);
 			shader_set(shader);
@@ -2910,7 +2980,7 @@ function official_block_present(_state, _now, _w, _h) {
 				official_block_present_quad(_state, _w, _h);
 			}
 			// blockTouch 沿用既有噪声、高光和淡出，仅在场景材质之后叠加反馈。
-			if (_state.hover_live && _state.ok_active) {
+			if (_touch && _state.hover_live && _state.ok_active) {
 				gpu_set_blendmode_ext(bm_one, bm_one);
 				official_block_active_bind(_state, shd_block_active, _now, _w, _h, true);
 				official_block_present_quad(_state, _w, _h);
@@ -2953,6 +3023,7 @@ function official_block_offscreen(_state, _chart, _now) {
 		}
 		official_block_masks_commit(_state);
 	}
+	if (_state.rpen_layer && !masks_same) rpen_block_resolve_masks(_state);
 	if (_state.on_active && _state.ok_compose) official_block_compose_active(_state, _now);
 	if (_state.on_active && _state.ok_compose && _state.ok_glow) official_block_glow(_state);
 	if (_state.hover_live && _state.ok_hover) official_block_paint_hover(_state);
@@ -2993,6 +3064,7 @@ function official_blocks_draw() {
 		if (!input_ready) official_blocks_update(state, now, aspect);
 		wants = state.need_gpu || state.hover_live;
 	}
+	if (state.rpen_session) now = rpen_noise_chart_time(now);
 	// 这一帧不需要画且已经预热过则返回
 	if (!wants && state.gpu_warm) return;
 	if (!variable_global_exists("chart_surface_active") || !chart_surface_active) return;
@@ -3014,7 +3086,25 @@ function official_blocks_draw() {
 					official_block_offscreen(state, chart_id, now);
 					surface_set_target(chart_id);
 					restored = true;
-					official_block_present(state, now, full_w, full_h);
+					official_block_present(state, now, full_w, full_h, array_length(state.rpen_layers) == 0);
+				}
+				for (var li = 0; li < array_length(state.rpen_layers); li++) {
+					var rpen_layer_state = state.rpen_layers[li];
+					if (!rpen_layer_state.need_gpu || !rpen_block_layer_resources(rpen_layer_state, state)) continue;
+					if (!official_block_rt_ensure(rpen_layer_state, full_w, full_h)) continue;
+					if (restored) { surface_reset_target(); restored = false; }
+					official_block_offscreen(rpen_layer_state, chart_id, now);
+					surface_set_target(chart_id);
+					restored = true;
+					official_block_present(rpen_layer_state, now, full_w, full_h, false);
+				}
+				// Shared touch feedback belongs above every RPEN layer.
+				if (array_length(state.rpen_layers) > 0 && state.hover_live && state.ok_active) {
+					if (!restored) { surface_set_target(chart_id); restored = true; }
+					gpu_set_scissor(0, 0, full_w, full_h);
+					gpu_set_blendmode_ext(bm_one, bm_one);
+					official_block_active_bind(state, shd_block_active, now, full_w, full_h, true);
+					official_block_present_quad(state, full_w, full_h);
 				}
 			}
 		}

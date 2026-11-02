@@ -1,5 +1,5 @@
 ///@desc 绘制官谱连击、曲名、分数和进度条
-var ui_fade = (variable_instance_exists(id, "chart_exit_alpha") ? chart_exit_alpha : 1);
+var ui_fade = (chart_actor_var_exists(id, "chart_exit_alpha") ? chart_exit_alpha : 1);
 var _transition_pause_y = (play_transition_active ? play_transition_pause_y : 0);
 var _transition_name_y = (play_transition_active ? play_transition_name_y : 0);
 var _transition_level_y = (play_transition_active ? play_transition_level_y : 0);
@@ -28,7 +28,7 @@ draw_sprite_ext(spr_pause, 0, _chart_left + 50 * global_scales, 50 * global_scal
 
 var val = 0;
 // 有音频长度时才算进度，避免除以 0。
-if (instance_exists(oMedia) && is_real(oMedia.length) && oMedia.length > 0) {
+if (chart_actor_exists(oMedia) && is_real(oMedia.length) && oMedia.length > 0) {
 	val = clamp(game.__time[4] / oMedia.length, 0, 1);
 };
 draw_sprite_ext(spr_pixel_2, 0, _chart_left, 0, val * (_chart_width / 2), 4 * global_scales, 0, c_gray, ui_fade * _transition_bar_alpha);

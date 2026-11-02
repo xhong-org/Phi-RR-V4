@@ -106,8 +106,8 @@ if (game.settings.useOldFX && !pls_is_gxgames() && !skin_active()) {
 	_eff_c = eff_create;
 };
 if (variable_global_exists("chart_layer_mode") && global.chart_layer_mode) {
-	if (instance_exists(oEffect)) then chart_set_instance_depth(oEffect, chart_layer_depth(7));
-	if (instance_exists(oEffectNew)) then chart_set_instance_depth(oEffectNew, chart_layer_depth(7));
+	if (chart_actor_exists(oEffect)) then chart_set_instance_depth(oEffect, chart_layer_depth(7));
+	if (chart_actor_exists(oEffectNew)) then chart_set_instance_depth(oEffectNew, chart_layer_depth(7));
 };
 
 cameraZoom = false;
@@ -138,8 +138,8 @@ _step_fps_user_count = 0;
 _re_fps = 1;
 fps_more = 0;
 refresh_count = 0;
-if (!instance_exists(oPausedUI)) then instance_create_depth(0, 0, -1000000, oPausedUI, { owner: id });
-event_user(2);
+if (!chart_actor_exists(oPausedUI)) then instance_create_depth(0, 0, -1000000, oPausedUI, { owner: id });
+chart_actor_user(2);
 
 print($"Usage Times: {(get_timer() - time) / 1000}ms");
 

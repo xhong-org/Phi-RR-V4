@@ -28,6 +28,7 @@ if (chart_session_has_track()) {
 };
 fpsReal = 0;
 show_debug_message("[oRender_1] Creating RPE state");
+official_blocks_reset();
 game_1 = (new RPE());
 show_debug_message("[oRender_1] RPE state created");
 if (variable_global_exists("render_mode") && global.render_mode) {
@@ -129,8 +130,8 @@ if (game.settings.useOldFX && !pls_is_gxgames() && !skin_active()) {
 	_eff_c = eff_create;
 };
 if (variable_global_exists("chart_layer_mode") && global.chart_layer_mode) {
-	if (instance_exists(oEffect)) then chart_set_instance_depth(oEffect, chart_layer_depth(7));
-	if (instance_exists(oEffectNew)) then chart_set_instance_depth(oEffectNew, chart_layer_depth(7));
+	if (chart_actor_exists(oEffect)) then chart_set_instance_depth(oEffect, chart_layer_depth(7));
+	if (chart_actor_exists(oEffectNew)) then chart_set_instance_depth(oEffectNew, chart_layer_depth(7));
 };
 cameraZoom = false;
 
@@ -164,9 +165,9 @@ play_transition_bound_ui = {
 	"level" : false
 };
 if (!_chart_lines_building) {
-	with (oLine_1) {
-		if (is_attach_ui && instance_exists(other.id)) then other.play_transition_bound_ui[$ attach_ui_key] = true;
-	};
+	{ var _actors_5477 = chart_actor_list(oLine_1); for (var _actor_i_5477 = 0; _actor_i_5477 < array_length(_actors_5477); _actor_i_5477++) with (_actors_5477[_actor_i_5477]) {
+		if (is_attach_ui && chart_actor_exists(other.id)) then other.play_transition_bound_ui[$ attach_ui_key] = true;
+	} };
 	if (!_rpe_render_mode) {
 		rpe_lines_freeze_after_init();
 		_chart_lines_frozen = true;
@@ -209,13 +210,14 @@ play_transition_score_y = 0;
 play_transition_ui_alpha = 1;
 play_transition_bar_alpha = 1;
 play_transition_bg_alpha = 1;
-if (!instance_exists(oPausedUI)) then instance_create_depth(0, 0, -1000000, oPausedUI, { owner: id });
-event_user(2);
+if (!chart_actor_exists(oPausedUI)) then instance_create_depth(0, 0, -1000000, oPausedUI, { owner: id });
+chart_actor_user(2);
 
 if (variable_global_exists("render_mode") && global.render_mode) {
 	instance_create_depth(0, 0, -9999999, oVideoRenderer);
 };
 // 特效先藏到加载层后面。判定线和音符要等初始化完成才冻结。
+official_blocks_preload();
 chart_idle_behind_loading();
 if (!_chart_lines_building) {
 	global.loading_render_ready = true;

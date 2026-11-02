@@ -106,7 +106,7 @@ if (game.settings.useOldFX && !pls_is_gxgames() && !skin_active()) {
 //print(struct_get_names(game.settings))
 //maxcombo = (instance_number(oNote));
 print(game.notes , game.settings.enableDebug);
-event_user(2);
+chart_actor_user(2);
 //game_set_speed(60 , gamespeed_fps);
 fps_more = 0;
 refresh_count = 0;
@@ -127,7 +127,7 @@ bak_str_combo = (game.settings.comboString);
 print($"str3: {game.settings.comboString}");
 
 image_blend = c_white;
-if (!instance_exists(oPausedUI)) then instance_create_depth(0, 0, -1000000, oPausedUI, { owner: id });
+if (!chart_actor_exists(oPausedUI)) then instance_create_depth(0, 0, -1000000, oPausedUI, { owner: id });
 if (variable_global_exists("render_mode") && global.render_mode) {
 	instance_create_depth(0, 0, -9999999, oVideoRenderer);
 };

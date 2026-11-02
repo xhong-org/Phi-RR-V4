@@ -1,0 +1,5 @@
+{
+  "$GMScript":"v1", "%Name":"ChartActors", "isCompatibility":false, "isDnD":false,
+  "name":"ChartActors", "parent":{"name":"Other","path":"folders/Other.yy"},
+  "resourceType":"GMScript", "resourceVersion":"2.0"
+}

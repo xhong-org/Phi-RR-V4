@@ -1,3 +1,5 @@
+// Release actors before shared sprites, fonts and sounds.
+chart_actors_dispose();
 ///@desc 离开房间时释放官谱占用的动态资源
 official_blocks_reset();
 chart_clip_shutdown();
@@ -6,7 +8,7 @@ if (variable_global_exists("chart_surface")) then chart_surface = -1;
 if (variable_global_exists("chart_background_surface") && !is_undefined(chart_background_surface)
 	&& surface_exists(chart_background_surface)) then surface_free(chart_background_surface);
 if (variable_global_exists("chart_background_surface")) then chart_background_surface = -1;
-instance_activate_object(oNote);
+
 if(variable_global_exists("game") && !is_undefined(game)){
 	game.Clean(true);
 	game = undefined;
@@ -18,4 +20,5 @@ mus_system_clean();
 skin_gameplay_unload();
 chart_default_resources_unload();
 LogUninit();
+chart_actors_collect_later();
 process_mem_trim_later();

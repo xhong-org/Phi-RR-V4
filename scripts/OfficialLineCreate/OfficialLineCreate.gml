@@ -1,4 +1,5 @@
-// 把官谱判定线与音符的创建摊到多个加载帧。
+// 把官谱判定线与音符的 Constructor 创建摊到多个加载帧。
+// 迁移前完整源码保存在 docs/constructor-migration/；旧对象事件仍保留。
 // 先建线再放音符。加载时建好并冻结，开播前只解冻一开始会用到的一段。
 // 后门：进谱面前写 global.official_array_pack = false，事件和音符都退回结构体，并且上万颗也全部实例化。
 
@@ -473,7 +474,7 @@ function official_lines_create_line(i) {
 	// 覆盖贴图无效时用默认判定线
 	if (!sprite_exists(img)) then img = line_2;
 	var scales = is_struct(line_override) ? real(line_override.Scale ?? 1) : 1;
-	var l = (instance_create_depth(room_width / 2, room_height / 2, 0, oLine, {
+	var l = (chart_actor_create(room_width / 2, room_height / 2, 0, oLine, {
 		events: job.judge_lines[i],
 		line_id: i,
 		image_id: img,
@@ -493,11 +494,11 @@ function official_lines_force_init() {
 	var lines = game.line_list;
 	for (var i = 0; i < array_length(lines); i++) {
 		var l = lines[i];
-		if (!instance_exists(l)) then continue;
+		if (!chart_actor_exists(l)) then continue;
 		with (l) {
 			// 强制跑一遍普通 Step，初始化事件游标
 			chart_force_event_init = true;
-			event_perform(ev_step, ev_step_normal);
+			chart_actor_event(ev_step, ev_step_normal);
 			chart_force_event_init = false;
 		};
 	};
@@ -555,7 +556,7 @@ function official_note_realize(_item) {
 	if (!is_array(rows) || at + 11 >= array_length(rows)) then return false;
 	var note_bpm = rows[at + 8];
 	if (!(note_bpm > 0) || !is_finite(note_bpm)) then note_bpm = 60;
-	var note_instance = instance_create_depth(-999, -999, 0, oNote, {
+	var note_instance = chart_actor_create(-999, -999, 0, oNote, {
 		"type": rows[at],
 		"isAbove": rows[at + 1] > 0.5,
 		"time": rows[at + 2],
@@ -570,7 +571,7 @@ function official_note_realize(_item) {
 		"_hl": rows[at + 11] > 0.5,
 		"combo_added": true
 	});
-	if (!instance_exists(note_instance)) then return false;
+	if (!chart_actor_exists(note_instance)) then return false;
 	chart_lines_hide_created(note_instance);
 	array_add(game.runtime_note_instances, note_instance);
 	if (variable_global_exists("render_mode") && global.render_mode) {
@@ -579,7 +580,7 @@ function official_note_realize(_item) {
 		note_instance.render_hitsound_scheduled = render_schedule_note_hitsound(note_instance, hitsound_at);
 	};
 	_item[0] = note_instance;
-	instance_deactivate_object(note_instance);
+	chart_actor_deactivate(note_instance);
 	return true;
 }
 
@@ -645,12 +646,12 @@ function official_lines_create_note(i) {
 		array_add(owner._notes, packed_note);
 		owner._note_defer = official_note_defer_count(job.note_count);
 		var media_len = 0;
-		if (instance_exists(oMedia) && is_real(oMedia.length) && is_finite(oMedia.length) && oMedia.length > 0) then media_len = oMedia.length;
+		if (chart_actor_exists(oMedia) && is_real(oMedia.length) && is_finite(oMedia.length) && oMedia.length > 0) then media_len = oMedia.length;
 		if (media_len <= 0 || (hit_sec * 1000000) <= media_len) then maxcombo++;
 		if (!owner._note_defer) then official_note_realize(packed_note);
 		return;
 	};
-	var note_instance = instance_create_depth(-999, -999, 0, oNote, {
+	var note_instance = chart_actor_create(-999, -999, 0, oNote, {
 		"type": na.type,
 		"isAbove": na.isAbove,
 		"time": na.time,
@@ -666,13 +667,13 @@ function official_lines_create_note(i) {
 	});
 	chart_lines_hide_created(note_instance);
 	array_add(owner.runtime_note_instances, note_instance);
-	if (variable_global_exists("render_mode") && global.render_mode && instance_exists(note_instance)) {
+	if (variable_global_exists("render_mode") && global.render_mode && chart_actor_exists(note_instance)) {
 		var note_hitsound_time = (note_instance.type == 2 || note_instance.type == 4)
 			? note_instance.realHitTime : note_instance.judgeRealTime;
 		note_instance.render_hitsound_scheduled = render_schedule_note_hitsound(
 			note_instance, note_hitsound_time);
 	};
-	if (!instance_exists(note_instance)) then return;
+	if (!chart_actor_exists(note_instance)) then return;
 	var line_index = real(na[$ "id"] ?? 0);
 	var line_cache = undefined;
 	if (line_index >= 0 && line_index < array_length(job.line_vis)) {
@@ -803,7 +804,7 @@ function official_lines_finish() {
 	owner._note_activation_index = 0;
 	for (var _di = 0; _di < array_length(owner._notes); _di++) {
 		var built = official_note_field(owner._notes[_di], 0);
-		if (built != undefined && built != noone) then instance_deactivate_object(built);
+		if (built != undefined && built != noone) then chart_actor_deactivate(built);
 	};
 	// 只解冻 0 秒就已经该出现的。提前解冻会让还没到激活时间的音符被画出来
 	official_notes_thaw_window(0);
@@ -858,7 +859,7 @@ function official_notes_refreeze_after_retry() {
 	if (bool(game._note_activation_enabled ?? false) && is_array(game._notes)) {
 		for (var _i = 0; _i < array_length(game._notes); _i++) {
 			var built_id = official_note_field(game._notes[_i], 0);
-			if (built_id != undefined && built_id != noone) then instance_deactivate_object(built_id);
+			if (built_id != undefined && built_id != noone) then chart_actor_deactivate(built_id);
 		};
 	};
 }

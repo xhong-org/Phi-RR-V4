@@ -20,6 +20,6 @@ draw_text_transformed_colour(chart_view_right-40*global_scales, 70*global_scales
 draw_sprite_ext(spr_pause, 0, chart_view_left + 50 * global_scales, 50 * global_scales + _transition_pause_y, 0.8 * global_scales, 0.8 * global_scales, 0, c_white, ui_alpha);
 var progress = 0;
 // 有音频长度时才算进度。
-if (instance_exists(oMedia) && oMedia.length > 0) then progress = clamp(game.__time[4]/oMedia.length, 0, 1);
+if (chart_actor_exists(oMedia) && oMedia.length > 0) then progress = clamp(game.__time[4]/oMedia.length, 0, 1);
 draw_sprite_ext(spr_pixel_2, 0, chart_view_left, 0, progress*(chart_view_width/2), 4*global_scales, 0, c_gray, ui_alpha*_transition_bar_alpha);
 draw_sprite_ext(spr_pixel_2, 0, chart_view_left + progress*chart_view_width-2, 0, 1, 4*global_scales, 0, c_white, ui_alpha*_transition_bar_alpha);

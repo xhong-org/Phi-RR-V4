@@ -83,7 +83,7 @@ function play_transition_sync_bound_ui() {
 		// 跳过没有界面绑定键的线。
 		for (var _line_i = 0; _line_i < array_length(_lines); _line_i++) {
 			var _line = _lines[_line_i];
-			if (!instance_exists(_line) || !_line.is_attach_ui
+			if (!chart_actor_exists(_line) || !_line.is_attach_ui
 				|| !is_string(_line.attach_ui_key) || !string_length(_line.attach_ui_key)
 				|| !struct_exists(_render_owner.play_transition_bound_ui, _line.attach_ui_key)) then continue;
 			_render_owner.play_transition_bound_ui[$ _line.attach_ui_key] = true;

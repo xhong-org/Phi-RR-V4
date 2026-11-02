@@ -1,5 +1,7 @@
+// Release actors before shared sprites, fonts and sounds.
+chart_actors_dispose();
 ///@desc 离开房间时释放 PEC 和共享谱面资源
-instance_activate_object(oNote_2);
+
 chart_clip_shutdown();
 if (variable_global_exists("chart_surface") && !is_undefined(chart_surface) && surface_exists(chart_surface)) then surface_free(chart_surface);
 if (variable_global_exists("chart_surface")) then chart_surface = -1;
@@ -22,4 +24,5 @@ mus_system_clean();
 skin_gameplay_unload();
 chart_default_resources_unload();
 LogUninit();
+chart_actors_collect_later();
 process_mem_trim_later();

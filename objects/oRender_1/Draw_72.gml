@@ -1,3 +1,4 @@
+chart_actors_draw_prepare();
 ///@desc 绘制前解析 RPE 父子判定线的世界变换
 skin_runtime_gpu_ensure();
 skin_tex_diag_frame();
@@ -18,9 +19,9 @@ var worker_scale_x = worker_window_width / 1350.0;
 var worker_scale_y = worker_window_height / 900.0;
 var worker_half_width = worker_window_width * 0.5;
 var worker_half_height = worker_window_height * 0.5;
-var line_layout_changed = !variable_instance_exists(id, "_rpe_layout_width")
-	|| !variable_instance_exists(id, "_rpe_layout_height")
-	|| !variable_instance_exists(id, "_rpe_layout_left")
+var line_layout_changed = !chart_actor_var_exists(id, "_rpe_layout_width")
+	|| !chart_actor_var_exists(id, "_rpe_layout_height")
+	|| !chart_actor_var_exists(id, "_rpe_layout_left")
 	|| _rpe_layout_width != worker_window_width || _rpe_layout_height != worker_window_height
 	|| _rpe_layout_left != worker_view_left;
 _rpe_layout_width = worker_window_width;
@@ -30,7 +31,7 @@ _rpe_layout_left = worker_view_left;
 var poses_ready = !line_layout_changed;
 for (var ready_i = 0; ready_i < line_count && poses_ready; ready_i++) {
 	var ready_line = game_1.line_list[ready_i];
-	if (!instance_exists(ready_line)) continue;
+	if (!chart_actor_exists(ready_line)) continue;
 	poses_ready = ready_line.pose_epoch == game_1._pose_epoch
 		&& sign(ready_line.pose_scale_x - worker_scale_x) == 0
 		&& sign(ready_line.pose_scale_y - worker_scale_y) == 0;
@@ -46,7 +47,7 @@ if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") &&
 	var hierarchy_size = line_count * 8;
 	var input_size = line_count * 24;
 	var output_size = line_count * 24;
-	if (!variable_instance_exists(id, "_rpe_worker_input") || !buffer_exists(_rpe_worker_input)) {
+	if (!chart_actor_var_exists(id, "_rpe_worker_input") || !buffer_exists(_rpe_worker_input)) {
 		_rpe_worker_hierarchy = buffer_create(hierarchy_size, buffer_fixed, 1);
 		_rpe_worker_input = buffer_create(input_size, buffer_fixed, 1);
 		_rpe_worker_output = buffer_create(output_size, buffer_fixed, 1);
@@ -63,7 +64,7 @@ if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") &&
 			var hierarchy_offset = hierarchy_line_index * 8;
 			var hierarchy_parent = -1;
 			var hierarchy_rotate = 0;
-			if (instance_exists(hierarchy_line)) {
+			if (chart_actor_exists(hierarchy_line)) {
 				hierarchy_parent = is_real(hierarchy_line.isFather) ? floor(hierarchy_line.isFather) : -1;
 				hierarchy_rotate = bool(hierarchy_line.rotFatherLine);
 			};
@@ -78,7 +79,7 @@ if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") &&
 	buffer_seek(_rpe_worker_input, buffer_seek_start, 0);
 	for (var worker_line_index = 0; worker_line_index < line_count; worker_line_index++) {
 		var worker_line = game_1.line_list[worker_line_index];
-		if (instance_exists(worker_line)) {
+		if (chart_actor_exists(worker_line)) {
 			// 原生解析先旋转再相加。先换成视图像素，才和先乘 view/1350、view/900 的 RPE 一致。
 			buffer_write(_rpe_worker_input, buffer_f64, real(worker_line.__raw_x) * worker_scale_x);
 			buffer_write(_rpe_worker_input, buffer_f64, real(worker_line.__raw_y) * worker_scale_y);
@@ -96,7 +97,7 @@ if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") &&
 	var worker_native_us = get_timer() - worker_native_start;
 	worker_resolved = worker_count > 0;
 	if (worker_resolved) {
-		if (!variable_instance_exists(id, "_rpe_worker_logged") || !_rpe_worker_logged) {
+		if (!chart_actor_var_exists(id, "_rpe_worker_logged") || !_rpe_worker_logged) {
 			print($"[RPE Worker] Parallel line resolver enabled: workers={worker_count}, lines={line_count}");
 			_rpe_worker_logged = true;
 		};
@@ -107,7 +108,7 @@ if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") &&
 			var result_world_x = buffer_read(_rpe_worker_output, buffer_f64);
 			var result_world_y = buffer_read(_rpe_worker_output, buffer_f64);
 			var result_world_r = buffer_read(_rpe_worker_output, buffer_f64);
-			if (!instance_exists(result_child)) then continue;
+			if (!chart_actor_exists(result_child)) then continue;
 			result_child.x = result_world_x + worker_view_left + worker_half_width;
 			result_child.y = -result_world_y + worker_half_height;
 			result_child.image_angle = -result_world_r;
@@ -133,7 +134,7 @@ if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") &&
 		};
 		var worker_apply_us = get_timer() - worker_apply_start;
 		var worker_total_us = get_timer() - worker_frame_start;
-		if (!variable_instance_exists(id, "_rpe_worker_profile_samples")) {
+		if (!chart_actor_var_exists(id, "_rpe_worker_profile_samples")) {
 			_rpe_worker_profile_samples = 0;
 			_rpe_worker_profile_snapshot_us = 0;
 			_rpe_worker_profile_native_us = 0;
@@ -161,7 +162,7 @@ if (worker_enabled && os_type == os_windows && extension_exists("I_Parallel") &&
 if (!worker_resolved) {
 	for (var line_index = 0; line_index < line_count; line_index++) {
 		var child = game_1.line_list[line_index];
-		if (!instance_exists(child)) then continue;
+		if (!chart_actor_exists(child)) then continue;
 
 		var pose = rpe_line_view_pose(child, worker_scale_x, worker_scale_y);
 		child.x = pose[0] + worker_view_left + worker_half_width;
@@ -188,7 +189,7 @@ if (!worker_resolved) {
 	};
 	};
 	var fallback_total_us = get_timer() - line_resolve_start;
-	if (!variable_instance_exists(id, "_rpe_fallback_profile_samples")) {
+	if (!chart_actor_var_exists(id, "_rpe_fallback_profile_samples")) {
 		_rpe_fallback_profile_samples = 0;
 		_rpe_fallback_profile_total_us = 0;
 	};

@@ -1,4 +1,4 @@
-// 把 PEC 判定线与音符的创建摊到多个加载帧。
+// 把 PEC Constructor 判定线与音符的创建摊到多个加载帧。
 // 先建线再放音符（音符按 line_id 绑定），全部初始化后再冻结。
 
 ///@desc 判断 PEC 判定线是否仍在分帧创建
@@ -54,15 +54,15 @@ function pec_lines_create_line(i) {
 	var job = ctx._chart_line_job;
 	var line_override = chart_line_override(i);
 	var line_sprite = chart_line_override_sprite(i);
-	var pec_line_instance = instance_create_depth(room_width / 2, room_height / 2, DEPTH.LINE, oLine_2, {
+	var pec_line_actor = chart_actor_create(room_width / 2, room_height / 2, DEPTH.LINE, oLine_2, {
 		line_id: i,
 		events: job.judge_lines[i],
 		image_id: (sprite_exists(line_sprite) ? line_sprite : line),
 		line_csv_scale: (is_struct(line_override) ? real(line_override.Scale ?? 1) : 1)
 	});
-	ctx.line_group[i] = pec_line_instance;
-	array_add(ctx.runtime_line_instances, pec_line_instance);
-	chart_lines_hide_created(pec_line_instance);
+	ctx.line_group[i] = pec_line_actor;
+	array_add(ctx.runtime_line_instances, pec_line_actor);
+	chart_lines_hide_created(pec_line_actor);
 }
 
 ///@desc 对已创建的 PEC 判定线强制执行普通 Step
@@ -73,11 +73,11 @@ function pec_lines_force_init() {
 	var lines = game_2.line_group;
 	for (var i = 0; i < array_length(lines); i++) {
 		var l = lines[i];
-		if (!instance_exists(l)) then continue;
+		if (!chart_actor_exists(l)) then continue;
 		with (l) {
 			// 强制跑一遍普通 Step，初始化事件游标
 			chart_force_event_init = true;
-			event_perform(ev_step, ev_step_normal);
+			chart_actor_event(ev_step, ev_step_normal);
 			chart_force_event_init = false;
 		};
 	};
@@ -92,7 +92,7 @@ function pec_lines_create_note(i) {
 	var note = job.source_notes[i];
 	// 源数据不是结构体则跳过
 	if (!is_struct(note)) then return;
-	var note_instance = instance_create_depth(-999, -999, DEPTH.NOTE, oNote_2, {
+	var note_actor = chart_actor_create(-999, -999, DEPTH.NOTE, oNote_2, {
 		type: note.type, line_id: note.line_id,
 		start_beat: note.startBeat, end_beat: note.endBeat,
 		startSec: note.startSec, endSec: note.endSec,
@@ -103,26 +103,26 @@ function pec_lines_create_note(i) {
 		angleOffset: note.angleOffset, speedFloorStart: note.speedFloorStart,
 		speedFloorEnd: note.speedFloorEnd, speedHoldFloorLength: note.speedHoldFloorLength
 	});
-	chart_lines_hide_created(note_instance);
-	array_add(ctx.runtime_note_instances, note_instance);
+	chart_lines_hide_created(note_actor);
+	array_add(ctx.runtime_note_instances, note_actor);
 	// 录像模式为非假音符预约打击音
 	if (variable_global_exists("render_mode") && global.render_mode && !note.isFake
-		&& instance_exists(note_instance)) {
+		&& chart_actor_exists(note_actor)) {
 		var note_hitsound_time = note.startSec;
-		if (note.type != 3 && note.type != 4) then note_hitsound_time += note_instance.hit_offset;
+		if (note.type != 3 && note.type != 4) then note_hitsound_time += note_actor.hit_offset;
 		note_hitsound_time += ctx.chart.offsetSeconds;
-		note_instance.render_hitsound_scheduled = render_schedule_note_hitsound(
-			note_instance, note_hitsound_time);
+		note_actor.render_hitsound_scheduled = render_schedule_note_hitsound(
+			note_actor, note_hitsound_time);
 	};
 	if (!note.isFake) then maxcombo++;
-	// 实例已不存在则不再登记激活
-	if (!instance_exists(note_instance)) then return;
+	// 构造实体已无效则不再登记激活
+	if (!chart_actor_exists(note_actor)) then return;
 	array_add(ctx._notes, {
-		id: note_instance,
-		startSec: real(note_instance.startSec),
-		endSec: real(note_instance.endSec),
-		activateSec: real(note_instance.startSec) - job.note_preload,
-		type: real(note_instance.type)
+		id: note_actor,
+		startSec: real(note_actor.startSec),
+		endSec: real(note_actor.endSec),
+		activateSec: real(note_actor.startSec) - job.note_preload,
+		type: real(note_actor.type)
 	});
 }
 
@@ -186,7 +186,7 @@ function pec_lines_finish() {
 	ctx._note_activation_enabled = (_preload > 0);
 	ctx._note_activation_index = (ctx._note_activation_enabled ? 0 : array_length(ctx._notes));
 	for (var _di = 0; _di < array_length(ctx._notes); _di++) {
-		instance_deactivate_object(ctx._notes[_di].id);
+		chart_actor_deactivate(ctx._notes[_di].id);
 	};
 	ctx._chart_line_job = undefined;
 	chart_lines_freeze_object(oLine_2);
@@ -235,7 +235,7 @@ function pec_notes_refreeze_after_retry() {
 	game_2._note_activation_index = 0;
 	if (bool(game_2._note_activation_enabled ?? false) && is_array(game_2._notes)) {
 		for (var _i = 0; _i < array_length(game_2._notes); _i++) {
-			instance_deactivate_object(game_2._notes[_i].id);
+			chart_actor_deactivate(game_2._notes[_i].id);
 		};
 	};
 }

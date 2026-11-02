@@ -347,7 +347,7 @@ video_finish_playback = function() {
 ///@returns {Real} 视频下标，没有则为 -1
 video_line_index = function(line_instance) {
 	// 关掉视频或线不存在。
-	if (chart_setting_on("disableChartVideo") || !instance_exists(line_instance)) then return -1;
+	if (chart_setting_on("disableChartVideo") || !chart_actor_exists(line_instance)) then return -1;
 	var _layered = -1;
 	for (var _line_i = 0; _line_i < array_length(videos); _line_i++) {
 		var _line_video = videos[_line_i];
@@ -449,7 +449,7 @@ draw_attached_video = function(_index) {
 		line_instance = game_1.line_list[attached_id];
 	};
 	// 判定线实例不在了。
-	if (!instance_exists(line_instance)) then return;
+	if (!chart_actor_exists(line_instance)) then return;
 	var _handle = video.handle;
 	var status = ffvideos_ext_get_status(_handle);
 	// 渲染模式会准备精确帧，不一定进入 Playing 或 Paused。

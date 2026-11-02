@@ -7,7 +7,7 @@
 ///@param {Id.Instance} _inst 判定线实例
 ///@returns {Undefined} 无
 function chart_lines_hide_created(_inst) {
-	if (instance_exists(_inst)
+	if (chart_actor_exists(_inst)
 		&& variable_global_exists("loading_animation_active")
 		&& global.loading_animation_active) {
 		_inst.visible = false;
@@ -18,19 +18,19 @@ function chart_lines_hide_created(_inst) {
 ///@param {Id.Instance} _inst 音符实例
 ///@returns {Undefined} 无
 function chart_note_activate(_inst) {
-	instance_activate_object(_inst);
-	if (!instance_exists(_inst)) then return;
+	chart_actor_activate(_inst);
+	if (!chart_actor_exists(_inst)) then return;
 	if (!chart_autoplay_active()) {
 		with (_inst) {
-			if (variable_instance_exists(id, "kb_record") && is_struct(kb_record)
+			if (chart_actor_var_exists(id, "kb_record") && is_struct(kb_record)
 				&& kb_record.owner == game[$ "keyboard_judge"] && kb_record.closed && hit_status != TYPE.BAD) {
-				instance_deactivate_object(self);
+				chart_actor_deactivate(self);
 				return;
 			}
 			chart_kb_register_note();
 		}
 	}
-	if (instance_exists(_inst)) _inst.visible = true;
+	if (chart_actor_exists(_inst)) _inst.visible = true;
 }
 
 ///@desc 冻结指定对象，渲染模式除外
@@ -39,7 +39,7 @@ function chart_note_activate(_inst) {
 function chart_lines_freeze_object(_object) {
 	// 渲染模式必须保持对象激活
 	if (variable_global_exists("render_mode") && global.render_mode) then return;
-	instance_deactivate_object(_object);
+	chart_actor_deactivate(_object);
 }
 
 ///@desc 清掉分帧建线、待解冻和已冻结标记
@@ -67,12 +67,12 @@ function chart_load_mark_ready(_frozen) {
 ///@param {Any} _sync_notes 同步音符的回调
 ///@returns {Undefined} 无
 function chart_load_begin_play(_sync_notes) {
-	if (!instance_exists(oChartMask)) then instance_create_depth(0, 0, -12000, oChartMask);
-	instance_activate_object(oRPEEffect);
-	instance_activate_object(oEffect);
-	instance_activate_object(oEffectNew);
+	if (!chart_actor_exists(oChartMask)) then instance_create_depth(0, 0, -12000, oChartMask);
+	chart_actor_activate(oRPEEffect);
+	chart_actor_activate(oEffect);
+	chart_actor_activate(oEffectNew);
 	_sync_notes();
-	if (!instance_exists(oPlayTransition)) then instance_create_depth(0, 0, -999999, oPlayTransition, { owner: id });
+	if (!chart_actor_exists(oPlayTransition)) then instance_create_depth(0, 0, -999999, oPlayTransition, { owner: id });
 }
 
 ///@desc 推进分帧加载、解冻或开始游玩
@@ -84,16 +84,16 @@ function chart_load_begin_play(_sync_notes) {
 ///@returns {Bool} 调用方本帧应当退出时为真
 function chart_load_step(_line_object, _pump, _finish, _thaw_force, _sync_notes) {
 	// 待解冻、加载动画结束或仍在建线时，本帧都交给这里处理
-	if (variable_instance_exists(id, "_chart_lines_thaw_pending") && _chart_lines_thaw_pending) {
+	if (chart_actor_var_exists(id, "_chart_lines_thaw_pending") && _chart_lines_thaw_pending) {
 		_thaw_force();
 		chart_load_begin_play(_sync_notes);
 		_chart_lines_thaw_pending = false;
 		return true;
 	};
 	if (variable_global_exists("loading_animator_finished") && global.loading_animator_finished) {
-		if (!instance_exists(oChartMask)) then instance_create_depth(0, 0, -12000, oChartMask);
-		if (variable_instance_exists(id, "_chart_lines_frozen") && _chart_lines_frozen) {
-			instance_activate_object(_line_object);
+		if (!chart_actor_exists(oChartMask)) then instance_create_depth(0, 0, -12000, oChartMask);
+		if (chart_actor_var_exists(id, "_chart_lines_frozen") && _chart_lines_frozen) {
+			chart_actor_activate(_line_object);
 			_chart_lines_thaw_pending = true;
 			_chart_lines_frozen = false;
 			global.loading_animator_finished = false;
@@ -103,7 +103,7 @@ function chart_load_step(_line_object, _pump, _finish, _thaw_force, _sync_notes)
 		global.loading_animator_finished = false;
 		return true;
 	};
-	if (variable_instance_exists(id, "_chart_lines_building") && _chart_lines_building) {
+	if (chart_actor_var_exists(id, "_chart_lines_building") && _chart_lines_building) {
 		if (_pump()) {
 			_finish();
 			chart_load_mark_ready(!(variable_global_exists("render_mode") && global.render_mode));
@@ -117,8 +117,8 @@ function chart_load_step(_line_object, _pump, _finish, _thaw_force, _sync_notes)
 ///@returns {Bool} 仍在建线、待解冻或加载动画中时为真
 function chart_load_draw_suppressed() {
 	// 建线、待解冻或加载动画期间都跳过绘制
-	if (variable_instance_exists(id, "_chart_lines_building") && _chart_lines_building) then return true;
-	if (variable_instance_exists(id, "_chart_lines_thaw_pending") && _chart_lines_thaw_pending) then return true;
+	if (chart_actor_var_exists(id, "_chart_lines_building") && _chart_lines_building) then return true;
+	if (chart_actor_var_exists(id, "_chart_lines_thaw_pending") && _chart_lines_thaw_pending) then return true;
 	if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return true;
 	return false;
 }

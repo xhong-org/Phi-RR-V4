@@ -5,7 +5,7 @@ with(oMedia){
 	is_exists = (self[$ "isExists"]);
 	success = (self[$ "success"]);
 };
-with(oNote){ canDraw = true; };
+{ var _actors_146 = chart_actor_list(oNote); for (var _actor_i_146 = 0; _actor_i_146 < array_length(_actors_146); _actor_i_146++) with (_actors_146[_actor_i_146]){ canDraw = true; } };
 // 音频还没准备好就先不开播。
 if(!is_exists || !success) then exit;
 // 噪域还在收，先停在开头，避免开头几秒没有噪区。
@@ -19,4 +19,4 @@ print("Playing" , game.settings.enableDebug);
 m_play();
 game.Math.now(0);
 game.paused = false;
-print($"notes count: {instance_number(oNote)}" , game.settings.enableDebug);
+print($"notes count: {chart_actor_number(oNote)}" , game.settings.enableDebug);

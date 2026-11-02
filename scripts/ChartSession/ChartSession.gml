@@ -166,13 +166,14 @@ function chart_playback_teardown_for_menu() {
         global.chart_playback_torn_down = true;
 		chart_kb_reset();
         chart_playback_prepare_exit();
+        chart_actors_dispose();
 
-        if (instance_exists(oExtraPlay)) {
-                with (oExtraPlay) instance_destroy();
+        if (chart_actor_exists(oExtraPlay)) {
+                with (oExtraPlay) chart_actor_destroy();
         };
         if (pls_is_gxgames()) then gx_video_shutdown();
-        if (instance_exists(oRPEEffect)) {
-                with (oRPEEffect) instance_destroy();
+        if (chart_actor_exists(oRPEEffect)) {
+                with (oRPEEffect) chart_actor_destroy();
         } else if (extension_exists("I_Shaders")) {
                 rpe_ext_shutdown();
         };
@@ -192,7 +193,7 @@ function chart_playback_teardown_for_menu() {
 function chart_hud_ready() {
         // 加载动画期间不显示
         if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return false;
-        if (instance_exists(oPlayTransition)) then return true;
+        if (chart_actor_exists(oPlayTransition)) then return true;
         if (variable_global_exists("game") && is_struct(game) && !game.paused) then return true;
         return false;
 }
@@ -203,10 +204,10 @@ function chart_version_label() {
 	var _kind = "PGRVersion";
 	var _value = 0;
 	// RPE、PEC、官谱各取自己的版本字段
-	if (instance_exists(oRender_1) && variable_global_exists("game_1") && is_struct(game_1)) {
+	if (chart_actor_exists(oRender_1) && variable_global_exists("game_1") && is_struct(game_1)) {
 		_kind = "RPEVersion";
 		_value = game_1.version;
-	} else if (instance_exists(oRender_2) && variable_global_exists("game_2") && is_struct(game_2)
+	} else if (chart_actor_exists(oRender_2) && variable_global_exists("game_2") && is_struct(game_2)
 		&& variable_struct_exists(game_2, "chart") && is_struct(game_2.chart)) {
 		_kind = "PECVersion";
 		_value = game_2.chart.version;
@@ -282,8 +283,8 @@ function chart_draw_recorded_version() {
 function chart_hud_draw_overlay() {
 	if (!chart_hud_ready()) then return;
 	// 全屏黑底和结算页已经接管画面，不再把游玩的水印叠到它们上面。
-	if (instance_exists(oSettlement)) then return;
-	if (instance_exists(oPlayTransition) && instance_find(oPlayTransition, 0).mask_released) then return;
+	if (chart_actor_exists(oSettlement)) then return;
+	if (chart_actor_exists(oPlayTransition) && chart_actor_find(oPlayTransition, 0).mask_released) then return;
 	if (!variable_global_exists("game") || !is_struct(game) || !asset_font_valid(game.font)) then return;
 	if (variable_global_exists("render_mode") && global.render_mode) then return;
 	var _scale = variable_global_exists("global_scales") ? global_scales : 1;
@@ -338,10 +339,10 @@ function chart_hud_draw_prepare() {
 function chart_fps_draw_allowed() {
         // 录制、结算或退场动画时不画
         if (variable_global_exists("render_mode") && global.render_mode) then return false;
-        if (instance_exists(oSettlement)) then return false;
-        if (instance_exists(oPlayTransition)) {
-                var _transition = instance_find(oPlayTransition, 0);
-                if (variable_instance_exists(_transition, "state")
+        if (chart_actor_exists(oSettlement)) then return false;
+        if (chart_actor_exists(oPlayTransition)) {
+                var _transition = chart_actor_find(oPlayTransition, 0);
+                if (chart_actor_var_exists(_transition, "state")
                         && _transition.state >= PLAY_TRANSITION_STATE.OUTRO) then return false;
         };
         return true;
@@ -493,18 +494,18 @@ function chart_set_gameplay_visible(_visible) {
                 if (!is_array(_lines)) then return;
                 for (var _i = 0; _i < array_length(_lines); _i++) {
                         var _line = _lines[_i];
-                        if (instance_exists(_line)) then _line.visible = _visible_flag;
+                        if (chart_actor_exists(_line)) then _line.visible = _visible_flag;
                 };
         };
         if (variable_global_exists("game")) then _apply_line_list(game, _show);
         if (variable_global_exists("game_1")) then _apply_line_list(game_1, _show);
         if (variable_global_exists("game_2")) then _apply_line_list(game_2, _show);
-        with (oLine) visible = _show;
-        with (oLine_1) visible = _show;
-        with (oLine_2) visible = _show;
-        with (oNote) visible = _show;
-        with (oNote_1) visible = _show;
-        with (oNote_2) visible = _show;
+        { var _actors_18869 = chart_actor_list(oLine); for (var _actor_i_18869 = 0; _actor_i_18869 < array_length(_actors_18869); _actor_i_18869++) with (_actors_18869[_actor_i_18869]) visible = _show; }
+        { var _actors_18907 = chart_actor_list(oLine_1); for (var _actor_i_18907 = 0; _actor_i_18907 < array_length(_actors_18907); _actor_i_18907++) with (_actors_18907[_actor_i_18907]) visible = _show; }
+        { var _actors_18947 = chart_actor_list(oLine_2); for (var _actor_i_18947 = 0; _actor_i_18947 < array_length(_actors_18947); _actor_i_18947++) with (_actors_18947[_actor_i_18947]) visible = _show; }
+        { var _actors_18987 = chart_actor_list(oNote); for (var _actor_i_18987 = 0; _actor_i_18987 < array_length(_actors_18987); _actor_i_18987++) with (_actors_18987[_actor_i_18987]) visible = _show; }
+        { var _actors_19025 = chart_actor_list(oNote_1); for (var _actor_i_19025 = 0; _actor_i_19025 < array_length(_actors_19025); _actor_i_19025++) with (_actors_19025[_actor_i_19025]) visible = _show; }
+        { var _actors_19065 = chart_actor_list(oNote_2); for (var _actor_i_19065 = 0; _actor_i_19065 < array_length(_actors_19065); _actor_i_19065++) with (_actors_19065[_actor_i_19065]) visible = _show; }
 }
 
 ///@desc 加载遮罩期间把特效藏到后面；本函数不冻结判定线和音符，它们只在 Create 与强制 Step 初始化之后才停
@@ -513,9 +514,9 @@ function chart_idle_behind_loading() {
         // 没有加载动画则不动
         if (!(variable_global_exists("loading_animation_active") && global.loading_animation_active)) then return;
         chart_set_gameplay_visible(false);
-        instance_deactivate_object(oRPEEffect);
-        instance_deactivate_object(oEffect);
-        instance_deactivate_object(oEffectNew);
+        chart_actor_deactivate(oRPEEffect);
+        chart_actor_deactivate(oEffect);
+        chart_actor_deactivate(oEffectNew);
 }
 
 ///@desc 取仍有效的加载模糊精灵
@@ -544,7 +545,7 @@ function chart_blur_keep(spr) {
 ///@returns {Real} 精灵资源号，没有则为 -1
 function chart_blur_keep_from_animator() {
         // 没有动画实例时沿用已经记住的精灵
-        if (!instance_exists(oLoadAnimator)) then return chart_blur_kept();
+        if (!chart_actor_exists(oLoadAnimator)) then return chart_blur_kept();
         var spr = -1;
         with (oLoadAnimator) {
                 if (sprite_exists(blur_sprite)) then spr = blur_sprite;
@@ -580,7 +581,7 @@ function chart_blur_bind_game(_force = false) {
 ///@returns {Real} 精灵资源号，没有则为 -1
 function chart_loading_blur_draw_sprite() {
         // 优先动画实例，其次记住的图，最后游戏背景
-        if (instance_exists(oLoadAnimator)) {
+        if (chart_actor_exists(oLoadAnimator)) {
                 with (oLoadAnimator) {
                         if (sprite_exists(blur_sprite)) then return blur_sprite;
                 };
@@ -607,11 +608,11 @@ function chart_blur_release() {
 function chart_loading_animation_abort() {
         chart_blur_release();
         // 动画实例还在就关掉并销毁
-        if (instance_exists(oLoadAnimator)) {
+        if (chart_actor_exists(oLoadAnimator)) {
                 with (oLoadAnimator) {
                         visible = false;
                         persistent = false;
-                        instance_destroy();
+                        chart_actor_destroy();
                 };
         };
         if (variable_global_exists("loading_animation_active")) {
@@ -640,13 +641,13 @@ function chart_loading_take_blur_sprite() {
 ///@returns {Undefined} 无
 function chart_loading_animation_finish() {
         chart_blur_bind_game(false);
-        if (instance_exists(oLoadAnimator)) {
+        if (chart_actor_exists(oLoadAnimator)) {
                 with (oLoadAnimator) {
                         // 模糊图已交给全局时，不要让实例销毁时删掉它
                         if (sprite_exists(blur_sprite) && blur_sprite == chart_blur_kept()) then blur_sprite = -1;
                         visible = false;
                         persistent = false;
-                        instance_destroy();
+                        chart_actor_destroy();
                 };
         };
         global.loading_animation_active = false;

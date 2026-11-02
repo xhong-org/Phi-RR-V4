@@ -1,3 +1,6 @@
+// Release actors before shared sprites, fonts and sounds.
+chart_actors_dispose();
+official_blocks_reset();
 ///@desc 离开房间时释放 RPE 纹理、字体和共享资源
 chart_clip_shutdown();
 if (variable_global_exists("chart_surface") && !is_undefined(chart_surface) && surface_exists(chart_surface)) then surface_free(chart_surface);
@@ -6,9 +9,9 @@ if (variable_global_exists("chart_background_surface") && !is_undefined(chart_ba
 	&& surface_exists(chart_background_surface)) then surface_free(chart_background_surface);
 if (variable_global_exists("chart_background_surface")) then chart_background_surface = -1;
 if (os_type == os_windows && extension_exists("I_Parallel")) rpe_worker_shutdown();
-if (variable_instance_exists(id, "_rpe_worker_hierarchy") && buffer_exists(_rpe_worker_hierarchy)) buffer_delete(_rpe_worker_hierarchy);
-if (variable_instance_exists(id, "_rpe_worker_input") && buffer_exists(_rpe_worker_input)) buffer_delete(_rpe_worker_input);
-if (variable_instance_exists(id, "_rpe_worker_output") && buffer_exists(_rpe_worker_output)) buffer_delete(_rpe_worker_output);
+if (chart_actor_var_exists(id, "_rpe_worker_hierarchy") && buffer_exists(_rpe_worker_hierarchy)) buffer_delete(_rpe_worker_hierarchy);
+if (chart_actor_var_exists(id, "_rpe_worker_input") && buffer_exists(_rpe_worker_input)) buffer_delete(_rpe_worker_input);
+if (chart_actor_var_exists(id, "_rpe_worker_output") && buffer_exists(_rpe_worker_output)) buffer_delete(_rpe_worker_output);
 _rpe_worker_hierarchy = -1;
 _rpe_worker_input = -1;
 _rpe_worker_output = -1;
@@ -17,14 +20,6 @@ if(variable_global_exists("game") && !is_undefined(game)){
 	game = undefined;
 };
 if(variable_global_exists("game_1") && !is_undefined(game_1)){
-	// 未激活音符不在普通实例迭代里，清理前先重新激活。
-	instance_activate_object(oNote_1);
-	with (oLine_1) {
-		if (variable_instance_exists(id, "paint_surface") && surface_exists(paint_surface)) {
-			surface_free(paint_surface);
-			paint_surface = -1;
-		};
-	};
 	if (struct_exists(game_1, "Texture") && is_struct(game_1.Texture)) {
 		var _texture_names = struct_get_names(game_1.Texture);
 		// 删掉本局加载的自定义纹理。
@@ -69,4 +64,5 @@ mus_system_clean();
 skin_gameplay_unload();
 chart_default_resources_unload();
 LogUninit();
+chart_actors_collect_later();
 process_mem_trim_later();

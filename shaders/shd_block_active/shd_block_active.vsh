@@ -1,7 +1,9 @@
 attribute vec3 in_Position;
 attribute vec4 in_Colour;
 attribute vec2 in_TextureCoord;
-uniform vec4 _ScreenParams;
+// Keep the vertex clip parameters separate from the fragment's screen size.
+// Some native backends return only one stage's handle for a shared name.
+uniform vec4 _VertexScreenParams;
 uniform vec4 _DisplaceMap_ST;
 uniform vec4 _SparkMap_ST;
 uniform vec4 _TouchDisplaceMap_ST;
@@ -23,5 +25,5 @@ void main() {
 	vs_TEXCOORD4 = uv * _TouchDisplaceMap_ST.xy + _TouchDisplaceMap_ST.zw;
 	vs_TEXCOORD5 = uv * _NoiseMap_ST.xy + _NoiseMap_ST.zw;
 	vs_TEXCOORD3 = vec4(uv, 0.0, 1.0);
-	vs_TEXCOORD6 = _ScreenParams.y * 0.888888896 / max(_ScreenParams.x, 1.0);
+	vs_TEXCOORD6 = _VertexScreenParams.y * 0.888888896 / max(_VertexScreenParams.x, 1.0);
 }

@@ -14,19 +14,19 @@ if (audit_complete) {
 wait_frames++;
 
 if (wait_frames == 1 || (wait_frames mod 300) == 0) {
-        print($"[RPETextureAudit] Waiting frame={wait_frames} room={room_get_name(room)} lines={instance_number(oLine_1)}");
+        print($"[RPETextureAudit] Waiting frame={wait_frames} room={room_get_name(room)} lines={chart_actor_number(oLine_1)}");
 };
 
 if (room != room_play_rpe
         || !variable_global_exists("game_1")
         || !is_struct(game_1)
-        || instance_number(oLine_1) <= 0) {
+        || chart_actor_number(oLine_1) <= 0) {
         // 等不到 RPE 判定线就失败。
         if (wait_frames >= 21600) {
                 print("[RPETextureAudit][FAIL] Timed out waiting for RPE judge lines.");
                 audit_complete = true;
                 if (test_mode) then game_end();
-                else instance_destroy();
+                else chart_actor_destroy();
         };
         exit;
 };
@@ -56,11 +56,11 @@ var line_alpha_mismatch = 0;
 var line_alpha_min = infinity;
 var line_alpha_max = -infinity;
 
-var line_count = instance_number(oLine_1);
+var line_count = chart_actor_number(oLine_1);
 // 逐线核对透明度和自定义纹理是否真正绑定。
 for (var instance_i = 0; instance_i < line_count; instance_i++) {
-        var line_instance = instance_find(oLine_1, instance_i);
-        if (!instance_exists(line_instance)) then continue;
+        var line_instance = chart_actor_find(oLine_1, instance_i);
+        if (!chart_actor_exists(line_instance)) then continue;
 	var line_i = line_instance.line_id;
 	var raw_alpha = real(line_instance.__raw_a);
 	var expected_line_alpha = clamp(raw_alpha / 255, 0, 1);
@@ -139,8 +139,8 @@ audit_complete = true;
 
 // 退出测试把绑定界面透明度打成 -1，并缩短音频以便离开。
 if (exit_test_mode) {
-        var exit_renderer = instance_find(oRender_1, 0);
-        if (instance_exists(exit_renderer) && is_struct(exit_renderer.bindUI)) {
+        var exit_renderer = chart_actor_find(oRender_1, 0);
+        if (chart_actor_exists(exit_renderer) && is_struct(exit_renderer.bindUI)) {
                 var exit_ui_keys = struct_get_names(exit_renderer.bindUI);
                 for (var exit_ui_i = 0; exit_ui_i < array_length(exit_ui_keys); exit_ui_i++) {
                         var exit_ui_slot = exit_renderer.bindUI[$ exit_ui_keys[exit_ui_i]];
@@ -149,9 +149,9 @@ if (exit_test_mode) {
                         };
                 };
         };
-        var exit_media = instance_find(oMedia, 0);
-        if (instance_exists(exit_media)) then exit_media.length = 1;
+        var exit_media = chart_actor_find(oMedia, 0);
+        if (chart_actor_exists(exit_media)) then exit_media.length = 1;
         wait_frames = 0;
         print("[ChartExitTest] Armed with all bound UI alpha=-1.");
 } else if (test_mode) then game_end();
-else instance_destroy();
+else chart_actor_destroy();

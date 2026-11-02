@@ -97,9 +97,9 @@ function chart_kb_poll(state) {
 ///@desc 加载、暂停和过场时不接收打击；暂停期间仍同步键态
 function chart_player_keyboard_judge_active() {
 	if (game.paused || (variable_global_exists("loading_animation_active") && global.loading_animation_active)) then return false;
-	if (instance_exists(oSettlement)) then return false;
-	if (instance_exists(oPlayTransition)) {
-		var transition = instance_find(oPlayTransition, 0);
+	if (chart_actor_exists(oSettlement)) then return false;
+	if (chart_actor_exists(oPlayTransition)) {
+		var transition = chart_actor_find(oPlayTransition, 0);
 		if (transition.state != PLAY_TRANSITION_STATE.PLAYING) then return false;
 	}
 	return true;
@@ -112,7 +112,7 @@ function chart_kb_register_note() {
 	if (object_index != oNote_2 && !inition) then return;
 	if (object_index != oNote && isFake) then return;
 	var state = chart_kb_state_get();
-	if (variable_instance_exists(id, "kb_record") && is_struct(kb_record) && kb_record.owner == state) then return;
+	if (chart_actor_var_exists(id, "kb_record") && is_struct(kb_record) && kb_record.owner == state) then return;
 	var hit;
 	var tail;
 	var kind;
@@ -187,7 +187,7 @@ function chart_kb_score(record, result) {
 function chart_kb_feedback(result, sound_on = true) {
 	var xy;
 	if (object_index == oNote) {
-		event_user(_step_user_count);
+		chart_actor_user(_step_user_count);
 		var local_x = xOffset * chart_view_width * 0.05625;
 		xy = [_line_ref.x + local_x * _line_ref.__cos, _line_ref.y - local_x * _line_ref.__sin];
 	} else if (object_index == oNote_1) xy = rpe_note_hit_effect_xy();
@@ -235,7 +235,7 @@ function chart_kb_apply_hit(record, result, now, input_time = undefined) {
 	if (record.kind != 3) {
 		chart_kb_score(record, result);
 		record.closed = true;
-		if (result != TYPE.BAD) then instance_deactivate_object(record.note);
+		if (result != TYPE.BAD) then chart_actor_deactivate(record.note);
 	}
 }
 
@@ -255,7 +255,7 @@ function chart_kb_miss(record) {
 		} else {
 			if (object_index == oNote_2) judged = true;
 			else isJudge = true;
-			instance_deactivate_object(self);
+			chart_actor_deactivate(self);
 		}
 	}
 	if (record.kind != 3) record.closed = true;
@@ -297,9 +297,9 @@ function chart_kb_judge_step() {
 	}
 	if (!state.initialized) {
 		// 一次性补入中途关闭自动播放时已经存在的音符，后续由创建/激活入口增量登记。
-		with (oNote) chart_kb_register_note();
-		with (oNote_1) chart_kb_register_note();
-		with (oNote_2) chart_kb_register_note();
+		{ var _actors_10121 = chart_actor_list(oNote); for (var _actor_i_10121 = 0; _actor_i_10121 < array_length(_actors_10121); _actor_i_10121++) with (_actors_10121[_actor_i_10121]) chart_kb_register_note(); }
+		{ var _actors_10162 = chart_actor_list(oNote_1); for (var _actor_i_10162 = 0; _actor_i_10162 < array_length(_actors_10162); _actor_i_10162++) with (_actors_10162[_actor_i_10162]) chart_kb_register_note(); }
+		{ var _actors_10205 = chart_actor_list(oNote_2); for (var _actor_i_10205 = 0; _actor_i_10205 < array_length(_actors_10205); _actor_i_10205++) with (_actors_10205[_actor_i_10205]) chart_kb_register_note(); }
 		state.initialized = true;
 	}
 	if (!state.was_active) state.pressed = 0;
@@ -340,7 +340,7 @@ function chart_kb_judge_at(state, now) {
 		var record = ds_priority_delete_min(state.pending);
 		state.next = undefined;
 		chart_note_activate(record.note);
-		if (instance_exists(record.note)) array_push(state.active, record);
+		if (chart_actor_exists(record.note)) array_push(state.active, record);
 	}
 	var active = state.active;
 	var count = array_length(active);
@@ -349,7 +349,7 @@ function chart_kb_judge_at(state, now) {
 	for (var index = 0; index < count; index++) {
 		var record = active[index];
 		if (record.closed) then continue;
-		if (!instance_exists(record.note)) {
+		if (!chart_actor_exists(record.note)) {
 			record.closed = true;
 			continue;
 		}
@@ -404,7 +404,7 @@ function chart_kb_judge_at(state, now) {
 			}
 			if (now >= record.tail && record.scored) {
 				record.closed = true;
-				instance_deactivate_object(record.note);
+				chart_actor_deactivate(record.note);
 			}
 		}
 		if (!record.closed) {

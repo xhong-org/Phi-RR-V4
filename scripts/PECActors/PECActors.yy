@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"PECActors",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"PECActors",
+  "parent":{
+    "name":"PEC",
+    "path":"folders/Objects/Main/Loader/Format/PEC.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

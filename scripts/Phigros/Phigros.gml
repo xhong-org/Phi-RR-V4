@@ -140,10 +140,8 @@ function chart_layer_depth(z) {
 /// 作者的话: 安全在哪
 function chart_set_instance_depth(_inst, _depth) {
 	// 实例已销毁则直接退出
-	if (!instance_exists(_inst)) then return;
-	with (_inst) {
-		depth = _depth;
-	};
+	if (!chart_actor_exists(_inst)) then return;
+    chart_actor_set_depth(_inst, _depth);
 }
 
 ///@desc 解析 RPE 音符的图层 Z
@@ -180,7 +178,7 @@ function chart_hit_effect_renderer(_object, _z = undefined) {
 	} finally {
 		math_set_epsilon(epsilon);
 	}
-	if (!instance_exists(renderer)) {
+	if (!chart_actor_exists(renderer)) {
 		renderer = instance_create_depth(0, 0, DEPTH.HEF, _object, { hit_effect_layer_z:target_z });
 	}
 	return renderer;
@@ -193,7 +191,7 @@ function chart_hit_effect_renderer(_object, _z = undefined) {
 ///@returns {Array} x、y 与旋转角
 /// 作者的话: 傻逼玩意,和oLine_1沾一块摘不掉了
 function rpe_line_view_pose(_line, _sx, _sy) {
-	if (!instance_exists(_line)) return [0, 0, 0];
+	if (!chart_actor_exists(_line)) return [0, 0, 0];
 	var epoch = game_1._pose_epoch;
 	if (_line.pose_epoch == epoch
 		&& sign(_line.pose_scale_x - _sx) == 0 && sign(_line.pose_scale_y - _sy) == 0) return _line.pose_value;
@@ -209,7 +207,7 @@ function rpe_line_view_pose(_line, _sx, _sy) {
 	var parent_index = _line.isFather;
 	if (is_real(parent_index) && parent_index >= 0 && parent_index < array_length(game_1.line_list)) {
 		var parent_line = game_1.line_list[parent_index];
-		if (instance_exists(parent_line) && parent_line != _line && !parent_line.pose_visiting) {
+		if (chart_actor_exists(parent_line) && parent_line != _line && !parent_line.pose_visiting) {
 			rpe_line_view_pose(parent_line, _sx, _sy);
 			var parent_pose = parent_line.pose_parent_value;
 			var parent_cos = dcos(parent_pose[2]);
@@ -307,7 +305,7 @@ function rpe_custom_texture_pixel_size(scale_x, scale_y, sprite_w, sprite_h, vie
 ///@returns {Real} 像素宽度，实例无效时为 0
 /// 作者的话: 文本文本文本
 function chart_line_pixel_width(line_instance) {
-	if (!instance_exists(line_instance)) then return 0;
+	if (!chart_actor_exists(line_instance)) then return 0;
 	var view_w = 1;
 	if (variable_global_exists("chart_view_width") && is_real(chart_view_width) && chart_view_width > 0) {
 		view_w = chart_view_width;
@@ -343,9 +341,9 @@ function chart_note_scale_clip_begin(line_instance) {
 	static u_half = -1;
 	static fetched = false;
 
-	if (!instance_exists(line_instance)) then return 0;
+	if (!chart_actor_exists(line_instance)) then return 0;
 	var mode = 0;
-	if (variable_instance_exists(line_instance, "scale_on_notes") && is_real(line_instance.scale_on_notes)) {
+	if (chart_actor_var_exists(line_instance, "scale_on_notes") && is_real(line_instance.scale_on_notes)) {
 		mode = real(line_instance.scale_on_notes);
 	};
 	// 仅模式 2 才按线宽裁剪
@@ -649,7 +647,7 @@ function judgeCalc(oHTime , nHTime , bpm , xx , yy , _type , isFHitEf = true, in
 	};
 	
 	if (isFHitEf && (status == TYPE.GOOD || status == TYPE.PREFECT)) {
-		var hit_z = variable_instance_exists(id, "hit_effect_z") ? hit_effect_z : undefined;
+		var hit_z = chart_actor_var_exists(id, "hit_effect_z") ? hit_effect_z : undefined;
 		_eff_c(xx, yy, is_undefined(effectColor) ? color : effectColor, undefined, hit_z);
 	}
 	
@@ -661,9 +659,9 @@ function judgeCalc(oHTime , nHTime , bpm , xx , yy , _type , isFHitEf = true, in
 /// 作者的话: 这个本来想写在oLine_1的Create事件
 function rpe_note_hit_effect_xy() {
 	// 先刷新判定线几何，再投影音符本地坐标
-	if (instance_exists(_line_ref)) {
-		with (_line_ref) event_perform(ev_step, ev_step_end);
-		event_user(_step_user_count);
+	if (chart_actor_exists(_line_ref)) {
+		with (_line_ref) chart_actor_event(ev_step, ev_step_end);
+		chart_actor_user(_step_user_count);
 	};
 	return [_x_h, _y_h];
 };
@@ -719,7 +717,7 @@ function rpe_alpha_control_is_identity(_raw) {
 ///@returns {Array} 特效的 x 与 y
 /// 作者的话: 拉
 function pec_note_hit_effect_xy() {
-	if (!instance_exists(line_ref)) then return [x, y];
+	if (!chart_actor_exists(line_ref)) then return [x, y];
 	var _local_x = localXFactor * chart_view_width;
 	var _c = line_ref.__cos;
 	var _s = line_ref.__sin;
@@ -1535,11 +1533,11 @@ function Phigros() constructor { // 仅仅结构
 	///@returns {Bool} 成功为真
 	static Reader = (func(_chart = "" , lmode = 0 , chart_source = undefined){
 		// 切谱会反复调用，不能留下上一份谱面的音符引用
-		if(instance_exists(oLine)) then with(oLine) instance_destroy();
+		chart_actor_destroy(oLine);
 		// 回放池里的音符是停用的，换谱前先激活再销毁
-		instance_activate_object(oNote);
-		if(instance_exists(oNote)) then with(oNote) instance_destroy();
-		if(instance_exists(oEffectNew)) then with(oEffectNew) effect_events = [];
+		chart_actor_activate(oNote);
+		chart_actor_destroy(oNote);
+		if(chart_actor_exists(oEffectNew)) then with(oEffectNew) effect_events = [];
 		self._notes = [];
 		self.line_list = [];
 		self.runtime_line_instances = [];
@@ -2021,16 +2019,7 @@ function Phigros() constructor { // 仅仅结构
 		self.chart = undefined;
 		self._notes = [];
 		self.line_list = [];
-		if(instance_exists(oLine)){
-			with(oLine) instance_destroy();
-		};
-		// 换谱或换房间时，停用的回放池也要一起清掉
-		instance_activate_object(oNote);
-		if(instance_exists(oNote)){
-			with(oNote) instance_destroy();
-		};
-		
-		
+		chart_actors_dispose();
 		
 		// 完整清理才释放音符皮肤、字体和打击特效
 		if(full){
@@ -8109,7 +8098,7 @@ function rpe_sync_note_activation(_now_sec = undefined) {
 			var _note = _notes[_i];
 			if (!is_struct(_note)) then continue;
 			chart_note_activate(_note.id);
-			var _key = string(_note.id);
+			var _key = chart_actor_key(_note.id);
 			if (is_struct(_records) && struct_exists(_records, _key)) {
 				rpe_note_mark_active(_records[$ _key]);
 			};
@@ -8129,7 +8118,7 @@ function rpe_sync_note_activation(_now_sec = undefined) {
 		// 列表按激活时间排序，后面的都还没到
 		if (!_always && real(_item.activateSec ?? infinity) > _now_sec) then break;
 		chart_note_activate(_item.id);
-		var _item_key = string(_item.id);
+		var _item_key = chart_actor_key(_item.id);
 		if (is_struct(_records) && struct_exists(_records, _item_key)) {
 			rpe_note_mark_active(_records[$ _item_key]);
 		};
@@ -8139,7 +8128,7 @@ function rpe_sync_note_activation(_now_sec = undefined) {
 		var _late = _notes[_rest];
 		if (!is_struct(_late) || !bool(_late.alwaysActive ?? false)) then continue;
 		chart_note_activate(_late.id);
-		var _late_key = string(_late.id);
+		var _late_key = chart_actor_key(_late.id);
 		if (is_struct(_records) && struct_exists(_records, _late_key)) {
 			rpe_note_mark_active(_records[$ _late_key]);
 		};
@@ -8321,9 +8310,9 @@ function render_hitsound_path(_default_sound, _custom_path = "") {
 ///@param {Bool} _is_fake 假音符不发声，默认假
 ///@returns {Bool} 安排成功为真
 function render_schedule_note_hitsound(_note, _event_time, _custom_path = "", _is_fake = false) {
-	if (!instance_exists(_note)) then return false;
+	if (!chart_actor_exists(_note)) then return false;
 	var fallback = snd_note_tap;
-	if (variable_instance_exists(_note, "sound") && audio_exists(_note.sound)) then fallback = _note.sound;
+	if (chart_actor_var_exists(_note, "sound") && audio_exists(_note.sound)) then fallback = _note.sound;
 	var path = string(_custom_path ?? "");
 	if (!string_length(path)) then path = skin_hitsound_path_for_note(_note);
 	return render_schedule_hitsound(fallback, _event_time, path, _is_fake);
@@ -8361,11 +8350,11 @@ function render_schedule_hitsound(_default_sound, _event_time, _custom_path = ""
 ///@param {String} _custom_path 自定义路径，默认为空
 ///@returns {Bool} 假音符为假，其余视播放结果
 function render_play_hitsound(_default_sound, _custom_path = "") {
-	if (variable_instance_exists(id, "isFake") && bool(variable_instance_get(id, "isFake"))) then return false;
+	if (chart_actor_var_exists(id, "isFake") && bool(chart_actor_var_get(id, "isFake"))) then return false;
 	if (chart_hitsound_volume() <= 0) then return true;
 	if (variable_global_exists("render_mode") && global.render_mode) {
-		if (variable_instance_exists(id, "render_hitsound_scheduled")
-			&& bool(variable_instance_get(id, "render_hitsound_scheduled"))) then return true;
+		if (chart_actor_var_exists(id, "render_hitsound_scheduled")
+			&& bool(chart_actor_var_get(id, "render_hitsound_scheduled"))) then return true;
 		var _path = render_hitsound_path(_default_sound, _custom_path);
 		if (string_length(_path)) {
 			var _event_time = max(0, global.render_frame) / max(1, global.render_fps);
@@ -8381,8 +8370,8 @@ function render_play_hitsound(_default_sound, _custom_path = "") {
 ///@desc 尝试在当前媒体系统播放自定义打击音，创建或启动声道失败时返回假
 function chart_try_fmod_hitsound(_sound) {
 	if (!is_real(_sound) || _sound <= 0
-		|| media_use_gx() || !instance_exists(oMedia)) then return false;
-	var media = instance_find(oMedia, 0);
+		|| media_use_gx() || !chart_actor_exists(oMedia)) then return false;
+	var media = chart_actor_find(oMedia, 0);
 	if (!skin_fmod_system_live(media.track)) then return false;
 	fmod_system_select(media.track);
 	var voice = fmod_system_play_sound(_sound, true);
@@ -8402,7 +8391,7 @@ function chart_try_fmod_hitsound(_sound) {
 ///@param {String} _custom_path 自定义路径，默认为空
 ///@returns {Bool} 是否已播放或记录
 function rpe_play_hitsound(_default_sound, _custom_fmod_sound = -1, _custom_path = "") {
-	if (variable_instance_exists(id, "isFake") && bool(isFake)) then return false;
+	if (chart_actor_var_exists(id, "isFake") && bool(isFake)) then return false;
 	if (chart_hitsound_volume() <= 0) then return true;
 	if (variable_global_exists("render_mode") && global.render_mode) {
 		return render_play_hitsound(_default_sound, _custom_path);
@@ -8487,6 +8476,15 @@ function RPE() constructor{
 
 		self.chart = parsed_chart;
 		self._bpm_timeline = undefined; // 这份谱面要重建多 BPM 时间轴
+		try {
+			rpen_blocks_load(self.chart);
+		} catch (noise_error) {
+			var noise_message = string(noise_error.message);
+			show_debug_message("[RPEN Noise] " + noise_message);
+			chart_session_fail(noise_message, false);
+			official_blocks_reset();
+			return false;
+		}
 		var meta = self.chart.META;
 		// 速度积分跟 RPEVersion。转换出的谱是 160，所以用 1.7 前的速度表。构建标签显示这个数
 		self.version = real(meta[$ "RPEVersion"] ?? 0);
@@ -9102,7 +9100,7 @@ function PEC() constructor{
             array_sort(_line.rotateEvents , _func);
             array_sort(_line.speedEvents , _func); 
             
-            var l = (instance_create_depth(room_width / 2 , room_height / 2 , 0 , oLine_2 , {
+            var l = (chart_actor_create(room_width / 2 , room_height / 2 , 0 , oLine_2 , {
                 "line_id" : i,
                 "events" : _line
             }));

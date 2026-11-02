@@ -10,7 +10,7 @@ if (variable_global_exists("pls_probe_until") && global.pls_probe_until > 0
 	&& surface_exists(application_surface)) {
 	global.pls_probe_screen_time = 0;
 	with (oRPEEffect) {
-		if (!variable_instance_exists(id, "effect_boundary_role")) then global.pls_probe_screen_time = chart_time;
+		if (!chart_actor_var_exists(id, "effect_boundary_role")) then global.pls_probe_screen_time = chart_time;
 	};
 	var _probe_shot_at = 31;
 	if (variable_global_exists("pls_probe_shot") && global.pls_probe_shot > 0) then _probe_shot_at = global.pls_probe_shot;
@@ -20,8 +20,8 @@ if (variable_global_exists("pls_probe_until") && global.pls_probe_until > 0
 		pls_draw_flush();
 		var _screen_path = game_save_id + "chromatic_screen.png";
 		var _mask_path = game_save_id + "chromatic_mask.png";
-		if (instance_exists(oChartMask)) {
-			var _mask = instance_find(oChartMask, 0);
+		if (chart_actor_exists(oChartMask)) {
+			var _mask = chart_actor_find(oChartMask, 0);
 			if (surface_exists(_mask.surface_id)) then surface_save(_mask.surface_id, _mask_path);
 		};
 		screen_save(_screen_path);

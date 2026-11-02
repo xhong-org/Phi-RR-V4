@@ -294,8 +294,8 @@ function settings_apply_live(_key) {
 	if ((_key == "noteSize" || _key == "noteUniformScale" || is_undefined(_key))
 		&& variable_global_exists("game") && is_struct(game)) {
 		// 被暂停或停用的实例恢复时仍会采样当前设置；当前可见音符立即刷新。
-		with (oNote) { if (inition) then event_user(7); };
-		with (oNote_1) { if (inition) then event_user(7); };
+		{ var _actors_11235 = chart_actor_list(oNote); for (var _actor_i_11235 = 0; _actor_i_11235 < array_length(_actors_11235); _actor_i_11235++) with (_actors_11235[_actor_i_11235]) { if (inition) then chart_actor_user(7); } };
+		{ var _actors_11288 = chart_actor_list(oNote_1); for (var _actor_i_11288 = 0; _actor_i_11288 < array_length(_actors_11288); _actor_i_11288++) with (_actors_11288[_actor_i_11288]) { if (inition) then chart_actor_user(7); } };
 	};
 	// 只在改这两项或未指定键时刷新显示
 	if (_key == "aa_level" || _key == "enableVsync" || is_undefined(_key)) {
@@ -476,7 +476,7 @@ function settings_grouped_keys() {
 ///@returns {Struct} 分组开关
 function settings_gui_group_state() {
 	// 首次使用时各分组都收起
-	if (!variable_instance_exists(id, "group_open") || !is_struct(group_open)) {
+	if (!chart_actor_var_exists(id, "group_open") || !is_struct(group_open)) {
 		group_open = { sound:false, display:false, debug:false, chart:false, deprecated:false };
 	};
 	return group_open;
@@ -521,7 +521,7 @@ function settings_gui_visible_rows() {
 ///@returns {Struct} 未保存的草稿
 function settings_gui_draft() {
 	// 没有草稿时从当前设置克隆一份
-	if (!variable_instance_exists(id, "draft") || !is_struct(draft)) {
+	if (!chart_actor_var_exists(id, "draft") || !is_struct(draft)) {
 		draft = settings_clone(settings_store());
 		draft_saved = settings_clone(draft);
 	};
@@ -558,7 +558,7 @@ function settings_values_equal(_key, _a, _b) {
 ///@returns {Bool} 是否有未保存的废弃项改动
 function settings_gui_deprecated_dirty() {
 	var editing = settings_gui_draft();
-	var saved = variable_instance_exists(id, "draft_saved") ? draft_saved : undefined;
+	var saved = chart_actor_var_exists(id, "draft_saved") ? draft_saved : undefined;
 	if (!is_struct(saved)) then return false;
 	var keys = settings_grouped_keys()[$ "deprecated"];
 	if (!is_array(keys)) then return false;
@@ -617,7 +617,7 @@ function settings_gui_commit_to_store(_include_deprecated) {
 ///@returns {Undefined} 无
 function settings_gui_sync_draft() {
 	// 设置界面不存在则不用同步
-	if (!instance_exists(oSettings)) then return;
+	if (!chart_actor_exists(oSettings)) then return;
 	with (oSettings) {
 		draft = settings_clone(settings_store());
 		draft_saved = settings_clone(draft);
@@ -634,14 +634,14 @@ function settings_gui_reset_and_sync() {
 ///@desc 确认后连废弃项一起保存
 ///@returns {Undefined} 无
 function settings_gui_save_yes() {
-	if (!instance_exists(oSettings)) then return;
+	if (!chart_actor_exists(oSettings)) then return;
 	with (oSettings) settings_gui_commit_to_store(true);
 }
 
 ///@desc 只保存非废弃项
 ///@returns {Undefined} 无
 function settings_gui_save_normal_only() {
-	if (!instance_exists(oSettings)) then return;
+	if (!chart_actor_exists(oSettings)) then return;
 	with (oSettings) settings_gui_commit_to_store(false);
 }
 
@@ -677,7 +677,7 @@ function settings_gui_request_save() {
 ///@desc 放弃编辑并关闭设置界面
 ///@returns {Undefined} 无
 function settings_gui_discard_close() {
-	if (variable_instance_exists(id, "editing_key")) then editing_key = "";
+	if (chart_actor_var_exists(id, "editing_key")) then editing_key = "";
 	// Android 上先藏起虚拟键盘
 	if (os_type == os_android) {
 		try { keyboard_virtual_hide(); } catch (hide_err) { delete(hide_err); };
@@ -746,10 +746,10 @@ function menu_draw_button(_btn, _hot, _text_scale) {
 function settings_skin_preview_surface(_w, _h) {
 	_w = max(1, floor(_w));
 	_h = max(1, floor(_h));
-	if (!variable_instance_exists(id, "skin_preview_surf") || !surface_exists(skin_preview_surf)
+	if (!chart_actor_var_exists(id, "skin_preview_surf") || !surface_exists(skin_preview_surf)
 		|| surface_get_width(skin_preview_surf) != _w || surface_get_height(skin_preview_surf) != _h) {
 		// 尺寸变化时先释放旧表面
-		if (variable_instance_exists(id, "skin_preview_surf") && surface_exists(skin_preview_surf)) {
+		if (chart_actor_var_exists(id, "skin_preview_surf") && surface_exists(skin_preview_surf)) {
 			surface_free(skin_preview_surf);
 		};
 		skin_preview_surf = surface_create(_w, _h);
@@ -760,7 +760,7 @@ function settings_skin_preview_surface(_w, _h) {
 ///@desc 释放皮肤预览表面
 ///@returns {Undefined} 无
 function settings_skin_preview_surface_free() {
-	if (variable_instance_exists(id, "skin_preview_surf") && surface_exists(skin_preview_surf)) {
+	if (chart_actor_var_exists(id, "skin_preview_surf") && surface_exists(skin_preview_surf)) {
 		surface_free(skin_preview_surf);
 		skin_preview_surf = -1;
 	};
@@ -1073,14 +1073,14 @@ function settings_gui_draw_tab(_box, _hot, _on, _label, _scale, _fill_on, _fill_
 ///@desc 设置界面是否正挡住操作
 ///@returns {Bool} oSettings 是否存在
 function settings_gui_blocking() {
-	return instance_exists(oSettings);
+	return chart_actor_exists(oSettings);
 }
 
 ///@desc 打开设置界面，避免刚关闭又被同一次点击打开
 ///@returns {Undefined} 无
 function settings_gui_open() {
 	// 已经打开或正在选文件时不再创建
-	if (instance_exists(oSettings) || instance_exists(oFilePicker)) then return;
+	if (chart_actor_exists(oSettings) || chart_actor_exists(oFilePicker)) then return;
 	// 关掉面板的那一下在下一步仍是按下。手机上菜单按钮就在这根手指下面，松手前会把面板再次打开。
 	if (variable_global_exists("settings_closed_at") && is_real(global.settings_closed_at)) {
 		if (current_time - global.settings_closed_at < 400) then return;
@@ -1092,7 +1092,7 @@ function settings_gui_open() {
 ///@returns {Undefined} 无
 function settings_gui_close() {
 	global.settings_closed_at = current_time;
-	if (!instance_exists(oSettings)) then return;
+	if (!chart_actor_exists(oSettings)) then return;
 	with (oSettings) {
 		// 先取消导入、卸预览并释放表面
 		try { skin_import_cancel(); } catch (cancel_err) { delete(cancel_err); };
@@ -1101,7 +1101,7 @@ function settings_gui_close() {
 		if (os_type == os_android) {
 			try { keyboard_virtual_hide(); } catch (hide_err) { delete(hide_err); };
 		};
-		instance_destroy();
+		chart_actor_destroy();
 	};
 }
 
@@ -1115,7 +1115,7 @@ function settings_developer_warning_text() {
 ///@returns {Undefined} 无
 function settings_warn_developer() {
 	// 已经警告过则返回
-	if (variable_instance_exists(id, "developer_warned") && developer_warned) then return;
+	if (chart_actor_var_exists(id, "developer_warned") && developer_warned) then return;
 	developer_warned = true;
 	var msg = settings_developer_warning_text();
 	var buttons = [msgbox_button("OK")];
@@ -1135,7 +1135,7 @@ function settings_menu_button_layout() {
 	if (!is_real(s) || s <= 0) then s = 1.0;
 	var rw = max(1, room_width);
 	var pad = max(12, 20 * s);
-	if (!variable_instance_exists(id, "btn_settings") || !is_struct(btn_settings)) {
+	if (!chart_actor_var_exists(id, "btn_settings") || !is_struct(btn_settings)) {
 		btn_settings = { label:lang("common.settings"), x:0, y:0, w:1, h:1 };
 	};
 	btn_settings.label = lang("common.settings");
@@ -1156,7 +1156,7 @@ function settings_menu_button_layout() {
 ///@returns {Bool} 是否命中
 function settings_menu_button_hit(_mx, _my) {
 	// 按钮还没摆好则不算命中
-	if (!variable_instance_exists(id, "btn_settings") || !is_struct(btn_settings)) then return false;
+	if (!chart_actor_var_exists(id, "btn_settings") || !is_struct(btn_settings)) then return false;
 	return point_in_rectangle(_mx, _my, btn_settings.x, btn_settings.y, btn_settings.x + btn_settings.w, btn_settings.y + btn_settings.h);
 }
 
@@ -1166,7 +1166,7 @@ function settings_menu_button_hit(_mx, _my) {
 ///@returns {Undefined} 无
 function settings_menu_button_draw(_hover, _s) {
 	// 按钮不存在则不画
-	if (!variable_instance_exists(id, "btn_settings") || !is_struct(btn_settings)) then return;
+	if (!chart_actor_var_exists(id, "btn_settings") || !is_struct(btn_settings)) then return;
 	var b = btn_settings;
 	var old_font = draw_get_font();
 	var old_halign = draw_get_halign();
@@ -1313,7 +1313,7 @@ function settings_gui_layout() {
 ///@desc 按当前页签决定右上角动作是重置、重载还是没有
 ///@returns {String} reset、reload 或空串
 function settings_gui_action_kind() {
-	if (!variable_instance_exists(id, "tab")) then return "";
+	if (!chart_actor_var_exists(id, "tab")) then return "";
 	// 常规页是重置，语言页是重载，皮肤页没有动作
 	if (tab == 0) then return "reset";
 	if (tab == 1) then return "reload";
@@ -1556,7 +1556,7 @@ function settings_gui_step() {
 		if (os_type == os_android || !pointer.held) then armed = true;
 	};
 	// 文件选择器打开时不处理点击
-	if (instance_exists(oFilePicker)) then exit;
+	if (chart_actor_exists(oFilePicker)) then exit;
 	skin_import_poll();
 	if (is_string(skin_import_path ?? "") && string_length(skin_import_path)) {
 		var queued_zip = skin_import_path;
@@ -1815,7 +1815,7 @@ function settings_gui_draw() {
 	shader_reset();
 	gpu_set_blendmode(bm_normal);
 	var draw_font = settings_ui_font();
-	if (!font_exists(draw_font) && variable_instance_exists(id, "ui_font")) then draw_font = ui_font;
+	if (!font_exists(draw_font) && chart_actor_var_exists(id, "ui_font")) then draw_font = ui_font;
 	if (font_exists(draw_font)) then draw_set_font(draw_font);
 	else draw_set_font(-1);
 	settings_gui_refresh_hits();

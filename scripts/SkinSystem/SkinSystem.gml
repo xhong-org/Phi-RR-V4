@@ -495,8 +495,8 @@ function skin_destroy_fmod(_snd) {
 ///@desc 判断皮肤音效所属的媒体系统是否仍可使用
 function skin_fmod_system_live(_system) {
 	if (!is_real(_system) || _system <= 0 || media_use_gx()) then return false;
-	if (!instance_exists(oMedia)) then return false;
-	var media = instance_find(oMedia, 0);
+	if (!chart_actor_exists(oMedia)) then return false;
+	var media = chart_actor_find(oMedia, 0);
 	return media.track == _system && !media.resources_released;
 }
 
@@ -1183,8 +1183,8 @@ function skin_pack_fmod_ensure(_pack) {
 	if (!is_struct(_pack)) then return false;
 	if (variable_global_exists("render_mode") && global.render_mode) then return false;
 	if (media_use_gx()) then return false;
-	if (!instance_exists(oMedia)) then return false;
-	var media = instance_find(oMedia, 0);
+	if (!chart_actor_exists(oMedia)) then return false;
+	var media = chart_actor_find(oMedia, 0);
 	if (!skin_fmod_system_live(media.track)) then return false;
 	// 失败也只在这个系统上尝试一次，避免每帧加载；换系统后重新准备。
 	if ((_pack[$ "fmod_attempted_system"] ?? -1) == media.track) then return _pack.fmod_ready;
@@ -1445,27 +1445,27 @@ function skin_tex_diag_frame() {
 	var note_n = 0;
 	var draw_n = 0;
 	var vis_n = 0;
-	if (instance_exists(oNote)) {
-		note_n += instance_number(oNote);
+	if (chart_actor_exists(oNote)) {
+		note_n += chart_actor_number(oNote);
 		// 累加可见且允许绘制的音符数量
-		with (oNote) {
+		{ var _actors_50169 = chart_actor_list(oNote); for (var _actor_i_50169 = 0; _actor_i_50169 < array_length(_actors_50169); _actor_i_50169++) with (_actors_50169[_actor_i_50169]) {
 			if (visible) then vis_n++;
 			if (canDraw) then draw_n++;
-		};
+		} };
 	};
-	if (instance_exists(oNote_1)) {
-		note_n += instance_number(oNote_1);
-		with (oNote_1) {
+	if (chart_actor_exists(oNote_1)) {
+		note_n += chart_actor_number(oNote_1);
+		{ var _actors_50327 = chart_actor_list(oNote_1); for (var _actor_i_50327 = 0; _actor_i_50327 < array_length(_actors_50327); _actor_i_50327++) with (_actors_50327[_actor_i_50327]) {
 			if (visible) then vis_n++;
 			if (canDraw) then draw_n++;
-		};
+		} };
 	};
-	if (instance_exists(oNote_2)) {
-		note_n += instance_number(oNote_2);
-		with (oNote_2) {
+	if (chart_actor_exists(oNote_2)) {
+		note_n += chart_actor_number(oNote_2);
+		{ var _actors_50487 = chart_actor_list(oNote_2); for (var _actor_i_50487 = 0; _actor_i_50487 < array_length(_actors_50487); _actor_i_50487++) with (_actors_50487[_actor_i_50487]) {
 			if (visible) then vis_n++;
 			if (canDraw) then draw_n++;
-		};
+		} };
 	};
 	//var msg = $"[Skin] tex f={global.skin_tex_diag_f} on={on} grp={grp} loaded={loaded} notes={note_n} draw={draw_n} vis={vis_n} tap={skin_tex_flag(note_tap)} drag={skin_tex_flag(note_drag)} flick={skin_tex_flag(note_flick)} hh={skin_tex_flag(note_hold_head)} hb={skin_tex_flag(note_hold_body)} he={skin_tex_flag(note_hold_end)} fx={skin_tex_flag(effect)} px={skin_tex_flag(spr_pixel_1)}";
 	//if (on) {
@@ -1576,7 +1576,7 @@ function skin_preview_set(_id) {
 	if (skin_id == SKIN_DEFAULT_ID) {
 		global.skin_preview_id = skin_id;
 		hold_default_notes_prefetch();
-		if (instance_exists(oSettings)) then skin_preview_cycle_reset();
+		if (chart_actor_exists(oSettings)) then skin_preview_cycle_reset();
 		return true;
 	};
 	var loaded = skin_load_id(skin_id);
@@ -1604,7 +1604,7 @@ function skin_preview_set(_id) {
 	if (variable_global_exists("skin_gameplay_failed_id") && global.skin_gameplay_failed_id == skin_id) {
 		global.skin_gameplay_failed_id = undefined;
 	};
-	if (instance_exists(oSettings)) then skin_preview_cycle_reset();
+	if (chart_actor_exists(oSettings)) then skin_preview_cycle_reset();
 	skin_log($"preview ready id={skin_id}");
 	return true;
 }
@@ -1690,7 +1690,7 @@ function skin_folder_remove(_path) {
 ///@desc 让设置界面重新计算皮肤命中区
 ///@returns {Undefined} 无
 function skin_ui_refresh() {
-	if (instance_exists(oSettings)) then oSettings.hits_tab = -1;
+	if (chart_actor_exists(oSettings)) then oSettings.hits_tab = -1;
 }
 
 ///@desc 记录导入失败并弹出错误
@@ -1736,7 +1736,7 @@ function skin_import_queue(_zip_path) {
 	skin_log($"queue zip={zip} len={string_length(zip)} file_exists={file_exists(zip)}");
 	if (!string_length(zip)) then return false;
 	// 设置界面存在时延到下一步，避免在回调里解压
-	if (instance_exists(oSettings)) {
+	if (chart_actor_exists(oSettings)) {
 		oSettings.skin_import_path = zip;
 		skin_log("queued for next settings step");
 		return true;
@@ -1747,14 +1747,14 @@ function skin_import_queue(_zip_path) {
 ///@desc 是否已有皮肤解压任务在跑
 ///@returns {Bool} 是否忙碌
 function skin_import_busy() {
-	return instance_exists(oSettings) && is_real(oSettings.skin_zip_task) && oSettings.skin_zip_task >= 0;
+	return chart_actor_exists(oSettings) && is_real(oSettings.skin_zip_task) && oSettings.skin_zip_task >= 0;
 }
 
 ///@desc 取消并释放正在进行的皮肤解压
 ///@returns {Undefined} 无
 function skin_import_cancel() {
 	// 没有设置界面就没有进行中的任务
-	if (!instance_exists(oSettings)) then return;
+	if (!chart_actor_exists(oSettings)) then return;
 	with (oSettings) {
 		if (is_real(skin_zip_task) && skin_zip_task >= 0) {
 			skin_log($"cancel extract task={skin_zip_task}");
@@ -1826,7 +1826,7 @@ function skin_import_finish(_dest, _folder) {
 ///@returns {Undefined} 无
 function skin_import_poll() {
 	// 没有设置界面或没有任务则不用轮询
-	if (!instance_exists(oSettings)) then return;
+	if (!chart_actor_exists(oSettings)) then return;
 	if (!is_real(oSettings.skin_zip_task) || oSettings.skin_zip_task < 0) then return;
 	var task = oSettings.skin_zip_task;
 	var status = unicode_zip_backend_task_status(task);
@@ -1876,7 +1876,7 @@ function skin_import_zip(_zip_path) {
 		return false;
 	};
 	// 异步解压需要设置实例保存任务号
-	if (!instance_exists(oSettings)) {
+	if (!chart_actor_exists(oSettings)) {
 		skin_log("import requires settings instance for async extract");
 		skin_import_fail(lang("skin.importFailed", "Failed to import skin."));
 		return false;
@@ -1971,7 +1971,7 @@ function skin_pick_file() {
 			skin_error(lang("android.pickerUnavailable", "File picker is not available."));
 			return;
 		};
-		if (instance_exists(oSettings)) {
+		if (chart_actor_exists(oSettings)) {
 			oSettings.skin_picking = true;
 			if (!i_android_open_pick("*/*")) {
 				oSettings.skin_picking = false;
@@ -2089,7 +2089,7 @@ function skin_hitsound_path_for_kind(_kind) {
 ///@returns {String} 路径，实例不存在则为空
 function skin_hitsound_path_for_note(_note) {
 	// 实例不存在则没有自定义路径
-	if (!instance_exists(_note)) then return "";
+	if (!chart_actor_exists(_note)) then return "";
 	var kind = "tap";
 	with (_note) kind = skin_note_kind_from_instance();
 	return skin_hitsound_path_for_kind(kind);
@@ -2098,7 +2098,7 @@ function skin_hitsound_path_for_note(_note) {
 ///@desc 根据当前实例的对象和 type 判断音符种类
 ///@returns {String} tap、drag 或 flick
 function skin_note_kind_from_instance() {
-	var t = variable_instance_exists(id, "type") ? real(type) : 1;
+	var t = chart_actor_var_exists(id, "type") ? real(type) : 1;
 	// oNote_2 与普通音符的 type 编号不同
 	if (object_index == oNote_2) {
 		if (t == 4) then return "drag";
@@ -2115,7 +2115,7 @@ function skin_note_kind_from_instance() {
 ///@param {Any} _fallback 默认音效
 ///@returns {Bool} 是否已交给播放
 function skin_play_hitsound(_kind, _fallback) {
-	if (variable_instance_exists(id, "isFake") && bool(isFake)) then return false;
+	if (chart_actor_var_exists(id, "isFake") && bool(isFake)) then return false;
 	if (chart_hitsound_volume() <= 0) then return true;
 	var pack = skin_runtime();
 	var path = "";
@@ -2163,13 +2163,13 @@ function skin_play_hitsound(_kind, _fallback) {
 ///@returns {Bool} 是否已播放
 function skin_play_note_hitsound() {
 	// 假音符不播放
-	if (variable_instance_exists(id, "isFake") && bool(isFake)) then return false;
+	if (chart_actor_var_exists(id, "isFake") && bool(isFake)) then return false;
 	var fallback = snd_note_tap;
-	if (variable_instance_exists(id, "sound") && audio_exists(sound)) then fallback = sound;
+	if (chart_actor_var_exists(id, "sound") && audio_exists(sound)) then fallback = sound;
 	var custom_fmod = -1;
 	var custom_path = "";
-	if (variable_instance_exists(id, "custom_fmod_sound")) then custom_fmod = custom_fmod_sound;
-	if (variable_instance_exists(id, "custom_hitsound_path")) then custom_path = string(custom_hitsound_path ?? "");
+	if (chart_actor_var_exists(id, "custom_fmod_sound")) then custom_fmod = custom_fmod_sound;
+	if (chart_actor_var_exists(id, "custom_hitsound_path")) then custom_path = string(custom_hitsound_path ?? "");
 	// 谱面自带音效优先于皮肤音
 	if ((is_real(custom_fmod) && custom_fmod > 0) || string_length(custom_path)) {
 		return rpe_play_hitsound(fallback, custom_fmod, custom_path);
@@ -2330,7 +2330,7 @@ function skin_preview_play_hitsound(_kind_i = 0) {
 ///@returns {Undefined} 无
 function skin_preview_cycle_reset() {
 	// 没有设置界面就没有预览状态可重置
-	if (!instance_exists(oSettings)) then return;
+	if (!chart_actor_exists(oSettings)) then return;
 	oSettings.skin_fx_cycle_t0 = current_time;
 	oSettings.skin_fx_last_hit = -1;
 	oSettings.skin_fx_rot = [];
@@ -2341,7 +2341,7 @@ function skin_preview_cycle_reset() {
 ///@returns {Struct} kind、showing 与 fx_age
 function skin_preview_cycle() {
 	var now = current_time;
-	if (!variable_instance_exists(id, "skin_fx_cycle_t0") || !is_real(skin_fx_cycle_t0) || skin_fx_cycle_t0 < 0) {
+	if (!chart_actor_var_exists(id, "skin_fx_cycle_t0") || !is_real(skin_fx_cycle_t0) || skin_fx_cycle_t0 < 0) {
 		skin_fx_cycle_t0 = now;
 		skin_fx_last_hit = -1;
 	};
@@ -2354,7 +2354,7 @@ function skin_preview_cycle() {
 	var showing = (phase < 1000);
 	var fx_age = showing ? -1 : ((phase - 1000) * 0.001);
 	// 进入特效阶段时只触发一次音效和随机粒子
-	if (!showing && (!variable_instance_exists(id, "skin_fx_last_hit") || skin_fx_last_hit != slot)) {
+	if (!showing && (!chart_actor_var_exists(id, "skin_fx_last_hit") || skin_fx_last_hit != slot)) {
 		skin_fx_last_hit = slot;
 		skin_fx_rot = [];
 		skin_fx_scales = [];

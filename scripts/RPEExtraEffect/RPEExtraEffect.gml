@@ -548,7 +548,7 @@ function rpe_effect_layer_layout_prepare() {
 		var rpe = game_1;
 		var lines = rpe.line_list;
 		for (var li = 0; li < array_length(lines); li++) {
-			if (instance_exists(lines[li])) array_push(z_values, lines[li].layer_z);
+			if (chart_actor_exists(lines[li])) array_push(z_values, lines[li].layer_z);
 		}
 		// 音符此时已休眠，使用创建记录，不能依赖 instance_exists。
 		for (var ni = 0; ni < array_length(rpe._notes); ni++) {
@@ -591,7 +591,7 @@ function rpe_effect_layer_layout_prepare() {
 		global.chart_layer_layout = { z:unique_z, depth:depths };
 		for (var li = 0; li < array_length(lines); li++) {
 			var line_instance = lines[li];
-			if (instance_exists(line_instance)) chart_set_instance_depth(line_instance,
+			if (chart_actor_exists(line_instance)) chart_set_instance_depth(line_instance,
 				chart_layer_depth(line_instance.layer_z) - line_instance.line_id * 0.0001);
 		}
 		if (instance_exists(oExtraPlay)) {

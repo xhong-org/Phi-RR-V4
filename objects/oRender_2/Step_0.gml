@@ -4,7 +4,8 @@ if (variable_global_exists("loading_animation_active") && global.loading_animati
 var chart_os_hold = chart_android_focus_step();
 if(!game.paused && !chart_os_hold){
 	game.Math.ctime();
-	event_user(0);
+	chart_actor_user(0);
+	chart_actors_lines_step();
 	if (variable_global_exists("game_2") && is_struct(game_2)
 		&& bool(game_2._note_activation_enabled ?? false) && is_array(game_2._notes)) {
 		var _pec_now = game.__time[1] - real(game_2.chart.offsetSeconds ?? 0);
@@ -22,8 +23,8 @@ if(!game.paused && !chart_os_hold){
 		
 };
 if (!(variable_global_exists("render_mode") && global.render_mode)
-	&& !chart_exit_started && game.__time[0] > 0 && instance_exists(oMedia)) {
-	var exit_media = instance_find(oMedia, 0);
+	&& !chart_exit_started && game.__time[0] > 0 && chart_actor_exists(oMedia)) {
+	var exit_media = chart_actor_find(oMedia, 0);
 	// 音频播完就进入退出流程。
 	if (exit_media.length > 0 && game.__time[4] >= exit_media.length) {
 		chart_exit_started = true;
@@ -33,4 +34,4 @@ if (!(variable_global_exists("render_mode") && global.render_mode)
 		m_pause();
 	};
 };
-event_user(_step_fps_user_count);
+chart_actor_user(_step_fps_user_count);

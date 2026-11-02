@@ -1,0 +1,13 @@
+{
+  "$GMScript":"v1",
+  "%Name":"RPENBlock",
+  "isCompatibility":false,
+  "isDnD":false,
+  "name":"RPENBlock",
+  "parent":{
+    "name":"RPE",
+    "path":"folders/Objects/Main/Loader/Format/RPE.yy",
+  },
+  "resourceType":"GMScript",
+  "resourceVersion":"2.0",
+}

@@ -1,6 +1,6 @@
 // 推进开场、游玩、结束和结算的过场状态机。
-if (!instance_exists(owner) || !variable_global_exists("game") || !is_struct(game)) {
-	instance_destroy();
+if (!chart_actor_exists(owner) || !variable_global_exists("game") || !is_struct(game)) {
+	chart_actor_destroy();
 	exit;
 };
 if (variable_global_exists("pls_probe_until") && global.pls_probe_until > 0
@@ -15,7 +15,7 @@ if (variable_global_exists("pls_probe_until") && global.pls_probe_until > 0
 	exit;
 };
 
-if (variable_instance_exists(id, "mask_released") && mask_released) {
+if (chart_actor_var_exists(id, "mask_released") && mask_released) {
 	depth = -12200;
 } else {
 	depth = DEPTH.HEF + 2;
@@ -33,12 +33,12 @@ var _elapsed = max(0, _now - state_started_at);
 if (variable_global_exists("render_mode") && global.render_mode) {
 	if (state == PLAY_TRANSITION_STATE.WAIT_MEDIA) {
 		game.paused = true;
-		if (!instance_exists(oMedia)) then exit;
-		var _render_media = instance_find(oMedia, 0);
-		if (!variable_instance_exists(_render_media, "isExists")
-			|| !variable_instance_exists(_render_media, "success")) then exit;
-		if (!bool(variable_instance_get(_render_media, "isExists"))
-			|| !bool(variable_instance_get(_render_media, "success"))) then exit;
+		if (!chart_actor_exists(oMedia)) then exit;
+		var _render_media = chart_actor_find(oMedia, 0);
+		if (!chart_actor_var_exists(_render_media, "isExists")
+			|| !chart_actor_var_exists(_render_media, "success")) then exit;
+		if (!bool(chart_actor_var_get(_render_media, "isExists"))
+			|| !bool(chart_actor_var_get(_render_media, "success"))) then exit;
 		render_started_frame = global.render_frame;
 		// 录像从开场动画开始，跳过动画前的等待。
 		state = PLAY_TRANSITION_STATE.INTRO;
@@ -83,7 +83,7 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 		// 整帧压暗完成后再创建结算界面。
 		if (render_wants_settlement()) {
 			if (_cover_done) {
-				if (!instance_exists(oSettlement)) {
+				if (!chart_actor_exists(oSettlement)) {
 					instance_create_depth(0, 0, -12500, oSettlement, { owner: owner });
 				};
 				state = PLAY_TRANSITION_STATE.SETTLEMENT;
@@ -115,7 +115,7 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 		if (state != PLAY_TRANSITION_STATE.PLAYING) {
 			play_transition_activate_gameplay();
 			play_transition_activate_chart_instances();
-			if (owner.object_index == oRender) then with (oNote) canDraw = true;
+			if (owner.object_index == oRender) then { var _actors_4371 = chart_actor_list(oNote); for (var _actor_i_4371 = 0; _actor_i_4371 < array_length(_actors_4371); _actor_i_4371++) with (_actors_4371[_actor_i_4371]) canDraw = true; }
 			game.__time[0] = 1;
 			game.paused = false;
 			owner.play_transition_active = false;
@@ -129,14 +129,14 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 switch (state) {
 	case PLAY_TRANSITION_STATE.WAIT_MEDIA:
 		game.paused = true;
-		if (!instance_exists(oMedia)) {
+		if (!chart_actor_exists(oMedia)) {
 			state = PLAY_TRANSITION_STATE.INTRO_DELAY;
 			state_started_at = _now;
 			break;
 		};
-		var _media = instance_find(oMedia, 0);
-		var _pcm_pending = variable_instance_exists(_media, "gx_pcm_id") && is_real(_media.gx_pcm_id) && _media.gx_pcm_id >= 0;
-		var _success_value = variable_instance_exists(_media, "success") ? variable_instance_get(_media, "success") : false;
+		var _media = chart_actor_find(oMedia, 0);
+		var _pcm_pending = chart_actor_var_exists(_media, "gx_pcm_id") && is_real(_media.gx_pcm_id) && _media.gx_pcm_id >= 0;
+		var _success_value = chart_actor_var_exists(_media, "success") ? chart_actor_var_get(_media, "success") : false;
 		var _waiting_pcm = _pcm_pending || is_undefined(_success_value);
 		// GX 等 PCM 解码，超时就继续开场。
 		if (pls_is_gxgames() && _waiting_pcm) {
@@ -148,15 +148,15 @@ switch (state) {
 			state_started_at = _now;
 			break;
 		};
-		if (!variable_instance_exists(_media, "isExists")
-			|| !variable_instance_exists(_media, "success")) then break;
-		if (!bool(variable_instance_get(_media, "isExists"))) {
+		if (!chart_actor_var_exists(_media, "isExists")
+			|| !chart_actor_var_exists(_media, "success")) then break;
+		if (!bool(chart_actor_var_get(_media, "isExists"))) {
 			state = PLAY_TRANSITION_STATE.INTRO_DELAY;
 			state_started_at = _now;
 			break;
 		};
-		if (is_undefined(variable_instance_get(_media, "success"))) then break;
-		if (!bool(variable_instance_get(_media, "success"))) {
+		if (is_undefined(chart_actor_var_get(_media, "success"))) then break;
+		if (!bool(chart_actor_var_get(_media, "success"))) {
 			state = PLAY_TRANSITION_STATE.INTRO_DELAY;
 			state_started_at = _now;
 			break;
@@ -197,7 +197,7 @@ switch (state) {
 			};
 			play_transition_activate_gameplay();
 			play_transition_activate_chart_instances();
-			if (owner.object_index == oRender) then with (oNote) canDraw = true;
+			if (owner.object_index == oRender) then { var _actors_6998 = chart_actor_list(oNote); for (var _actor_i_6998 = 0; _actor_i_6998 < array_length(_actors_6998); _actor_i_6998++) with (_actors_6998[_actor_i_6998]) canDraw = true; }
 			m_play();
 			game.Math.now(0);
 			game.paused = false;
@@ -229,7 +229,7 @@ switch (state) {
 			if (variable_global_exists("pls_environment_run") && global.pls_environment_run) {
 				play_transition_finish_exit();
 			} else {
-				if (!instance_exists(oSettlement)) {
+				if (!chart_actor_exists(oSettlement)) {
 					instance_create_depth(0, 0, -12500, oSettlement, { owner: owner });
 				};
 				state = PLAY_TRANSITION_STATE.SETTLEMENT;

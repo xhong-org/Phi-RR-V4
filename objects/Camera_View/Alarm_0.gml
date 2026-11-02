@@ -2,10 +2,10 @@
 //show_debug_message("THIS-CV");
 
 // 创建事件没跑完时，补一份设计分辨率。
-if (!variable_instance_exists(id, "start_width") || !is_real(start_width) || start_width <= 0) {
+if (!chart_actor_var_exists(id, "start_width") || !is_real(start_width) || start_width <= 0) {
         start_width = max(1, room_width);
 };
-if (!variable_instance_exists(id, "start_height") || !is_real(start_height) || start_height <= 0) {
+if (!chart_actor_var_exists(id, "start_height") || !is_real(start_height) || start_height <= 0) {
         start_height = max(1, room_height);
 };
 
@@ -18,16 +18,16 @@ chart_view_refresh(room_width, room_height);
 if (chart_play_ending()) then exit;
 
 // 通知音符和判定线按新尺寸重算。
-if (instance_exists(oNote)) {
-        with (oNote) {
-                event_user(1);
-                event_user(2);
-                event_user(8);
-        };
+if (chart_actor_exists(oNote)) {
+        { var _actors_720 = chart_actor_list(oNote); for (var _actor_i_720 = 0; _actor_i_720 < array_length(_actors_720); _actor_i_720++) with (_actors_720[_actor_i_720]) {
+                chart_actor_user(1);
+                chart_actor_user(2);
+                chart_actor_user(8);
+        } };
 };
 
-if (instance_exists(oLine)) {
-        with (oLine) {
-                event_user(2);
-        };
+if (chart_actor_exists(oLine)) {
+        { var _actors_881 = chart_actor_list(oLine); for (var _actor_i_881 = 0; _actor_i_881 < array_length(_actors_881); _actor_i_881++) with (_actors_881[_actor_i_881]) {
+                chart_actor_user(2);
+        } };
 };

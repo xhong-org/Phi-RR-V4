@@ -6,7 +6,8 @@ var chart_os_hold = chart_android_focus_step();
 if(!game.paused && !chart_os_hold){
 	// 谱面时钟只用 get_timer 的微秒时间基。
 	game.Math.ctime();
-	event_user(0); // 用用户事件 0 补偿 BPM 列表
+	chart_actor_user(0); // 用用户事件 0 补偿 BPM 列表
+	chart_actors_lines_step();
 	var _rpe = game_1;
 	// 只激活进入预加载窗口的音符。
 	if (is_struct(_rpe) && bool(_rpe._note_activation_enabled ?? false)
@@ -27,7 +28,7 @@ if(!game.paused && !chart_os_hold){
 			var _time_note_id = _notes[_note_index].id;
 			chart_note_activate(_time_note_id);
 			if (is_struct(_activation_records)) {
-				var _time_note_key = string(_time_note_id);
+				var _time_note_key = chart_actor_key(_time_note_id);
 				if (struct_exists(_activation_records, _time_note_key)) {
 					rpe_note_mark_active(_activation_records[$ _time_note_key]);
 				};
@@ -46,7 +47,7 @@ if(!game.paused && !chart_os_hold){
 				if (_sg.remaining <= 0) continue;
 				var _sg_line = _sg.line;
 				// 判定线不在或速度为 0 时跳过这一组。
-				if (!instance_exists(_sg_line)) then continue;
+				if (!chart_actor_exists(_sg_line)) then continue;
 				var _sg_speed = real(_sg.speed);
 				if (_sg_speed == 0) then continue;
 				var _sg_reversed = (_sg.above ? -1 : 1);
@@ -107,7 +108,7 @@ if(!game.paused && !chart_os_hold){
 			for (var _hgi = 0; _hgi < _hold_group_count; _hgi++) {
 				var _hg = _hold_groups[_hgi];
 				var _sh_line = _hg.line;
-				if (!instance_exists(_sh_line)) then continue;
+				if (!chart_actor_exists(_sh_line)) then continue;
 				var _sh_reversed = (_hg.above ? -1 : 1);
 				var _sh_nx = real(_sh_line.__sin) * _sh_reversed;
 				var _sh_ny = real(_sh_line.__cos) * _sh_reversed;
@@ -171,8 +172,8 @@ elif(game.paused && game.__time[0] > 0){
 };
 
 if (!(variable_global_exists("render_mode") && global.render_mode)
-	&& !chart_exit_started && game.__time[0] > 0 && instance_exists(oMedia)) {
-	var exit_media = instance_find(oMedia, 0);
+	&& !chart_exit_started && game.__time[0] > 0 && chart_actor_exists(oMedia)) {
+	var exit_media = chart_actor_find(oMedia, 0);
 	// 音频播完就进入退出流程。
 	if (exit_media.length > 0 && game.__time[4] >= exit_media.length) {
 		chart_exit_started = true;
@@ -183,4 +184,4 @@ if (!(variable_global_exists("render_mode") && global.render_mode)
 	};
 };
 
-event_user(_step_fps_user_count);
+chart_actor_user(_step_fps_user_count);

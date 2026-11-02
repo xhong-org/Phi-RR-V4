@@ -1,0 +1,9 @@
+{
+  "$GMShader":"",
+  "%Name":"shd_rpen_block_resolve",
+  "name":"shd_rpen_block_resolve",
+  "parent":{"name":"Shaders","path":"folders/Shaders.yy"},
+  "resourceType":"GMShader",
+  "resourceVersion":"2.0",
+  "type":1
+}

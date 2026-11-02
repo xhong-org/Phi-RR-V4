@@ -4,7 +4,7 @@ soundsList = (ds_map_create());
 
 ///@desc 打击音逐次取值；预览使用未保存的草稿，不改动正式音量
 function chart_hitsound_volume(_preview = false) {
-	if (_preview && instance_exists(oSettings) && is_struct(oSettings.draft)) {
+	if (_preview && chart_actor_exists(oSettings) && is_struct(oSettings.draft)) {
 		return oSettings.draft.hitsoundVolume;
 	};
 	return settings_store().hitsoundVolume;
@@ -12,7 +12,7 @@ function chart_hitsound_volume(_preview = false) {
 
 ///@desc 仅在播放、重建声道或保存设置时更新音乐音量，不逐帧调用插件
 function chart_music_apply_volume() {
-	if (!instance_exists(oMedia)) then return;
+	if (!chart_actor_exists(oMedia)) then return;
 	var gain = settings_store().musicVolume;
 	with (oMedia) {
 		if (media_use_gx()) {
@@ -78,7 +78,7 @@ function chart_music_noise_prepare() {
 function chart_music_noise_step() {
 	if (media_use_gx() || channel <= 0 || track <= 0) then return;
 	var touching = false;
-	if (instance_exists(oRender) && !game.paused && !chart_autoplay_active()
+	if ((chart_actor_exists(oRender) || chart_actor_exists(oRender_1)) && !game.paused && !chart_autoplay_active()
 		&& !chart_play_ending() && official_block_enabled()) {
 		var blocks = official_block_state();
 		touching = array_length(blocks.blocked_ids) > 0;
@@ -153,7 +153,7 @@ function chart_media_on_length_ready(_len_us) {
 	var counted = 0;
 	var counted_from_chart = false;
 	// 官谱音符按激活时间才实例化，曲长就绪时用登记表
-	if (instance_exists(oRender) && variable_global_exists("game") && is_struct(game) && is_array(game[$ "_notes"])) {
+	if (chart_actor_exists(oRender) && variable_global_exists("game") && is_struct(game) && is_array(game[$ "_notes"])) {
 		var note_list = game._notes;
 		var note_n = array_length(note_list);
 		for (var note_i = 0; note_i < note_n; note_i++) {
@@ -169,11 +169,11 @@ function chart_media_on_length_ready(_len_us) {
 		};
 	};
 	if (!counted_from_chart) {
-		if (!instance_exists(oNote)) then return;
-		with (oNote) {
-			if (!variable_instance_exists(id, "realHitTime") || !is_real(realHitTime)) then continue;
+		if (!chart_actor_exists(oNote)) then return;
+		{ var _actors_5855 = chart_actor_list(oNote); for (var _actor_i_5855 = 0; _actor_i_5855 < array_length(_actors_5855); _actor_i_5855++) with (_actors_5855[_actor_i_5855]) {
+			if (!chart_actor_var_exists(id, "realHitTime") || !is_real(realHitTime)) then continue;
 			if ((realHitTime * 1000000) <= _len_us) then counted++;
-		};
+		} };
 	};
 	// 计数为 0 时不覆盖已经有效的音符数
 	if (counted > 0) then maxcombo = counted;
@@ -182,21 +182,21 @@ function chart_media_on_length_ready(_len_us) {
 ///@desc 通知媒体对象开始播放
 ///@returns {Undefined} 无
 func m_play(){
-	with(oMedia){ event_user(2) };
+	with(oMedia){ chart_actor_user(2) };
 	//event_perform_object( , ev_user2 , 0);
 };
 
 ///@desc 通知媒体对象暂停
 ///@returns {Undefined} 无
 func m_pause(){
-	with(oMedia){ event_user(3) };
+	with(oMedia){ chart_actor_user(3) };
 	//event_perform_object(oMedia , ev_user3 , 0);
 };
 
 ///@desc 通知媒体对象继续播放
 ///@returns {Undefined} 无
 func m_resume(){
-	with(oMedia){ event_user(4) };
+	with(oMedia){ chart_actor_user(4) };
 	//event_perform_object(oMedia , ev_user4 , 0);
 };
 
@@ -204,14 +204,14 @@ func m_resume(){
 ///@param {Bool} full 为真时做完全清理
 ///@returns {Undefined} 无
 func m_clean(full = false){
-	with(oMedia){ event_user(full ? 6 : 5) };
+	with(oMedia){ chart_actor_user(full ? 6 : 5) };
 	//event_perform_object(oMedia , (!full ? ev_user5 : ev_user6) , 0);
 };
 
 ///@desc 通知媒体对象停止
 ///@returns {Undefined} 无
 func m_stop(){
-	with(oMedia){ event_user(7) };
+	with(oMedia){ chart_actor_user(7) };
 	//event_perform_object(oMedia , ev_user7 , 0);
 };
 
@@ -245,7 +245,7 @@ func m_seek_ms(_ms) {
 ///@desc 确保 GX 音频在恢复后仍处于播放
 ///@returns {Undefined} 无
 func gx_media_ensure_playing() {
-	if (!pls_is_gxgames() || !instance_exists(oMedia)) then return;
+	if (!pls_is_gxgames() || !chart_actor_exists(oMedia)) then return;
 	with (oMedia) {
 		// 网页音频直接续播，缓冲音频缺实例时重新播放
 		if (gx_audio_kind == "js" && gx_js_handle > 0) {
@@ -271,7 +271,7 @@ func chart_android_focus_step() {
 	var is_gx = pls_is_gxgames();
 	if (os_type != os_android && !is_gx) then return false;
 	if (variable_global_exists("render_mode") && global.render_mode) then return false;
-	if (variable_instance_exists(id, "chart_exit_started") && chart_exit_started) then return false;
+	if (chart_actor_var_exists(id, "chart_exit_started") && chart_exit_started) then return false;
 	if (!variable_global_exists("game") || !is_struct(game) || !is_array(game.__time)) then return false;
 	if (real(game.__time[0]) <= 0) {
 		last_tick = -1;

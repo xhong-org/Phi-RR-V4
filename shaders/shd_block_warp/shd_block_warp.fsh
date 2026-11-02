@@ -93,7 +93,10 @@ void main() {
     float alpha = clamp(coverage * 0.667 + edge * 0.8 + glow * 0.8, 0.0, 1.0);
     float shine = (sin(u_screen.z * 37.9) * 0.5 + 1.0) * 0.12 * ready;
     colour += vec3(shine * ready);
-    alpha = clamp(alpha + ready, 0.0, 1.0);
+    // Match shd_block_active_ready: the warning emits dim white light but does
+    // not cover the chart. Adding ready to alpha made the same warning opaque
+    // whenever another active area or touch switched to this material.
+    // Previous source: docs/blockarea-hints/legacy/shaders/shd_block_warp/.
 
     gl_FragColor = vec4(max(colour, 0.0), alpha);
 }

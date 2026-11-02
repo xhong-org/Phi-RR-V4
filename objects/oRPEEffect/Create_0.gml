@@ -1,13 +1,13 @@
 ///@desc 初始化 RPE 后期效果控制器和外部着色器后端
 // 区间哨兵只记录深度，不初始化控制器。
-if (variable_instance_exists(id, "effect_boundary_role")) {
+if (chart_actor_var_exists(id, "effect_boundary_role")) {
 	depth = real(effect_boundary_depth);
 	exit;
 };
 // 全局调色必须等每个深度区间都合成回来之后再跑。
 depth = chart_layer_depth(64);
-if (!variable_instance_exists(id, "effects_local") || !is_array(effects_local)) then effects_local = [];
-if (!variable_instance_exists(id, "effects_global") || !is_array(effects_global)) then effects_global = [];
+if (!chart_actor_var_exists(id, "effects_local") || !is_array(effects_local)) then effects_local = [];
+if (!chart_actor_var_exists(id, "effects_global") || !is_array(effects_global)) then effects_global = [];
 fx_ping = -1;
 fx_pong = -1;
 fx_sample = -1;
@@ -542,8 +542,8 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 	effect_caller_pushed = false;
 	var _full_frame = surface_exists(input_override) && input_override == effect_caller_target;
 	var input_surface = surface_exists(input_override) ? input_override : application_surface;
-	if (!surface_exists(input_override) && instance_exists(oChartMask)) {
-		var chart_mask = instance_find(oChartMask, 0);
+	if (!surface_exists(input_override) && chart_actor_exists(oChartMask)) {
+		var chart_mask = chart_actor_find(oChartMask, 0);
 		if (surface_exists(chart_mask.surface_id)) then input_surface = chart_mask.surface_id;
 	};
 	///@desc 把渲染目标恢复成调用者原来的表面
@@ -1071,9 +1071,9 @@ effect_boundaries_create = function() {
 			} else {
 				for (var line_i = 0; line_i < array_length(game_1.line_list); line_i++) {
 					var line_instance = game_1.line_list[@ line_i];
-					if (!instance_exists(line_instance)) then continue;
+					if (!chart_actor_exists(line_instance)) then continue;
 					var line_z = real(line_instance.zOrder);
-					if (variable_instance_exists(line_instance, "zIndex")
+					if (chart_actor_var_exists(line_instance, "zIndex")
 						&& is_real(line_instance.zIndex)) then line_z = real(line_instance.zIndex);
 					if (line_z < range.min || line_z >= range.max) then continue;
 					first_depth = max(first_depth, line_instance.depth);

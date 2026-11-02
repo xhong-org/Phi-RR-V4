@@ -8,9 +8,9 @@ function chart_touch_geometry(record) {
 	with (record.note) {
 		var xy;
 		var judge_line = object_index == oNote_2 ? line_ref : _line_ref;
-		if (!instance_exists(judge_line)) then return;
+		if (!chart_actor_exists(judge_line)) then return;
 		if (object_index == oNote) {
-			event_user(_step_user_count);
+			chart_actor_user(_step_user_count);
 			var local_x = xOffset * chart_view_width * 0.05625;
 			xy = [judge_line.x + local_x * judge_line.__cos, judge_line.y - local_x * judge_line.__sin];
 		} else if (object_index == oNote_1) {
@@ -44,8 +44,8 @@ function chart_touch_metric(record, sample) {
 function chart_touch_in_playfield(sample) {
 	if (sample.finger.blocked) then return false;
 	if (sample.x < chart_view_left || sample.x > chart_view_right || sample.y < 0 || sample.y > chart_view_height) then return false;
-	if (instance_exists(oPausedUI)) {
-		var ui = instance_find(oPausedUI, 0);
+	if (chart_actor_exists(oPausedUI)) {
+		var ui = chart_actor_find(oPausedUI, 0);
 		if (point_in_rectangle(sample.x, sample.y,
 			ui.pause_button_x - ui.pause_button_radius, ui.pause_button_y - ui.pause_button_radius,
 			ui.pause_button_x + ui.pause_button_radius, ui.pause_button_y + ui.pause_button_radius)) then return false;
@@ -76,14 +76,14 @@ function chart_touch_contact(record, input) {
 ///@desc 触控与键盘使用相同索引；自动播放不进入此分支
 function chart_touch_judge_at(state, input, now) {
 	// 官谱噪区必须先于四种音符和 Hold 续接过滤，不能等 Draw 才更新。
-	if (instance_exists(oRender)) then official_blocks_touch_step(input);
+	if (chart_actor_exists(oRender) || chart_actor_exists(oRender_1)) then official_blocks_touch_step(input);
 	while (!ds_priority_empty(state.pending)) {
 		if (!is_struct(state.next)) state.next = ds_priority_find_min(state.pending);
 		if (state.next.hit > now + KB_BAD_EARLY_SECONDS) then break;
 		var record = ds_priority_delete_min(state.pending);
 		state.next = undefined;
 		chart_note_activate(record.note);
-		if (instance_exists(record.note)) array_push(state.active, record);
+		if (chart_actor_exists(record.note)) array_push(state.active, record);
 	}
 	var active = state.active;
 	var count = array_length(active);
@@ -91,7 +91,7 @@ function chart_touch_judge_at(state, input, now) {
 	for (var index = 0; index < count; index++) {
 		var record = active[index];
 		if (record.closed) then continue;
-		if (!instance_exists(record.note)) { record.closed = true; continue; }
+		if (!chart_actor_exists(record.note)) { record.closed = true; continue; }
 		if (now >= record.hit) record.frames++;
 		if (has_input) chart_touch_geometry(record);
 	}
@@ -193,7 +193,7 @@ function chart_touch_judge_at(state, input, now) {
 			}
 			if (now >= record.tail && record.scored) {
 				record.closed = true;
-				instance_deactivate_object(record.note);
+				chart_actor_deactivate(record.note);
 			}
 		}
 		if (!record.closed) {

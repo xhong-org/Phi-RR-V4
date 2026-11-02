@@ -12,4 +12,4 @@ print("Playing" , game.settings.enableDebug);
 m_play();
 game.Math.now(0);
 game.paused = false;
-print($"notes count: {instance_number(oNote_1)}" , game.settings.enableDebug);
+print($"notes count: {chart_actor_number(oNote_1)}" , game.settings.enableDebug);

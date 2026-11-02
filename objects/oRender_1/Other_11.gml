@@ -3,7 +3,7 @@
 // 键：pause / combonumber / combo / score / bar / name / level。
 // 数组：[偏移 X, 偏移 Y, 颜色, 透明度, 旋转, 缩放 X, 缩放 Y]。
 // 偏移相对画面中心。最终位置是默认布局加偏移。
-var ui_fade = (variable_instance_exists(id, "chart_exit_alpha") ? chart_exit_alpha : 1);
+var ui_fade = (chart_actor_var_exists(id, "chart_exit_alpha") ? chart_exit_alpha : 1);
 var _transition_active = play_transition_active;
 var _transition_bar_alpha = (_transition_active ? play_transition_bar_alpha : 1);
 
@@ -38,8 +38,8 @@ if (_transition_active) {
 };
 
 // 被绑定的界面仍用上面的原始布局。判定线只贡献相对画面中心的偏移。
-if (variable_instance_exists(id, "bindUI") && is_struct(bindUI)
-	&& variable_instance_exists(id, "bindUI_attached") && is_struct(bindUI_attached)) {
+if (chart_actor_var_exists(id, "bindUI") && is_struct(bindUI)
+	&& chart_actor_var_exists(id, "bindUI_attached") && is_struct(bindUI_attached)) {
 	var _keys = ["combonumber", "combo", "name", "level", "score", "pause", "bar"];
 	var _slots = [u_combo_num, u_combo, u_name, u_level, u_score, u_pause, u_bar];
 	for (var _si = 0; _si < array_length(_keys); _si++) {
@@ -88,7 +88,7 @@ draw_text_transformed_colour(u_level[0], u_level[1], _ui_level, u_level[5], u_le
 // 分数用垂直居中。绑在很高的线上时字形中心会贴到窗口边，这个偏移要保留。
 // 零偏移的分数留在原来的顶部。只有文字盒越过难度用的底边距时才上移。
 var score_text = ScoreSystem();
-if (variable_instance_exists(id, "bindUI_attached") && is_struct(bindUI_attached)
+if (chart_actor_var_exists(id, "bindUI_attached") && is_struct(bindUI_attached)
 	&& struct_exists(bindUI_attached, "score") && bindUI_attached.score
 	&& abs(u_score[4]) <= 0.5) {
 	var score_box_h = string_height(score_text) * abs(u_score[6]);
@@ -107,7 +107,7 @@ draw_sprite_ext(spr_pause, 0, u_pause[0], u_pause[1], u_pause[5], u_pause[6], u_
 // 进度条。Phira 的判定线长度 6 才是一整屏，谱师常把进度线缩到约 1/6。
 // 这里缩放 1 已经是一整屏，直接乘线缩放会变成亚像素。按线长映射，并且不超过屏幕。
 var _mlen = 0;
-if (instance_exists(oMedia)) then _mlen = real(oMedia.length);
+if (chart_actor_exists(oMedia)) then _mlen = real(oMedia.length);
 var val = (_mlen > 0 ? clamp(game.__time[4] / _mlen, 0, 1) : 0);
 var bar_x = u_bar[0];
 var bar_y = u_bar[1];

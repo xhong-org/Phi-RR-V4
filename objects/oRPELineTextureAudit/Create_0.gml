@@ -10,7 +10,7 @@ print($"[RPETextureAudit] Created testMode={test_mode}");
 ///@desc 把判定线事件游标清回起点
 ///@returns {Undefined} 无
 function rpe_text_probe_reset_cursors() {
-	with (oLine_1) {
+	{ var _actors_434 = chart_actor_list(oLine_1); for (var _actor_i_434 = 0; _actor_i_434 < array_length(_actors_434); _actor_i_434++) with (_actors_434[_actor_i_434]) {
 		if (is_array(events_count)) {
 			// 每层计数和扩展计数都归零。
 			for (var layer_i = 0; layer_i < array_length(events_count); layer_i++) {
@@ -28,7 +28,7 @@ function rpe_text_probe_reset_cursors() {
 				ext_count[$ ext_names[ext_i]] = 0;
 			};
 		};
-	};
+	} };
 }
 
 ///@desc 把谱面时间跳到指定秒并强制刷新判定线
@@ -43,12 +43,12 @@ function rpe_text_probe_seek(_sec) {
 	};
 	game.__time[1] = _sec + offset_sec;
 	rpe_text_probe_reset_cursors();
-	with (oLine_1) {
+	{ var _actors_1556 = chart_actor_list(oLine_1); for (var _actor_i_1556 = 0; _actor_i_1556 < array_length(_actors_1556); _actor_i_1556++) with (_actors_1556[_actor_i_1556]) {
 		rpe_force_event_init = true;
-		event_perform(ev_step, ev_step_normal);
-		event_perform(ev_step, ev_step_end);
+		chart_actor_event(ev_step, ev_step_normal);
+		chart_actor_event(ev_step, ev_step_end);
 		rpe_force_event_init = false;
-	};
+	} };
 	return true;
 }
 
@@ -71,11 +71,11 @@ function rpe_text_probe_run() {
 	print($"[TextProbe] room={room_width}x{room_height} view={view_w}x{view_h} left={view_left} globalScale={ui_scale} fontPx={font_px} boxAdvance={box_advance} lineBox={line_box}");
 
 	var samples = [];
-	var line_count = instance_number(oLine_1);
+	var line_count = chart_actor_number(oLine_1);
 	// 每条有文字事件的线最多抽三条有空格或换行的样本。
 	for (var instance_i = 0; instance_i < line_count; instance_i++) {
-		var line_instance = instance_find(oLine_1, instance_i);
-		if (!instance_exists(line_instance) || !line_instance.has_text_events) then continue;
+		var line_instance = chart_actor_find(oLine_1, instance_i);
+		if (!chart_actor_exists(line_instance) || !line_instance.has_text_events) then continue;
 		var text_events = line_instance.extEvents[$ "textEvents"];
 		if (!is_array(text_events)) then continue;
 		var picked = 0;
@@ -121,7 +121,7 @@ function rpe_text_probe_run() {
 		// 跳转失败就跳过这条样本。
 		if (!rpe_text_probe_seek(sample.sec)) then continue;
 		var line_instance = sample.line;
-		if (!instance_exists(line_instance)) then continue;
+		if (!chart_actor_exists(line_instance)) then continue;
 		var expect_x = line_instance.__raw_x * (view_w / 1350) + view_left + view_w * 0.5;
 		var expect_y = -line_instance.__raw_y * (view_h / 900) + view_h * 0.5;
 		var dx = line_instance.x - expect_x;
@@ -142,11 +142,11 @@ function rpe_text_probe_run() {
 		print($"[TextProbe] line={line_instance.line_id} t={sample.sec} text=\"{shown}\" raw=({line_instance.__raw_x},{line_instance.__raw_y}) screen=({line_instance.x},{line_instance.y}) expect=({expect_x},{expect_y}) d=({dx},{dy}) norm=({norm_x},{norm_y}) scale=({line_instance.__scale_x},{line_instance.__scale_y}) em=({em_x},{em_y}) emPerW={size_ratio} newlineRpe={newline_rpe} anchor=({line_instance.anchor_x},{line_instance.anchor_y}) rot={line_instance.image_angle} posOk={pos_ok} sizeOk={size_ok}");
 	};
 	var logged_lines = 0;
-	var judge_count = instance_number(oLine_1);
+	var judge_count = chart_actor_number(oLine_1);
 	for (var line_i = 0; line_i < judge_count && logged_lines < 4; line_i++) {
-		var judge = instance_find(oLine_1, line_i);
+		var judge = chart_actor_find(oLine_1, line_i);
 		// 只抽默认、没有文字、也没绑界面的判定线。
-		if (!instance_exists(judge) || !judge.is_default_line || judge.has_text_events || judge.is_attach_ui) then continue;
+		if (!chart_actor_exists(judge) || !judge.is_default_line || judge.has_text_events || judge.is_attach_ui) then continue;
 		if (abs(judge.__scale_x) < 0.2) then continue;
 		var half_rpe = chart_line_pixel_width(judge);
 		var preview_w = 1350;

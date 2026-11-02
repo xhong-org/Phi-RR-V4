@@ -1,5 +1,5 @@
 ///@desc 创建暂停界面、倒计时精灵和操作函数
-if (!variable_instance_exists(id, "owner")) then owner = noone;
+if (!chart_actor_var_exists(id, "owner")) then owner = noone;
 // 绘制结束在 oChartMask（-12000）贴回谱面之后。
 depth = -99999999;
 
@@ -217,17 +217,17 @@ pause_layout_height = -1;
 ///@returns {Bool} 可以操作时为真
 function paused_ui_can_control() {
 	// 结算界面或非重试过场中禁止操作。
-	if (instance_exists(oSettlement)) then return false;
-	if (instance_exists(oPlayTransition) && !retry_waiting) {
-		var _transition = instance_find(oPlayTransition, 0);
+	if (chart_actor_exists(oSettlement)) then return false;
+	if (chart_actor_exists(oPlayTransition) && !retry_waiting) {
+		var _transition = chart_actor_find(oPlayTransition, 0);
 		if (_transition.state != PLAY_TRANSITION_STATE.PLAYING) then return false;
 	};
         return !(variable_global_exists("render_mode") && global.render_mode)
-                && instance_exists(owner)
+                && chart_actor_exists(owner)
                 && variable_global_exists("game") && is_struct(game)
                 && variable_struct_exists(game, "paused")
                 && is_array(game.__time) && (retry_waiting || game.__time[0] > 0)
-                && variable_instance_exists(owner, "chart_exit_started")
+                && chart_actor_var_exists(owner, "chart_exit_started")
                 && !owner.chart_exit_started;
 }
 
@@ -252,7 +252,7 @@ function paused_ui_pause() {
         // 还没开播或已经暂停就返回。
         if (!paused_ui_can_control() || game.paused || game.__time[0] <= 0) then return;
         print("[PausedUI] Pause");
-        with (oNote) {
+        { var _actors_10039 = chart_actor_list(oNote); for (var _actor_i_10039 = 0; _actor_i_10039 < array_length(_actors_10039); _actor_i_10039++) with (_actors_10039[_actor_i_10039]) {
                 if (!_is_hold) {
                         _pause_lock_x = x;
                         _pause_lock_y = y;
@@ -262,8 +262,8 @@ function paused_ui_pause() {
                         _pause_lock_bad_angle = _bad_angle;
                         _pause_lock_active = true;
                 };
-        };
-        with (oNote_1) {
+        } };
+        { var _actors_10483 = chart_actor_list(oNote_1); for (var _actor_i_10483 = 0; _actor_i_10483 < array_length(_actors_10483); _actor_i_10483++) with (_actors_10483[_actor_i_10483]) {
                 if (!_is_hold) {
                         _pause_lock_x = x;
                         _pause_lock_y = y;
@@ -273,15 +273,15 @@ function paused_ui_pause() {
                         _pause_lock_bad_angle = _bad_angle;
                         _pause_lock_active = true;
                 };
-        };
-        with (oNote_2) {
+        } };
+        { var _actors_10929 = chart_actor_list(oNote_2); for (var _actor_i_10929 = 0; _actor_i_10929 < array_length(_actors_10929); _actor_i_10929++) with (_actors_10929[_actor_i_10929]) {
                 if (type != 2) {
                         _pause_lock_x = x;
                         _pause_lock_y = y;
                         _pause_lock_angle = image_angle;
                         _pause_lock_active = true;
                 };
-        };
+        } };
         m_pause();
         array_set(game.__time, 2, get_timer());
         game.paused = true;
@@ -314,7 +314,7 @@ function paused_ui_back() {
         owner.chart_exit_started = true;
         owner.chart_exit_timer = get_timer();
         owner.chart_exit_alpha = 1;
-        if (instance_exists(oPlayTransition)) {
+        if (chart_actor_exists(oPlayTransition)) {
                 with (oPlayTransition) play_transition_finish_exit();
         } else {
                 chart_playback_teardown_for_menu();
@@ -350,16 +350,16 @@ function paused_ui_reset_score() {
 function paused_ui_reset_official() {
         // 加载动画还在时不复位。
         if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return;
-        instance_activate_object(oLine);
-        instance_activate_object(oNote);
-        with (oLine) {
+        chart_actor_activate(oLine);
+        chart_actor_activate(oNote);
+        { var _actors_13549 = chart_actor_list(oLine); for (var _actor_i_13549 = 0; _actor_i_13549 < array_length(_actors_13549); _actor_i_13549++) with (_actors_13549[_actor_i_13549]) {
                 _counts = [0, 0, 0, 0];
                 _last_event_time = 0;
                 __x = 0; __y = 0; __a = 0; __r = 0;
                 __cos = 1; __sin = 0;
                 __value[0] = 0; __value[1] = 0;
-        };
-        with (oNote) {
+        } };
+        { var _actors_13799 = chart_actor_list(oNote); for (var _actor_i_13799 = 0; _actor_i_13799 < array_length(_actors_13799); _actor_i_13799++) with (_actors_13799[_actor_i_13799]) {
                 canDraw = false;
                 isBad = false;
                 isJudge = false;
@@ -379,7 +379,7 @@ function paused_ui_reset_official() {
                         yscale = hold_time_length * room_height * 0.6 / max(1, _hold_body_height) * speed;
                 };
 				chart_kb_register_note();
-        };
+        } };
         official_notes_refreeze_after_retry();
 }
 
@@ -388,9 +388,9 @@ function paused_ui_reset_official() {
 function paused_ui_reset_pec() {
         // 加载动画还在时不复位。
         if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return;
-        instance_activate_object(oLine_2);
-        instance_activate_object(oNote_2);
-        with (oLine_2) {
+        chart_actor_activate(oLine_2);
+        chart_actor_activate(oNote_2);
+        { var _actors_15041 = chart_actor_list(oLine_2); for (var _actor_i_15041 = 0; _actor_i_15041 < array_length(_actors_15041); _actor_i_15041++) with (_actors_15041[_actor_i_15041]) {
                 _move_index = 0; _alpha_index = 0; _rotate_index = 0; _speed_index = 0;
                 _move_value = [0, 0];
                 _move_x = 0; _move_y = 0;
@@ -401,10 +401,10 @@ function paused_ui_reset_pec() {
                 _last_line_sec = -infinity;
                 __cos = 1; __sin = 0;
                 _last_angle = 0;
-                if (variable_instance_exists(id, "_counts")) then _counts = [0, 0, 0, 0];
-                if (variable_instance_exists(id, "line_time")) then line_time = 0;
-        };
-        with (oNote_2) {
+                if (chart_actor_var_exists(id, "_counts")) then _counts = [0, 0, 0, 0];
+                if (chart_actor_var_exists(id, "line_time")) then line_time = 0;
+        } };
+        { var _actors_15657 = chart_actor_list(oNote_2); for (var _actor_i_15657 = 0; _actor_i_15657 < array_length(_actors_15657); _actor_i_15657++) with (_actors_15657[_actor_i_15657]) {
                 canDraw = false;
                 judged = false;
                 hold_started = false;
@@ -420,7 +420,7 @@ function paused_ui_reset_pec() {
                 image_alpha = 1;
                 judge_sec = startSec + hit_offset;
                 chart_kb_register_note();
-        };
+        } };
         owner.bpm_count = 0;
         owner.pec_bpm_last_sec = -infinity;
         pec_notes_refreeze_after_retry();
@@ -431,8 +431,8 @@ function paused_ui_reset_pec() {
 function paused_ui_reset_rpe() {
         // 加载动画还在时不复位。
         if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return;
-        instance_activate_object(oNote_1);
-        with (oLine_1) {
+        chart_actor_activate(oNote_1);
+        { var _actors_16673 = chart_actor_list(oLine_1); for (var _actor_i_16673 = 0; _actor_i_16673 < array_length(_actors_16673); _actor_i_16673++) with (_actors_16673[_actor_i_16673]) {
                 // 每层事件游标和扩展计数都回到 0。
                 for (var layer_index = 0; layer_index < array_length(events_count); layer_index++) {
                         if (!is_struct(events_count[layer_index])) then continue;
@@ -481,8 +481,8 @@ function paused_ui_reset_rpe() {
                 paint_has_content = false;
                 paint_last_valid = false;
                 paint_last_time = -infinity;
-        };
-        with (oNote_1) { // TODO: Retry之后部分音符变滚木,等会修)))))))
+        } };
+        { var _actors_19872 = chart_actor_list(oNote_1); for (var _actor_i_19872 = 0; _actor_i_19872 < array_length(_actors_19872); _actor_i_19872++) with (_actors_19872[_actor_i_19872]) { // TODO: Retry之后部分音符变滚木,等会修)))))))
                 canDraw = false;
                 isHold = false;
                 notJudge = true;
@@ -513,7 +513,7 @@ function paused_ui_reset_rpe() {
                         yscale = 0;
                 };
 				chart_kb_register_note();
-        };
+        } };
         owner.bpm_count = 0;
         if (variable_global_exists("game_1") && is_struct(game_1)) {
                 game_1._note_activation_index = 0;
@@ -549,13 +549,13 @@ function paused_ui_reset_rpe() {
                                 var activation_note = game_1._notes[activation_i];
                                 if (!is_struct(activation_note)) then continue;
                                 if (bool(activation_note.alwaysActive ?? false)) {
-                                        var activation_key = string(activation_note.id);
+                                        var activation_key = chart_actor_key(activation_note.id);
                                         if (is_struct(game_1._note_activation_records)
                                                 && struct_exists(game_1._note_activation_records, activation_key)) {
                                                 rpe_note_mark_active(game_1._note_activation_records[$ activation_key]);
                                         };
                                 } else {
-                                        instance_deactivate_object(activation_note.id);
+                                        chart_actor_deactivate(activation_note.id);
                                 };
                         };
                 };
@@ -613,7 +613,7 @@ function paused_ui_retry() {
         retry_mode = 0;
         action_queued = false;
         draw_logged = false;
-        if (instance_exists(oPlayTransition)) {
+        if (chart_actor_exists(oPlayTransition)) {
                 with (oPlayTransition) play_transition_restart_intro();
                 print("[PausedUI] Retry prepare animation started");
         } else {

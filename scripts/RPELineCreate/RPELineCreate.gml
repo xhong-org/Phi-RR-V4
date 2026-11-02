@@ -1,6 +1,6 @@
 // 把 RPE 判定线与音符的创建摊到多个加载帧。
-// 每条线和每个音符完成 Create 与强制 Step 初始化后再冻结。
-// 音乐开始前解冻；GameMaker 的激活推迟一个事件。
+// Constructor 完成预处理后进入管理器的休眠队列。
+// 播放前由管理器显式唤醒，更新与绘制不依赖 Object 事件顺序。
 
 #macro RPE_LINE_CREATE_BUDGET_US 8000
 
@@ -28,8 +28,8 @@ function rpe_lines_begin() {
 	// 仍用旧的 zOrder 间距，避免 Phira 判定线顺序被挪动。
 	global.chart_layer_mode = false;
 	global.chart_layer_layout = undefined;
-	if (instance_exists(oExtraPlay)
-		&& variable_instance_exists(oExtraPlay, "requests_chart_layers")
+	if (chart_actor_exists(oExtraPlay)
+		&& chart_actor_var_exists(oExtraPlay, "requests_chart_layers")
 		&& oExtraPlay.requests_chart_layers) then global.chart_layer_mode = true;
 	for (var layer_line_i = 0; layer_line_i < array_length(judge_lines) && !global.chart_layer_mode; layer_line_i++) {
 		var layer_line = judge_lines[layer_line_i];
@@ -49,9 +49,9 @@ function rpe_lines_begin() {
 			};
 		};
 	};
-	if (global.chart_layer_mode && instance_exists(oExtraPlay)
-		&& variable_instance_exists(oExtraPlay, "effect_controller")
-		&& instance_exists(oExtraPlay.effect_controller)) {
+	if (global.chart_layer_mode && chart_actor_exists(oExtraPlay)
+		&& chart_actor_var_exists(oExtraPlay, "effect_controller")
+		&& chart_actor_exists(oExtraPlay.effect_controller)) {
 		chart_set_instance_depth(oExtraPlay.effect_controller, chart_layer_depth(24));
 	};
 	var line_group_size = array_length(judge_lines);
@@ -156,7 +156,7 @@ function rpe_lines_create_one(i) {
 	print($"Line[{i}]FatherID->{_isFather >= 0 ? _isFather : "undefined"}", game.settings.enableDebug);
 	var line_override = chart_line_override(i);
 	var line_image = is_struct(line_override) ? line_override.Image : (l_s[$ "Texture"] ?? "line.png");
-	var l = (instance_create_depth(room_width / 2, room_height / 2, 0, oLine_1, {
+	var l = (chart_actor_create(room_width / 2, room_height / 2, 0, oLine_1, {
 		"line_id": i,
 		"bindUI": (is_undefined(l_s[$ "attachUI"]) ? 0 : l_s[$ "attachUI"]),
 		"image": line_image,
@@ -185,10 +185,10 @@ function rpe_lines_create_one(i) {
 	array_add(rpe.runtime_line_instances, l);
 	rpe_lines_hide_created(l);
 	// 冻结前强制 Step，让事件游标和原始变换先存在。
-	if (instance_exists(l)) {
+	if (chart_actor_exists(l)) {
 		with (l) {
 			rpe_force_event_init = true;
-			event_perform(ev_step, ev_step_normal);
+			chart_actor_event(ev_step, ev_step_normal);
 			rpe_force_event_init = false;
 		};
 	};
@@ -227,7 +227,7 @@ function rpe_lines_create_note(i, n) {
 	var et_abs = game_1.Math.beatToAbsSec(et_beat);
 	var note_floor = 0;
 	var end_floor = 0;
-	if (instance_exists(l) && variable_instance_exists(l, "rpe_floor_at_sec")) {
+	if (chart_actor_exists(l)) {
 		note_floor = l.rpe_floor_at_sec(st_abs);
 		if (off_type == 3) then end_floor = l.rpe_floor_at_sec(et_abs);
 	};
@@ -282,7 +282,7 @@ function rpe_lines_create_note(i, n) {
 				custom_hitsound_path = chart_file_readable_path(hitsound_path);
 				hitsound_path = custom_hitsound_path;
 			};
-			if (chart_file_exists_any(chart_path_join(InChartPath, hitsound_rel)) && instance_exists(oMedia)
+			if (chart_file_exists_any(chart_path_join(InChartPath, hitsound_rel)) && chart_actor_exists(oMedia)
 				&& !(variable_global_exists("render_mode") && global.render_mode)) {
 				if (!struct_exists(game_1, "HitSounds") || !is_struct(game_1.HitSounds)) then game_1.HitSounds = {};
 				if (!struct_exists(game_1.HitSounds, hitsound_rel)) {
@@ -302,7 +302,7 @@ function rpe_lines_create_note(i, n) {
 	};
 
 	var note_explicit_z = n_s[$ "zIndex"];
-	var note_instance = instance_create_depth(-999, -999, DEPTH.NOTE, oNote_1, {
+	var note_instance = chart_actor_create(-999, -999, DEPTH.NOTE, oNote_1, {
 		"type": off_type,
 		"rpe_type": rpe_type,
 		"note_layer_z": chart_note_layer_z(rpe_type, is_real(note_explicit_z) ? real(note_explicit_z) : undefined),
@@ -333,6 +333,7 @@ function rpe_lines_create_note(i, n) {
 		"custom_hitsound_path": custom_hitsound_path,
 		"line_id": i
 	});
+	if (!chart_actor_exists(note_instance)) then return;
 	rpe_lines_hide_created(note_instance);
 	var note_factor = real(l.bpmfactor);
 	// 线的 BPM 倍率无效时按 1
@@ -340,7 +341,7 @@ function rpe_lines_create_note(i, n) {
 	var note_hit_sec = _chart_offset_sec + note_factor * note_start_sec;
 	var note_end_hit_sec = _chart_offset_sec + note_factor * note_end_sec;
 	if (variable_global_exists("render_mode") && global.render_mode && !isFake
-		&& instance_exists(note_instance)) {
+		&& chart_actor_exists(note_instance)) {
 		var note_hitsound_time = note_hit_sec;
 		if (off_type != 2 && off_type != 4) {
 			note_hitsound_time += note_factor * note_instance.hitTime2 * 0.001;
@@ -388,7 +389,7 @@ function rpe_lines_pump(_budget_us = CHART_LINE_CREATE_BUDGET_US) {
 			var source_line = job.judge_lines[line_index];
 			var notes = is_struct(source_line) ? source_line[$ "notes"] : undefined;
 			var note_count = is_array(notes) ? array_length(notes) : 0;
-			if (instance_exists(rpe.line_list[line_index]) && job.next_note < note_count) {
+			if (chart_actor_exists(rpe.line_list[line_index]) && job.next_note < note_count) {
 				rpe_lines_create_note(line_index, job.next_note);
 				job.next_note++;
 				created++;
@@ -433,7 +434,7 @@ function rpe_lines_finish() {
 		if (_group_end - _group_start > 1 && bool(game.settings.enableNoteHightLight)) {
 			for (var _hi = _group_start; _hi < _group_end; _hi++) {
 				var _highlight_note = rpe._notes[_hi].id;
-				if (instance_exists(_highlight_note)) then _highlight_note.hl = 1;
+				if (chart_actor_exists(_highlight_note)) then _highlight_note.hl = 1;
 			};
 		};
 		_group_start = _group_end;
@@ -458,13 +459,13 @@ function rpe_lines_finish() {
 	rpe._note_activation_last_time = -infinity;
 	for (var _fi = 0; _fi < array_length(rpe.line_list); _fi++) {
 		var _fl = rpe.line_list[_fi];
-		if (!instance_exists(_fl)) then continue;
+		if (!chart_actor_exists(_fl)) then continue;
 		var _seen = array_create(array_length(rpe.line_list), false);
 		var _parent = _fl.isFather;
 		var _valid_parent = true;
 		while (is_real(_parent) && _parent >= 0) {
 			if (_parent >= array_length(rpe.line_list) || _parent == _fi || _seen[_parent]
-				|| !instance_exists(rpe.line_list[_parent])) {
+				|| !chart_actor_exists(rpe.line_list[_parent])) {
 				// 父链越界、自环或断掉则这条线不再挂父线
 				_valid_parent = false;
 				break;
@@ -479,7 +480,7 @@ function rpe_lines_finish() {
 		// 父图已经校验；上限取线数，与原生后端保持一致。
 		while (is_real(_parent) && _parent >= 0 && _chain_guard < array_length(rpe.line_list)) {
 			var _parent_line = rpe.line_list[_parent];
-			if (!instance_exists(_parent_line)) then break;
+			if (!chart_actor_exists(_parent_line)) then break;
 			array_add(_fl._father_chain, _parent_line);
 			_parent = _parent_line.isFather;
 			_chain_guard++;
@@ -491,14 +492,14 @@ function rpe_lines_finish() {
 		var _order = array_create(0);
 		for (var _zi = 0; _zi < _n_lines; _zi++) {
 			var _l0 = rpe.line_list[_zi];
-			if (!instance_exists(_l0)) then continue;
+			if (!chart_actor_exists(_l0)) then continue;
 			var _z0 = 0;
-			if (variable_instance_exists(_l0, "zIndex") && is_real(_l0.zIndex)) then _z0 = real(_l0.zIndex)
-			else if (variable_instance_exists(_l0, "zOrder") && is_real(_l0.zOrder)) then _z0 = real(_l0.zOrder);
+			if (chart_actor_var_exists(_l0, "zIndex") && is_real(_l0.zIndex)) then _z0 = real(_l0.zIndex)
+			else if (chart_actor_var_exists(_l0, "zOrder") && is_real(_l0.zOrder)) then _z0 = real(_l0.zOrder);
 			if (!is_finite(_z0)) then _z0 = 0;
 			_l0.zOrder = _z0;
 			_l0.z = _z0;
-			if (!variable_instance_exists(_l0, "line_id") || !is_real(_l0.line_id)) then _l0.line_id = _zi;
+			if (!chart_actor_var_exists(_l0, "line_id") || !is_real(_l0.line_id)) then _l0.line_id = _zi;
 			array_add(_order, _l0);
 		};
 
@@ -528,7 +529,7 @@ function rpe_lines_finish() {
 			for (var _ui = 0; _ui < _line_count; _ui++) {
 				var _unique_line = _order[_ui];
 				// 已有 zIndex 的线不参与旧 zOrder 均分
-				if (variable_instance_exists(_unique_line, "zIndex") && is_real(_unique_line.zIndex)) then continue;
+				if (chart_actor_var_exists(_unique_line, "zIndex") && is_real(_unique_line.zIndex)) then continue;
 				var _raw_order = real(_unique_line.z_order_raw ?? _unique_line.zOrder);
 				var _raw_seen = false;
 				for (var _uj = 0; _uj < array_length(unique_orders); _uj++) {
@@ -549,7 +550,7 @@ function rpe_lines_finish() {
 			for (var _ri = 0; _ri < _line_count; _ri++) {
 				var _layer_line = _order[_ri];
 				var _layer_z;
-				if (variable_instance_exists(_layer_line, "zIndex") && is_real(_layer_line.zIndex)) {
+				if (chart_actor_var_exists(_layer_line, "zIndex") && is_real(_layer_line.zIndex)) {
 					_layer_z = real(_layer_line.zIndex);
 				} else {
 					var _raw_order = real(_layer_line.z_order_raw ?? _layer_line.zOrder);
@@ -569,8 +570,8 @@ function rpe_lines_finish() {
 			if (is_array(rpe.runtime_note_instances)) {
 				for (var _note_depth_i = 0; _note_depth_i < array_length(rpe.runtime_note_instances); _note_depth_i++) {
 					var _note_depth = rpe.runtime_note_instances[_note_depth_i];
-					if (!instance_exists(_note_depth)) then continue;
-					if (variable_instance_exists(_note_depth, "note_layer_z") && is_real(_note_depth.note_layer_z)) {
+					if (!chart_actor_exists(_note_depth)) then continue;
+					if (chart_actor_var_exists(_note_depth, "note_layer_z") && is_real(_note_depth.note_layer_z)) {
 						chart_set_instance_depth(_note_depth, chart_layer_depth(_note_depth.note_layer_z) - _note_depth.note_layer_bias);
 					};
 				};
@@ -588,18 +589,17 @@ function rpe_lines_finish() {
 		};
 	};
 
-	// 深度布局完成后再冻结音符。休眠实例会被上面的 instance_exists 跳过，
-	// 保留布局前的深度，自定义贴图就可能盖住本应画在上方的音符。
+	// 完成深度布局后移出活动队列；休眠音符仍保留在谱面容器中供预加载和重试使用。
 	for (var _di = 0; _di < array_length(rpe._notes); _di++) {
-		instance_deactivate_object(rpe._notes[_di].id);
+		chart_actor_deactivate(rpe._notes[_di].id);
 	};
 
 	for (var _initial_line_i = 0; _initial_line_i < array_length(rpe.line_list); _initial_line_i++) {
 		var _initial_line = rpe.line_list[_initial_line_i];
-		if (instance_exists(_initial_line)) {
+		if (chart_actor_exists(_initial_line)) {
 			with (_initial_line) {
 				rpe_force_event_init = true;
-				event_perform(ev_step, ev_step_end);
+				chart_actor_event(ev_step, ev_step_end);
 				rpe_force_event_init = false;
 			};
 		};
@@ -656,14 +656,20 @@ function rpe_lines_post_bind() {
 	// 线表缺失时从仍存在的实例重新收集
 	if (!struct_exists(rpe, "line_list") || !is_array(rpe.line_list)) {
 		rpe.line_list = [];
-		with (oLine_1) array_add(rpe.line_list, id);
+		var all_lines = chart_actor_list(oLine_1, false);
+		for (var line_i = 0; line_i < array_length(all_lines); line_i++) {
+			var line_actor = all_lines[line_i];
+			if (chart_actor_alive(line_actor)) then rpe.line_list[line_actor.line_id] = line_actor;
+		};
 	};
-	if (instance_exists(oRender_1)) {
+	if (chart_actor_exists(oRender_1)) {
 		var _render = instance_find(oRender_1, 0);
-		if (instance_exists(_render) && variable_instance_exists(_render, "play_transition_bound_ui")
+		if (chart_actor_exists(_render) && chart_actor_var_exists(_render, "play_transition_bound_ui")
 			&& is_struct(_render.play_transition_bound_ui)) {
-			with (oLine_1) {
-				if (is_attach_ui && instance_exists(_render)) then _render.play_transition_bound_ui[$ attach_ui_key] = true;
+			for (var bind_i = 0; bind_i < array_length(rpe.line_list); bind_i++) {
+				var bind_line = rpe.line_list[bind_i];
+				if (!chart_actor_exists(bind_line) || !bind_line.is_attach_ui) then continue;
+				_render.play_transition_bound_ui[$ bind_line.attach_ui_key] = true;
 			};
 		};
 	};
@@ -691,20 +697,20 @@ function rpe_lines_thaw_force_init() {
 	// 第一轮补普通 Step
 	for (var i = 0; i < array_length(lines); i++) {
 		var l = lines[i];
-		if (!instance_exists(l)) then continue;
+		if (!chart_actor_exists(l)) then continue;
 		with (l) {
 			rpe_force_event_init = true;
-			event_perform(ev_step, ev_step_normal);
+			chart_actor_event(ev_step, ev_step_normal);
 			rpe_force_event_init = false;
 		};
 	};
 	// 第二轮补 Step End，父子变换才完整
 	for (var j = 0; j < array_length(lines); j++) {
 		var line_end = lines[j];
-		if (!instance_exists(line_end)) then continue;
+		if (!chart_actor_exists(line_end)) then continue;
 		with (line_end) {
 			rpe_force_event_init = true;
-			event_perform(ev_step, ev_step_end);
+			chart_actor_event(ev_step, ev_step_end);
 			rpe_force_event_init = false;
 		};
 	};
@@ -722,8 +728,13 @@ function rpe_notes_refresh_geometry(_layout_changed) {
 	game_1._geometry_note_size = note_size;
 	game_1._geometry_uniform = uniform;
 	if (game.paused && !_layout_changed && !size_changed) return;
-	with (oNote_1) {
-		if (inition && instance_exists(_line_ref)) event_user(_step_user_count);
+	var active_notes = chart_actor_list(oNote_1, true);
+	for (var note_i = 0; note_i < array_length(active_notes); note_i++) {
+		var note_actor = active_notes[note_i];
+		if (!chart_actor_exists(note_actor) || !note_actor.active) then continue;
+		with (note_actor) {
+			if (inition && chart_actor_exists(_line_ref)) then chart_actor_user(_step_user_count);
+		};
 	}
 }
 
