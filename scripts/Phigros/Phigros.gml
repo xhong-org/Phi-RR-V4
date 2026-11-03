@@ -25,8 +25,8 @@
 #macro func function
 #macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal { "windows": 40548, "android": 40549, "gxgames": 40532 } // 各平台版本号(独立)
-#macro VerStr "v.4.1.1r"
+#macro VerReal { "windows": 50001, "android": 50001, "gxgames": 40532 } // 各平台版本号(独立)
+#macro VerStr "v.4.1.1-next"
 
 ///@desc 按当前操作系统从 VerReal 取出对应版本号
 ///@returns {Real} 平台版本号，未知平台为 40500
