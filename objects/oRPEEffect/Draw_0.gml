@@ -1,4 +1,5 @@
 ///@desc 在界面之前应用谱面局部效果或区间捕获
+if (chart_loading_silent()) then exit;
 // 关闭谱面着色器时整段跳过。
 if (chart_setting_on("disableChartShader")) then exit;
 if (os_type == os_android) {

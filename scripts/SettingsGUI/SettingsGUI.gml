@@ -7,8 +7,17 @@ function settings_ini_path() {
 	return $"{working_directory}resource/configs.ini";
 }
 
+///@desc 仅作持久数据的设置键，不生成可编辑行
+function settings_ui_hidden(_key) {
+	return _key == "language" || _key == "skinId" || _key == "userRankBadge"
+		|| _key == "userRankLevel" || _key == "userRating" || _key == "userHead"
+		|| _key == "userNameExpanded" || _key == "settlementDataBytes" || _key == "recordEndingLength"
+		|| _key == "enableVerVisble";
+}
+
 ///@desc 设置仍保存全部键，只隐藏当前平台不能执行的桌面选项
 function settings_platform_visible(key) {
+	if (settings_ui_hidden(key)) then return false;
 	if (os_type != os_android) then return true;
 	return key != "preventWindowMoveFreeze" && key != "enableRPEMulticore"
 		&& key != "rpeWorkerMinLines" && key != "rpeWorkerProfileFrames"
@@ -156,6 +165,9 @@ function chart_setting_on(_key) {
 ///@param {String} _key 设置键
 ///@returns {String} string、bool 或 number
 function settings_kind(_key) {
+	// 这些配置项保持固定类型，兼容旧会话仍缓存数值形式的Data字段。
+	if (_key == "settlementDataBytes" || _key == "userHead" || _key == "userRankBadge") then return "string";
+	if (_key == "userNameExpanded" || _key == "enableVerVisble") then return "bool";
 	var d = settings_defaults();
 	// 默认值里没有该键时当作数字
 	if (!struct_exists(d, _key)) then return "number";
@@ -196,6 +208,12 @@ function settings_format_ini(_key, _value) {
 ///@returns {Undefined} 无
 function settings_clamp_store(_store) {
 	if (!is_struct(_store)) then return;
+	settings_profile_sanitize(_store);
+	_store.enableVerVisble = settings_version_visible(_store[$ "enableVerVisble"] ?? true);
+	// 保留用户输入的单位；实际字节数由settings_data_bytes在显示时换算。
+	_store.settlementDataBytes = settings_data_text(_store[$ "settlementDataBytes"] ?? "0B");
+	var ending_length = settings_parse_value(_store[$ "recordEndingLength"] ?? 3, 3);
+	_store.recordEndingLength = (is_numeric(ending_length) && is_finite(ending_length)) ? clamp(ending_length, 3, 30) : 3;
 	if (struct_exists(_store, "noteSize")) then _store.noteSize = settings_clamp_number(_store.noteSize, 0.5, 4);
 	if (struct_exists(_store, "hitsoundVolume")) then _store.hitsoundVolume = settings_clamp_number(_store.hitsoundVolume, 0, 1);
 	if (struct_exists(_store, "musicVolume")) then _store.musicVolume = settings_clamp_number(_store.musicVolume, 0, 1);
@@ -214,12 +232,118 @@ function settings_clamp_number(_value, _low, _high) {
 	return is_finite(value) ? clamp(value, _low, _high) : 1;
 }
 
-///@desc 判断该键是否应忽略；随包的 configs.ini 只有少量键，不算用户存档
+///@desc 版本、作者和谱面格式默认显示；兼容缺失字段并拒绝无效布尔配置
+function settings_version_visible(_value) {
+	var value = settings_parse_value(_value, true);
+	return (is_numeric(value) && is_finite(value)) ? bool(value) : true;
+}
+
+///@desc 玩家徽章省略后缀；null、default和旧版none均表示不显示
+function settings_profile_badge(_value) {
+	if (!is_string(_value)) then return "rainbow";
+	var badge = string_lower(string_trim(_value));
+	switch (badge) {
+		case "null": case "default": return "none";
+		case "white": case "green": case "blue":
+		case "red": case "golden": case "rainbow": case "none": return badge;
+	};
+	return "rainbow";
+}
+
+///@desc 头像固定从resource/heads读取，只保存文件名，不允许相对或绝对目录
+function settings_profile_head(_value) {
+	if (!is_string(_value)) then return "default.png";
+	var head = string_trim(_value);
+	if (!string_length(head) || head == "." || head == "..") then return "default.png";
+	var forbidden = ["/", chr(92), ":", "*", "?", chr(34), "<", ">", "|"];
+	for (var i = 0; i < array_length(forbidden); i++) {
+		if (string_pos(forbidden[i], head) > 0) then return "default.png";
+	};
+	for (var i = 1; i <= string_length(head); i++) {
+		if (string_ord_at(head, i) < 32) then return "default.png";
+	};
+	return head;
+}
+
+///@desc 保留Data输入单位，兼容旧版直接存储的数值字节
+function settings_data_text(_value) {
+	if (is_string(_value)) {
+		var text = string_trim(_value);
+		return string_length(text) ? text : "0B";
+	};
+	return (is_numeric(_value) && is_finite(_value)) ? string(_value) : "0B";
+}
+
+///@desc 解析数字加单位的Data配置；单位不分大小写，未知或省略单位按B，数字错误按0
+function settings_data_bytes(_value) {
+	if (is_numeric(_value)) then return is_finite(_value) ? _value : 0;
+	if (!is_string(_value)) then return 0;
+	var text = string_trim(_value);
+	var len = string_length(text);
+	var pos = 1;
+	var first = string_char_at(text, pos);
+	if (first == "+" || first == "-") then pos++;
+	var digits = 0;
+	var dot = false;
+	while (pos <= len) {
+		var ch = string_char_at(text, pos);
+		if (ch >= "0" && ch <= "9") { digits++; pos++; }
+		else if (ch == "." && !dot) { dot = true; pos++; }
+		else break;
+	};
+	if (digits == 0) then return 0;
+	// 接受科学计数；单独的EB单位不能误读成指数。
+	if (string_lower(string_char_at(text, pos)) == "e") {
+		var exp_pos = pos + 1;
+		var exp_ch = string_char_at(text, exp_pos);
+		var exp_sign = exp_ch == "+" || exp_ch == "-";
+		if (exp_sign) then exp_pos++;
+		var exp_start = exp_pos;
+		while (exp_pos <= len) {
+			var exp_digit = string_char_at(text, exp_pos);
+			if (exp_digit < "0" || exp_digit > "9") then break;
+			exp_pos++;
+		};
+		if (exp_pos > exp_start) then pos = exp_pos;
+		else if (exp_sign) then return 0;
+	};
+	var unit = string_upper(string_trim(string_copy(text, pos, len - pos + 1)));
+	var unit_first = string_char_at(unit, 1);
+	// 重复小数点或夹在数值内的符号属于错误数字，不按未知单位补救。
+	if (unit_first == "." || unit_first == "+" || unit_first == "-") then return 0;
+	var amount = 0;
+	try { amount = real(string_copy(text, 1, pos - 1)); }
+	catch (parse_error) { delete(parse_error); return 0; };
+	if (!is_finite(amount)) then return 0;
+	var units = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
+	var unit_power = 0;
+	for (var i = 1; i < array_length(units); i++) {
+		if (unit == units[i]) { unit_power = i; break; };
+	};
+	var bytes = amount * power(1024, unit_power);
+	return is_finite(bytes) ? bytes : 0;
+}
+
+///@desc 为旧存档补充玩家显示数据，并归一化无效值；不开放设置界面入口
+function settings_profile_sanitize(_store) {
+	if (!is_struct(_store)) then return;
+	_store.userRankBadge = settings_profile_badge(_store[$ "userRankBadge"] ?? "rainbow");
+	_store.userHead = settings_profile_head(_store[$ "userHead"] ?? "default.png");
+	var expanded = settings_parse_value(_store[$ "userNameExpanded"] ?? false, false);
+	_store.userNameExpanded = is_numeric(expanded) && is_finite(expanded) && bool(expanded);
+	var level = settings_parse_value(_store[$ "userRankLevel"] ?? 48, 48);
+	var rating = settings_parse_value(_store[$ "userRating"] ?? 16, 16);
+	_store.userRankLevel = (is_numeric(level) && is_finite(level) && level >= 0) ? floor(level) : 48;
+	_store.userRating = (is_numeric(rating) && is_finite(rating) && rating >= 0) ? rating : 16;
+}
+
+///@desc 判断该键是否应忽略；配置专用字段即使没有旧GUI标记也允许单独读取
 ///@param {String} _key 设置键
 ///@returns {Bool} 为真表示不要从 ini 读入
 function settings_saved_key_ignored(_key) {
-	// 没有 Settings 段，或缺少界面才会写的键，则整段视为旧档
+	// 配置专用字段可以单独手填，不要求同时出现GUI曾写入的标记键。
 	if (!ini_section_exists("Settings")) then return true;
+	if (settings_ui_hidden(_key) && ini_key_exists("Settings", _key)) then return false;
 	var legacy = !ini_key_exists("Settings", "userName")
 		&& !ini_key_exists("Settings", "aa_level")
 		&& !ini_key_exists("Settings", "comboString");
@@ -232,6 +356,8 @@ function settings_saved_key_ignored(_key) {
 ///@returns {Undefined} 无
 function settings_load_into(_store) {
 	if (!is_struct(_store)) then return;
+	// 旧配置缺键或非法文本时默认显示，重载也不能继承上一次的false。
+	_store.enableVerVisble = true;
 	var f = settings_ini_path();
 	ini_open(f);
 	var names = struct_get_names(_store);
@@ -268,6 +394,37 @@ function settings_save_store(_store) {
 	ini_close();
 	// 菜单和下一局不能继续持有修改前的副本。
 	global.pls_settings = settings_clone(_store);
+}
+
+///@desc 离开结算时只保存用户名展开状态，避免覆盖用户手工编辑的其他配置
+///@returns {Bool} 是否成功写入配置
+function settings_save_player_expanded(_expanded) {
+	var expanded = bool(_expanded);
+	if (variable_global_exists("game") && is_struct(game) && is_struct(game.settings)) {
+		game.settings.userNameExpanded = expanded;
+	};
+	if (variable_global_exists("pls_settings") && is_struct(global.pls_settings)) {
+		global.pls_settings.userNameExpanded = expanded;
+	};
+	var opened = false;
+	try {
+		ini_open(settings_ini_path());
+		opened = true;
+		ini_write_string("Settings", "userNameExpanded", expanded ? "true" : "false");
+		ini_close();
+		opened = false;
+		// 写盘失败可能不抛异常，重新读取该字段确认本次结果。
+		ini_open(settings_ini_path());
+		opened = true;
+		var saved = string_lower(ini_read_string("Settings", "userNameExpanded", ""));
+		ini_close();
+		opened = false;
+		return saved == (expanded ? "true" : "false");
+	} catch (save_error) {
+		delete(save_error);
+		if (opened) { try { ini_close(); } catch (close_error) { delete(close_error); }; };
+		return false;
+	};
 }
 
 ///@desc 返回对局设置，否则返回已加载的全局设置
@@ -377,15 +534,16 @@ function settings_list(_deprecated) {
 		var seen = {};
 		for (var i = 0; i < array_length(cat); i++) {
 			var item = cat[i];
+			if (settings_ui_hidden(item.key)) then continue;
 			seen[$ item.key] = true;
 			array_add(lists[settings_comment_is_deprecated(item.comment) ? 1 : 0], item);
 		};
 		var store = settings_store();
 		var names = struct_get_names(store);
 		for (var n = 0; n < array_length(names); n++) {
-			// 目录里没有、且不是 language 或 skinId 的键补进普通列表
+			// 目录里没有的公开键补进普通列表，内部持久字段不生成编辑项
 			if (struct_exists(seen, names[n])) then continue;
-			if (names[n] == "language" || names[n] == "skinId") then continue;
+			if (settings_ui_hidden(names[n])) then continue;
 			array_add(lists[0], { key:names[n], comment:names[n] });
 		};
 	};
@@ -447,6 +605,7 @@ function settings_grouped_keys() {
 		var keys = [];
 		var src = groups[g].keys;
 		for (var k = 0; k < array_length(src); k++) {
+			if (settings_ui_hidden(src[k])) then continue;
 			array_add(keys, src[k]);
 			explicit[$ src[k]] = true;
 		};
@@ -455,6 +614,7 @@ function settings_grouped_keys() {
 	var cat = settings_catalog();
 	for (var i = 0; i < array_length(cat); i++) {
 		var key = cat[i].key;
+		if (settings_ui_hidden(key)) then continue;
 		// 目录中多出的键，废弃的进 deprecated，其余进 chart
 		if (struct_exists(explicit, key)) then continue;
 		var bucket = settings_comment_is_deprecated(cat[i].comment) ? "deprecated" : "chart";
@@ -465,8 +625,8 @@ function settings_grouped_keys() {
 	var names = struct_get_names(defaults);
 	for (var n = 0; n < array_length(names); n++) {
 		var extra = names[n];
-		// language 和 skinId 不进分组
-		if (struct_exists(explicit, extra) || extra == "language" || extra == "skinId") then continue;
+		// 内部持久字段不进设置分组
+		if (struct_exists(explicit, extra) || settings_ui_hidden(extra)) then continue;
 		array_add(built[$ "chart"], extra);
 	};
 	return built;

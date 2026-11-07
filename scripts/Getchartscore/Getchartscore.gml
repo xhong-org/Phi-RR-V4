@@ -180,7 +180,7 @@ function chart_score_book() {
 
 ///@desc 把成绩簿加密后写入磁盘
 ///@param {Struct} _book 成绩簿
-///@returns {Bool} 写入后文件存在时为真
+///@returns {Bool} 本次写入内容校验通过时为真，旧文件存在不代表本次保存成功
 function chart_score_book_save(_book) {
 	if (!is_struct(_book)) then return false;
 	var folder = working_directory + "resource";
@@ -203,9 +203,17 @@ function chart_score_book_save(_book) {
 	buffer_copy(packed, 0, used, out, 4);
 	buffer_delete(packed);
 	var path = chart_score_file();
-	buffer_save(out, path);
+	var saved = false;
+	try {
+		var expected_hash = buffer_md5(out, 0, used + 4);
+		buffer_save(out, path);
+		saved = file_exists(path) && string_lower(md5_file(path)) == string_lower(expected_hash);
+	} catch (save_err) {
+		delete(save_err);
+		saved = false;
+	};
 	buffer_delete(out);
-	return file_exists(path);
+	return saved;
 }
 
 ///@desc 按谱面摘要读取已保存的最高分
@@ -234,8 +242,19 @@ function chart_score_set(_md5, _score) {
 	// 不覆盖已经更高的记录
 	if (stored_score <= prev) then return false;
 	var book = chart_score_book();
+	var had_record = struct_exists(book.records, score_key);
+	var old_value = had_record ? book.records[$ score_key] : undefined;
 	book.records[$ score_key] = stored_score;
-	return chart_score_book_save(book);
+	var saved = false;
+	try { saved = chart_score_book_save(book); } catch (save_err) {
+		delete(save_err);
+	};
+	// 磁盘失败时回滚缓存，避免下一局读取到未保存的新纪录。
+	if (!saved) {
+		if (had_record) then book.records[$ score_key] = old_value;
+		else variable_struct_remove(book.records, score_key);
+	};
+	return saved;
 }
 /*
 getScore = (function() { return(int64(1000000 * ((getCombo()) / _num_of_notes))) });

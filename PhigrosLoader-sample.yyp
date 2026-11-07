@@ -59,6 +59,7 @@
   ],
   "ForcedPrefabProjectReferences":[],
   "IncludedFiles":[
+    {"$GMIncludedFile":"","%Name":"data.png","CopyToMask":-1,"filePath":"datafiles/resource","name":"data.png","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"gx_audio_boot.js","CopyToMask":-1,"filePath":"datafiles","name":"gx_audio_boot.js","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"gx_drop.js","CopyToMask":-1,"filePath":"datafiles","name":"gx_drop.js","resourceType":"GMIncludedFile","resourceVersion":"2.0",},
     {"$GMIncludedFile":"","%Name":"gx_import.html","CopyToMask":-1,"filePath":"datafiles","name":"gx_import.html","resourceType":"GMIncludedFile","resourceVersion":"2.0",},

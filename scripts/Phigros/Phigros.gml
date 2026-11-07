@@ -25,8 +25,8 @@
 #macro func function
 #macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal { "windows": 50001, "android": 50001, "gxgames": 40532 } // 各平台版本号(独立)
-#macro VerStr "v.4.1.1-next"
+#macro VerReal { "windows": 50003, "android": 50001, "gxgames": 40532 } // 各平台版本号(独立)
+#macro VerStr "v.4.1.2-Next"
 
 ///@desc 按当前操作系统从 VerReal 取出对应版本号
 ///@returns {Real} 平台版本号，未知平台为 40500
@@ -1464,6 +1464,7 @@ function Phigros() constructor { // 仅仅结构
 		"enableSurface" : true,					// 是否启用遮罩(default:true)
 		"enableNoteHightLight" : true,			// 是否启用音符多押高亮(default:true)
 		"enableChartGUI" : true,				// 是否启用UI(default:true)
+		"enableVerVisble" : true,				// 仅configs.ini编辑，显示左下角版本、作者和谱面格式(default:true)
 		"enableLineJudge" : true,				// 是否启用FC/AP指示器(default:true)
 		"showBG" : true,						// 是否显示背景(default:true)
 		"enableHitEffect" : true,				// 是否显示打击特效(default:true)
@@ -1472,6 +1473,13 @@ function Phigros() constructor { // 仅仅结构
 		"enableDisplayLineID" : false,			// 是否显示线ID(已弃用)(default:false)
 		"comboString" : "COMBO",				// 连击文本(default:"COMBO")
 		"userName" : "Guest",					// 结算界面玩家名(default:"Guest")
+		"userHead" : "default.png",			// 仅configs.ini编辑，resource/heads内的头像文件名
+		"userNameExpanded" : false,			// 结算用户名默认展开，离开结算时保存当前状态，仅配置编辑
+		"userRankBadge" : "rainbow",			// 仅配置编辑，预设名省略后缀，null/default隐藏
+		"userRankLevel" : 48,					// 玩家徽章内数字，暂不在设置界面编辑
+		"userRating" : 16,						// 玩家白底数字，绘制保留两位小数，暂不在设置界面编辑
+		"settlementDataBytes" : "0B",			// 仅配置编辑，数字+单位，不分大小写，支持负数
+		"recordEndingLength" : 3,				// 仅配置编辑，渲染模式完整入场后录制秒数，范围3到30
 		"enableVsync" : true,					// 是否启用垂直同步(default:true)
 		"aa_level" : 0,							// aa_level等级(default:0)
 		"useOldFX" : false,						// 是否使用旧版打击特效(default:false)
@@ -1878,10 +1886,12 @@ function Phigros() constructor { // 仅仅结构
 		self.res_path[$ "effc.hit"] = (ini_read_string("Resource" , "effc.hit" , $"{working_directory}resource/effect.png"));
 		
 		///
+		// 旧配置缺少此键时恢复默认显示，避免重复读档保留上次的false。
+		self.settings.enableVerVisble = true;
 		var name = (struct_get_names(self.settings));
 		for(var i = 0 ; i < array_length(name) ; i ++){
 			if (settings_saved_key_ignored(name[i])) then continue;
-			if (is_string(self.settings[$ name[i]])) then self.settings[$ name[i]] = (ini_read_string("Settings" , name[i] , self.settings[$ name[i]]));
+			if (settings_kind(name[i]) == "string") then self.settings[$ name[i]] = (ini_read_string("Settings" , name[i] , string(self.settings[$ name[i]])));
 			else self.settings[$ name[i]] = (self.strToReal(ini_read_string("Settings" , name[i] , string(self.settings[$ name[i]])), self.settings[$ name[i]]));
 		};
 		// 只有没有自定义谱面会话时才读 Chart 段，避免 ini 默认值盖掉曲包信息
@@ -1904,6 +1914,7 @@ function Phigros() constructor { // 仅仅结构
 		self.settings.noteSize = settings_clamp_number(self.settings.noteSize, 0.5, 4);
 		self.settings.hitsoundVolume = settings_clamp_number(self.settings.hitsoundVolume, 0, 1);
 		self.settings.musicVolume = settings_clamp_number(self.settings.musicVolume, 0, 1);
+		settings_clamp_store(self.settings);
 		ini_write_string("Settings", "language", lang_current_id());
 		ini_close();
 		print($"str2: {game.settings.comboString}");
@@ -8034,8 +8045,8 @@ function rpe_read_info_number(root_path, key_name, fallback) {
 function rpe_read_info_offset_ms(root_path) {
 	var root = chart_path_norm(root_path);
 	if (string_length(root) && string_char_at(root, string_length(root)) != "/") then root += "/";
-	var info_path = root + "info.txt";
-	if (!chart_file_exists_any(info_path)) then info_path = root + "info.yml";
+	var info_path = root + "info.yml";
+	if (!chart_file_exists_any(info_path)) then info_path = root + "info.txt";
 	if (!chart_file_exists_any(info_path)) then info_path = root + "info.yaml";
 	if (!chart_file_exists_any(info_path)) then return 0;
 

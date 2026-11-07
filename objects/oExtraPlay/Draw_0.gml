@@ -1,4 +1,5 @@
 ///@desc 绘制：先压暗插图，再把背景视频画在上面
+if (chart_loading_silent()) then exit;
 // Phira 先画 background_dim，再画片段，只用片段自己的 dim。
 // 若最后再画一次视口压暗，会把已经乘过 1-dim 的画面再压一层（例如再盖 0.6 的黑）。
 chart_viewport_dim_draw();

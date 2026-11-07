@@ -50,6 +50,11 @@ if (!encoder_started) {
     // 第一帧有效画面才配置编码器。
     video_renderer_configure(frame_width, frame_height, global.render_fps, global.render_crf);
     video_renderer_set_ffmpeg(global.render_ffmpeg);
+    // 解锁视频只在谱面录制完成后拼接，不进入程序内视频播放。
+    var _unlock_file = chart_session_ensure().unlock_video_file;
+    var _unlock_path = is_string(_unlock_file) && string_length(_unlock_file)
+        ? chart_in_path(_unlock_file) : "";
+    video_renderer_set_unlock_video(_unlock_path);
     video_renderer_set_music_volume(game.settings.musicVolume);
     // 延迟、预设或编码器非法就退出。
     if (!video_renderer_set_audio_delay(global.render_intro_seconds)) {
@@ -114,16 +119,16 @@ if (!chart_mask_released()) {
 	};
 };
 gpu_set_scissor(0, 0, max(1, global.render_width), max(1, global.render_height));
-// 官谱已经把版本画进谱面贴回。RPE 在更晚的全屏着色之后再盖一次。录像时关掉 GUI，避免进度层再出现一份。
-if (instance_exists(oRPEEffect)) then chart_draw_recorded_version();
+// 三种格式都在退场、结算合成完成后盖版本信息，先进入成片，再覆盖录制进度层。
+chart_draw_version_overlay();
 if (!variable_instance_exists(id, "version_logged")) {
 	version_logged = true;
-	print($"[Renderer] Version watermark: {chart_version_label()}");
+	print($"[Renderer] Version watermark visible={chart_version_visible()}: {chart_version_label()}");
 };
 // 不要在这里 shader_reset，也不要 surface_reset_target。
 // oChartMask 已经贴回并刷新。surface_get_target 可能仍报谱面遮罩，多一次 reset 会把成片目标弹掉。
 // 捕获表面还绑着时 shader_reset 会丢掉刚提交的音符，成片变成白屏、黑屏，或只剩乱码水印。
-// 这处已经反复修过。抓帧前只允许补视口外背景、把裁剪铺满成片尺寸，以及 pls_draw_flush。
+// 这处已经反复修过。版本叠层 helper 已负责安全刷新与恢复；这里不要额外重置目标或 shader。
 pls_draw_flush();
 // 偶发绑错目标时先跳过这一帧，不要立刻毁掉整段编码。
 if (!video_renderer_capture()) {
@@ -159,11 +164,12 @@ if (render_wants_settlement()) {
 if (render_should_finish) {
     encoder_finished = true;
     overlay_ready = false;
-    render_status = "Finalizing video file";
+    render_status = string_length(chart_session_ensure().unlock_video_file)
+        ? "Merging unlock video, black screen and chart recording" : "Finalizing video file";
     var success = bool(video_renderer_finish());
     if (success) print($"[Renderer] Complete: {global.render_output}");
     else print($"[Renderer] FFmpeg failed: {video_renderer_get_error()}");
-    if (global.render_cli) game_end(); else {
+    if (global.render_cli) game_end(success ? 0 : 1); else {
         global.render_mode = false;
         global.render_source = "";
         global.render_gui_returning = true;

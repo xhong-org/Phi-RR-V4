@@ -222,7 +222,7 @@ chart_idle_behind_loading();
 if (!_chart_lines_building) {
 	global.loading_render_ready = true;
 	chart_blur_bind_game(false);
-	if (pls_is_gxgames()) {
+	if (pls_is_gxgames() && !chart_loading_silent()) {
 		chart_loading_animation_finish();
 	};
 };

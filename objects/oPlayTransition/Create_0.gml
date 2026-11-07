@@ -5,6 +5,7 @@ depth = DEPTH.HEF + 2;
 
 enum PLAY_TRANSITION_STATE {
 	WAIT_MEDIA,
+	UNLOCK_FADE,
 	INTRO_DELAY,
 	INTRO,
 	START_DELAY,
@@ -16,6 +17,9 @@ enum PLAY_TRANSITION_STATE {
 };
 
 state = PLAY_TRANSITION_STATE.WAIT_MEDIA;
+unlock_direct_start = variable_global_exists("loading_unlock_direct_start") && global.loading_unlock_direct_start;
+unlock_fade_started_at = -1;
+unlock_fade_duration = 100000;
 state_started_at = get_timer();
 intro_delay = 100000;
 animation_duration = 1000000;
@@ -189,4 +193,5 @@ function play_transition_finish_exit() {
 play_transition_apply(0);
 if (variable_global_exists("game") && is_struct(game)) then game.paused = true;
 play_transition_deactivate_gameplay();
-if (instance_exists(oLoadAnimator)) then chart_loading_animation_finish();
+// 解锁视频后的静默加载一直保留到媒体就绪；普通流程仍按原来的过场退出。
+if (instance_exists(oLoadAnimator) && !unlock_direct_start) then chart_loading_animation_finish();

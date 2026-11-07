@@ -373,6 +373,7 @@ video_attached_to_line = function(line_instance) {
 ///@param {Real} _index 视频下标
 ///@returns {Undefined} 无
 video_draw_index = function(_index) {
+	if (chart_loading_silent()) then return;
 	// 关掉视频、下标越界、没打开或已播完都不画。
 	if (chart_setting_on("disableChartVideo")) then return;
 	if (_index < 0 || _index >= array_length(videos)) then return;

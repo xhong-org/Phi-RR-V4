@@ -1,4 +1,36 @@
 ///@desc 绘制：半透明遮罩和倾斜的加载排版
+// 静默加载与元数据探测期间不提交任何画面。
+if (mode == "waiting" || mode == "silent") then exit;
+if (mode == "unlock") {
+    if (!unlock_open || unlock_ended) then exit;
+    var _video = video_draw();
+    if (!is_array(_video) || array_length(_video) < 1) then exit;
+    if (_video[0] == -2) {
+        unlock_ended = true;
+        exit;
+    };
+    if (_video[0] == -1) {
+        unlock_error = "Unable to decode unlock video: " + chart_session_ensure().unlock_video_file;
+        exit;
+    };
+    if (_video[0] != 0 || array_length(_video) < 2 || !surface_exists(_video[1])) then exit;
+    chart_mask_scissor_clear();
+    var _video_surface = _video[1];
+    var _video_w = surface_get_width(_video_surface);
+    var _video_h = surface_get_height(_video_surface);
+    var _video_scale = min(room_width / max(1, _video_w), room_height / max(1, _video_h));
+    var _video_x = (room_width - _video_w * _video_scale) * 0.5;
+    var _video_y = (room_height - _video_h * _video_scale) * 0.5;
+    var _video_shader = shader_current();
+    if (video_get_format() == video_format_yuv) {
+        if (array_length(_video) < 3 || !surface_exists(_video[2])) then exit;
+        shader_set(shd_video_yuv);
+        texture_set_stage(shader_get_sampler_index(shd_video_yuv, "v_chroma"), surface_get_texture(_video[2]));
+    };
+    draw_surface_ext(_video_surface, _video_x, _video_y, _video_scale, _video_scale, 0, c_white, 1);
+    if (_video_shader == -1) then shader_reset(); else shader_set(_video_shader);
+    exit;
+};
 // 谱面视口裁剪不能切掉这张全屏遮罩。
 chart_mask_scissor_clear();
 // GX 离开加载房后结束动画。

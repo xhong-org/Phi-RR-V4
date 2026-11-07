@@ -6,6 +6,8 @@ if (!variable_global_exists("game") || !is_struct(game)) {
 };
 
 var now = settlement_elapsed_us();
+// 首个实际 Draw End 才启动时间轴，避免首次加载把入场提前消耗。
+if (!animation_started) then exit;
 // 离开淡出结束后再真正重试或继续。
 if (leaving) {
 	fade_alpha = Easings.InOutCubic(settlement_phase(now, leave_started_at, leave_fade_dur));
@@ -21,22 +23,9 @@ if (leaving) {
 };
 
 // 使用固定时间轴，低帧率和录像跳帧不会累积各小段的等待误差。
-page_eased = Easings.OutCubic(settlement_phase(now, 0, 450000));
-art_eased = Easings.OutExpo(settlement_phase(now, 100000, 1000000));
-score_eased = Easings.OutCubic(settlement_phase(now, 400000, 1100000));
-score_show = round(score_value * score_eased);
-record_eased = Easings.OutCubic(settlement_phase(now, 1200000, 450000));
-stats_eased = Easings.OutQuart(settlement_phase(now, 950000, 650000));
-for (var i = 0; i < 4; i++) {
-	judge_eased[@ i] = Easings.OutCubic(settlement_phase(now, 1250000 + i * 100000, 500000));
-};
-footer_eased = Easings.OutCubic(settlement_phase(now, 1550000, 650000));
-var rank_raw = settlement_phase(now, 1750000, 850000);
-rank_alpha = Easings.OutCubic(settlement_phase(now, 1750000, 250000));
-rank_scale = lerp(1.18, 1, Easings.OutBack(rank_raw));
-rank_flash = sin(rank_raw * pi) * (1 - rank_raw);
-easing_complete = now >= animation_dur;
+settlement_update_animation(now);
 settlement_refresh_layout();
+settlement_update_score_save(now);
 
 if (variable_global_exists("render_mode") && global.render_mode) {
 	if (now >= animation_dur + hold_dur) then global.render_settlement_finished = true;
@@ -50,7 +39,11 @@ if (!input_armed && now >= 800000 && !pointer.held) {
 };
 retry_hover = input_armed && settlement_button_contains(retry_hit, pointer.x, pointer.y, button_cut);
 cont_hover = input_armed && settlement_button_contains(cont_hit, pointer.x, pointer.y, -button_cut);
-if (!input_armed || footer_eased < 0.95) then exit;
+if (settlement_player_input(pointer, now)) then exit;
+if (settlement_sync_input(pointer, now)) then exit;
+// 未保存时先完成同步板入场，不让重试／继续提前销毁待写成绩。
+if (sync_state == 1) then exit;
+if (!input_armed || footer_eased < 0.95 || edge_eased < 0.95) then exit;
 
 if (pointer.pressed && retry_hover) {
 	settlement_begin_leave(true);

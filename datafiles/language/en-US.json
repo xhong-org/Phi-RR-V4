@@ -87,6 +87,7 @@
       "downloadMissing": "Download finished but the file is missing."
     },
     "settlement": {
+      "collected": "Collected",
       "score": "SCORE",
       "maxCombo": "MAX COMBO",
       "accuracy": "ACCURACY"
@@ -151,6 +152,8 @@
       "enableDisplayLineID": "Show line IDs",
       "comboString": "Combo text",
       "userName": "Player name",
+      "settlementDataBytes": "Settlement Data (B; negative values allowed)",
+      "recordEndingLength": "Record Ending Length",
       "enableVsync": "Enable vertical sync",
       "aa_level": "Anti-aliasing level",
       "useOldFX": "Use legacy hit effects",

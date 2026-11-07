@@ -3,6 +3,39 @@
 
 #macro CHART_LINE_CREATE_BUDGET_US 8000
 
+///@desc 解锁后的静止谱面从黑屏渐入；完成后由过场状态机开始原开场动画
+function chart_unlock_fade_draw() {
+	if (variable_global_exists("render_mode") && global.render_mode) then return;
+	if (!instance_exists(oPlayTransition)) then return;
+	var _transition = instance_find(oPlayTransition, 0);
+	if (_transition.state != PLAY_TRANSITION_STATE.UNLOCK_FADE) then return;
+	if (_transition.unlock_fade_started_at < 0) {
+		_transition.unlock_fade_started_at = get_timer();
+		_transition.state_started_at = _transition.unlock_fade_started_at;
+	};
+	var _elapsed = max(0, get_timer() - _transition.unlock_fade_started_at);
+	var _cover_alpha = 1 - clamp(_elapsed / _transition.unlock_fade_duration, 0, 1);
+	if (_cover_alpha <= 0) then return;
+	var _colour = draw_get_colour();
+	var _alpha = draw_get_alpha();
+	gpu_push_state();
+	chart_hud_draw_prepare();
+	draw_set_colour(c_black);
+	draw_set_alpha(_cover_alpha);
+	draw_rectangle(0, 0, room_width, room_height, false);
+	pls_draw_flush();
+	gpu_pop_state();
+	draw_set_colour(_colour);
+	draw_set_alpha(_alpha);
+}
+
+///@desc 解锁视频结束后的加载阶段只推进资源，不呈现谱面或加载界面
+function chart_loading_silent() {
+	if (!instance_exists(oLoadAnimator)) then return false;
+	var _loader = instance_find(oLoadAnimator, 0);
+	return variable_instance_exists(_loader, "mode") && _loader.mode == "silent";
+}
+
 ///@desc 加载动画期间先隐藏刚创建的判定线
 ///@param {Id.Instance} _inst 判定线实例
 ///@returns {Undefined} 无

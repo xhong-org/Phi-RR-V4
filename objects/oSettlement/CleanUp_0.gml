@@ -18,4 +18,8 @@ if (variable_instance_exists(id, "rank_sprite") && asset_sprite_valid(rank_sprit
 rank_sprite = -1;
 if (variable_instance_exists(id, "head_sprite") && asset_sprite_valid(head_sprite)) then sprite_delete(head_sprite);
 head_sprite = -1;
+if (variable_instance_exists(id, "player_badge_sprite") && asset_sprite_valid(player_badge_sprite)) then sprite_delete(player_badge_sprite);
+player_badge_sprite = -1;
+if (variable_instance_exists(id, "data_sprite") && asset_sprite_valid(data_sprite)) then sprite_delete(data_sprite);
+data_sprite = -1;
 pls_ui_font_release_instance();

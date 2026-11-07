@@ -1,13 +1,19 @@
-Tips: Hello World
-Tips: 这个是由GameMaker-LTS2026制作的
-Tips: X X XXX
-Tips: 你知道吗,我不知道
-Tips: 请输入文本
-Tips: 我Phi-RR重构9次了
-Tips: 棍木滚木
-Tips: 在2026.10.12正式跑路(其实是进行维护)
-Tips: 该模拟器源码已经在Github开源(https://github.com/xhongdev/Phi-RR-V4)
-Tips: 石山叠的倍儿高,我叠呀叠
-Tips: 你知道吗,这个模拟器的价值高达800￥
-Tips: 你知道吗,这个模拟器在大量AI Coding找到了少量人工
-Tips: 你知道吗,你在看Tips
+Tip: Hello World
+Tip: 这个是由GameMaker-LTS2026制作的
+Tip: X X XXX
+Tip: 你知道吗,我不知道
+Tip: 请输入文本
+Tip: 我Phi-RR重构9次了
+Tip: 棍木滚木
+Tip: 在2026.10.12正式跑路(其实是进行维护)
+Tip: 该模拟器源码已经在Github开源(https://github.com/xhongdev/Phi-RR-V4)
+Tip: 石山叠的倍儿高,我叠呀叠
+Tip: 你知道吗,这个模拟器的价值高达800￥
+Tip: 你知道吗,这个模拟器在大量AI Coding找到了少量人工
+Tip: 你知道吗,你在看Tips
+Tip: 你知道吗,这个版本是V4-Next
+Tip: 你知道吗,Next和原V4是双更新
+Tip: 你知道吗,Next是实验性内容更新
+Tip: 大肥鱼: 我要吃饭
+Tip: 你知道吗,以前Tip写成了Tips,明明给你看的是单数,不过相信你已经看过不少了
+Tip: 你知道吗,这条Tip是在2026/11/06写的

@@ -1089,7 +1089,7 @@ function official_block_notify_load_ready() {
 		&& oRender._chart_lines_building) return;
 	global.loading_render_ready = true;
 	chart_blur_bind_game(false);
-	if (pls_is_gxgames()) then chart_loading_animation_finish();
+	if (pls_is_gxgames() && !chart_loading_silent()) then chart_loading_animation_finish();
 }
 
 ///@desc 趁加载界面还停着，继续收一批噪域

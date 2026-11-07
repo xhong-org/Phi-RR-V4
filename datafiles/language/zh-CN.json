@@ -87,6 +87,7 @@
       "downloadMissing": "下载完成但文件不存在。"
     },
     "settlement": {
+      "collected": "已获得",
       "score": "本次得分",
       "maxCombo": "最大连击",
       "accuracy": "准确率"
@@ -151,6 +152,8 @@
       "enableDisplayLineID": "是否显示线ID",
       "comboString": "combo 文本",
       "userName": "玩家名称",
+      "settlementDataBytes": "结算 Data 数值（B，支持负数）",
+      "recordEndingLength": "结算录制时长（秒）",
       "enableVsync": "是否启用垂直同步",
       "aa_level": "抗锯齿等级",
       "useOldFX": "是否使用旧版打击特效",

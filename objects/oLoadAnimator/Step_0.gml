@@ -5,6 +5,87 @@ if (room == room_menu) {
     exit;
 };
 var _session = chart_session_ensure();
+if (mode == "waiting") {
+    if (!_session.ready) then exit;
+    var _unlock_file = _session.unlock_video_file;
+    if (is_string(_unlock_file) && string_length(_unlock_file)) {
+        // 加载房间使用黑底，视频留边和后续静默阶段都不显示加载界面。
+        var _unlock_background = layer_background_get_id("Background");
+        if (_unlock_background != -1) then layer_background_blend(_unlock_background, c_black);
+        if (variable_global_exists("render_mode") && global.render_mode) {
+            // 录像只加载谱面；解锁视频由编码器在录制完成后拼接。
+            mode = "silent";
+            global.loading_animation_load_start = true;
+            print("[UnlockVideo] Render mode: deferred to export; starting silent chart load");
+        } else {
+            global.loading_unlock_direct_start = true;
+            mode = "unlock";
+            var _unlock_path = chart_in_path(_unlock_file);
+            if (!gx_media_source_exists(_unlock_path)) {
+                unlock_fail("Unlock video file not found: " + _unlock_file);
+                exit;
+            };
+            try { video_open(_unlock_path); } catch (_unlock_exception) {
+                var _unlock_reason = _unlock_exception.message;
+                delete(_unlock_exception);
+                unlock_fail(_unlock_reason);
+                exit;
+            };
+            unlock_open = true;
+            unlock_opened_at = get_timer();
+            video_enable_loop(false);
+            video_set_volume(settings_store().musicVolume);
+            print($"[UnlockVideo] Opening: {_unlock_path}");
+        };
+    } else {
+        mode = "normal";
+        loading_animation_assets_init();
+    };
+};
+if (mode == "unlock") {
+    if (string_length(unlock_error)) {
+        unlock_fail(unlock_error);
+        exit;
+    };
+    if (unlock_ended) {
+        unlock_finish();
+        exit;
+    };
+    var _video_status = video_get_status();
+    if (_video_status == video_status_playing) {
+        // 解码器可能在 preparing 之后才创建音频通道，播放中继续同步音量。
+        video_set_volume(settings_store().musicVolume);
+        unlock_started = true;
+    };
+    if (os_is_paused()) {
+        if (_video_status == video_status_playing) {
+            video_pause();
+            unlock_os_paused = true;
+        };
+    } else if (unlock_os_paused) {
+        video_resume();
+        unlock_os_paused = false;
+    };
+    if (_video_status == video_status_closed) {
+        if (unlock_started) then unlock_finish();
+        else unlock_fail("Unable to open unlock video: " + _session.unlock_video_file);
+    } else if (!unlock_started && get_timer() - unlock_opened_at > 30000000) {
+        unlock_fail("Timed out opening unlock video: " + _session.unlock_video_file);
+    };
+    exit;
+};
+if (mode == "silent") {
+    if (!silent_released && variable_global_exists("loading_render_ready") && global.loading_render_ready) {
+        silent_released = true;
+        if (global.loading_unlock_direct_start) {
+            // 允许分帧建线解冻，但继续屏蔽绘制，直到媒体就绪并真正开播。
+            global.loading_animator_finished = true;
+        } else {
+            chart_loading_animation_finish();
+        };
+    };
+    exit;
+};
 // 渲染房间准备好就算谱面就绪。
 if (!chart_ready && variable_global_exists("loading_render_ready") && global.loading_render_ready) {
     chart_ready = true;

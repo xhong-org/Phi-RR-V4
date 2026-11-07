@@ -4,6 +4,31 @@ The Windows build supports deterministic chart-to-MP4 rendering through the
 `VideoRenderer` extension. The selected chart package may be a ZIP/PEZ archive,
 a chart directory, or an individual supported chart file.
 
+Chart metadata is read from the chart package root, preferring `info.yml`, then
+`info.txt`, then `info.csv`. When multiple files exist, the first existing file
+provides the metadata. It can specify an unlock video relative to that root:
+
+```yaml
+unlockVideo: unlock.mp4
+```
+
+With this field set, interactive playback shows the video with its audio first,
+then loads the chart silently on a black screen. When ready, the picture fades
+in over 0.1 seconds, followed by the chart's normal intro animation and playback. Missing,
+empty, or `null` values use the normal loading animation.
+
+Render mode never plays the unlock video in the application. It records the
+chart first, finishes the music and hit-sound mix, then uses the configured
+FFmpeg to join **unlock video → 1 second of silent black → 0.1-second picture
+fade-in → full chart recording**. The fade holds the first chart frame with
+silence; the original intro animation and music start only after it finishes.
+The unlock video is fitted inside the selected output size, with black bars as
+needed, and uses the music volume setting. A missing audio stream is filled with
+silence; audio extending past the last video frame holds that frame until the
+audio ends. This final join re-encodes the combined video and adds export time.
+If joining fails, the completed chart recording is retained and the export
+reports failure.
+
 ```powershell
 .\pcr.exe -render "D:\Charts\MyChart.zip" -output "D:\Videos\MyChart.mp4"
 

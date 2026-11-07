@@ -50,6 +50,8 @@ UINT g_capture_height = 0;
 UINT g_capture_samples = 0;
 std::vector<std::uint8_t> g_row;
 std::string g_output_path;
+std::string g_unlock_video_path;
+bool g_unlock_video_merged = false;
 std::uint64_t g_captured_frames = 0;
 bool g_pipe_bgra = false;
 constexpr UINT kNoStagingSlot = UINT_MAX;
@@ -357,7 +359,7 @@ bool run_process(std::wstring command) {
     PROCESS_INFORMATION process{};
     if (!CreateProcessW(nullptr, command.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW,
         nullptr, nullptr, &startup, &process)) {
-        g_error = "Unable to start FFmpeg hitsound mixing (Win32 error "
+        g_error = "Unable to start FFmpeg (Win32 error "
             + std::to_string(GetLastError()) + ").";
         return false;
     }
@@ -367,9 +369,212 @@ bool run_process(std::wstring command) {
     GetExitCodeProcess(process.hProcess, &exit_code);
     CloseHandle(process.hProcess);
     if (exit_code != 0) {
-        g_error = "FFmpeg hitsound mixing exited with code " + std::to_string(exit_code) + ".";
+        g_error = "FFmpeg exited with code " + std::to_string(exit_code) + ".";
         return false;
     }
+    return true;
+}
+
+// Capture bounded FFmpeg progress without depending on a separate ffprobe install.
+bool run_process_capture(std::wstring command, std::string& text, DWORD& exit_code) {
+    SECURITY_ATTRIBUTES security{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
+    HANDLE read_pipe = nullptr;
+    HANDLE write_pipe = nullptr;
+    if (!CreatePipe(&read_pipe, &write_pipe, &security, 0)) {
+        g_error = "Unable to create the FFmpeg metadata pipe.";
+        return false;
+    }
+    SetHandleInformation(read_pipe, HANDLE_FLAG_INHERIT, 0);
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    startup.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+    startup.wShowWindow = SW_HIDE;
+    startup.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    startup.hStdOutput = write_pipe;
+    startup.hStdError = write_pipe;
+    PROCESS_INFORMATION process{};
+    const BOOL started = CreateProcessW(nullptr, command.data(), nullptr, nullptr, TRUE,
+        CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
+    CloseHandle(write_pipe);
+    if (!started) {
+        CloseHandle(read_pipe);
+        g_error = "Unable to inspect unlock video (Win32 error "
+            + std::to_string(GetLastError()) + ").";
+        return false;
+    }
+    CloseHandle(process.hThread);
+    text.clear();
+    std::array<char, 4096> chunk{};
+    DWORD count = 0;
+    while (ReadFile(read_pipe, chunk.data(), static_cast<DWORD>(chunk.size()), &count, nullptr)
+        && count > 0) {
+        text.append(chunk.data(), count);
+        // Only the last progress block and error details are needed. Keep draining the pipe.
+        if (text.size() > 65536) text.erase(0, text.size() - 65536);
+    }
+    CloseHandle(read_pipe);
+    WaitForSingleObject(process.hProcess, INFINITE);
+    exit_code = 1;
+    GetExitCodeProcess(process.hProcess, &exit_code);
+    CloseHandle(process.hProcess);
+    return true;
+}
+
+double progress_value(const std::string& text, std::string_view key) {
+    const std::string needle = "\n" + std::string(key) + "=";
+    std::size_t position = text.rfind(needle);
+    if (position == std::string::npos) {
+        if (text.starts_with(std::string(key) + "=")) position = 0;
+        else return 0.0;
+    } else {
+        ++position;
+    }
+    const char* number = text.c_str() + position + key.size() + 1;
+    char* end = nullptr;
+    const double result = std::strtod(number, &end);
+    return end != number && std::isfinite(result) ? result : 0.0;
+}
+
+std::wstring hardware_encoder_options();
+
+bool same_existing_file(const std::wstring& first, const std::wstring& second) {
+    const DWORD sharing = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+    const HANDLE a = CreateFileW(first.c_str(), FILE_READ_ATTRIBUTES, sharing,
+        nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    const HANDLE b = CreateFileW(second.c_str(), FILE_READ_ATTRIBUTES, sharing,
+        nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    BY_HANDLE_FILE_INFORMATION info_a{}, info_b{};
+    const bool equal = a != INVALID_HANDLE_VALUE && b != INVALID_HANDLE_VALUE
+        && GetFileInformationByHandle(a, &info_a) && GetFileInformationByHandle(b, &info_b)
+        && info_a.dwVolumeSerialNumber == info_b.dwVolumeSerialNumber
+        && info_a.nFileIndexHigh == info_b.nFileIndexHigh
+        && info_a.nFileIndexLow == info_b.nFileIndexLow;
+    if (a != INVALID_HANDLE_VALUE) CloseHandle(a);
+    if (b != INVALID_HANDLE_VALUE) CloseHandle(b);
+    return equal;
+}
+
+bool prepend_unlock_video() {
+    if (g_unlock_video_path.empty() || g_unlock_video_merged) return true;
+    const auto merge_started = std::chrono::steady_clock::now();
+    const std::wstring unlock = utf8_to_wide(g_unlock_video_path);
+    const std::wstring output = utf8_to_wide(g_output_path);
+    if (unlock.empty() || output.empty() || g_width <= 0 || g_height <= 0
+        || !std::isfinite(g_fps) || g_fps <= 0.0 || g_captured_frames == 0) {
+        g_error = "Invalid unlock video merge configuration; chart recording was preserved.";
+        return false;
+    }
+    const DWORD attributes = GetFileAttributesW(unlock.c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+        g_error = "Unlock video file is missing; chart recording was preserved.";
+        return false;
+    }
+    if (same_existing_file(unlock, output)) {
+        g_error = "Unlock video and render output must be different files.";
+        return false;
+    }
+    const std::wstring ffmpeg = quote(utf8_to_wide(g_ffmpeg));
+    const std::wstring fps = std::to_wstring(g_fps);
+    std::string metadata;
+    DWORD probe_exit = 1;
+    // Decode with the same CFR conversion as the merge. Progress includes audio tails,
+    // so a longer soundtrack holds the final unlock frame rather than being cut off.
+    const std::wstring inspect = ffmpeg
+        + L" -hide_banner -loglevel error -nostdin -nostats -i " + quote(unlock)
+        + L" -map 0:v:0 -map 0:a:0? -vf fps=" + fps
+        + L" -c:a pcm_s16le -progress pipe:1 -f null NUL";
+    if (!run_process_capture(inspect, metadata, probe_exit)) return false;
+    if (probe_exit != 0) {
+        g_error = "Unable to decode unlock video; chart recording was preserved. " + metadata;
+        return false;
+    }
+    const double video_frames = progress_value(metadata, "frame");
+    const double media_seconds = progress_value(metadata, "out_time_us") / 1000000.0;
+    const double unlock_frames = std::max(video_frames, std::ceil(media_seconds * g_fps - 0.000001));
+    if (unlock_frames < 1.0) {
+        g_error = "Unlock video contains no decodable frames; chart recording was preserved.";
+        return false;
+    }
+    const double unlock_seconds = unlock_frames / g_fps;
+    const double chart_seconds = static_cast<double>(g_captured_frames) / g_fps;
+    // Keep the chart's original first frame still during the fade. Its intro and
+    // soundtrack must only begin after this separate, silent prefix has ended.
+    const double fade_seconds = std::ceil(g_fps * 0.1) / g_fps;
+    const std::wstring inspect_audio = ffmpeg
+        + L" -hide_banner -loglevel error -nostdin -i " + quote(unlock)
+        + L" -map 0:a:0 -frames:a 1 -f null NUL";
+    if (!run_process_capture(inspect_audio, metadata, probe_exit)) return false;
+    const bool has_audio = probe_exit == 0;
+    const std::wstring unlock_duration = std::to_wstring(unlock_seconds);
+    const std::wstring chart_duration = std::to_wstring(chart_seconds);
+    const std::wstring fade_duration = std::to_wstring(fade_seconds);
+    const std::wstring dimensions = std::to_wstring(g_width) + L":" + std::to_wstring(g_height);
+    const std::wstring filter =
+        L"[0:v:0]setpts=PTS-STARTPTS,scale=" + dimensions
+        + L":force_original_aspect_ratio=decrease:force_divisible_by=2,pad=" + dimensions
+        + L":(ow-iw)/2:(oh-ih)/2:black,setsar=1,fps=" + fps
+        + L",format=yuv420p,tpad=stop_mode=clone:stop_duration=" + unlock_duration
+        + L",trim=duration=" + unlock_duration + L",settb=AVTB[uv];"
+        // Turn a positive stream start into actual silence before resetting PTS.
+        // In particular, no-hit charts retain the recorder's -itsoffset start time.
+        + (has_audio ? L"[0:a:0]aresample=48000:async=1:first_pts=0,aformat=channel_layouts=stereo,"
+                     : L"anullsrc=r=48000:cl=stereo,")
+        + L"volume=" + std::to_wstring(g_music_volume)
+        + L",apad,atrim=duration=" + unlock_duration + L",asetpts=PTS-STARTPTS[ua];"
+        + L"color=c=black:s=" + std::to_wstring(g_width) + L"x" + std::to_wstring(g_height)
+        + L":r=" + fps + L":d=1,setsar=1,settb=AVTB[bv];"
+        + L"anullsrc=r=48000:cl=stereo,atrim=duration=1,asetpts=PTS-STARTPTS[ba];"
+        + L"[1:v:0]setpts=PTS-STARTPTS,setsar=1,fps=" + fps
+        + L",format=yuv420p,split=2[cfade][cfull];"
+        + L"[cfade]trim=end_frame=1,setpts=PTS-STARTPTS,tpad=stop_mode=clone:stop_duration="
+        + fade_duration + L",trim=duration=" + fade_duration
+        + L",fade=t=in:st=0:d=" + fade_duration + L",settb=AVTB[fv];"
+        + L"anullsrc=r=48000:cl=stereo,atrim=duration=" + fade_duration
+        + L",asetpts=PTS-STARTPTS[fa];"
+        + L"[cfull]trim=duration=" + chart_duration + L",settb=AVTB[cv];"
+        + L"[1:a:0]aresample=48000:async=1:first_pts=0,aformat=channel_layouts=stereo,apad,atrim=duration="
+        + chart_duration + L",asetpts=PTS-STARTPTS[ca];"
+        + L"[uv][ua][bv][ba][fv][fa][cv][ca]concat=n=4:v=1:a=1[v][a]";
+    const std::wstring merged = output + L".unlock-merge-"
+        + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64()) + L".mp4";
+    const std::wstring merge_inputs = ffmpeg
+        + L" -hide_banner -loglevel warning -nostdin -n -i " + quote(unlock)
+        + L" -i " + quote(output) + L" -filter_complex " + quote(filter)
+        + L" -map \"[v]\" -map \"[a]\" -map_metadata -1";
+    const std::wstring merge_output =
+        L" -r " + fps + L" -c:a aac -b:a 192k -movflags +faststart " + quote(merged);
+    std::wstring command = merge_inputs + hardware_encoder_options()
+        + (g_active_encoder == "qsv" ? L" -pix_fmt nv12" : L" -pix_fmt yuv420p")
+        + merge_output;
+    std::fprintf(stderr, "[Renderer] Merging unlock video (%.3fs), 1s black, %.3fs still-frame fade, chart (%.3fs)\n",
+        unlock_seconds, fade_seconds, chart_seconds);
+    bool merged_ok = run_process(std::move(command));
+    if (!merged_ok && g_active_encoder != "x264") {
+        // Direct SDK capture can succeed when FFmpeg lacks that hardware encoder.
+        // Retry only the separate merge, leaving the completed chart untouched.
+        std::fprintf(stderr, "[Renderer] Unlock merge with %s failed; retrying libx264: %s\n",
+            g_active_encoder.c_str(), g_error.c_str());
+        DeleteFileW(merged.c_str());
+        merged_ok = run_process(merge_inputs + L" -c:v libx264 -preset "
+            + utf8_to_wide(g_preset) + L" -crf " + std::to_wstring(g_crf)
+            + L" -pix_fmt yuv420p" + merge_output);
+    }
+    if (!merged_ok) {
+        DeleteFileW(merged.c_str());
+        g_error = "Unlock video merge failed; chart recording was preserved. " + g_error;
+        return false;
+    }
+    g_error.clear();
+    if (!MoveFileExW(merged.c_str(), output.c_str(),
+        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        g_error = "Unable to commit unlock video merge (Win32 error "
+            + std::to_string(GetLastError()) + "); chart recording was preserved.";
+        DeleteFileW(merged.c_str());
+        return false;
+    }
+    g_unlock_video_merged = true;
+    std::fprintf(stderr, "[Renderer] Unlock video merge complete in %.2fs\n",
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - merge_started).count());
     return true;
 }
 
@@ -1531,6 +1736,12 @@ extern "C" __declspec(dllexport) double video_renderer_set_ffmpeg(const char* ff
     return 1.0;
 }
 
+extern "C" __declspec(dllexport) double video_renderer_set_unlock_video(const char* video_path) {
+    g_unlock_video_path = video_path ? video_path : "";
+    g_unlock_video_merged = false;
+    return 1.0;
+}
+
 extern "C" __declspec(dllexport) double video_renderer_set_music_volume(double volume) {
     if (!std::isfinite(volume)) return 0.0;
     g_music_volume = std::clamp(volume, 0.0, 1.0);
@@ -1577,6 +1788,7 @@ extern "C" __declspec(dllexport) double video_renderer_start(const char* output_
     reset_nvenc(true);
     reset_amf(true);
     g_error.clear();
+    g_unlock_video_merged = false;
     g_output_path = output_path && *output_path ? output_path : "";
     g_audio_path = audio_path && *audio_path ? audio_path : "";
 
@@ -1586,6 +1798,12 @@ extern "C" __declspec(dllexport) double video_renderer_start(const char* output_
     if (!output_path || !*output_path || !audio_path || !*audio_path || width <= 0
         || height <= 0 || fps <= 0.0) {
         g_error = "Invalid renderer arguments.";
+        return 0.0;
+    }
+    // Check before the encoder can open/truncate the destination, including hard links.
+    if (!g_unlock_video_path.empty() && same_existing_file(
+        utf8_to_wide(g_unlock_video_path), utf8_to_wide(g_output_path))) {
+        g_error = "Unlock video and render output must be different files.";
         return 0.0;
     }
 
@@ -1754,7 +1972,7 @@ extern "C" __declspec(dllexport) double video_renderer_finish() {
         if (!encoded) return 0.0;
         const bool mixed = mix_hitsounds();
         g_hitsounds.clear();
-        return mixed ? 1.0 : 0.0;
+        return mixed && prepend_unlock_video() ? 1.0 : 0.0;
     }
     if (!flush_pending_capture()) {
         finish_process();
@@ -1763,7 +1981,7 @@ extern "C" __declspec(dllexport) double video_renderer_finish() {
     if (finish_process() == 0.0) return 0.0;
     const bool mixed = mix_hitsounds();
     g_hitsounds.clear();
-    return mixed ? 1.0 : 0.0;
+    return mixed && prepend_unlock_video() ? 1.0 : 0.0;
 }
 
 extern "C" __declspec(dllexport) double video_renderer_clear_hitsounds() {
@@ -1795,6 +2013,8 @@ extern "C" __declspec(dllexport) double video_renderer_shutdown() {
     reset_amf(true);
     g_hitsounds.clear();
     g_output_path.clear();
+    g_unlock_video_path.clear();
+    g_unlock_video_merged = false;
     g_audio_path.clear();
     g_audio_delay_seconds = 0.0;
     g_music_volume = 1.0;

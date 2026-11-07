@@ -120,6 +120,7 @@ function chart_background_retry_blur() {
 ///@param {Bool} _dim 是否参与压暗流程
 ///@returns {Undefined} 无
 function chart_draw_background(_dim = true) {
+	if (chart_loading_silent()) then return;
 	if (pls_is_gxgames()) {
 		chart_blur_bind_game(true);
 		chart_background_retry_blur();

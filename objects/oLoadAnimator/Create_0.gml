@@ -43,9 +43,38 @@ global.loading_animation_load_start = false;
 global.loading_render_ready = false;
 global.loading_animator_finished = false;
 global.loading_animation_active = true;
+global.loading_unlock_direct_start = false;
+mode = "waiting";
+unlock_open = false;
+unlock_started = false;
+unlock_ended = false;
+unlock_error = "";
+unlock_opened_at = 0;
+unlock_os_paused = false;
+silent_released = false;
+
+unlock_close = function() {
+    if (unlock_open) then video_close();
+    unlock_open = false;
+};
+unlock_finish = function() {
+    unlock_close();
+    mode = "silent";
+    global.loading_animation_load_start = true;
+    print("[UnlockVideo] Ended; starting silent chart load");
+};
+unlock_fail = function(_reason) {
+    unlock_close();
+    print($"[UnlockVideo] Failed: {_reason}");
+    chart_loading_animation_abort();
+    chart_session_cleanup(true);
+    pls_return_to_entry(_reason);
+};
 tips = [];
 tip_index = 0;
 
+// 先读元数据；只有普通加载才创建动画资源和界面字体。
+loading_animation_assets_init = function() {
 var _tips_path = working_directory + "resource/tips.txt";
 // 从 tips.txt 读提示，没有就用语言包里的兜底句。
 if (file_exists(_tips_path)) {
@@ -88,6 +117,7 @@ if (surface_exists(_panel_surface)) {
         _slice.tilemode[nineslice_centre] = nineslice_stretch;
         sprite_set_nineslice(panel_sprite, _slice);
     };
+};
 };
 ///@desc 绘制填充平行四边形，锐角 75 度
 ///@param {Real} px 左下角 x

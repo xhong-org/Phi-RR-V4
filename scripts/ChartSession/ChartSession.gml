@@ -23,6 +23,7 @@ function chart_session_default() { // 立正了
                 "line_file" : "",
                 "line_overrides" : [],
                 "extra_file" : "",
+                "unlock_video_file" : "",
                 "info_offset_ms" : 0,
                 "aspect_ratio" : 16 / 9,
                 "name" : "",
@@ -106,6 +107,7 @@ function chart_session_cleanup(full_reset = true) {
         } else if (is_struct(session)) {
                 session.extract_dir = "";
                 session.active_dir = "";
+                session.unlock_video_file = "";
                 session.files = undefined;
                 session.ready = false;
         };
@@ -193,7 +195,7 @@ function chart_playback_teardown_for_menu() {
 function chart_hud_ready() {
         // 加载动画期间不显示
         if (variable_global_exists("loading_animation_active") && global.loading_animation_active) then return false;
-        if (chart_actor_exists(oPlayTransition)) then return true;
+        if (chart_actor_exists(oPlayTransition) || chart_actor_exists(oSettlement)) then return true;
         if (variable_global_exists("game") && is_struct(game) && !game.paused) then return true;
         return false;
 }
@@ -218,11 +220,17 @@ function chart_version_label() {
 	return $"@{VerStr}[{ver_real()}] - Code By XTHX({_kind}->{_value})";
 }
 
-///@desc 在当前渲染目标上盖版本水印；若画在 Draw GUI 会晚于编码器读取而落到进度条上，须在谱面 surface 绑定中或最后一次全屏着色器之后调用，并在恢复 GPU 前刷新
+///@desc 版本、作者和谱面格式的独立开关；旧配置缺失时仍显示
+function chart_version_visible() {
+	if (!variable_global_exists("game") || !is_struct(game) || !is_struct(game.settings)) then return true;
+	return settings_version_visible(game.settings[$ "enableVerVisble"] ?? true);
+}
+
+///@desc 在合成后的目标上画版本信息；交互在暂停层末尾调用，录像在抓帧前调用
 ///@returns {Undefined} 无
-function chart_draw_recorded_version() {
-	// 非录制模式或字体无效则不画
-	if (!(variable_global_exists("render_mode") && global.render_mode)) then return;
+function chart_draw_version_overlay() {
+	if (chart_loading_silent()) then return;
+	if (!chart_version_visible()) then return;
 	if (!variable_global_exists("game") || !is_struct(game) || !asset_font_valid(game.font)) then return;
 	var _scale = variable_global_exists("global_scales") ? global_scales : 1;
 	if (!is_real(_scale) || _scale <= 0) then _scale = 1;
@@ -278,18 +286,16 @@ function chart_draw_recorded_version() {
 	draw_set_font(_font);
 }
 
-///@desc 在应用表面最上层画版本号和帧率。Draw GUI 会被谱面遮罩盖掉，谱面着色器也已经结束。
+///@desc 在应用表面画版本信息和帧率；结算只保留版本信息，录像由抓帧入口处理
 ///@returns {Undefined} 无
 function chart_hud_draw_overlay() {
 	if (!chart_hud_ready()) then return;
-	// 全屏黑底和结算页已经接管画面，不再把游玩的水印叠到它们上面。
-	if (chart_actor_exists(oSettlement)) then return;
-	if (chart_actor_exists(oPlayTransition) && chart_actor_find(oPlayTransition, 0).mask_released) then return;
 	if (!variable_global_exists("game") || !is_struct(game) || !asset_font_valid(game.font)) then return;
 	if (variable_global_exists("render_mode") && global.render_mode) then return;
+	chart_draw_version_overlay();
+	if (!chart_fps_draw_allowed()) then return;
 	var _scale = variable_global_exists("global_scales") ? global_scales : 1;
 	if (!is_real(_scale) || _scale <= 0) then _scale = 1;
-	var _left = variable_global_exists("chart_view_left") ? chart_view_left : 0;
 	var _right = variable_global_exists("chart_view_right") ? chart_view_right : room_width;
 	chart_hud_draw_prepare();
 	draw_set_font(game.font);
@@ -299,12 +305,10 @@ function chart_hud_draw_overlay() {
 		draw_set_colour(c_white);
 		draw_set_alpha(1);
 		var _fps_now = variable_global_exists("fpsReal") ? fpsReal : fps_real;
-		draw_text_transformed(_right, 30 * _scale, $"{ceil(_fps_now)}({fps})", 0.35 * _scale, 0.35 * _scale, 0);
+		// Runtime fps_real 由场景执行耗时计算；fps 是每秒实际运行的游戏循环。
+		var _fps_label = $"{ceil(_fps_now)}({fps})";
+		draw_text_transformed(_right, 30 * _scale, _fps_label, 0.35 * _scale, 0.35 * _scale, 0);
 	};
-	draw_set_colour(c_gray);
-	draw_set_halign(fa_left);
-	draw_set_alpha(1);
-	draw_text_transformed(_left + 5 * _scale, room_height - (10 * _scale), chart_version_label(), 0.3 * _scale, 0.3 * _scale, 0);
 	draw_set_valign(fa_top);
 	draw_set_halign(fa_left);
 	draw_set_colour(c_white);
@@ -337,6 +341,8 @@ function chart_hud_draw_prepare() {
 ///@desc 判断现在能否画帧率
 ///@returns {Bool} 允许时为真
 function chart_fps_draw_allowed() {
+        if (variable_global_exists("game") && is_struct(game) && is_struct(game.settings)
+                && !bool(game.settings.enableFPS)) then return false;
         // 录制、结算或退场动画时不画
         if (variable_global_exists("render_mode") && global.render_mode) then return false;
         if (chart_actor_exists(oSettlement)) then return false;
@@ -364,13 +370,24 @@ function render_settlement_lead_seconds() {
 ///@desc 结算入场动画时长，界面和录像共用
 ///@returns {Real} 秒数
 function settlement_animation_seconds() {
-        return 2.6;
+        // Official 式主体、评级和晚入场横条的完整时间轴。
+        return 3.65;
 }
 
-///@desc 结算收尾时长：退场和等待，加上入场动画、停留 3 秒
+///@desc 结算完整入场后继续录制的秒数，兼容缺失或无效的旧配置
+///@returns {Real} 3 至 30 秒，默认 3 秒
+function render_settlement_hold_seconds() {
+        var value = 3;
+        if (variable_global_exists("game") && is_struct(game) && is_struct(game.settings)) {
+                value = settings_parse_value(game.settings[$ "recordEndingLength"] ?? 3, 3);
+        };
+        return (is_numeric(value) && is_finite(value)) ? clamp(value, 3, 30) : 3;
+}
+
+///@desc 结算收尾时长：退场和等待，加上入场动画及设置中的停留秒数
 ///@returns {Real} 从谱面结束到结算停留结束的秒数
 function render_settlement_tail_seconds() {
-        return render_settlement_lead_seconds() + settlement_animation_seconds() + 3;
+        return render_settlement_lead_seconds() + settlement_animation_seconds() + render_settlement_hold_seconds();
 }
 
 ///@desc 按难度前缀选择结算结尾音序号
@@ -606,6 +623,7 @@ function chart_blur_release() {
 ///@desc 中止加载动画并清掉相关全局标记
 ///@returns {Undefined} 无
 function chart_loading_animation_abort() {
+        global.loading_unlock_direct_start = false;
         chart_blur_release();
         // 动画实例还在就关掉并销毁
         if (chart_actor_exists(oLoadAnimator)) {
@@ -672,6 +690,7 @@ function chart_session_fail(message, cleanup = true) {
         session.chart_file = "";
         session.music_file = "";
         session.image_file = "";
+        session.unlock_video_file = "";
         session.name = "";
         session.level = "";
         session.composer = "";
@@ -1899,6 +1918,11 @@ function chart_parse_aspect_ratio(value, fallback = 16 / 9) {
 function chart_info_apply_value(info, key, val) {
         var normalized_key = string_lower(string_replace_all(string(key), " ", ""));
         normalized_key = string_replace_all(normalized_key, "\t", "");
+        // 解锁视频只能由元数据明确指定；空值也必须清掉先前的值。
+        if (normalized_key == "unlockvideo" || normalized_key == "unlock_video") {
+                info.unlock_video = is_string(val) ? chart_info_trim_value(val) : "";
+                return;
+        };
         var value = chart_info_trim_value(val);
         // 空值不覆盖已有字段
         if (!string_length(value)) then return;
@@ -1989,6 +2013,7 @@ function chart_parse_info_file(info_path) {
                 "image" : "",
                 "music" : "",
                 "chart" : "",
+                "unlock_video" : "",
                 "offset_ms" : 0,
                 "aspect_ratio" : 16 / 9
         };
@@ -2021,6 +2046,7 @@ function chart_parse_info_csv(info_path) {
         var info = {
                 "name" : "", "level" : "", "image" : "", "music" : "", "chart" : "",
                 "composer" : "", "charter" : "", "illustrator" : "",
+                "unlock_video" : "",
                 "offset_ms" : 0, "aspect_ratio" : 16 / 9
         };
         if (!chart_file_exists_any(info_path)) then return info;
@@ -2061,7 +2087,7 @@ function chart_parse_info_csv(info_path) {
         return info;
 }
 
-///@desc 只接受谱面包根目录的 info.txt、info.yml 或 info.csv
+///@desc 只接受谱面包根目录的元数据，优先级为 info.yml、info.txt、info.csv
 ///@param {String} root_dir 包根目录
 ///@returns {Struct} 含 info、has_info、source 的结果
 function chart_load_root_info(root_dir) {
@@ -2074,20 +2100,12 @@ function chart_load_root_info(root_dir) {
                 "image" : "",
                 "music" : "",
                 "chart" : "",
+                "unlock_video" : "",
                 "offset_ms" : 0,
                 "aspect_ratio" : 16 / 9
         };
         var root = chart_path_norm(root_dir);
         if (string_length(root) && string_char_at(root, string_length(root)) != "/") then root += "/";
-
-        var txt = chart_path_join(root, "info.txt");
-        if (chart_file_exists_any(txt)) {
-                return {
-                        "info" : chart_parse_info_file(txt),
-                        "has_info" : true,
-                        "source" : "info.txt"
-                };
-        };
 
         var yml = chart_path_join(root, "info.yml");
         if (chart_file_exists_any(yml)) {
@@ -2095,6 +2113,15 @@ function chart_load_root_info(root_dir) {
                         "info" : chart_parse_info_file(yml),
                         "has_info" : true,
                         "source" : "info.yml"
+                };
+        };
+
+        var txt = chart_path_join(root, "info.txt");
+        if (chart_file_exists_any(txt)) {
+                return {
+                        "info" : chart_parse_info_file(txt),
+                        "has_info" : true,
+                        "source" : "info.txt"
                 };
         };
 
@@ -2139,8 +2166,8 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
         session.from_zip = from_zip;
         global.chart_active_path = root;
 
-        // 优先级：根目录 info.txt，其次 info.yml，再纯目录扫描；扫描到的嵌套 info 忽略
-        chart_session_set_status("Reading metadata", "root info.txt / info.yml only");
+        // 优先级：根目录 info.yml、info.txt、info.csv，再纯目录扫描；扫描到的嵌套 info 忽略
+        chart_session_set_status("Reading metadata", "root info.yml / info.txt / info.csv");
         var info_pack = chart_load_root_info(root);
         var info = info_pack.info;
         var has_info = info_pack.has_info;
@@ -2240,6 +2267,7 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
         session.line_file = string_length(line_full) ? chart_path_rel(root, line_full) : "";
         session.line_overrides = chart_load_line_overrides(line_full, chart_full, root);
         session.extra_file = string_length(extra_full) ? chart_path_rel(root, extra_full) : "";
+        session.unlock_video_file = info.unlock_video;
         session.info_offset_ms = real(info.offset_ms ?? 0);
         session.aspect_ratio = real(info.aspect_ratio ?? (16 / 9));
 
@@ -2263,6 +2291,7 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
 function chart_session_load_zip(zip_path) {
         var session = chart_session_ensure();
         session.ready = false;
+        session.unlock_video_file = "";
         session.error = "";
         session.source_path = zip_path;
         session.from_zip = true;

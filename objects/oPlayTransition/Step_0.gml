@@ -126,6 +126,52 @@ if (variable_global_exists("render_mode") && global.render_mode) {
 	exit;
 };
 
+// 解锁视频后的静默加载结束后，先渐入静止画面，再运行原谱面开场。
+if (unlock_direct_start && state == PLAY_TRANSITION_STATE.WAIT_MEDIA) {
+	game.paused = true;
+	if (_elapsed >= 45000000) {
+		var _unlock_wait_error = "Timed out preparing chart media after unlock video";
+		print("[UnlockVideo] " + _unlock_wait_error);
+		chart_loading_animation_abort();
+		chart_session_cleanup(true);
+		pls_return_to_entry(_unlock_wait_error);
+		exit;
+	};
+	if (!chart_actor_exists(oMedia)) then exit;
+	var _unlock_media = chart_actor_find(oMedia, 0);
+	if (!chart_actor_var_exists(_unlock_media, "success") || is_undefined(_unlock_media.success)) then exit;
+	if (chart_actor_var_exists(_unlock_media, "gx_pcm_id") && is_real(_unlock_media.gx_pcm_id) && _unlock_media.gx_pcm_id >= 0) then exit;
+	if (owner.object_index == oRender && official_block_pack_pending()) {
+		official_blocks_pack_pump();
+		exit;
+	};
+	play_transition_apply(0);
+	chart_loading_animation_finish();
+	global.loading_animator_finished = false;
+	global.loading_unlock_direct_start = false;
+	unlock_direct_start = false;
+	line_progress = 0;
+	state = PLAY_TRANSITION_STATE.UNLOCK_FADE;
+	state_started_at = _now;
+	unlock_fade_started_at = -1;
+	print("[UnlockVideo] Silent load complete; fading in before chart intro");
+	exit;
+};
+if (state == PLAY_TRANSITION_STATE.UNLOCK_FADE) {
+	game.paused = true;
+	play_transition_apply(0);
+	line_progress = 0;
+	// 首帧真正绘制时才开始计时，避免资源初始化耗时吃掉渐入前半段。
+	if (unlock_fade_started_at < 0) then exit;
+	if (_elapsed >= unlock_fade_duration) {
+		unlock_fade_started_at = -1;
+		state = PLAY_TRANSITION_STATE.INTRO;
+		state_started_at = _now;
+		print("[UnlockVideo] Fade complete; starting chart intro");
+	};
+	exit;
+};
+
 switch (state) {
 	case PLAY_TRANSITION_STATE.WAIT_MEDIA:
 		game.paused = true;

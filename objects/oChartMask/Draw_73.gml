@@ -1,4 +1,5 @@
 ///@desc 绘制结束：把有效谱面视口合成回屏幕
+if (chart_loading_silent()) then exit;
 // 谱面表面这时还绑着。未刷新就 shader_reset，会丢掉这一帧的音符和打击特效。
 // 捕获表面或谱面表面仍是目标时，必须先解开再复位，复位后再绑回去。
 // 这处已经反复修过。不要在这里直接 shader_reset，也不要多一次 surface_reset_target。
@@ -8,6 +9,10 @@ var _mask_held = surface_exists(_mask_target) && _mask_target != application_sur
 if (_mask_held) then surface_reset_target();
 shader_reset();
 if (_mask_held) then surface_set_target(_mask_target);
+chart_mask_scissor_clear();
+// 噪域要先合成进谱面，才能和音符一起参与全局遮挡、扭曲及发光。
+if (!target_active || !surface_exists(surface_id)) then exit;
+official_blocks_draw();
 chart_mask_scissor_clear();
 // 全屏着色器（没有 PhiZone targetRange）必须在贴回之前落到这张表面上。
 // 不用 Draw GUI；暂停菜单画在这次贴回之后。
@@ -43,18 +48,7 @@ if (target_active && surface_exists(surface_id) && instance_exists(oRPEEffect)
 		};
 	};
 };
-// 没绑上目标或表面丢了就不再合成。
-if (!target_active || !surface_exists(surface_id)) then exit;
-// oRender 深度是 -10999，它的绘制结束会晚于这个 -12000 的解绑，
-// 那时 chart_surface_active 已经清掉。噪声区域要趁谱面表面还绑着时合成，
-// 再清掉方块通道留下的裁剪，然后才贴视口。
-official_blocks_draw();
-chart_mask_scissor_clear();
-// Draw GUI 上的版本号在编码器读取之后才画，所以只会留在进度叠层上。
-// 官谱后面没有着色器通道：把标签画到这张表面上，下面的视口贴回才会进视频。
-if (variable_global_exists("render_mode") && global.render_mode && !instance_exists(oRPEEffect)) {
-	chart_draw_recorded_version();
-}
+// 版本信息留给完成合成后的独立层，不能画进这张会被退场压缩的谱面表面。
 pls_draw_flush();
 surface_reset_target();
 target_active = false;
@@ -125,7 +119,7 @@ if (_outro_scale > 0) {
 gpu_set_blendmode(bm_normal);
 pls_draw_flush();
 gpu_pop_state();
-// pop 会把 scaleOnNotes 推进去的线宽剪刀还原。版本号和帧率在 Draw GUI 再画，这里先放开。
+// pop 会把 scaleOnNotes 推进去的线宽剪刀还原。版本信息和帧率由最终叠层再画，这里先放开。
 chart_mask_scissor_clear();
 // HUD 留在压缩画面之外，继续使用原来的收缩和淡出。
 if (instance_exists(oPlayTransition)) {
