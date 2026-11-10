@@ -51,7 +51,7 @@ if (!encoder_started) {
     video_renderer_configure(frame_width, frame_height, global.render_fps, global.render_crf);
     video_renderer_set_ffmpeg(global.render_ffmpeg);
     // 解锁视频只在谱面录制完成后拼接，不进入程序内视频播放。
-    var _unlock_file = chart_session_ensure().unlock_video_file;
+    var _unlock_file = chart_unlock_video_file();
     var _unlock_path = is_string(_unlock_file) && string_length(_unlock_file)
         ? chart_in_path(_unlock_file) : "";
     video_renderer_set_unlock_video(_unlock_path);
@@ -164,7 +164,7 @@ if (render_wants_settlement()) {
 if (render_should_finish) {
     encoder_finished = true;
     overlay_ready = false;
-    render_status = string_length(chart_session_ensure().unlock_video_file)
+    render_status = string_length(chart_unlock_video_file())
         ? "Merging unlock video, black screen and chart recording" : "Finalizing video file";
     var success = bool(video_renderer_finish());
     if (success) print($"[Renderer] Complete: {global.render_output}");

@@ -5,6 +5,6 @@ if (_video_event == "video_start") {
     video_set_volume(settings_store().musicVolume);
     unlock_started = true;
     print("[UnlockVideo] Playing; chart load is waiting");
-} else if (_video_event == "video_end") {
+} else if (_video_event == "video_end" && unlock_started) {
     unlock_ended = true;
 };

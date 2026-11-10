@@ -947,6 +947,14 @@ function chart_in_path(relative_or_full) {
         return chart_file_readable_path(full);
 }
 
+///@desc 按播放设置选择解锁视频；保留会话中的原始谱面元数据
+///@returns {String} 关闭解锁视频或没有配置时返回空串
+function chart_unlock_video_file() {
+        if (!bool(settings_store()[$ "playUnlockVideos"] ?? true)) then return "";
+        var video_file = chart_session_ensure().unlock_video_file;
+        return is_string(video_file) ? video_file : "";
+}
+
 ///@desc 在谱面目录、Pictures 和已发现图片里解析判定线贴图；根目录文件仍留在谱面目录
 ///@param {String} relative_path 相对贴图路径
 ///@returns {String} 可读路径，找不到则为空

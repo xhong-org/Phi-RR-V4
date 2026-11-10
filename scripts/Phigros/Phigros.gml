@@ -25,7 +25,7 @@
 #macro func function
 #macro isExists chart_file_exists_any
 #macro InChartPath (variable_global_exists("chart_active_path") && is_string(global.chart_active_path) && string_length(global.chart_active_path) ? global.chart_active_path : (working_directory + "chart/"))
-#macro VerReal { "windows": 50003, "android": 50001, "gxgames": 40532 } // 各平台版本号(独立)
+#macro VerReal { "windows": 50004, "android": 50004, "gxgames": 40532 } // 各平台版本号(独立)
 #macro VerStr "v.4.1.2-Next"
 
 ///@desc 按当前操作系统从 VerReal 取出对应版本号
@@ -1496,6 +1496,7 @@ function Phigros() constructor { // 仅仅结构
 		"disableChartShader" : false,			// 禁用谱面 Shader(default:false)
 		"directGlslEs" : false,					// Windows 直接编译谱面 GLSL ES(default:false)
 		"disableChartVideo" : false,			// 禁用谱面视频(default:false)
+		"playUnlockVideos" : true,			// 是否播放 unlockVideos(default:true)
 		"enableNoiseArea" : true,				// 是否启用噪区(default:true)
 		"enableNoiseAreaFine" : false,			// 是否开启噪区高分辨率(default:false)
 		"reduceNoiseAreaWave" : false,			// 减少噪区起伏幅度(default:false)
@@ -4080,7 +4081,8 @@ function phi_chart_aspect_of(meta) {
 ///@desc 计算一段速度事件在比例 p 处的地板积分
 ///@returns {Real} 地板位移
 function phi_speed_integral(legacy, v0, v1, duration, p, easing, left, right) {
-	if (!(p > 0) || !(duration > 0.000000001)) then return 0;
+	// 与播放路径一致：不能用 GML epsilon 把超长事件的小正进度当成零。
+	if (sign(p) != 1 || !(duration > 0.000000001)) then return 0;
 	if (easing == 1) then return ((v1 - v0) * p * p * 0.5 + v0 * p) * duration;
 	// 旧表直接套用，新表用辛普森积分
 	if (legacy) then return rpe_speed_legacy_slice(v0, v1, duration, p, easing, left, right);

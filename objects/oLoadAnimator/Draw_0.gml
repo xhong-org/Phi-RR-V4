@@ -3,13 +3,23 @@
 if (mode == "waiting" || mode == "silent") then exit;
 if (mode == "unlock") {
     if (!unlock_open || unlock_ended) then exit;
+    // Android 的播放器和首帧都异步准备，playing 不保证 TextureView 已有 bitmap。
+    if (os_type == os_android && !unlock_started) then exit;
     var _video = video_draw();
     if (!is_array(_video) || array_length(_video) < 1) then exit;
     if (_video[0] == -2) {
-        unlock_ended = true;
+        // Android 异步打开前也会返回 -2；实际开始后才算播放结束。
+        if (unlock_started && (os_type != os_android || unlock_frame_seen)) then unlock_ended = true;
         exit;
     };
     if (_video[0] == -1) {
+        if (os_type == os_android && !unlock_frame_seen) {
+            if (!unlock_wait_logged) {
+                unlock_wait_logged = true;
+                print("[UnlockVideo] Waiting for first Android video frame");
+            };
+            exit;
+        };
         unlock_error = "Unable to decode unlock video: " + chart_session_ensure().unlock_video_file;
         exit;
     };
@@ -18,6 +28,11 @@ if (mode == "unlock") {
     var _video_surface = _video[1];
     var _video_w = surface_get_width(_video_surface);
     var _video_h = surface_get_height(_video_surface);
+    if (_video_w <= 0 || _video_h <= 0) then exit;
+    if (!unlock_frame_seen) {
+        unlock_frame_seen = true;
+        print($"[UnlockVideo] First frame: {_video_w}x{_video_h}");
+    };
     var _video_scale = min(room_width / max(1, _video_w), room_height / max(1, _video_h));
     var _video_x = (room_width - _video_w * _video_scale) * 0.5;
     var _video_y = (room_height - _video_h * _video_scale) * 0.5;

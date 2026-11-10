@@ -94,15 +94,21 @@ bool looks_like_utf8(std::string_view text) {
     while (i < text.size()) {
         const auto ch = static_cast<unsigned char>(text[i]);
         std::size_t need = 0;
-        if (ch <= 0x7F) need = 1;
-        else if ((ch & 0xE0) == 0xC0) need = 2;
-        else if ((ch & 0xF0) == 0xE0) need = 3;
-        else if ((ch & 0xF8) == 0xF0) need = 4;
+        std::uint32_t code = 0;
+        if (ch == 0) return false; // Filenames must not contain embedded NULs.
+        if (ch <= 0x7F) { need = 1; code = ch; }
+        else if (ch >= 0xC2 && ch <= 0xDF) { need = 2; code = ch & 0x1F; }
+        else if (ch >= 0xE0 && ch <= 0xEF) { need = 3; code = ch & 0x0F; }
+        else if (ch >= 0xF0 && ch <= 0xF4) { need = 4; code = ch & 0x07; }
         else return false;
         if (i + need > text.size()) return false;
         for (std::size_t n = 1; n < need; ++n) {
-            if ((static_cast<unsigned char>(text[i + n]) & 0xC0) != 0x80) return false;
+            const auto next = static_cast<unsigned char>(text[i + n]);
+            if ((next & 0xC0) != 0x80) return false;
+            code = (code << 6) | (next & 0x3F);
         }
+        if ((need == 3 && code < 0x800) || (need == 4 && code < 0x10000)
+            || (code >= 0xD800 && code <= 0xDFFF) || code > 0x10FFFF) return false;
         i += need;
     }
     return true;
@@ -542,30 +548,42 @@ bool read_file_u32(FILE* file, std::uint32_t* value) {
     return true;
 }
 
-std::string zip_name_from_extra(const std::vector<std::uint8_t>& extra) {
+std::string zip_name_from_extra(const std::vector<std::uint8_t>& extra, const std::string& raw) {
     std::size_t offset = 0;
     while (offset + 4 <= extra.size()) {
         const std::uint16_t id = static_cast<std::uint16_t>(extra[offset] | (extra[offset + 1] << 8));
         const std::uint16_t size = static_cast<std::uint16_t>(extra[offset + 2] | (extra[offset + 3] << 8));
         offset += 4;
         if (offset + size > extra.size()) break;
-        if (id == 0x7075 && size >= 5) {
+        if (id == 0x7075 && size > 5 && extra[offset] == 1) {
+            const auto expected_crc = static_cast<std::uint32_t>(extra[offset + 1])
+                | (static_cast<std::uint32_t>(extra[offset + 2]) << 8)
+                | (static_cast<std::uint32_t>(extra[offset + 3]) << 16)
+                | (static_cast<std::uint32_t>(extra[offset + 4]) << 24);
             std::string utf8(reinterpret_cast<const char*>(extra.data() + offset + 5), size - 5);
-            if (!utf8.empty()) return normalize_entry_slashes(utf8);
+            const auto actual_crc = crc32(0, reinterpret_cast<const Bytef*>(raw.data()),
+                static_cast<uInt>(raw.size()));
+            if (expected_crc == actual_crc && looks_like_utf8(utf8)) return normalize_entry_slashes(utf8);
         }
         offset += size;
     }
     return {};
 }
 
-std::string decode_zip_filename_bytes(const std::string& raw, std::uint16_t flags, const std::vector<std::uint8_t>& extra) {
-    const std::string unicode = zip_name_from_extra(extra);
+std::string decode_zip_filename_bytes(const std::string& raw, std::uint16_t flags,
+    const std::vector<std::uint8_t>& extra, bool allow_legacy = true) {
+    if ((flags & 0x0800) != 0) {
+        return looks_like_utf8(raw) ? normalize_entry_slashes(raw) : std::string{};
+    }
+    const std::string unicode = zip_name_from_extra(extra, raw);
     if (!unicode.empty()) return unicode;
-    if ((flags & 0x0800) != 0 || looks_like_utf8(raw)) return normalize_entry_slashes(raw);
-    return decode_raw_name(raw);
+    if (looks_like_utf8(raw)) return normalize_entry_slashes(raw);
+    return allow_legacy ? decode_raw_name(raw) : std::string{};
 }
 
-std::string zip_local_header_name(const std::string& archive_path, la_int64_t offset) {
+std::string zip_local_header_name(const std::string& archive_path, la_int64_t offset,
+    bool allow_legacy = true, bool* valid_header = nullptr) {
+    if (valid_header) *valid_header = false;
     FILE* file = fopen(archive_path.c_str(), "rb");
     if (!file || offset < 0) {
         if (file) fclose(file);
@@ -604,7 +622,8 @@ std::string zip_local_header_name(const std::string& archive_path, la_int64_t of
         return {};
     }
     fclose(file);
-    return decode_zip_filename_bytes(name, flags, extra);
+    if (valid_header) *valid_header = true;
+    return decode_zip_filename_bytes(name, flags, extra, allow_legacy);
 }
 
 std::unordered_map<std::uint32_t, std::string> zip_central_names(const std::string& archive_path) {
@@ -631,8 +650,12 @@ std::unordered_map<std::uint32_t, std::string> zip_central_names(const std::stri
     for (off_t i = static_cast<off_t>(tail.size()) - 22; i >= 0; --i) {
         if (tail[static_cast<std::size_t>(i)] == 0x50 && tail[static_cast<std::size_t>(i) + 1] == 0x4B
             && tail[static_cast<std::size_t>(i) + 2] == 0x05 && tail[static_cast<std::size_t>(i) + 3] == 0x06) {
-            eocd = i;
-            break;
+            const auto comment_len = static_cast<std::size_t>(tail[i + 20])
+                | (static_cast<std::size_t>(tail[i + 21]) << 8);
+            if (static_cast<std::size_t>(i) + 22 + comment_len == tail.size()) {
+                eocd = i;
+                break;
+            }
         }
     }
     if (eocd < 0) {
@@ -644,7 +667,9 @@ std::unordered_map<std::uint32_t, std::string> zip_central_names(const std::stri
         tail[base + 12] | (tail[base + 13] << 8) | (tail[base + 14] << 16) | (tail[base + 15] << 24));
     const std::uint32_t cd_offset = static_cast<std::uint32_t>(
         tail[base + 16] | (tail[base + 17] << 8) | (tail[base + 18] << 16) | (tail[base + 19] << 24));
-    if (fseeko(file, static_cast<off_t>(cd_offset), SEEK_SET) != 0) {
+    const auto eocd_offset = static_cast<std::uint64_t>(file_size - max_back + eocd);
+    if (cd_offset > eocd_offset || cd_size > eocd_offset - cd_offset
+        || fseeko(file, static_cast<off_t>(cd_offset), SEEK_SET) != 0) {
         fclose(file);
         return names;
     }
@@ -669,10 +694,44 @@ std::unordered_map<std::uint32_t, std::string> zip_central_names(const std::stri
         std::string name(reinterpret_cast<const char*>(central.data() + cursor + 46), name_len);
         std::vector<std::uint8_t> extra(central.begin() + cursor + 46 + name_len,
             central.begin() + cursor + 46 + name_len + extra_len);
-        names[local_offset] = decode_zip_filename_bytes(name, flags, extra);
+        // Keep offsets for legacy entries, but only trust explicit Unicode names.
+        names[local_offset] = decode_zip_filename_bytes(name, flags, extra, false);
         cursor += 46u + name_len + extra_len + comment_len;
     }
     return names;
+}
+
+std::string zip_entry_name(const std::string& archive_path, la_int64_t header_pos,
+    const std::unordered_map<std::uint32_t, std::string>& central_names, bool allow_legacy = true) {
+    if (header_pos < 0 || static_cast<std::uint64_t>(header_pos) > UINT32_MAX - 24u) return {};
+    const auto pos = static_cast<std::uint32_t>(header_pos);
+    // libarchive can report the preceding data descriptor as the header position.
+    // Only accept a descriptor-sized gap leading to a real central-directory entry.
+    FILE* file = fopen(archive_path.c_str(), "rb");
+    if (!file) return {};
+    std::uint32_t signature = 0;
+    const bool read = fseeko(file, static_cast<off_t>(header_pos), SEEK_SET) == 0
+        && read_file_u32(file, &signature);
+    fclose(file);
+    if (!read) return {};
+    const bool signed_descriptor = signature == 0x08074b50u;
+    const std::uint32_t gaps[] = {0, 12, 16, 20, 24};
+    for (const auto gap : gaps) {
+        if (gap == 0 && signature != 0x04034b50u) continue;
+        if (gap != 0) {
+            if (signature == 0x04034b50u) break;
+            if ((signed_descriptor && gap != 16 && gap != 24)
+                || (!signed_descriptor && gap != 12 && gap != 20)) continue;
+            if (central_names.find(pos + gap) == central_names.end()) continue;
+        }
+        bool valid_header = false;
+        const auto local = zip_local_header_name(archive_path, header_pos + gap, allow_legacy, &valid_header);
+        if (!valid_header) continue;
+        const auto found = central_names.find(pos + gap);
+        // The central directory may carry a Unicode Path extra missing locally.
+        return found != central_names.end() && !found->second.empty() ? found->second : local;
+    }
+    return {};
 }
 
 bool is_safe_relative_name(std::string_view name) {
@@ -809,7 +868,7 @@ bool extract_archive(const std::filesystem::path& archive, const std::filesystem
     int written = 0;
     int skipped = 0;
     int utf8_names = 0;
-    int unnamed = 0;
+    int recovered_names = 0;
     struct archive_entry* entry = nullptr;
     while (true) {
         if (task->cancel_requested.load()) {
@@ -827,19 +886,24 @@ bool extract_archive(const std::filesystem::path& archive, const std::filesystem
             archive_read_free(reader);
             return false;
         }
+        if (status == ARCHIVE_WARN) {
+            const char* warning = archive_error_string(reader);
+            log_line(std::string("archive header warning: ") + (warning ? warning : "unknown"));
+        }
 
         const char* raw_utf8 = archive_entry_pathname_utf8(entry);
         const char* raw_path = archive_entry_pathname(entry);
         std::string name = entry_utf8_name(entry);
         const la_int64_t header_pos = archive_read_header_position(reader);
-        if (name.empty()) {
-            name = zip_local_header_name(archive.string(), header_pos);
-            if (name.empty()) {
-                const auto found = central_names.find(static_cast<std::uint32_t>(header_pos));
-                if (found != central_names.end()) name = found->second;
-            }
-            if (!name.empty()) log_line("recovered name=" + name + " hex=" + hex_preview(name)
+        if ((archive_format(reader) & ARCHIVE_FORMAT_BASE_MASK) == ARCHIVE_FORMAT_ZIP) {
+            // Keep original UTF-8 bytes even when libarchive's locale conversion fails.
+            const auto zip_name = zip_entry_name(archive.string(), header_pos, central_names, name.empty());
+            if (!zip_name.empty() && zip_name != name) {
+                name = zip_name;
+                ++recovered_names;
+                log_line("recovered name=" + name + " hex=" + hex_preview(name)
                 + " pos=" + std::to_string(static_cast<long long>(header_pos)));
+            }
         }
         const bool non_ascii = !name.empty() && !std::all_of(name.begin(), name.end(), [](unsigned char ch) {
             return ch < 0x80;
@@ -854,10 +918,12 @@ bool extract_archive(const std::filesystem::path& archive, const std::filesystem
             + " size=" + std::to_string(static_cast<long long>(archive_entry_size(entry))));
 
         if (name.empty()) {
-            ++unnamed;
-            name = "_unnamed_" + std::to_string(unnamed);
-            log_line("empty name fallback=" + name
-                + " size=" + std::to_string(static_cast<long long>(archive_entry_size(entry))));
+            task->error = "Cannot decode archive entry filename at position "
+                + std::to_string(static_cast<long long>(header_pos));
+            log_line(task->error);
+            if (extract_log) fclose(extract_log);
+            archive_read_free(reader);
+            return false;
         }
         if (!is_safe_relative_name(name)) {
             task->error = "Refusing unsafe archive entry path: " + name;
@@ -920,7 +986,7 @@ bool extract_archive(const std::filesystem::path& archive, const std::filesystem
     log_line("extract done written=" + std::to_string(written)
         + " skipped=" + std::to_string(skipped)
         + " utf8_names=" + std::to_string(utf8_names)
-        + " unnamed=" + std::to_string(unnamed));
+        + " recovered_names=" + std::to_string(recovered_names));
     if (extract_log) fclose(extract_log);
     {
         JniAttach jni;

@@ -4,10 +4,12 @@ import android.app.Activity;
 import android.util.Base64;
 import android.util.Log;
 
+import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.RandomAccessFile;
 import java.nio.charset.Charset;
@@ -326,21 +328,40 @@ public class IAndroidFiles extends IAndroidFilesInternal {
             return "";
         }
         long length = file.length();
-        if (length > READ_LIMIT) {
+        // The 32 MiB limit belongs to the base64 buffer bridge, not chart text.
+        if (length > Integer.MAX_VALUE) {
             setError("file too large to read: " + file.getAbsolutePath() + " (" + length + " bytes)");
             return "";
         }
-        int size = (int) length;
-        try (FileInputStream stream = new FileInputStream(file)) {
-            byte[] data = new byte[size];
-            int offset = 0;
-            while (offset < data.length) {
-                int read = stream.read(data, offset, data.length - offset);
-                if (read < 0) break;
-                offset += read;
+        try (BufferedInputStream stream = new BufferedInputStream(new FileInputStream(file))) {
+            stream.mark(3);
+            int b0 = stream.read();
+            int b1 = stream.read();
+            int b2 = stream.read();
+            stream.reset();
+            Charset encoding = UTF8;
+            int bom = 0;
+            if (b0 == 0xEF && b1 == 0xBB && b2 == 0xBF) {
+                bom = 3;
+            } else if (b0 == 0xFF && b1 == 0xFE) {
+                encoding = Charset.forName("UTF-16LE");
+                bom = 2;
+            } else if (b0 == 0xFE && b1 == 0xFF) {
+                encoding = Charset.forName("UTF-16BE");
+                bom = 2;
+            }
+            for (int i = 0; i < bom; i++) stream.read();
+            StringBuilder text = new StringBuilder((int) Math.min(length, COPY_BUFFER));
+            // Decode in chunks: do not also allocate a byte[] for the whole JSON.
+            try (InputStreamReader reader = new InputStreamReader(stream, encoding)) {
+                char[] chunk = new char[16 * 1024];
+                int read;
+                while ((read = reader.read(chunk)) != -1) text.append(chunk, 0, read);
             }
             clearError();
-            return new String(data, 0, offset, UTF8);
+            Log.i(TAG, "read text " + file.getAbsolutePath() + " bytes=" + length
+                    + " chars=" + text.length() + " encoding=" + encoding.name());
+            return text.toString();
         } catch (Exception exception) {
             setError("read failed: " + message(exception));
             return "";

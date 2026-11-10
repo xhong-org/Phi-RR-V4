@@ -424,7 +424,7 @@ function chart_actors_dispose(_collect = false) {
     for (var k = 0; k < array_length(keys); k++) {
         var bucket = runtime.buckets[$ keys[k]];
         while (array_length(bucket.all)) chart_actor_destroy(bucket.all[array_length(bucket.all) - 1]);
-        bucket.all = []; bucket.live = [];
+        bucket[$ "all"] = []; bucket.live = [];
     }
     for (var i = 0; i < array_length(runtime.group_list); i++) {
         var group = runtime.group_list[i];

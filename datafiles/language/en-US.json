@@ -170,6 +170,7 @@
       "disableChartShader": "Disable chart shaders",
       "directGlslEs": "Compile GLSL ES directly (Beta)",
       "disableChartVideo": "Disable chart videos",
+      "playUnlockVideos": "Play unlock videos",
       "enableNoiseArea": "Enable noise areas",
       "enableNoiseAreaFine": "Enable high-resolution noise areas",
       "reduceNoiseAreaWave": "Reduce noise-area wave",

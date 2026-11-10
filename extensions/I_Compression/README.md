@@ -8,6 +8,8 @@ On Android the same GML API is served by `I_Compression_android.cpp` through ext
 
 Do not use GameMaker `zip_unzip` on Android; it mangles UTF-8 filenames.
 
+Android ZIP extraction reads original filename bytes from the ZIP headers and central directory, including when libarchive reports the preceding data descriptor as the header position. This preserves Chinese characters, symbols, and emoji when locale conversion cannot provide a name. Unicode Path extra fields are accepted only with version 1, a matching original-name CRC32, and valid UTF-8. Entries whose filenames cannot be recovered fail extraction instead of being saved without their original names and extensions.
+
 ## API
 
 Use the backend wrappers so Windows and Android stay on the correct native file:

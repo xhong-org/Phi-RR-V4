@@ -295,8 +295,8 @@ function rpe_speed_legacy_slice(v0, v1, duration, p, easing, left, right) {
 ///@param {Any} integrate 逐线积分开关，undefined 按谱面版本选择
 ///@returns {Real} 原始积分，无效进度为 0
 function rpe_speed_slice_integral(v0, v1, duration, p, easing, left, right, integrate = undefined) {
-	// 非正进度或零时长没有位移
-	if (!(p > 0) || !(duration > 0.000000001)) then return 0;
+	// 超长事件的正进度可能小于 GML epsilon；按符号判断，避免把末段位移清零。
+	if (sign(p) != 1 || !(duration > 0.000000001)) then return 0;
 	// 线性缓动用闭式，不看窗口
 	if (easing == 1) {
 		return ((v1 - v0) * p * p * 0.5 + v0 * p) * duration;

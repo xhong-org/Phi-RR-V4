@@ -7,7 +7,7 @@ if (room == room_menu) {
 var _session = chart_session_ensure();
 if (mode == "waiting") {
     if (!_session.ready) then exit;
-    var _unlock_file = _session.unlock_video_file;
+    var _unlock_file = chart_unlock_video_file();
     if (is_string(_unlock_file) && string_length(_unlock_file)) {
         // 加载房间使用黑底，视频留边和后续静默阶段都不显示加载界面。
         var _unlock_background = layer_background_get_id("Background");
@@ -66,10 +66,11 @@ if (mode == "unlock") {
         video_resume();
         unlock_os_paused = false;
     };
-    if (_video_status == video_status_closed) {
-        if (unlock_started) then unlock_finish();
-        else unlock_fail("Unable to open unlock video: " + _session.unlock_video_file);
-    } else if (!unlock_started && get_timer() - unlock_opened_at > 30000000) {
+    if (_video_status == video_status_closed && unlock_started) {
+        unlock_finish();
+    } else if ((!unlock_started || (os_type == os_android && !unlock_frame_seen))
+            && get_timer() - unlock_opened_at > 30000000) {
+        // Android 在 UI 线程异步打开；开始准备前 closed 仍是正常的初始状态。
         unlock_fail("Timed out opening unlock video: " + _session.unlock_video_file);
     };
     exit;

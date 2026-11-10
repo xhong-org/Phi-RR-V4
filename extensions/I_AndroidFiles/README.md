@@ -23,4 +23,8 @@ android_files_read_buffer_into(logs + "raw.bin", dest_buf);
 
 Java cannot take `buffer_get_address`. Buffer helpers encode through Base64 (32MB cap). Large files should use `i_android_files_copy`.
 
+Text reads use a character stream, independently of the Base64 cap, so chart JSON
+larger than 32 MiB can be loaded. UTF-8 is the default; UTF-8 and UTF-16 LE/BE BOMs
+are detected and removed while decoding.
+
 `i_android_files_error()` returns the last native error string.
