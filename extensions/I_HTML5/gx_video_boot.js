@@ -16,7 +16,7 @@
             "i_gx_video_end", "i_gx_video_play", "i_gx_video_pause", "i_gx_video_stop",
             "i_gx_video_seek_ms", "i_gx_video_get_position_ms", "i_gx_video_get_length_ms",
             "i_gx_video_get_width", "i_gx_video_get_height", "i_gx_video_get_status",
-            "i_gx_video_draw", "i_gx_video_set_loop", "i_gx_video_release", "i_gx_video_last_error",
+            "i_gx_video_draw", "i_gx_video_set_loop", "i_gx_video_set_volume", "i_gx_video_release", "i_gx_video_last_error",
             "i_gx_video_shutdown"
         ];
         for (var ni = 0; ni < names.length; ni++) {
@@ -89,8 +89,8 @@
     function attachSrc(s, url, mime) {
         if (!s.el) s.el = makeVideo();
         var el = s.el;
-        el.muted = true;
-        el.volume = 0;
+        el.muted = !(s.volume > 0);
+        el.volume = s.volume || 0;
         s.srcUrl = String(url || "");
         s.mime = mime || mimeFromPath(s.srcUrl);
         try { el.pause(); } catch (e0) {}
@@ -98,14 +98,34 @@
         el.src = s.srcUrl;
         try { el.load(); } catch (e2) {}
         if (s.want && !pageHidden) {
-            var p = el.play();
-            if (p && p.catch) p.catch(function () {});
+            tryPlay(s);
         }
         return 1;
     }
 
     function slotOf(id) {
         return slots[id | 0];
+    }
+
+    function tryPlay(s) {
+        if (!s || !s.el || !s.want || pageHidden || s.playPending) return;
+        s.el.volume = s.volume || 0;
+        s.el.muted = !(s.volume > 0);
+        s.playPending = true;
+        var p = s.el.play();
+        Promise.resolve(p).then(function () {
+            s.blocked = false;
+            if (s.playGate) { s.playGate.remove(); s.playGate = null; }
+        }, function (err) {
+            if (err.name !== "NotAllowedError" || !s.want) return;
+            s.blocked = true;
+            if (s.playGate) return;
+            var button = document.createElement("button");
+            button.textContent = /^zh/i.test(navigator.language) ? "点击播放解锁视频" : "Tap to play unlock video";
+            button.style.cssText = "position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2147483645;padding:20px 30px;background:#213b60;color:white;border:1px solid #7c9bc3;border-radius:10px;font:20px system-ui;cursor:pointer";
+            button.addEventListener("click", function () { tryPlay(s); });
+            document.body.appendChild(button); s.playGate = button;
+        }).finally(function () { s.playPending = false; });
     }
 
     function statusOf(s) {
@@ -116,6 +136,7 @@
             return ST_ERROR;
         }
         if (el.ended) return ST_ENDED;
+        if (s.blocked) return 5; // Waiting for the browser's required user gesture.
         if (el.readyState < 2) return ST_PREP;
         if (el.paused) return ST_PAUSE;
         return ST_PLAY;
@@ -131,6 +152,7 @@
     }
 
     function onPageHidden(hidden) {
+        hidden = hidden || !!(g.PhiGX && g.PhiGX.suspended());
         pageHidden = hidden ? 1 : 0;
         if (hidden) pauseAll();
         else {
@@ -138,16 +160,21 @@
             for (var i = 0; i < ids.length; i++) {
                 var s = slots[ids[i]];
                 if (!s || !s.el || !s.want) continue;
-                var p = s.el.play();
-                if (p && p.catch) p.catch(function () {});
+                tryPlay(s);
             }
         }
     }
 
     if (typeof document !== "undefined") {
+        function activateVideos() {
+            Object.keys(slots).forEach(function (id) { var s=slots[id]; if (s.blocked) tryPlay(s); });
+        }
+        document.addEventListener("pointerup", activateVideos, true);
+        document.addEventListener("keydown", activateVideos, true);
         document.addEventListener("visibilitychange", function () {
             onPageHidden(!!document.hidden);
         }, true);
+        document.addEventListener("pls-gx-fullscreen", function (ev) { onPageHidden(document.hidden || ev.detail.suspended); });
         document.addEventListener("pagehide", function () { onPageHidden(true); }, true);
         document.addEventListener("pageshow", function () { onPageHidden(false); }, true);
         document.addEventListener("freeze", function () { onPageHidden(true); }, true);
@@ -346,10 +373,7 @@
         if (!(right > left) || !(bottom > top)) return 1;
         var el = s.el;
         if (s.want && el.paused && !pageHidden) {
-            el.muted = true;
-            el.volume = 0;
-            var playp = el.play();
-            if (playp && playp.catch) playp.catch(function () {});
+            if (!s.blocked) tryPlay(s);
         }
         if (el.readyState < 2 || el.videoWidth <= 0 || el.videoHeight <= 0) return 0;
         var gl = getGL();
@@ -366,7 +390,7 @@
         var prevUnpack = null;
         try { if (gl.PIXEL_UNPACK_BUFFER) prevUnpack = gl.getParameter(gl.PIXEL_UNPACK_BUFFER_BINDING); } catch (eU) {}
         var prevVAO = null;
-        try { prevVAO = gl.getParameter(gl.VERTEX_ARRAY_BINDING); } catch (e0) {}
+        try { if (gl.VERTEX_ARRAY_BINDING !== undefined) prevVAO = gl.getParameter(gl.VERTEX_ARRAY_BINDING); } catch (e0) {}
         var prevBlend = gl.isEnabled(gl.BLEND);
         var prevDepth = gl.isEnabled(gl.DEPTH_TEST);
         var prevCull = gl.isEnabled(gl.CULL_FACE);
@@ -514,10 +538,14 @@
         if (!s || !s.el) return 0;
         s.want = 1;
         if (pageHidden) return 1;
-        s.el.muted = true;
-        s.el.volume = 0;
-        var p = s.el.play();
-        if (p && p.catch) p.catch(function () {});
+        tryPlay(s);
+        return 1;
+    });
+    bind("i_gx_video_set_volume", function (id, volume) {
+        var s = slotOf(id);
+        if (!s || !s.el) return 0;
+        s.volume = Math.max(0, Math.min(1, Number(volume) || 0));
+        s.el.volume = s.volume; s.el.muted = !(s.volume > 0);
         return 1;
     });
     bind("i_gx_video_pause", function (id) {
@@ -576,6 +604,7 @@
     });
     function releaseSlot(id, s) {
         if (!s) return 0;
+        if (s.playGate) { s.playGate.remove(); s.playGate = null; }
         if (s.el) {
             try { s.el.pause(); s.el.removeAttribute("src"); s.el.load(); } catch (e0) {}
             try { if (s.el.parentNode) s.el.parentNode.removeChild(s.el); } catch (e1) {}

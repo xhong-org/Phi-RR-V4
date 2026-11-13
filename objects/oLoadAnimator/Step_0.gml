@@ -25,16 +25,26 @@ if (mode == "waiting") {
                 unlock_fail("Unlock video file not found: " + _unlock_file);
                 exit;
             };
-            try { video_open(_unlock_path); } catch (_unlock_exception) {
-                var _unlock_reason = _unlock_exception.message;
+            try {
+                if (pls_is_gxgames()) {
+                    unlock_gx_handle = gx_video_open(_unlock_path);
+                    if (unlock_gx_handle <= 0) throw "Unable to open unlock video: " + gx_video_last_error();
+                    gx_video_set_loop(unlock_gx_handle, false);
+                    gx_video_set_volume(unlock_gx_handle, settings_store().musicVolume);
+                    gx_video_play(unlock_gx_handle);
+                } else video_open(_unlock_path);
+            } catch (_unlock_exception) {
+                var _unlock_reason = is_string(_unlock_exception) ? _unlock_exception : _unlock_exception.message;
                 delete(_unlock_exception);
                 unlock_fail(_unlock_reason);
                 exit;
             };
             unlock_open = true;
             unlock_opened_at = get_timer();
-            video_enable_loop(false);
-            video_set_volume(settings_store().musicVolume);
+            if (!pls_is_gxgames()) {
+                video_enable_loop(false);
+                video_set_volume(settings_store().musicVolume);
+            };
             print($"[UnlockVideo] Opening: {_unlock_path}");
         };
     } else {
@@ -43,6 +53,24 @@ if (mode == "waiting") {
     };
 };
 if (mode == "unlock") {
+    if (pls_is_gxgames()) {
+        var _gx_status = gx_video_get_status(unlock_gx_handle);
+        if (_gx_status == 2) unlock_started = true;
+        if (_gx_status == 4 && unlock_started) unlock_ended = true;
+        if (_gx_status < 0) unlock_error = "Unable to decode unlock video: " + gx_video_last_error();
+        if (_gx_status == 5 || os_is_paused()) unlock_opened_at = get_timer();
+        if (os_is_paused() && !unlock_os_paused) {
+            gx_video_pause(unlock_gx_handle); unlock_os_paused = true;
+        } else if (!os_is_paused() && unlock_os_paused) {
+            gx_video_play(unlock_gx_handle); unlock_os_paused = false;
+        };
+        if (string_length(unlock_error)) unlock_fail(unlock_error);
+        else if (unlock_ended) unlock_finish();
+        else if ((!unlock_started || !unlock_frame_seen) && get_timer() - unlock_opened_at > 30000000) {
+            unlock_fail("Timed out opening unlock video: " + _session.unlock_video_file);
+        };
+        exit;
+    };
     if (string_length(unlock_error)) {
         unlock_fail(unlock_error);
         exit;

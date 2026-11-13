@@ -55,7 +55,7 @@ function gx_fs_copy_js_file(src_path, dest_path) {
         while (off < size) {
                 var n = min(chunk, size - off);
                 var b64 = "";
-                try { b64 = string(i_gx_drop_chunk(off, n)); } catch (chunk_error) { delete(chunk_error); b64 = ""; };
+                b64 = gx_fs_read_chunk(off, n);
                 if (!is_string(b64) || !string_length(b64)) {
                         buffer_delete(buf);
                         return false;
@@ -81,6 +81,13 @@ function gx_fs_copy_js_file(src_path, dest_path) {
         return file_exists(dest_path);
 }
 
+/// Read the active JS file without overwriting the selected ZIP package.
+function gx_fs_read_chunk(offset, count) {
+        if (gx_file_ui_cmd("pls-f:fread\t" + string(offset) + "\t" + string(count)) <= 0) then return "";
+        try { return gx_query_unquote(i_gx_query_get("pls-f:chunk")); }
+        catch (chunk_error) { delete(chunk_error); return ""; };
+}
+
 function gx_fs_read_js_text(path, max_chars = -1) {
         if (!pls_is_gxgames() || !is_string(path) || !string_length(path)) then return "";
         var size = gx_file_ui_cmd("pls-f:fopen\t" + gx_path_clean(path));
@@ -93,7 +100,7 @@ function gx_fs_read_js_text(path, max_chars = -1) {
         while (off < want) {
                 var n = min(chunk, want - off);
                 var b64 = "";
-                try { b64 = string(i_gx_drop_chunk(off, n)); } catch (chunk_error) { delete(chunk_error); b64 = ""; };
+                b64 = gx_fs_read_chunk(off, n);
                 if (!is_string(b64) || !string_length(b64)) {
                         buffer_delete(buf);
                         return "";
@@ -104,6 +111,11 @@ function gx_fs_read_js_text(path, max_chars = -1) {
                         return "";
                 };
                 var piece_size = buffer_get_size(piece);
+                if (piece_size <= 0) {
+                        buffer_delete(piece);
+                        buffer_delete(buf);
+                        return "";
+                };
                 buffer_copy(piece, 0, min(piece_size, want - off), buf, off);
                 buffer_delete(piece);
                 off += piece_size;
@@ -114,7 +126,11 @@ function gx_fs_read_js_text(path, max_chars = -1) {
                 buffer_copy(buf, 0, want, src, 0);
                 buffer_poke(src, want, buffer_u8, 0);
                 buffer_seek(src, buffer_seek_start, 0);
-                text = buffer_read(src, buffer_string);
+                var b0 = buffer_peek(src, 0, buffer_u8);
+                var b1 = (want > 1) ? buffer_peek(src, 1, buffer_u8) : 0;
+                if (b0 == 255 && b1 == 254) then text = chart_buffer_utf16_to_text(src, 2, want - 2, false);
+                else if (b0 == 254 && b1 == 255) then text = chart_buffer_utf16_to_text(src, 2, want - 2, true);
+                else text = chart_text_strip_bom(buffer_read(src, buffer_string));
                 buffer_delete(src);
         } catch (read_error) {
                 delete(read_error);
@@ -138,9 +154,9 @@ function gx_fs_chart_head(path) {
         };
         if (!(is_real(n) && n > 0)) then return "";
         var head = "";
-        try { head = string(i_gx_query_get("pls-f:head")); } catch (head_error) { delete(head_error); head = ""; };
+        try { head = gx_query_unquote(i_gx_query_get("pls-f:head")); } catch (head_error) { delete(head_error); head = ""; };
         if (!is_string(head) || !string_length(head)) {
-                try { head = string(i_gx_drop_error()); } catch (err_head) { delete(err_head); head = ""; };
+                head = gx_fs_read_js_text(path, 4096);
         };
         return is_string(head) ? head : "";
 }
@@ -168,7 +184,7 @@ function gx_fs_chart_tail(path, max_chars = 16000) {
         while (off < take) {
                 var n = min(chunk, take - off);
                 var b64 = "";
-                try { b64 = string(i_gx_drop_chunk(start + off, n)); } catch (chunk_error) { delete(chunk_error); b64 = ""; };
+                b64 = gx_fs_read_chunk(start + off, n);
                 if (!is_string(b64) || !string_length(b64)) {
                         buffer_delete(buf);
                         return "";
@@ -230,7 +246,7 @@ function gx_fs_list_files(dir_path) {
         var n = gx_file_ui_cmd("pls-f:list\t" + gx_path_clean(dir_path));
         if (!(is_real(n) && n > 0)) then return files;
         var raw = "";
-        try { raw = string(i_gx_query_get("pls-f:list")); } catch (list_error) { delete(list_error); raw = ""; };
+        try { raw = gx_query_unquote(i_gx_query_get("pls-f:list")); } catch (list_error) { delete(list_error); raw = ""; };
         if (!is_string(raw) || !string_length(raw)) then return files;
         var parts = string_split(string_replace_all(raw, "\r", ""), "\n");
         var root = chart_path_norm(dir_path);
@@ -327,6 +343,7 @@ function pls_draw_flush() {
 
 function pls_window_width() {
 	if (os_type == os_android) then return max(1, window_get_width());
+        if (pls_is_gxgames()) then return max(1, real(gx_query_unquote(i_gx_query_get("pls-w:width"))));
         // 桌面全屏时 window_get_width 可能仍返回退出全屏后恢复的窗口宽度。
         var w = (!pls_is_gxgames() && window_get_fullscreen()) ? display_get_width() : window_get_width();
         if (!is_real(w) || w <= 1) then w = display_get_width();
@@ -336,6 +353,7 @@ function pls_window_width() {
 
 function pls_window_height() {
 	if (os_type == os_android) then return max(1, window_get_height());
+        if (pls_is_gxgames()) then return max(1, real(gx_query_unquote(i_gx_query_get("pls-w:height"))));
         var h = (!pls_is_gxgames() && window_get_fullscreen()) ? display_get_height() : window_get_height();
         if (!is_real(h) || h <= 1) then h = display_get_height();
         if (!is_real(h) || h <= 1) then h = max(1, room_height);
@@ -344,6 +362,87 @@ function pls_window_height() {
 
 function pls_font_path(path) {
         return string_replace_all(string(path), "\\", "/");
+}
+
+/// Browser input is sampled once in Begin Step, in the same pixel space as the room.
+function gx_input_state() {
+        if (!variable_global_exists("gx_input") || !is_struct(global.gx_input)) {
+                global.gx_input = { generation:-1, focused:false, available:false, fingers:[], taps:[], samples:[], flicks:[],
+                        primary:-1, sample_us:0, suspended_at:-1, width:room_width, height:room_height,
+                        keys:[], presses:[],
+                        pointer:{x:0,y:0,pressed:false,released:false,held:false} };
+        };
+        return global.gx_input;
+}
+
+function gx_input_reset() {
+        if (!pls_is_gxgames()) then return;
+        gx_file_ui_cmd("pls-f:inputreset");
+        global.gx_input = undefined;
+}
+
+function gx_input_poll() {
+        var state = gx_input_state();
+        var packet = undefined;
+        try { packet = json_parse(gx_query_unquote(i_gx_query_get("pls-i:poll"))); }
+        catch (input_error) { delete(input_error); };
+        state.sample_us = get_timer();
+        state.taps = []; state.samples = []; state.flicks = []; state.presses = []; state.keys = [];
+        state.pointer.pressed = false; state.pointer.released = false;
+        state.available = is_struct(packet);
+        state.focused = state.available && bool(packet.focused);
+        if (!state.focused || packet.generation != state.generation) {
+                state.fingers = []; state.primary = -1; state.pointer.held = false;
+        };
+        if (!state.available) then return;
+        state.generation = packet.generation;
+        if (!state.focused) then return;
+        state.keys = packet.keys; state.presses = packet.presses;
+        if (state.width != room_width || state.height != room_height) {
+                for (var fi = 0; fi < array_length(state.fingers); fi++) {
+                        var finger = state.fingers[fi];
+                        finger.x *= room_width / max(1,state.width); finger.y *= room_height / max(1,state.height);
+                        finger.dx *= room_width / max(1,state.width); finger.dy *= room_height / max(1,state.height);
+                };
+                state.width = room_width; state.height = room_height;
+        };
+        for (var index = 0; index < array_length(packet.events); index++) {
+                var event = packet.events[index];
+                var kind = event[0], token = event[1];
+                var px = event[2] * room_width, py = event[3] * room_height;
+                var stamp = state.sample_us - event[4] * 1000;
+                var finger = undefined;
+                for (var fi = 0; fi < array_length(state.fingers); fi++) {
+                        if (state.fingers[fi].token == token) { finger = state.fingers[fi]; break; };
+                };
+                if (kind == 1) {
+                        finger = {token:token,x:px,y:py,stamp:stamp,moved_at:stamp,dx:0,dy:0,travel:0,
+                                active:true,blocked:false,flicking:false,gesture:{consumed:false}};
+                        array_push(state.fingers,finger);
+                        array_push(state.taps,{x:px,y:py,stamp:stamp,finger:finger});
+                        if (state.primary < 0) { state.primary = token; state.pointer.pressed = true; };
+                };
+                if (!is_struct(finger)) then continue;
+                android_touch_move(state,finger,px,py,stamp);
+                if (kind == 3) finger.active = false;
+                if (state.primary == token) {
+                        state.pointer.x = px; state.pointer.y = py; state.pointer.held = kind != 3;
+                        if (kind == 3) { state.pointer.released = true; state.primary = -1; };
+                };
+        };
+        var kept = 0;
+        for (var fi = 0; fi < array_length(state.fingers); fi++) {
+                var finger = state.fingers[fi];
+                if (!finger.active) then continue;
+                if (state.sample_us - finger.moved_at > 80000) finger.flicking = false;
+                var sample = {x:finger.x,y:finger.y,stamp:state.sample_us,since:finger.stamp,from_x:finger.x,from_y:finger.y,
+                        finger:finger,gesture:finger.gesture};
+                array_push(state.samples,sample);
+                if (finger.flicking && !finger.gesture.consumed) array_push(state.flicks,sample);
+                state.fingers[@ kept] = finger;
+                kept++;
+        };
+        array_resize(state.fingers,kept);
 }
 
 function pls_font_add(path, size, bold = false, italic = false, first = -infinity, last = infinity) {
@@ -746,6 +845,14 @@ function gx_query_unquote(text) {
         if (n >= 2) {
                 var first = string_char_at(text, 1);
                 var last = string_char_at(text, n);
+                // GX 的 JS 字符串桥接可能返回 JSON 字符串。必须同时解码转义，
+                // 只去引号会把谱面里的键变成 \\"META\\"，导致头部格式探测失败。
+                if (first == "\"" && last == "\"") {
+                        try {
+                                var decoded = json_parse(text);
+                                if (is_string(decoded)) then return decoded;
+                        } catch (decode_error) { delete(decode_error); };
+                };
                 if ((first == "\"" && last == "\"") || (first == "'" && last == "'")) {
                         text = string_copy(text, 2, n - 2);
                 };
@@ -865,7 +972,6 @@ function gx_drop_take_file() {
         var name = gx_file_picker_safe_name(gx_drop_filename());
         if (!string_length(name)) then name = "chart.zip";
         var dest = chart_path_join(gx_file_picker_download_dir(), name);
-        if (file_exists(dest)) then return dest;
         var js_path = "";
         try { js_path = gx_query_unquote(i_gx_query_get("pls-f:path")); } catch (path_error) { delete(path_error); js_path = ""; };
         if (string_length(js_path) && file_exists(js_path)) then return js_path;
@@ -1648,6 +1754,7 @@ function gx_video_js_from_file(path) {
 
 function gx_video_open(path) {
         if (!pls_is_gxgames()) then return -1;
+        if (!gx_video_available()) then return -1;
         var host = gx_media_host_path_for(path);
         if (string_length(host)) {
                 print($"[GXVideo] open stream host={host} rpc={gx_video_rpc_enabled() ? 1 : 0}");
@@ -1658,6 +1765,12 @@ function gx_video_open(path) {
         if (is_string(path) && (string_pos("http://", path) == 1 || string_pos("https://", path) == 1 || string_pos("blob:", path) == 1)) {
                 var remote = gx_video_js_create(path);
                 if (remote > 0) then return remote;
+        };
+        // Remote packages retain imported bytes in the JS filesystem; native file_exists
+        // cannot see every extracted entry. Resolve it directly without a base64 copy.
+        if (gx_video_rpc_enabled()) {
+                var extracted = gx_video_rpc_real("create", path);
+                if (extracted > 0) then return extracted;
         };
         if (file_exists(path)) {
                 var local = gx_video_js_from_file(path);
@@ -1699,6 +1812,11 @@ function gx_video_set_loop(handle, enabled) {
         if (!(is_real(handle) && handle > 0)) then return 0;
         if (gx_video_rpc_enabled()) then return gx_video_rpc_real("loop", handle, enabled ? 1 : 0);
         try { return gx_video_js_real(i_gx_video_set_loop(handle, enabled ? 1 : 0), 0); } catch (loop_error) { delete(loop_error); return gx_video_rpc_real("loop", handle, enabled ? 1 : 0); };
+}
+
+function gx_video_set_volume(handle, volume) {
+        if (!(is_real(handle) && handle > 0)) then return 0;
+        return gx_video_rpc_real("volume", handle, clamp(volume, 0, 1));
 }
 
 function gx_video_get_status(handle) {

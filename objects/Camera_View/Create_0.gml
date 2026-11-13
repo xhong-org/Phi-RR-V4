@@ -24,6 +24,7 @@ gx_last_room_h = room_height;
 gx_gui_w = -1;
 gx_gui_h = -1;
 if (os_type == os_android) android_touch_reset();
+if (pls_is_gxgames()) gx_input_reset();
 
 // 全局界面与世界缩放。其他对象应读它，不要自己再算窗口缩放。
 globalvar global_scales;

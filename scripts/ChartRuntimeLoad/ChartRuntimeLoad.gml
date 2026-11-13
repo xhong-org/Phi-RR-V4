@@ -116,6 +116,14 @@ function chart_load_begin_play(_sync_notes) {
 ///@param {Any} _sync_notes 同步音符的回调
 ///@returns {Bool} 调用方本帧应当退出时为真
 function chart_load_step(_line_object, _pump, _finish, _thaw_force, _sync_notes) {
+	// GX 的加载动画可能先于 YYC 分帧建线结束；先完成创建再放行播放。
+	if (pls_is_gxgames() && chart_actor_var_exists(id, "_chart_lines_building") && _chart_lines_building) {
+		if (_pump()) {
+			_finish();
+			chart_load_mark_ready(!(variable_global_exists("render_mode") && global.render_mode));
+		};
+		return true;
+	};
 	// 待解冻、加载动画结束或仍在建线时，本帧都交给这里处理
 	if (chart_actor_var_exists(id, "_chart_lines_thaw_pending") && _chart_lines_thaw_pending) {
 		_thaw_force();

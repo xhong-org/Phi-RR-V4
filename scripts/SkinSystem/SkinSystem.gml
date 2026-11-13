@@ -8,6 +8,7 @@
 ///@returns {String} skins 目录路径
 function skin_root_dir() {
 	var dir = working_directory + "skins/";
+	if (pls_is_gxgames()) then dir = chart_path_join(chart_gx_sandbox_root(), "skins/");
 	if (os_type == os_android) dir = android_files_internal_dir() + "skins/";
 	dir = string_replace_all(dir, "\\", "/");
 	// 目录不存在时尝试创建
@@ -312,6 +313,7 @@ function skin_index_save(_index) {
 	buffer_write(buf, buffer_text, text);
 	buffer_save(buf, path);
 	buffer_delete(buf);
+	if (pls_is_gxgames()) then gx_file_ui_cmd("pls-f:sync");
 }
 
 ///@desc 在根目录或其一级子目录中查找 info.yml
@@ -1817,6 +1819,7 @@ function skin_import_finish(_dest, _folder) {
 	skin_index_save(index);
 	skin_ui_refresh();
 	skin_log($"index saved selected={folder} packs={array_length(index.packs)}");
+	if (pls_is_gxgames()) then gx_file_ui_cmd("pls-f:sync");
 	var preview_ok = skin_preview_set(folder);
 	skin_log($"preview after import ok={preview_ok}");
 	return preview_ok;
@@ -1960,10 +1963,7 @@ function skin_pick_file() {
 	skin_log($"pick file os={os_type} gx={pls_is_gxgames()}");
 	// GX 与 Android 走各自选择器，其他平台用系统对话框
 	if (pls_is_gxgames()) {
-		///@desc 把选中的压缩包路径加入导入队列
-		///@param {String} path 所选文件路径
-		///@returns {Undefined} 无
-		gx_file_picker_open(function(path) { skin_import_queue(path); });
+		// 原生 DOM 文件输入覆盖添加按钮，保留浏览器要求的真实用户手势。
 		return;
 	};
 	if (os_type == os_android) {

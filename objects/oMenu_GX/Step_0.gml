@@ -33,11 +33,12 @@ if (settings_gui_blocking()) {
         exit;
 };
 
-hover_pick = !drop_panel_open && point_in_rectangle(mouse_x, mouse_y, pick_x, pick_y, pick_x + pick_w, pick_y + pick_h);
+var pointer = settings_gui_pointer();
+hover_pick = !drop_panel_open && point_in_rectangle(pointer.x, pointer.y, pick_x, pick_y, pick_x + pick_w, pick_y + pick_h);
 hover_drop_btn = false;
-hover_api = !drop_panel_open && (api_btn_w > 0) && point_in_rectangle(mouse_x, mouse_y, api_btn_x, api_btn_y, api_btn_x + api_btn_w, api_btn_y + api_btn_h);
+hover_api = !drop_panel_open && (api_btn_w > 0) && point_in_rectangle(pointer.x, pointer.y, api_btn_x, api_btn_y, api_btn_x + api_btn_w, api_btn_y + api_btn_h);
 hover_drop = hover_pick || gx_drop_hover();
-hover_settings = !drop_panel_open && settings_menu_button_hit(mouse_x, mouse_y);
+hover_settings = !drop_panel_open && settings_menu_button_hit(pointer.x, pointer.y);
 
 var drop_status = gx_drop_status();
 gx_drop_unpause();
@@ -60,7 +61,7 @@ if (!busy && import_opened) {
 };
 
 // 左键：设置、API 浏览，或打开点击选文件面板。
-if (!busy && mouse_check_button_pressed(mb_left)) {
+if (!busy && pointer.pressed) {
         if (hover_settings) {
                 settings_gui_open();
         } else if (hover_api && !drop_panel_open) {

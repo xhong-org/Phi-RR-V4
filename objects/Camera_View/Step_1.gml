@@ -56,6 +56,7 @@ if (os_type == os_android) {
         android_touch_poll();
         display_android_update();
 };
+if (pls_is_gxgames()) gx_input_poll();
 
 // 在任何绘制之前贴合应用表面。帧画完后再改尺寸会清掉这一帧，进房间会闪黑。
 if (application_surface_is_enabled() && surface_exists(application_surface)) {

@@ -3,6 +3,20 @@
 if (mode == "waiting" || mode == "silent") then exit;
 if (mode == "unlock") {
     if (!unlock_open || unlock_ended) then exit;
+    if (pls_is_gxgames()) {
+        var _gx_w = gx_video_get_width(unlock_gx_handle), _gx_h = gx_video_get_height(unlock_gx_handle);
+        if (_gx_w <= 0 || _gx_h <= 0) then exit;
+        var _gx_scale = min(room_width / _gx_w, room_height / _gx_h);
+        var _gx_left = (room_width - _gx_w * _gx_scale) * 0.5 / room_width;
+        var _gx_top = (room_height - _gx_h * _gx_scale) * 0.5 / room_height;
+        var _gx_draw = gx_video_draw(unlock_gx_handle, _gx_left, _gx_top, 1 - _gx_left, 1 - _gx_top, 1, 0);
+        if (_gx_draw > 0 && !unlock_frame_seen) {
+            unlock_frame_seen = true;
+            print($"[UnlockVideo] First GX frame: {_gx_w}x{_gx_h}");
+        };
+        if (_gx_draw < 0) unlock_error = "Unable to draw unlock video: " + gx_video_last_error();
+        exit;
+    };
     // Android 的播放器和首帧都异步准备，playing 不保证 TextureView 已有 bitmap。
     if (os_type == os_android && !unlock_started) then exit;
     var _video = video_draw();

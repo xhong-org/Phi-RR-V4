@@ -1773,6 +1773,10 @@ function chart_detect_format(chart_path) {
         if (ext == ".pec") then return CHART_FORMAT.PEC;
 
         if (ext == ".json" || ext == ".txt") {
+                if (pls_is_gxgames()) {
+                        var gx_format = gx_file_ui_cmd("pls-f:format\t" + gx_path_clean(chart_path));
+                        if (gx_format == CHART_FORMAT.RPE || gx_format == CHART_FORMAT.OFFICIAL) then return gx_format;
+                };
                 var text = "";
                 if (pls_is_gxgames()) then text = gx_fs_chart_head(chart_path);
                 if (!string_length(text)) then text = chart_read_text_file(chart_path, 16000);
@@ -2216,24 +2220,11 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
 
         print($"[ChartSession] Picked info={info_source} chart={chart_full} music={music_full} image={image_full}");
 
-        // 谱面和音乐都必需，缺一则失败、清理并回菜单
-        if (!string_length(chart_full) || !string_length(music_full)) {
-                var missing = [];
-                if (!string_length(chart_full)) then array_add(missing, "chart");
-                if (!string_length(music_full)) then array_add(missing, "music");
-                var missing_text = "";
-                for (var mi = 0; mi < array_length(missing); mi++) {
-                        if (mi > 0) then missing_text += ", ";
-                        missing_text += missing[mi];
-                };
-                print($"[ChartSession] Scan leftover charts={array_length(discovered.chart)} music={array_length(discovered.music)} image={array_length(discovered.image)} text={array_length(discovered.text)}");
-                return chart_session_fail("Missing required file(s): " + missing_text);
-        };
-
         chart_session_set_status("Detecting format", chart_path_file_name(chart_full));
         var format_id = chart_detect_format(chart_full);
         // 首选谱面格式未知时，换另一个谱面再探
-        if (format_id == CHART_FORMAT.UNKNOWN && is_array(discovered.chart)) {
+        if (format_id == CHART_FORMAT.UNKNOWN && is_array(discovered.chart)
+                && !(string_length(info.unlock_video) && string_length(info.chart))) {
                 for (var chart_try_i = 0; chart_try_i < array_length(discovered.chart); chart_try_i++) {
                         var chart_try = discovered.chart[chart_try_i];
                         var chart_try_name = string_lower(chart_path_file_name(chart_try));
@@ -2252,6 +2243,14 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
                 fail_head = string_copy(string_replace_all(string_replace_all(string(fail_head), "\n", " "), "\r", ""), 1, 80);
                 var fail_n = pls_is_gxgames() ? gx_file_ui_cmd("pls-f:head\t" + chart_full) : -1;
                 return chart_session_fail("Unsupported chart format: " + chart_path_file_name(chart_full) + " head=" + fail_head + " headcmd=" + string(fail_n));
+        };
+
+        // 所有平台先验证格式，再检查文件；此时不创建谱面实例或加载媒体。
+        if (string_length(info.unlock_video)) {
+                if (!chart_unlock_preflight(root, info, chart_full, format_id, music_full)) then return false;
+        };
+        if (!string_length(chart_full) || !string_length(music_full)) {
+                return chart_session_fail("Missing required file(s): " + (!string_length(chart_full) ? "chart" : "music"));
         };
 
         session.format = format_id;
@@ -2290,6 +2289,55 @@ function chart_session_build_from_dir(dir_path, source_path = "", from_zip = fal
         session.error = "";
         var ready_label = string_length(session.name) ? session.name : session.chart_file;
         chart_session_set_status("Ready", $"{session.format_name} / {ready_label}");
+        return true;
+}
+
+/// 解锁视频前只校验源文件；音频、贴图、事件转换和建线仍在视频结束后执行。
+function chart_unlock_preflight(root, info, chart_full, format_id, music_full) {
+        chart_session_set_status("Validating chart", chart_path_file_name(chart_full));
+        var text = chart_read_text_file(chart_full, -1);
+        var valid = false;
+        try {
+                if (format_id == CHART_FORMAT.PEC) {
+                        var rows = string_split(string_replace_all(text, "\r", ""), "\n");
+                        valid = array_length(rows) > 1 && is_finite(real(string_trim(rows[0])))
+                                && string_pos("\nbp ", string_lower(text)) > 0;
+                } else {
+                        var source = json_parse(text);
+                        valid = is_struct(source) && is_array(source[$ "judgeLineList"])
+                                && array_length(source.judgeLineList) > 0;
+                        if (valid && format_id == CHART_FORMAT.RPE) {
+                                valid = is_struct(source[$ "META"]) && is_real(source.META[$ "RPEVersion"])
+                                        && is_array(source[$ "BPMList"]) && array_length(source.BPMList) > 0;
+                        } else if (valid && format_id == CHART_FORMAT.OFFICIAL) {
+                                var version = source[$ "formatVersion"];
+                                valid = is_real(version) && version == floor(version) && version >= 1 && version <= 3;
+                        };
+                };
+        } catch (validation_error) { delete(validation_error); valid = false; };
+        if (!valid) then return chart_session_fail("Invalid chart format or data: " + chart_path_file_name(chart_full));
+        // 完整文本留给正式读取器，视频前不转换事件或建立运行时资源。
+        chart_cache_detected_text(chart_full, text);
+        chart_session_set_status("Checking required files", info.unlock_video);
+        // Music is required even when metadata leaves its filename to directory discovery.
+        var file_ready = function(path) {
+                if (!is_string(path) || !string_length(path)) then return false;
+                if (pls_is_gxgames()) then return gx_file_ui_cmd("pls-f:fopen\t" + gx_path_clean(path)) > 0;
+                return chart_file_exists_any(path) && chart_archive_size_bytes(path) > 0;
+        };
+        if (!file_ready(music_full)) {
+                return chart_session_fail("Missing required file(s): music");
+        };
+        var names = [info.chart, info.music, info.image, info.unlock_video];
+        for (var index = 0; index < array_length(names); index++) {
+                var name = names[index];
+                if (!string_length(name)) then continue;
+                var path = chart_path_join(root, name);
+                if (!file_ready(path)) {
+                        return chart_session_fail("Missing required file(s): " + name);
+                };
+        };
+        print("[UnlockVideo] Preflight passed: format valid, required files present; full load deferred");
         return true;
 }
 

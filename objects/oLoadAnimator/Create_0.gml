@@ -46,6 +46,7 @@ global.loading_animation_active = true;
 global.loading_unlock_direct_start = false;
 mode = "waiting";
 unlock_open = false;
+unlock_gx_handle = -1;
 unlock_started = false;
 unlock_frame_seen = false;
 unlock_wait_logged = false;
@@ -56,7 +57,11 @@ unlock_os_paused = false;
 silent_released = false;
 
 unlock_close = function() {
-    if (unlock_open) then video_close();
+    if (unlock_open) {
+        if (pls_is_gxgames()) gx_video_close(unlock_gx_handle);
+        else video_close();
+    };
+    unlock_gx_handle = -1;
     unlock_open = false;
 };
 unlock_finish = function() {

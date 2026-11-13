@@ -311,7 +311,7 @@ effect_compile_builtins = function() {
 				print($"[RPE Effect] Built-in shader failed to compile: {effect_name}");
 			};
 			effect_uniforms[$ effect_name] = handles;
-			if (os_type == os_android && external_hlsl_ready) {
+			if ((os_type == os_android || rpe_ext_shader_gx()) && external_hlsl_ready) {
 				var builtin_source = rpe_effect_builtin_glsl(effect_name);
 				if (string_length(builtin_source)) {
 					var builtin_uniforms = external_uniforms_parse(builtin_source);
@@ -646,10 +646,10 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 		var pass = active[pass_i];
 		var is_external = bool(pass[$ "externalHlsl"] ?? false) || bool(pass[$ "externalGlsl"] ?? false);
 		var external_handle = is_external ? effect_external_handle(pass) : -1;
-		var _chart_chromatic = string_pos("chromatic_random_rate", pass.shaderName) > 0
+		var _chart_chromatic = !rpe_ext_shader_gx() && string_pos("chromatic_random_rate", pass.shaderName) > 0
 			&& shader_is_compiled(shd_rpe_chromatic_rate)
 			&& is_struct(effect_uniforms[$ "@glsl:chromatic_random_rate.glsl"]);
-		var _chart_gate = string_pos("gate.glsl", pass.shaderName) > 0
+		var _chart_gate = !rpe_ext_shader_gx() && string_pos("gate.glsl", pass.shaderName) > 0
 			&& shader_is_compiled(shd_rpe_gate)
 			&& is_struct(effect_uniforms[$ "@glsl:gate.glsl"]);
 		// 这两支改走谱面内置着色器，不再当外部通道。
@@ -658,7 +658,7 @@ effect_render = function(effect_list, input_override = -1, composite_target = -1
 			external_handle = -1;
 		};
 		var external_uniforms = is_external ? pass.externalUniforms : {};
-		if (!is_external && os_type == os_android) {
+		if (!is_external && (os_type == os_android || rpe_ext_shader_gx())) {
 			external_handle = real(builtin_native_handles[$ pass.shaderName] ?? -1);
 			if (struct_exists(builtin_native_uniforms, pass.shaderName)) {
 				external_uniforms = builtin_native_uniforms[$ pass.shaderName];

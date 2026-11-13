@@ -3,6 +3,7 @@
 ///@desc 返回设置 ini 的路径
 ///@returns {String} configs.ini 路径
 function settings_ini_path() {
+	if (pls_is_gxgames()) then return chart_path_join(chart_gx_sandbox_root(), "configs.ini");
 	if (os_type == os_android) then return game_save_id + "configs.ini";
 	return $"{working_directory}resource/configs.ini";
 }
@@ -18,6 +19,8 @@ function settings_ui_hidden(_key) {
 ///@desc 设置仍保存全部键，只隐藏当前平台不能执行的桌面选项
 function settings_platform_visible(key) {
 	if (settings_ui_hidden(key)) then return false;
+	if (pls_is_gxgames()) then return key != "preventWindowMoveFreeze" && key != "enableRPEMulticore"
+		&& key != "rpeWorkerMinLines" && key != "rpeWorkerProfileFrames" && key != "directGlslEs";
 	if (os_type != os_android) then return true;
 	return key != "preventWindowMoveFreeze" && key != "enableRPEMulticore"
 		&& key != "rpeWorkerMinLines" && key != "rpeWorkerProfileFrames"
@@ -26,7 +29,7 @@ function settings_platform_visible(key) {
 
 ///@desc 当前 Android Runtime 的 SetMultiSample 为空实现，不改写已保存的桌面档位
 function settings_platform_enabled(key) {
-	return os_type != os_android || key != "aa_level";
+	return (os_type != os_android && !pls_is_gxgames()) || key != "aa_level";
 }
 
 ///@desc 判断字段注释是否标成已废弃或已弃用
@@ -395,6 +398,7 @@ function settings_save_store(_store) {
 	ini_close();
 	// 菜单和下一局不能继续持有修改前的副本。
 	global.pls_settings = settings_clone(_store);
+	if (pls_is_gxgames()) then gx_file_ui_cmd("pls-f:sync");
 }
 
 ///@desc 离开结算时只保存用户名展开状态，避免覆盖用户手工编辑的其他配置
@@ -1477,7 +1481,7 @@ function settings_gui_action_kind() {
 	if (!chart_actor_var_exists(id, "tab")) then return "";
 	// 常规页是重置，语言页是重载，皮肤页没有动作
 	if (tab == 0) then return "reset";
-	if (tab == 1) then return "reload";
+	if (tab == 1 && !pls_is_gxgames()) then return "reload";
 	return "";
 }
 
@@ -1698,6 +1702,7 @@ function settings_gui_refresh_hits() {
 ///@returns {Struct} x、y、pressed、released、held
 function settings_gui_pointer() {
 	if (os_type == os_android) then return android_touch_pointer();
+	if (pls_is_gxgames()) then return gx_input_state().pointer;
 	return { x:mouse_x, y:mouse_y, pressed:mouse_check_button_pressed(mb_left),
 		released:mouse_check_button_released(mb_left), held:mouse_check_button(mb_left) };
 }
@@ -1712,6 +1717,21 @@ function settings_gui_step() {
 		settings_gui_layout();
 	};
 	var pointer = settings_gui_pointer();
+	if (pls_is_gxgames()) {
+		var skin_can_pick = tab == 2 && !skin_import_busy() && !chart_actor_exists(oFilePicker);
+		gx_file_ui_cmd("pls-f:skinrect\t" + string(skin_can_pick ? skin_add.x : 0)
+			+ "\t" + string(skin_can_pick ? skin_add.y : 0) + "\t" + string(skin_can_pick ? skin_add.w : 0)
+			+ "\t" + string(skin_can_pick ? skin_add.h : 0) + "\t" + string(room_width) + "\t" + string(room_height));
+		if (gx_file_ui_cmd("pls-f:skinstat") == GX_DROP_STATUS.OK) {
+			var picked_skin = gx_drop_take_file();
+			gx_drop_reset();
+			if (string_length(picked_skin)) then skin_import_queue(picked_skin);
+		} else if (gx_file_ui_cmd("pls-f:skinstat") == GX_DROP_STATUS.ERROR) {
+			var skin_pick_error = gx_drop_error();
+			gx_drop_reset();
+			skin_error(skin_pick_error);
+		};
+	};
 	if (!armed) {
 		// Android 由 ignore_release 排除打开面板的那次手势。
 		if (os_type == os_android || !pointer.held) then armed = true;

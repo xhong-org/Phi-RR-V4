@@ -36,7 +36,7 @@ function chart_kb_state_get() {
 
 ///@desc 桌面键盘可用于无位置判定
 function chart_kb_desktop() {
-	return os_type == os_windows || os_type == os_linux || os_type == os_macosx;
+	return os_type == os_windows || os_type == os_linux || os_type == os_macosx || pls_is_gxgames();
 }
 
 ///@desc Windows 直接读取键态，避免输入法吞键
@@ -50,6 +50,17 @@ function chart_kb_poll(state) {
 	state.pressed = 0;
 	state.sample_sec = game.__time[1];
 	array_resize(state.press_times, 0);
+	if (pls_is_gxgames()) {
+		var input = gx_input_state();
+		state.sample_sec = (input.sample_us - game.__time[3] - game.__time[0]) / 1000000;
+		if (!input.focused) then return;
+		state.held = array_length(input.keys);
+		state.pressed = array_length(input.presses);
+		for (var index = 0; index < state.pressed; index++) {
+			array_push(state.press_times, state.sample_sec - input.presses[index][1] / 1000);
+		};
+		return;
+	};
 	if (os_type == os_windows && extension_exists("I_Pulse")) {
 		if (!buffer_exists(state.native_buffer)) {
 			state.native_buffer = buffer_create(8 + 1024 * 8, buffer_fixed, 1);
@@ -181,6 +192,9 @@ function chart_kb_score(record, result) {
 		if (result == TYPE.BAD) phi_state_list.bad++;
 		else phi_state_list.miss++;
 	}
+	if (pls_is_gxgames() && chart_setting_on("enableDebug")) {
+		print($"[GXInput] judge kind={record.kind} result={result} combo={combo}");
+	}
 }
 
 ///@desc 在当前音符作用域中更新命中位置、音效和特效
@@ -291,6 +305,11 @@ function chart_kb_judge_step() {
 		state.pressed = 0;
 		state.sample_sec = game.__time[1];
 	}
+	if (pls_is_gxgames() && chart_setting_on("enableDebug")) {
+		gx_file_ui_cmd("pls-f:inputdebug\t" + json_stringify({time:state.sample_sec,
+			active:chart_player_keyboard_judge_active(),held:state.held,pressed:state.pressed,
+			touches:array_length(gx_input_state().fingers)}));
+	}
 	if (!chart_player_keyboard_judge_active()) {
 		state.was_active = false;
 		return;
@@ -303,8 +322,8 @@ function chart_kb_judge_step() {
 		state.initialized = true;
 	}
 	if (!state.was_active) state.pressed = 0;
-	if (os_type == os_android) {
-		var input = android_touch_state();
+	if (os_type == os_android || pls_is_gxgames()) {
+		var input = pls_is_gxgames() ? gx_input_state() : android_touch_state();
 		if (!input.focused || !input.available) {
 			state.was_active = false;
 			return;
@@ -364,29 +383,7 @@ function chart_kb_judge_at(state, now) {
 		if (state.held > 0 || (record.kind == 4 && state.pressed > 0)) record.caught = true;
 		if (record.caught && now >= record.hit) chart_kb_apply_hit(record, TYPE.PREFECT, now);
 	}
-	var pressed = state.pressed;
-	while (pressed > 0) {
-		var input_index = state.pressed - pressed;
-		var input_time = input_index < array_length(state.press_times) ? state.press_times[input_index] : now;
-		var best = undefined;
-		var best_time = infinity;
-		var best_result = TYPE.NONE;
-		for (var index = 0; index < count; index++) {
-			var record = active[index];
-			if (record.closed || record.scored || record.head != TYPE.NONE || (record.kind != 1 && record.kind != 3)) then continue;
-			var result = chart_kb_head_result(record.hit - input_time, record.frames, record.kind == 3);
-			if (result == TYPE.NONE || (result == TYPE.BAD && prevent_bad)) then continue;
-			// 无位置键盘按时间先后消耗音符，与 sim-phi/Phira 的键盘匹配一致。
-			if (record.hit < best_time) {
-				best = record;
-				best_time = record.hit;
-				best_result = result;
-			}
-		}
-		if (!is_struct(best)) then break;
-		chart_kb_apply_hit(best, best_result, now, input_time);
-		pressed--;
-	}
+	chart_kb_judge_presses(state, active, now, prevent_bad);
 	// Hold 的最终结果只取头判定。进入末尾 200ms 后结算，不再要求持续按住。
 	var kept = 0;
 	for (var index = 0; index < count; index++) {
@@ -414,4 +411,32 @@ function chart_kb_judge_at(state, now) {
 	}
 	array_resize(active, kept);
 	state.active = active;
+}
+
+/// Shared key presses let GX combine both devices before timeouts and Hold release checks.
+function chart_kb_judge_presses(state, active, now, prevent_bad) {
+	var count = array_length(active);
+	var pressed = state.pressed;
+	while (pressed > 0) {
+		var input_index = state.pressed - pressed;
+		var input_time = input_index < array_length(state.press_times) ? state.press_times[input_index] : now;
+		var best = undefined;
+		var best_time = infinity;
+		var best_result = TYPE.NONE;
+		for (var index = 0; index < count; index++) {
+			var record = active[index];
+			if (record.closed || record.scored || record.head != TYPE.NONE || (record.kind != 1 && record.kind != 3)) then continue;
+			var result = chart_kb_head_result(record.hit - input_time, record.frames, record.kind == 3);
+			if (result == TYPE.NONE || (result == TYPE.BAD && prevent_bad)) then continue;
+			// 无位置键盘按时间先后消耗音符，与 sim-phi/Phira 的键盘匹配一致。
+			if (record.hit < best_time) {
+				best = record;
+				best_time = record.hit;
+				best_result = result;
+			}
+		}
+		if (!is_struct(best)) then break;
+		chart_kb_apply_hit(best, best_result, now, input_time);
+		pressed--;
+	}
 }

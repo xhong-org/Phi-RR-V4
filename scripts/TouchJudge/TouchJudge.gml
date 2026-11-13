@@ -75,6 +75,7 @@ function chart_touch_contact(record, input) {
 
 ///@desc 触控与键盘使用相同索引；自动播放不进入此分支
 function chart_touch_judge_at(state, input, now) {
+	var hybrid = pls_is_gxgames();
 	// 官谱噪区必须先于四种音符和 Hold 续接过滤，不能等 Draw 才更新。
 	if (chart_actor_exists(oRender) || chart_actor_exists(oRender_1)) then official_blocks_touch_step(input);
 	while (!ds_priority_empty(state.pending)) {
@@ -102,8 +103,15 @@ function chart_touch_judge_at(state, input, now) {
 		if (!record.caught) {
 			var contact = chart_touch_contact(record, input);
 			if (is_struct(contact)) record.caught = true;
+			if (hybrid && state.held > 0 && now >= record.hit - KB_GOOD_SECONDS) record.caught = true;
 		}
 		if (record.caught && now >= record.hit) chart_kb_apply_hit(record, TYPE.PREFECT, now);
+	}
+	if (hybrid && (state.held > 0 || state.pressed > 0)) {
+		for (var index = 0; index < count; index++) {
+			var record = active[index];
+			if (!record.closed && !record.scored && record.kind == 4 && now >= record.hit - KB_GOOD_SECONDS) record.caught = true;
+		}
 	}
 	// 每次划动选择位置最近的同时 Flick，不受优先队列同时间项的顺序影响。
 	for (var fi = 0; fi < array_length(input.flicks); fi++) {
@@ -163,6 +171,15 @@ function chart_touch_judge_at(state, input, now) {
 			best.touch_contact_at = input_time;
 		}
 	}
+	if (hybrid) {
+		var prevent_bad = false;
+		for (var index = 0; index < count; index++) {
+			var record = active[index];
+			if (record.closed || record.scored || (record.kind != 2 && record.kind != 4)) then continue;
+			if (now >= record.hit - KB_GOOD_SECONDS && (now < record.hit || (record.kind == 4 && !record.caught))) prevent_bad = true;
+		}
+		chart_kb_judge_presses(state, active, now, prevent_bad);
+	}
 	var kept = 0;
 	for (var index = 0; index < count; index++) {
 		var record = active[index];
@@ -181,6 +198,7 @@ function chart_touch_judge_at(state, input, now) {
 						&& chart_touch_metric_xy(record, sample.from_x, sample.from_y) < infinity;
 					if (continuous || stamp <= last_contact + TOUCH_HOLD_GRACE_SECONDS) last_contact = max(last_contact, stamp);
 				}
+				if (hybrid && state.held > 0) last_contact = now;
 				record.touch_contact_at = last_contact;
 				var required_until = min(now, record.tail - KB_HOLD_TAIL_SECONDS);
 				if (required_until - last_contact > TOUCH_HOLD_GRACE_SECONDS) chart_kb_miss(record);

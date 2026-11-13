@@ -68,8 +68,10 @@
             var s = slots[ids[i]];
             if (!s) continue;
             if (s.el) {
+                s.want = s.want || !s.el.paused ? 1 : 0;
                 try { s.el.pause(); } catch (e0) {}
             } else {
+                s.want = s.want || s.playing ? 1 : 0;
                 s.off = posOf(s);
                 s.playing = 0;
                 stopSrc(s);
@@ -80,16 +82,21 @@
         }
     }
     function onPageHidden(hidden) {
+        hidden = hidden || !!(g.PhiGX && g.PhiGX.suspended());
         pageHidden = hidden ? 1 : 0;
         if (hidden) pauseAll();
-        else if (ctx && ctx.state === "suspended") {
-            try { ctx.resume(); } catch (e2) {}
+        else {
+            if (ctx && ctx.state === "suspended") {
+                try { ctx.resume(); } catch (e2) {}
+            }
+            unlock();
         }
     }
     if (typeof document !== "undefined") {
         document.addEventListener("visibilitychange", function () {
             onPageHidden(!!document.hidden);
         }, true);
+        document.addEventListener("pls-gx-fullscreen", function (ev) { onPageHidden(document.hidden || ev.detail.suspended); });
         document.addEventListener("pagehide", function () { onPageHidden(true); }, true);
         document.addEventListener("pageshow", function () { onPageHidden(false); }, true);
         document.addEventListener("freeze", function () { onPageHidden(true); }, true);
@@ -117,6 +124,7 @@
         return p < 0 ? 0 : p;
     }
     function playBuf(s) {
+        if (pageHidden || (g.PhiGX && g.PhiGX.suspended())) { s.want = 1; return 1; }
         var c = AC();
         if (!c || !s.buffer) {
             s.want = 1;
@@ -159,7 +167,7 @@
             s.el = el;
             el.addEventListener("loadedmetadata", function () {
                 s.dur = isFinite(el.duration) ? el.duration : 0;
-                if (s.want) {
+                if (s.want && !pageHidden) {
                     var p = el.play();
                     if (p && p.catch) p.catch(function () {});
                 }
@@ -261,8 +269,8 @@
     bind("i_gx_audio_set_volume", function (id, volume) {
         var s = slots[id | 0];
         if (!s) return 0;
-        var v = Number(volume);
-        s.volume = isFinite(v) ? Math.max(0, Math.min(1, v)) : 1;
+        s.volume = Math.max(0, Math.min(1, Number(volume)));
+        if (!isFinite(s.volume)) s.volume = 1;
         if (s.el) s.el.volume = s.volume;
         if (s.gain) s.gain.gain.value = s.volume;
         return 1;
@@ -270,6 +278,8 @@
     bind("i_gx_audio_play", function (id) {
         var s = slots[id | 0];
         if (!s) return 0;
+        s.want = 1;
+        if (pageHidden || (g.PhiGX && g.PhiGX.suspended())) return 1;
         if (s.el) {
             var p = s.el.play();
             if (p && p.catch) p.catch(function () {});
@@ -281,6 +291,7 @@
     bind("i_gx_audio_pause", function (id) {
         var s = slots[id | 0];
         if (!s) return 0;
+        s.want = 0;
         if (s.el) {
             s.el.pause();
             return 1;
@@ -293,6 +304,8 @@
     bind("i_gx_audio_resume", function (id) {
         var s = slots[id | 0];
         if (!s) return 0;
+        s.want = 1;
+        if (pageHidden || (g.PhiGX && g.PhiGX.suspended())) return 1;
         if (s.el) {
             var p = s.el.play();
             if (p && p.catch) p.catch(function () {});
@@ -304,6 +317,7 @@
     bind("i_gx_audio_stop", function (id) {
         var s = slots[id | 0];
         if (!s) return 0;
+        s.want = 0;
         if (s.el) {
             s.el.pause();
             try { s.el.currentTime = 0; } catch (e0) {}

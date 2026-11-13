@@ -68,8 +68,10 @@
             var s = slots[ids[i]];
             if (!s) continue;
             if (s.el) {
+                s.want = s.want || !s.el.paused ? 1 : 0;
                 try { s.el.pause(); } catch (e0) {}
             } else {
+                s.want = s.want || s.playing ? 1 : 0;
                 s.off = posOf(s);
                 s.playing = 0;
                 stopSrc(s);
@@ -80,16 +82,21 @@
         }
     }
     function onPageHidden(hidden) {
+        hidden = hidden || !!(g.PhiGX && g.PhiGX.suspended());
         pageHidden = hidden ? 1 : 0;
         if (hidden) pauseAll();
-        else if (ctx && ctx.state === "suspended") {
-            try { ctx.resume(); } catch (e2) {}
+        else {
+            if (ctx && ctx.state === "suspended") {
+                try { ctx.resume(); } catch (e2) {}
+            }
+            unlock();
         }
     }
     if (typeof document !== "undefined") {
         document.addEventListener("visibilitychange", function () {
             onPageHidden(!!document.hidden);
         }, true);
+        document.addEventListener("pls-gx-fullscreen", function (ev) { onPageHidden(document.hidden || ev.detail.suspended); });
         document.addEventListener("pagehide", function () { onPageHidden(true); }, true);
         document.addEventListener("pageshow", function () { onPageHidden(false); }, true);
         document.addEventListener("freeze", function () { onPageHidden(true); }, true);
@@ -117,6 +124,7 @@
         return p < 0 ? 0 : p;
     }
     function playBuf(s) {
+        if (pageHidden || (g.PhiGX && g.PhiGX.suspended())) { s.want = 1; return 1; }
         var c = AC();
         if (!c || !s.buffer) {
             s.want = 1;
@@ -125,7 +133,12 @@
         stopSrc(s);
         var src = c.createBufferSource();
         src.buffer = s.buffer;
-        src.connect(c.destination);
+        if (!s.gain) {
+            s.gain = c.createGain();
+            s.gain.connect(c.destination);
+        }
+        s.gain.gain.value = s.volume === undefined ? 1 : s.volume;
+        src.connect(s.gain);
         s.off = s.off || 0;
         try { src.start(0, s.off); } catch (e0) {
             try { src.start(0); } catch (e1) {}
@@ -147,13 +160,14 @@
             var blob = new Blob([u8], { type: mime || "audio/ogg" });
             var url = URL.createObjectURL(blob);
             var el = new Audio();
+            el.volume = s.volume === undefined ? 1 : s.volume;
             el.preload = "auto";
             el.src = url;
             el.__plsObjectUrl = url;
             s.el = el;
             el.addEventListener("loadedmetadata", function () {
                 s.dur = isFinite(el.duration) ? el.duration : 0;
-                if (s.want) {
+                if (s.want && !pageHidden) {
                     var p = el.play();
                     if (p && p.catch) p.catch(function () {});
                 }
@@ -252,9 +266,20 @@
         lastErr = "path needs bytes";
         return 0;
     });
+    bind("i_gx_audio_set_volume", function (id, volume) {
+        var s = slots[id | 0];
+        if (!s) return 0;
+        s.volume = Math.max(0, Math.min(1, Number(volume)));
+        if (!isFinite(s.volume)) s.volume = 1;
+        if (s.el) s.el.volume = s.volume;
+        if (s.gain) s.gain.gain.value = s.volume;
+        return 1;
+    });
     bind("i_gx_audio_play", function (id) {
         var s = slots[id | 0];
         if (!s) return 0;
+        s.want = 1;
+        if (pageHidden || (g.PhiGX && g.PhiGX.suspended())) return 1;
         if (s.el) {
             var p = s.el.play();
             if (p && p.catch) p.catch(function () {});
@@ -266,6 +291,7 @@
     bind("i_gx_audio_pause", function (id) {
         var s = slots[id | 0];
         if (!s) return 0;
+        s.want = 0;
         if (s.el) {
             s.el.pause();
             return 1;
@@ -278,6 +304,8 @@
     bind("i_gx_audio_resume", function (id) {
         var s = slots[id | 0];
         if (!s) return 0;
+        s.want = 1;
+        if (pageHidden || (g.PhiGX && g.PhiGX.suspended())) return 1;
         if (s.el) {
             var p = s.el.play();
             if (p && p.catch) p.catch(function () {});
@@ -289,6 +317,7 @@
     bind("i_gx_audio_stop", function (id) {
         var s = slots[id | 0];
         if (!s) return 0;
+        s.want = 0;
         if (s.el) {
             s.el.pause();
             try { s.el.currentTime = 0; } catch (e0) {}
@@ -331,6 +360,9 @@
         var s = slots[id | 0];
         if (!s) return 0;
         stopSrc(s);
+        if (s.gain) {
+            try { s.gain.disconnect(); } catch (gainError) {}
+        }
         if (s.el) {
             try { s.el.pause(); s.el.removeAttribute("src"); s.el.load(); } catch (e0) {}
             if (s.el.__plsObjectUrl) {

@@ -206,6 +206,7 @@ function lang_save_id(_id) {
 	ini_open(settings_ini_path());
 	ini_write_string("Settings", "language", string(_id ?? LANG_DEFAULT));
 	ini_close();
+	if (pls_is_gxgames()) then gx_file_ui_cmd("pls-f:sync");
 }
 
 ///@desc 按 id 查找已加载的语言包
@@ -243,6 +244,7 @@ function lang_apply(_id) {
 	// 换语言后查找缓存必须清空
 	global.pls_lang.lookup = {};
 	global.pls_lang.field_labels = {};
+	if (pls_is_gxgames()) then gx_file_ui_cmd("pls-f:locale\t" + global.pls_lang.id);
 }
 
 ///@desc 若静态文本等于某个语言包里的旧译文，则换成当前语言
@@ -383,7 +385,7 @@ function lang_cycle(_dir) {
 function lang_scan_packs() {
 	// Android 的文件枚举可能返回小写文件名；优先保留内置包的标准 id。
 	var files = [lang_dir() + "en-US.json", lang_dir() + "zh-CN.json"];
-	lang_collect_json(lang_dir(), files);
+	if (!pls_is_gxgames()) then lang_collect_json(lang_dir(), files);
 	var seen_path = {};
 	var seen_id = {};
 	var packs = [];

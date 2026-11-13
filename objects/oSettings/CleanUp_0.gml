@@ -1,4 +1,5 @@
 ///@desc 提交未完成的编辑并释放设置界面资源
+if (pls_is_gxgames()) then gx_file_ui_cmd("pls-f:skinrect\t0\t0\t0\t0\t1\t1");
 if (is_string(editing_key) && string_length(editing_key)) {
 	try { settings_gui_commit_edit(); } catch (commit_err) { delete(commit_err); };
 };
